@@ -110,15 +110,15 @@ User Code ──▶ Compiler ──▶ IR (JSON) ──▶ Validation           
 
 ### 2.2 Layer Responsibilities
 
-| Layer | Input | Output | Responsibility | MUST NOT |
-|-------|-------|--------|---------------|----------|
-| **Compiler** | TypeScript generators | IR (JSON) | Transform code to serializable tree | Emit non-JSON, depend on runtime state |
-| **Validation** | IR (JSON) | Validated IR | Verify grammar, single-Quote rule, scope | Change the IR |
-| **Kernel** | IR + Environment | Val or Suspend | Evaluate expressions, yield effects | Know about agents, journal, transport |
-| **Execution Layer** | Effect descriptors | Results | Replay or dispatch, journal, task mgmt | Evaluate IR (delegates to kernel) |
-| **Agent** | Execute message | Result message | Perform external work, return JSON | Access journal, know about replay |
-| **Transport** | JSON-RPC messages | JSON-RPC messages | Deliver messages host ↔ agents | Affect semantics |
-| **Journal** | Yield/Close events | Stored events | Durable append-only log | Lose acknowledged events |
+| Layer               | Input                 | Output            | Responsibility                           | MUST NOT                               |
+| ------------------- | --------------------- | ----------------- | ---------------------------------------- | -------------------------------------- |
+| **Compiler**        | TypeScript generators | IR (JSON)         | Transform code to serializable tree      | Emit non-JSON, depend on runtime state |
+| **Validation**      | IR (JSON)             | Validated IR      | Verify grammar, single-Quote rule, scope | Change the IR                          |
+| **Kernel**          | IR + Environment      | Val or Suspend    | Evaluate expressions, yield effects      | Know about agents, journal, transport  |
+| **Execution Layer** | Effect descriptors    | Results           | Replay or dispatch, journal, task mgmt   | Evaluate IR (delegates to kernel)      |
+| **Agent**           | Execute message       | Result message    | Perform external work, return JSON       | Access journal, know about replay      |
+| **Transport**       | JSON-RPC messages     | JSON-RPC messages | Deliver messages host ↔ agents           | Affect semantics                       |
+| **Journal**         | Yield/Close events    | Stored events     | Durable append-only log                  | Lose acknowledged events               |
 
 ### 2.3 Boundaries
 
@@ -417,16 +417,22 @@ Durable Stream. Two event types:
 **Yield** — records an effect's description and result:
 
 ```json
-{ "type": "yield", "coroutineId": "root",
+{
+  "type": "yield",
+  "coroutineId": "root",
   "description": { "type": "order-service", "name": "fetchOrder" },
-  "result": { "status": "ok", "value": { "id": "123", "total": 150 } } }
+  "result": { "status": "ok", "value": { "id": "123", "total": 150 } }
+}
 ```
 
 **Close** — records a task's terminal state:
 
 ```json
-{ "type": "close", "coroutineId": "root",
-  "result": { "status": "ok", "value": { "receiptId": "r-456" } } }
+{
+  "type": "close",
+  "coroutineId": "root",
+  "result": { "status": "ok", "value": { "receiptId": "r-456" } }
+}
 ```
 
 **Event result** has three possible statuses:
@@ -819,11 +825,11 @@ byte-identical JSON.
 
 ### 12.2 Three `yield*` Cases
 
-| Case | Source | IR Output | Data shape |
-|------|--------|-----------|------------|
-| Agent effect | `yield* Agent().method(args)` | External Eval | Unquoted array |
-| Concurrency | `yield* all/race([...])` | Compound Eval | Quoted `{exprs:[...]}` |
-| Built-in | `yield* sleep(ms)` | External Eval | Unquoted array |
+| Case         | Source                        | IR Output     | Data shape             |
+| ------------ | ----------------------------- | ------------- | ---------------------- |
+| Agent effect | `yield* Agent().method(args)` | External Eval | Unquoted array         |
+| Concurrency  | `yield* all/race([...])`      | Compound Eval | Quoted `{exprs:[...]}` |
+| Built-in     | `yield* sleep(ms)`            | External Eval | Unquoted array         |
 
 The quoting difference is critical: agent effects use unquoted
 data (resolved by `resolve()` at runtime), while concurrency
@@ -849,16 +855,16 @@ layer to spawn).
 
 ## 13. Comparison to Existing Systems
 
-| Aspect | Async/retry | Queues | Temporal | Tisyn |
-|--------|------------|--------|---------|-------|
-| Crash recovery | No | Partial | Full | Full |
-| Determinism | None | None | Developer discipline | Construction |
-| Workflow structure | Code | Scattered | Code | Serializable tree |
-| Effect isolation | None | Message boundaries | SDK boundary | Eval nodes |
-| Concurrency | Language-level | Consumer count | SDK primitives | `all`/`race` |
-| Inspection | Debugger | Queue monitoring | Replay debugger | Static tree analysis |
-| Language lock-in | Yes | No | Per-SDK | No (IR is JSON) |
-| Side-effect safety | None | At-least-once/step | At-least-once | At-least-once |
+| Aspect             | Async/retry    | Queues             | Temporal             | Tisyn                |
+| ------------------ | -------------- | ------------------ | -------------------- | -------------------- |
+| Crash recovery     | No             | Partial            | Full                 | Full                 |
+| Determinism        | None           | None               | Developer discipline | Construction         |
+| Workflow structure | Code           | Scattered          | Code                 | Serializable tree    |
+| Effect isolation   | None           | Message boundaries | SDK boundary         | Eval nodes           |
+| Concurrency        | Language-level | Consumer count     | SDK primitives       | `all`/`race`         |
+| Inspection         | Debugger       | Queue monitoring   | Replay debugger      | Static tree analysis |
+| Language lock-in   | Yes            | No                 | Per-SDK              | No (IR is JSON)      |
+| Side-effect safety | None           | At-least-once/step | At-least-once        | At-least-once        |
 
 The fundamental difference from Temporal: Temporal re-executes
 native code with stored results; Tisyn evaluates a deterministic
@@ -909,13 +915,13 @@ other languages could produce the same JSON trees.
 
 ## References
 
-- Abelson, H. and Sussman, G.J. *Structure and Interpretation of Computer Programs*, MIT Press, 1996.
+- Abelson, H. and Sussman, G.J. _Structure and Interpretation of Computer Programs_, MIT Press, 1996.
 - Blumofe, R.D. et al. "Cilk: An efficient multithreaded runtime system," PPoPP, 1995.
 - Felleisen, M. and Friedman, D.P. "Control operators, the SECD machine, and the λ-calculus," 1986.
 - Fischer, M.J., Lynch, N.A., and Paterson, M.S. "Impossibility of distributed consensus with one faulty process," JACM, 1985.
 - Fowler, M. "Event Sourcing," 2005.
 - Garcia-Molina, H. and Salem, K. "Sagas," SIGMOD, 1987.
-- Hohpe, G. and Woolf, B. *Enterprise Integration Patterns*, Addison-Wesley, 2003.
+- Hohpe, G. and Woolf, B. _Enterprise Integration Patterns_, Addison-Wesley, 2003.
 - Mohan, C. et al. "ARIES: A transaction recovery method," TODS, 1992.
 - Plotkin, G.D. and Power, J. "Notions of computation determine monads," FoSSaCS, 2002.
 - Plotkin, G.D. and Pretnar, M. "Handlers of algebraic effects," ESOP, 2009.

@@ -38,10 +38,10 @@ export function Seq(exprs: Expr[]): EvalNode {
   return { tisyn: "eval", id: "seq", data: Q({ exprs }) };
 }
 
-export function If(condition: Expr, then: Expr, else_?: Expr): EvalNode {
-  const fields: Record<string, unknown> = { condition, then };
-  if (else_ !== undefined) {
-    fields["else"] = else_;
+export function If(condition: Expr, thenBranch: Expr, elseBranch?: Expr): EvalNode {
+  const fields: Record<string, unknown> = { condition, then: thenBranch };
+  if (elseBranch !== undefined) {
+    fields["else"] = elseBranch;
   }
   return { tisyn: "eval", id: "if", data: Q(fields) };
 }

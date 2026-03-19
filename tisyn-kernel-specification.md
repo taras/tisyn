@@ -219,11 +219,11 @@ resolve(node, E):
 
 ### 3.4 Categories
 
-| Category | Behavior |
-|----------|----------|
-| **Terminal** | Return as-is. No further traversal. Results of `lookup`, `eval`; Fn nodes; primitives. |
-| **Unwrap** | Strip Quote, resolve contents. |
-| **Traversable** | Recurse into children. Plain arrays; plain objects without matching `tisyn`. |
+| Category        | Behavior                                                                               |
+| --------------- | -------------------------------------------------------------------------------------- |
+| **Terminal**    | Return as-is. No further traversal. Results of `lookup`, `eval`; Fn nodes; primitives. |
+| **Unwrap**      | Strip Quote, resolve contents.                                                         |
+| **Traversable** | Recurse into children. Plain arrays; plain objects without matching `tisyn`.           |
 
 ### 3.5 Postcondition
 
@@ -712,17 +712,17 @@ Counter starts at 0, increments per spawn. Task IDs match
 
 ### 8.1 Error Types
 
-| Error | Cause |
-|-------|-------|
-| `UnboundVariable` | Ref resolution failed |
-| `NotCallable` | Call on non-Fn value |
-| `ArityMismatch` | Wrong argument count |
-| `TypeError` | Invalid operand type |
-| `DivisionByZero` | div/mod by zero |
-| `ExplicitThrow` | `throw` node evaluated |
-| `EffectError` | Agent returned error |
-| `DivergenceError` | Replay mismatch |
-| `MalformedIR` | Invalid IR structure |
+| Error             | Cause                  |
+| ----------------- | ---------------------- |
+| `UnboundVariable` | Ref resolution failed  |
+| `NotCallable`     | Call on non-Fn value   |
+| `ArityMismatch`   | Wrong argument count   |
+| `TypeError`       | Invalid operand type   |
+| `DivisionByZero`  | div/mod by zero        |
+| `ExplicitThrow`   | `throw` node evaluated |
+| `EffectError`     | Agent returned error   |
+| `DivergenceError` | Replay mismatch        |
+| `MalformedIR`     | Invalid IR structure   |
 
 ### 8.2 Propagation
 
@@ -1013,23 +1013,23 @@ unique final value, and a unique task tree.
 
 ### 11.2 What Must Be Deterministic
 
-| Component | Guarantee |
-|-----------|-----------|
-| Structural operations | Pure functions of inputs |
-| Effect descriptor construction | Deterministic from tree + env |
-| Effect ordering within a task | Single-threaded, sequential |
-| Task spawn ordering | Synchronous counter per parent |
-| Branching decisions | Same results → same conditions |
-| `construct` field order | Lexicographic key sorting |
-| `call` argument order | Left-to-right |
-| `seq` element order | Left-to-right |
+| Component                      | Guarantee                      |
+| ------------------------------ | ------------------------------ |
+| Structural operations          | Pure functions of inputs       |
+| Effect descriptor construction | Deterministic from tree + env  |
+| Effect ordering within a task  | Single-threaded, sequential    |
+| Task spawn ordering            | Synchronous counter per parent |
+| Branching decisions            | Same results → same conditions |
+| `construct` field order        | Lexicographic key sorting      |
+| `call` argument order          | Left-to-right                  |
+| `seq` element order            | Left-to-right                  |
 
 ### 11.3 What Is Explicitly Non-Deterministic
 
-| Component | How handled |
-|-----------|-------------|
-| Effect result values | Journal stores them |
-| Wall-clock timing | Time is an effect |
+| Component                         | How handled           |
+| --------------------------------- | --------------------- |
+| Effect result values              | Journal stores them   |
+| Wall-clock timing                 | Time is an effect     |
 | Concurrent child completion order | Per-coroutine cursors |
 
 ### 11.4 Structural Determinism
@@ -1087,20 +1087,20 @@ For every structural Eval in the IR:
 The `positions` function returns the set of Expr nodes that the
 operation will `eval()`:
 
-| Operation | Positions |
-|-----------|-----------|
-| `let` | `value`, `body` |
-| `seq` | each element of `exprs` |
-| `if` | `condition`, `then`, `else` (if present) |
-| `while` | `condition`, each element of `exprs` |
-| `call` | `fn`, each element of `args` |
-| `get` | `obj` |
-| binary ops | `a`, `b` |
-| unary ops | `a` |
-| `construct` | each value |
-| `array` | each element of `items` |
-| `concat` | each element of `parts` |
-| `throw` | `message` |
+| Operation   | Positions                                |
+| ----------- | ---------------------------------------- |
+| `let`       | `value`, `body`                          |
+| `seq`       | each element of `exprs`                  |
+| `if`        | `condition`, `then`, `else` (if present) |
+| `while`     | `condition`, each element of `exprs`     |
+| `call`      | `fn`, each element of `args`             |
+| `get`       | `obj`                                    |
+| binary ops  | `a`, `b`                                 |
+| unary ops   | `a`                                      |
+| `construct` | each value                               |
+| `array`     | each element of `items`                  |
+| `concat`    | each element of `parts`                  |
+| `throw`     | `message`                                |
 
 ### 12.3 When Validation Runs
 
@@ -1128,15 +1128,15 @@ wire, loading from storage. MAY validate during evaluation.
 CREATED → RUNNING ⇄ SUSPENDED → COMPLETED | FAILED | CANCELLED
 ```
 
-| Transition | Trigger | Journal event |
-|-----------|---------|---------------|
-| CREATED → RUNNING | Task started | (none) |
-| RUNNING → SUSPENDED | External Eval | (none) |
-| SUSPENDED → RUNNING | Result received | Yield (before resume) |
-| RUNNING → COMPLETED | Body returns Val | Close(ok) |
-| RUNNING → FAILED | Unhandled error | Close(err) |
-| SUSPENDED → FAILED | Effect error | Yield(err), Close(err) |
-| * → CANCELLED | Cancel signal | Close(cancelled) |
+| Transition          | Trigger          | Journal event          |
+| ------------------- | ---------------- | ---------------------- |
+| CREATED → RUNNING   | Task started     | (none)                 |
+| RUNNING → SUSPENDED | External Eval    | (none)                 |
+| SUSPENDED → RUNNING | Result received  | Yield (before resume)  |
+| RUNNING → COMPLETED | Body returns Val | Close(ok)              |
+| RUNNING → FAILED    | Unhandled error  | Close(err)             |
+| SUSPENDED → FAILED  | Effect error     | Yield(err), Close(err) |
+| \* → CANCELLED      | Cancel signal    | Close(cancelled)       |
 
 ### 13.3 The Execution Loop
 

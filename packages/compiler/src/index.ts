@@ -1,3 +1,4 @@
+export { compile, compileOne, type CompileOptions, type CompileResult } from "./compile.js";
 export { toAgentId } from "./agent-id.js";
 export { Counter } from "./counter.js";
 export { CompileError, ErrorCodes } from "./errors.js";
