@@ -1,5 +1,6 @@
 {
   "rules": {
-    "require-yield": "off"
+    "require-yield": "off",
+    "unicorn/no-thenable": "off"
   }
 }

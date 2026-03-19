@@ -95,13 +95,13 @@ Implementations MUST NOT inspect `tisyn` fields to determine
 whether a value is "really" an IR node. The origin determines
 classification.
 
-| Origin | Classification |
-|--------|---------------|
-| Node in IR tree being walked | Expr |
-| Result of `lookup(name, E)` | Val |
-| Result of `eval(expr, E)` (except Rule QUOTE) | Val |
-| Agent response `result.value` | Val |
-| Journal `result.value` | Val |
+| Origin                                        | Classification |
+| --------------------------------------------- | -------------- |
+| Node in IR tree being walked                  | Expr           |
+| Result of `lookup(name, E)`                   | Val            |
+| Result of `eval(expr, E)` (except Rule QUOTE) | Val            |
+| Agent response `result.value`                 | Val            |
+| Journal `result.value`                        | Val            |
 
 There is no `is_val` predicate. Implementations do not need a
 function that inspects a value's structure to determine if it is
@@ -197,13 +197,13 @@ values.
 
 ### 3.7 Discriminant Table
 
-| `tisyn` value | Node type | Required fields |
-|---------------|-----------|-----------------|
-| `"eval"` | Eval | `id` (string), `data` (any) |
-| `"quote"` | Quote | `expr` (any) |
-| `"ref"` | Ref | `name` (string) |
-| `"fn"` | Fn | `params` (string[]), `body` (any) |
-| *(absent or other)* | Literal | *(the value itself)* |
+| `tisyn` value       | Node type | Required fields                   |
+| ------------------- | --------- | --------------------------------- |
+| `"eval"`            | Eval      | `id` (string), `data` (any)       |
+| `"quote"`           | Quote     | `expr` (any)                      |
+| `"ref"`             | Ref       | `name` (string)                   |
+| `"fn"`              | Fn        | `params` (string[]), `body` (any) |
+| _(absent or other)_ | Literal   | _(the value itself)_              |
 
 ---
 
@@ -348,6 +348,7 @@ eval(Call { fn, args }, E):
 Free Refs in the body resolve at the call site. The compiler
 MUST ensure every Fn it produces either has no free variables
 or has all free variables guaranteed in scope at every call site.
+
 ## 6. Structural Operations
 
 Structural operations are `Eval` nodes whose `id` is in the
@@ -361,9 +362,18 @@ fields, then selectively `eval`s sub-expressions.
 ### 6.1 let
 
 ```json
-{ "tisyn": "eval", "id": "let",
-  "data": { "tisyn": "quote", "expr": {
-    "name": "<string>", "value": "<Expr>", "body": "<Expr>" }}}
+{
+  "tisyn": "eval",
+  "id": "let",
+  "data": {
+    "tisyn": "quote",
+    "expr": {
+      "name": "<string>",
+      "value": "<Expr>",
+      "body": "<Expr>"
+    }
+  }
+}
 ```
 
 ```
@@ -401,10 +411,18 @@ visible in subsequent elements.
 ### 6.3 if
 
 ```json
-{ "tisyn": "eval", "id": "if",
-  "data": { "tisyn": "quote", "expr": {
-    "condition": "<Expr>", "then": "<Expr>",
-    "else": "<Expr | absent>" }}}
+{
+  "tisyn": "eval",
+  "id": "if",
+  "data": {
+    "tisyn": "quote",
+    "expr": {
+      "condition": "<Expr>",
+      "then": "<Expr>",
+      "else": "<Expr | absent>"
+    }
+  }
+}
 ```
 
 ```
@@ -463,9 +481,17 @@ caller's environment extended with parameter bindings.
 ### 6.6 get
 
 ```json
-{ "tisyn": "eval", "id": "get",
-  "data": { "tisyn": "quote", "expr": {
-    "obj": "<Expr>", "key": "<string>" }}}
+{
+  "tisyn": "eval",
+  "id": "get",
+  "data": {
+    "tisyn": "quote",
+    "expr": {
+      "obj": "<Expr>",
+      "key": "<string>"
+    }
+  }
+}
 ```
 
 ```
@@ -557,15 +583,15 @@ Not(null) → true
 
 ### 6.9 Operator Summary
 
-| Operator | Accepts | Returns | Error on |
-|----------|---------|---------|----------|
-| `add`, `sub`, `mul`, `div`, `mod` | number, number | number | Non-number; div/mod by zero |
-| `neg` | number | number | Non-number |
-| `gt`, `gte`, `lt`, `lte` | number, number | boolean | Non-number |
-| `eq`, `neq` | any, any | boolean | (never) |
-| `and`, `or` | any, any | any (operand) | (never) |
-| `not` | any | boolean | (never) |
-| `concat` | any[] | string | (never — coerces to string) |
+| Operator                          | Accepts        | Returns       | Error on                    |
+| --------------------------------- | -------------- | ------------- | --------------------------- |
+| `add`, `sub`, `mul`, `div`, `mod` | number, number | number        | Non-number; div/mod by zero |
+| `neg`                             | number         | number        | Non-number                  |
+| `gt`, `gte`, `lt`, `lte`          | number, number | boolean       | Non-number                  |
+| `eq`, `neq`                       | any, any       | boolean       | (never)                     |
+| `and`, `or`                       | any, any       | any (operand) | (never)                     |
+| `not`                             | any            | boolean       | (never)                     |
+| `concat`                          | any[]          | string        | (never — coerces to string) |
 
 ### 6.10 construct
 
@@ -651,11 +677,11 @@ and any replay.
 
 ### 7.2 Classification Properties
 
-| Property | STRUCTURAL | EXTERNAL |
-|----------|-----------|----------|
-| Evaluated by | Host evaluator | Agent (via execution layer) |
-| Journaled? | No | Yes (Yield event) |
-| Causes suspension? | No | Yes |
+| Property           | STRUCTURAL     | EXTERNAL                    |
+| ------------------ | -------------- | --------------------------- |
+| Evaluated by       | Host evaluator | Agent (via execution layer) |
+| Journaled?         | No             | Yes (Yield event)           |
+| Causes suspension? | No             | Yes                         |
 
 ### 7.3 The Dot Convention
 
@@ -692,12 +718,12 @@ Task state → RUNNING. Evaluator returns the result.
 
 ### 7.5 What Crosses the Boundary
 
-| Direction | Payload | Type |
-|-----------|---------|------|
+| Direction             | Payload           | Type                        |
+| --------------------- | ----------------- | --------------------------- |
 | Evaluator → Execution | Effect descriptor | `{ id: string, data: Val }` |
-| Execution → Evaluator | Success result | Val |
-| Execution → Evaluator | Error result | Error |
-| Execution → Evaluator | Cancellation | Signal |
+| Execution → Evaluator | Success result    | Val                         |
+| Execution → Evaluator | Error result      | Error                       |
+| Execution → Evaluator | Cancellation      | Signal                      |
 
 The execution layer NEVER receives unevaluated IR nodes for
 standard external operations. Exception: concurrency nodes (§8).
@@ -890,11 +916,11 @@ resolve(node, E):
 
 ### 9.4 Categories
 
-| Category | Behavior | Examples |
-|----------|----------|---------|
-| **Terminal** | Return as-is. No traversal. | Results of `lookup`, `eval`; Fn nodes; primitives |
-| **Unwrap** | Remove Quote layer, resolve contents. | Quote nodes |
-| **Traversable** | Recurse into children. | Plain arrays; objects without matching `tisyn` |
+| Category        | Behavior                              | Examples                                          |
+| --------------- | ------------------------------------- | ------------------------------------------------- |
+| **Terminal**    | Return as-is. No traversal.           | Results of `lookup`, `eval`; Fn nodes; primitives |
+| **Unwrap**      | Remove Quote layer, resolve contents. | Quote nodes                                       |
+| **Traversable** | Recurse into children.                | Plain arrays; objects without matching `tisyn`    |
 
 Only plain arrays and objects without a matching `tisyn`
 discriminant are traversable.
@@ -957,20 +983,20 @@ where `classify(ID) = STRUCTURAL`:
 `positions(id, fields)` returns the set of nodes that the
 structural operation will `eval()` on:
 
-| Operation | `fields` shape | Evaluation positions |
-|-----------|---------------|---------------------|
-| `let` | `{ name, value, body }` | `value`, `body` |
-| `seq` | `{ exprs: [...] }` | each element of `exprs` |
-| `if` | `{ condition, then, else? }` | `condition`, `then`, `else` (if present) |
-| `while` | `{ condition, exprs: [...] }` | `condition`, each element of `exprs` |
-| `call` | `{ fn, args: [...] }` | `fn`, each element of `args` |
-| `get` | `{ obj, key }` | `obj` only |
-| binary ops | `{ a, b }` | `a`, `b` |
-| unary ops | `{ a }` | `a` |
-| `construct` | `{ k₁: v₁, ... }` | each value |
-| `array` | `{ items: [...] }` | each element of `items` |
-| `concat` | `{ parts: [...] }` | each element of `parts` |
-| `throw` | `{ message }` | `message` |
+| Operation   | `fields` shape                | Evaluation positions                     |
+| ----------- | ----------------------------- | ---------------------------------------- |
+| `let`       | `{ name, value, body }`       | `value`, `body`                          |
+| `seq`       | `{ exprs: [...] }`            | each element of `exprs`                  |
+| `if`        | `{ condition, then, else? }`  | `condition`, `then`, `else` (if present) |
+| `while`     | `{ condition, exprs: [...] }` | `condition`, each element of `exprs`     |
+| `call`      | `{ fn, args: [...] }`         | `fn`, each element of `args`             |
+| `get`       | `{ obj, key }`                | `obj` only                               |
+| binary ops  | `{ a, b }`                    | `a`, `b`                                 |
+| unary ops   | `{ a }`                       | `a`                                      |
+| `construct` | `{ k₁: v₁, ... }`             | each value                               |
+| `array`     | `{ items: [...] }`            | each element of `items`                  |
+| `concat`    | `{ parts: [...] }`            | each element of `parts`                  |
+| `throw`     | `{ message }`                 | `message`                                |
 
 This table is exhaustive. The check is one level deep — it
 examines only nodes at evaluation positions, not their children.
@@ -983,6 +1009,7 @@ examines only nodes at evaluation positions, not their children.
 Implementations MUST validate when: parsing IR from JSON,
 receiving IR over the wire, loading IR from storage. Implementations
 MAY additionally validate during evaluation.
+
 ## 11. Runtime Model
 
 ### 11.1 Components
@@ -1009,15 +1036,15 @@ CREATED → RUNNING ⇄ SUSPENDED → COMPLETED
 
 Terminal states: COMPLETED, FAILED, CANCELLED.
 
-| From | To | Trigger | Journal |
-|------|----|---------|---------|
-| CREATED | RUNNING | Start | (none) |
-| RUNNING | SUSPENDED | External Eval | (none) |
-| SUSPENDED | RUNNING | Result received | Yield (before resume) |
-| RUNNING | COMPLETED | Body returns | Close(ok) |
-| RUNNING | FAILED | Unhandled error | Close(err) |
-| SUSPENDED | FAILED | Effect error | Yield(err), Close(err) |
-| * | CANCELLED | Cancel signal | Close(cancelled) |
+| From      | To        | Trigger         | Journal                |
+| --------- | --------- | --------------- | ---------------------- |
+| CREATED   | RUNNING   | Start           | (none)                 |
+| RUNNING   | SUSPENDED | External Eval   | (none)                 |
+| SUSPENDED | RUNNING   | Result received | Yield (before resume)  |
+| RUNNING   | COMPLETED | Body returns    | Close(ok)              |
+| RUNNING   | FAILED    | Unhandled error | Close(err)             |
+| SUSPENDED | FAILED    | Effect error    | Yield(err), Close(err) |
+| \*        | CANCELLED | Cancel signal   | Close(cancelled)       |
 
 **Critical:** SUSPENDED → RUNNING writes the Yield event and
 awaits durable acknowledgment BEFORE calling `generator.next()`.
@@ -1157,20 +1184,22 @@ WebSocket, stdio (NDJSON), SSE + POST, in-process.
 
 Six message types. No others.
 
-| Message | Direction | JSON-RPC Type | Response? |
-|---------|-----------|--------------|-----------|
-| Initialize | Agent → Host | Request | Yes |
-| Execute | Host → Agent | Request | Yes |
-| Result | Agent → Host | Response | *(is response)* |
-| Progress | Agent → Host | Notification | No |
-| Cancel | Host → Agent | Notification | No |
-| Shutdown | Host → Agent | Notification | No |
+| Message    | Direction    | JSON-RPC Type | Response?       |
+| ---------- | ------------ | ------------- | --------------- |
+| Initialize | Agent → Host | Request       | Yes             |
+| Execute    | Host → Agent | Request       | Yes             |
+| Result     | Agent → Host | Response      | _(is response)_ |
+| Progress   | Agent → Host | Notification  | No              |
+| Cancel     | Host → Agent | Notification  | No              |
+| Shutdown   | Host → Agent | Notification  | No              |
 
 ### 12.3 Initialize
 
 ```json
 {
-  "jsonrpc": "2.0", "id": 1, "method": "initialize",
+  "jsonrpc": "2.0",
+  "id": 1,
+  "method": "initialize",
   "params": {
     "protocolVersion": "1.0",
     "agentId": "fraud-detector",
@@ -1186,8 +1215,7 @@ Six message types. No others.
 Response:
 
 ```json
-{ "jsonrpc": "2.0", "id": 1,
-  "result": { "protocolVersion": "1.0", "sessionId": "sess-123" } }
+{ "jsonrpc": "2.0", "id": 1, "result": { "protocolVersion": "1.0", "sessionId": "sess-123" } }
 ```
 
 Initialize MUST be the first message. No Execute before it
@@ -1197,7 +1225,9 @@ completes. Incompatible version → error `-32002`, close.
 
 ```json
 {
-  "jsonrpc": "2.0", "id": "root.0:2", "method": "execute",
+  "jsonrpc": "2.0",
+  "id": "root.0:2",
+  "method": "execute",
   "params": {
     "executionId": "ex-abc-123",
     "taskId": "root.0",
@@ -1209,37 +1239,38 @@ completes. Incompatible version → error `-32002`, close.
 }
 ```
 
-| Field | Type | Required | Description |
-|-------|------|----------|-------------|
-| `id` | string | Yes | Correlation: `"{taskId}:{yieldIndex}"` |
-| `executionId` | string | Yes | Workflow execution instance |
-| `taskId` | string | Yes | Coroutine ID |
-| `operation` | string | Yes | Method name |
-| `args` | Val[] | Yes | Resolved arguments |
-| `progressToken` | string | No | For progress notifications |
-| `deadline` | string | No | ISO 8601 absolute deadline |
+| Field           | Type   | Required | Description                            |
+| --------------- | ------ | -------- | -------------------------------------- |
+| `id`            | string | Yes      | Correlation: `"{taskId}:{yieldIndex}"` |
+| `executionId`   | string | Yes      | Workflow execution instance            |
+| `taskId`        | string | Yes      | Coroutine ID                           |
+| `operation`     | string | Yes      | Method name                            |
+| `args`          | Val[]  | Yes      | Resolved arguments                     |
+| `progressToken` | string | No       | For progress notifications             |
+| `deadline`      | string | No       | ISO 8601 absolute deadline             |
 
 ### 12.5 Result
 
 **Success:**
 
 ```json
-{ "jsonrpc": "2.0", "id": "root.0:2",
-  "result": { "ok": true, "value": true } }
+{ "jsonrpc": "2.0", "id": "root.0:2", "result": { "ok": true, "value": true } }
 ```
 
 **Application error:**
 
 ```json
-{ "jsonrpc": "2.0", "id": "root.0:2",
-  "result": { "ok": false, "error": { "message": "unavailable", "name": "ServiceError" } } }
+{
+  "jsonrpc": "2.0",
+  "id": "root.0:2",
+  "result": { "ok": false, "error": { "message": "unavailable", "name": "ServiceError" } }
+}
 ```
 
 **Protocol error:**
 
 ```json
-{ "jsonrpc": "2.0", "id": "root.0:2",
-  "error": { "code": -32601, "message": "Method not found" } }
+{ "jsonrpc": "2.0", "id": "root.0:2", "error": { "code": -32601, "message": "Method not found" } }
 ```
 
 Application errors (`result.ok: false`) are journaled as
@@ -1249,8 +1280,11 @@ journaled.
 ### 12.6 Progress
 
 ```json
-{ "jsonrpc": "2.0", "method": "progress",
-  "params": { "token": "root.0:2", "value": { "phase": "analyzing", "percent": 45 } } }
+{
+  "jsonrpc": "2.0",
+  "method": "progress",
+  "params": { "token": "root.0:2", "value": { "phase": "analyzing", "percent": 45 } }
+}
 ```
 
 NOT journaled. NOT replayed. Best-effort. Ordered per-token.
@@ -1259,8 +1293,11 @@ Discarded for unknown or expired tokens.
 ### 12.7 Cancel
 
 ```json
-{ "jsonrpc": "2.0", "method": "cancel",
-  "params": { "id": "root.0:2", "reason": "parent_cancelled" } }
+{
+  "jsonrpc": "2.0",
+  "method": "cancel",
+  "params": { "id": "root.0:2", "reason": "parent_cancelled" }
+}
 ```
 
 Best-effort. No response expected. The host does not wait for
@@ -1311,21 +1348,21 @@ unique final value, and a unique task tree.
 
 ### 13.2 What Must Be Deterministic
 
-| Requirement | Guaranteed by |
-|-------------|---------------|
-| Structural operations | All rules are pure functions |
-| Effect ordering | Single-threaded within a task |
-| Branching decisions | Same results → same conditions |
-| Task spawn ordering | Synchronous reducer, priority queue |
-| Construct field order | Lexicographic key sorting |
+| Requirement           | Guaranteed by                       |
+| --------------------- | ----------------------------------- |
+| Structural operations | All rules are pure functions        |
+| Effect ordering       | Single-threaded within a task       |
+| Branching decisions   | Same results → same conditions      |
+| Task spawn ordering   | Synchronous reducer, priority queue |
+| Construct field order | Lexicographic key sorting           |
 
 ### 13.3 What Is Non-Deterministic
 
-| Component | How handled |
-|-----------|-------------|
-| Effect result values | Journal stores results |
-| Wall-clock timing | Time is an effect |
-| Concurrent child completion order | Per-coroutine cursors |
+| Component                         | How handled            |
+| --------------------------------- | ---------------------- |
+| Effect result values              | Journal stores results |
+| Wall-clock timing                 | Time is an effect      |
+| Concurrent child completion order | Per-coroutine cursors  |
 
 ### 13.4 Structural Determinism
 
@@ -1372,17 +1409,17 @@ translates between representations.
 
 ### 14.2 Error Types
 
-| Type | Cause |
-|------|-------|
+| Type            | Cause                 |
+| --------------- | --------------------- |
 | UnboundVariable | Ref resolution failed |
-| NotCallable | Call on non-Fn value |
-| ArityMismatch | Wrong argument count |
-| TypeError | Invalid operand type |
-| DivisionByZero | div/mod by zero |
-| ExplicitThrow | throw node evaluated |
-| EffectError | Agent returned error |
-| DivergenceError | Replay mismatch |
-| MalformedIR | Invalid IR structure |
+| NotCallable     | Call on non-Fn value  |
+| ArityMismatch   | Wrong argument count  |
+| TypeError       | Invalid operand type  |
+| DivisionByZero  | div/mod by zero       |
+| ExplicitThrow   | throw node evaluated  |
+| EffectError     | Agent returned error  |
+| DivergenceError | Replay mismatch       |
+| MalformedIR     | Invalid IR structure  |
 
 ### 14.3 Propagation Rules
 
@@ -1551,13 +1588,13 @@ Not journaled. May be lost.
 
 ### 17.2 What Observers See
 
-| Event | When | Contains |
-|-------|------|----------|
-| Yield | Effect completed | Agent, method, result |
-| Close(ok) | Task completed | Final value |
-| Close(err) | Task failed | Error |
-| Close(cancelled) | Task cancelled | — |
-| Progress | During effect | Agent-defined payload |
+| Event            | When             | Contains              |
+| ---------------- | ---------------- | --------------------- |
+| Yield            | Effect completed | Agent, method, result |
+| Close(ok)        | Task completed   | Final value           |
+| Close(err)       | Task failed      | Error                 |
+| Close(cancelled) | Task cancelled   | —                     |
+| Progress         | During effect    | Agent-defined payload |
 
 Observers do NOT see structural operations, environment bindings,
 internal control flow, or replay/live distinction.
@@ -1568,11 +1605,11 @@ internal control flow, or replay/live distinction.
 
 Three independent version axes:
 
-| Thing | What changes | Versioned by |
-|-------|-------------|-------------|
-| IR grammar | New node types | IR version |
-| Structural operations | New ids in set | Interpreter version |
-| Wire protocol | Message changes | Protocol version |
+| Thing                 | What changes    | Versioned by        |
+| --------------------- | --------------- | ------------------- |
+| IR grammar            | New node types  | IR version          |
+| Structural operations | New ids in set  | Interpreter version |
+| Wire protocol         | Message changes | Protocol version    |
 
 Classification changes are breaking. In-flight executions must
 complete on the old interpreter version before upgrading.
@@ -1585,19 +1622,36 @@ complete on the old interpreter version before upgrading.
 type Expr<T> = T | Eval<T> | Quote<T> | Ref<T> | TisynFn<T>;
 
 interface Eval<T, TInput = unknown> {
-  tisyn: "eval"; id: string; data: TInput; T?: T;
+  tisyn: "eval";
+  id: string;
+  data: TInput;
+  T?: T;
 }
-interface Quote<T> { tisyn: "quote"; expr: Expr<T>; }
-interface Ref<T> { tisyn: "ref"; name: string; T?: T; }
-interface TisynFn<T> { tisyn: "fn"; params: string[]; body: Expr<T>; }
+interface Quote<T> {
+  tisyn: "quote";
+  expr: Expr<T>;
+}
+interface Ref<T> {
+  tisyn: "ref";
+  name: string;
+  T?: T;
+}
+interface TisynFn<T> {
+  tisyn: "fn";
+  params: string[];
+  body: Expr<T>;
+}
 
 type AgentOperations = Record<string, (...args: any[]) => Operation<any>>;
 interface AgentDefinition<T extends AgentOperations> {
-  id: string; operations: T; create(): AgentClient<T>;
+  id: string;
+  operations: T;
+  create(): AgentClient<T>;
 }
 type AgentClient<T extends AgentOperations> = {
   [K in keyof T]: T[K] extends (...a: infer A) => Operation<infer R>
-    ? (...a: A) => Workflow<R> : never;
+    ? (...a: A) => Workflow<R>
+    : never;
 };
 ```
 
@@ -1609,27 +1663,34 @@ Phantom fields (`T?`) are stripped by `JSON.stringify`.
 
 ```typescript
 interface ExecuteRequest {
-  jsonrpc: "2.0"; id: string; method: "execute";
+  jsonrpc: "2.0";
+  id: string;
+  method: "execute";
   params: {
-    executionId: string; taskId: string;
-    operation: string; args: Json[];
-    progressToken?: string; deadline?: string;
+    executionId: string;
+    taskId: string;
+    operation: string;
+    args: Json[];
+    progressToken?: string;
+    deadline?: string;
   };
 }
 
 interface ExecuteResponse {
-  jsonrpc: "2.0"; id: string;
-  result: { ok: boolean; value?: Json;
-            error?: { message: string; name?: string } };
+  jsonrpc: "2.0";
+  id: string;
+  result: { ok: boolean; value?: Json; error?: { message: string; name?: string } };
 }
 
 interface CancelNotification {
-  jsonrpc: "2.0"; method: "cancel";
+  jsonrpc: "2.0";
+  method: "cancel";
   params: { id: string; reason?: string };
 }
 
 interface ProgressNotification {
-  jsonrpc: "2.0"; method: "progress";
+  jsonrpc: "2.0";
+  method: "progress";
   params: { token: string; value: Json };
 }
 ```
@@ -1642,13 +1703,15 @@ interface ProgressNotification {
 type DurableEvent = YieldEvent | CloseEvent;
 
 interface YieldEvent {
-  type: "yield"; coroutineId: string;
+  type: "yield";
+  coroutineId: string;
   description: { type: string; name: string };
   result: EventResult;
 }
 
 interface CloseEvent {
-  type: "close"; coroutineId: string;
+  type: "close";
+  coroutineId: string;
   result: EventResult;
 }
 

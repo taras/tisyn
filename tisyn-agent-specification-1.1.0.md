@@ -93,8 +93,11 @@ If `operation` is not in the registry, the agent MUST respond
 with a protocol error:
 
 ```json
-{ "jsonrpc":"2.0", "id":"root:0",
-  "error": { "code": -32601, "message": "Unknown operation: unknownMethod" } }
+{
+  "jsonrpc": "2.0",
+  "id": "root:0",
+  "error": { "code": -32601, "message": "Unknown operation: unknownMethod" }
+}
 ```
 
 The agent MUST NOT silently ignore unknown operations. It MUST
@@ -108,24 +111,30 @@ operations are protocol-level failures.
 ### 3.1 Input
 
 ```json
-{ "jsonrpc":"2.0", "id":"root.0:2", "method":"execute",
+{
+  "jsonrpc": "2.0",
+  "id": "root.0:2",
+  "method": "execute",
   "params": {
-    "executionId": "ex-abc-123", "taskId": "root.0",
+    "executionId": "ex-abc-123",
+    "taskId": "root.0",
     "operation": "fraudCheck",
     "args": [{ "id": "order-123", "total": 150 }],
     "progressToken": "root.0:2",
-    "deadline": "2026-03-19T12:05:00Z" }}
+    "deadline": "2026-03-19T12:05:00Z"
+  }
+}
 ```
 
-| Field | Type | Required | Description |
-|-------|------|----------|-------------|
-| `id` | string | Yes | Correlation ID (see §3.2) |
-| `executionId` | string | Yes | Workflow execution instance |
-| `taskId` | string | Yes | Coroutine ID |
-| `operation` | string | Yes | Operation name |
-| `args` | Val[] | Yes | JSON arguments (always an array) |
-| `progressToken` | string | No | For progress notifications |
-| `deadline` | string | No | ISO 8601 absolute deadline |
+| Field           | Type   | Required | Description                      |
+| --------------- | ------ | -------- | -------------------------------- |
+| `id`            | string | Yes      | Correlation ID (see §3.2)        |
+| `executionId`   | string | Yes      | Workflow execution instance      |
+| `taskId`        | string | Yes      | Coroutine ID                     |
+| `operation`     | string | Yes      | Operation name                   |
+| `args`          | Val[]  | Yes      | JSON arguments (always an array) |
+| `progressToken` | string | No       | For progress notifications       |
+| `deadline`      | string | No       | ISO 8601 absolute deadline       |
 
 ### 3.2 Correlation ID Semantics
 
@@ -156,23 +165,23 @@ one is a re-dispatch of the other.
 **Success:**
 
 ```json
-{ "jsonrpc":"2.0", "id":"root.0:2",
-  "result": { "ok": true, "value": true } }
+{ "jsonrpc": "2.0", "id": "root.0:2", "result": { "ok": true, "value": true } }
 ```
 
 **Application error:**
 
 ```json
-{ "jsonrpc":"2.0", "id":"root.0:2",
-  "result": { "ok": false,
-    "error": { "message": "service unavailable", "name": "ServiceError" } } }
+{
+  "jsonrpc": "2.0",
+  "id": "root.0:2",
+  "result": { "ok": false, "error": { "message": "service unavailable", "name": "ServiceError" } }
+}
 ```
 
 **Protocol error:**
 
 ```json
-{ "jsonrpc":"2.0", "id":"root.0:2",
-  "error": { "code": -32601, "message": "Unknown operation" } }
+{ "jsonrpc": "2.0", "id": "root.0:2", "error": { "code": -32601, "message": "Unknown operation" } }
 ```
 
 The response `id` MUST match the request `id`.
@@ -340,8 +349,11 @@ Each agent MUST document, for every operation:
 ### 5.1 Delivery
 
 ```json
-{ "jsonrpc":"2.0", "method":"cancel",
-  "params": { "id": "root.0:2", "reason": "parent_cancelled" } }
+{
+  "jsonrpc": "2.0",
+  "method": "cancel",
+  "params": { "id": "root.0:2", "reason": "parent_cancelled" }
+}
 ```
 
 Cancel is a JSON-RPC **notification** — no `id` field at the
@@ -486,17 +498,17 @@ cause the task to fail without a replay record.
 
 ### 7.2 Classification Rules
 
-| Situation | Category | Reason |
-|-----------|----------|--------|
-| Database query failed | Application | Operation attempted, infrastructure failed |
-| External API returned 500 | Application | Operation attempted, dependency failed |
-| Input validation failed | Application | Operation rejected input |
-| Timeout waiting for response | Application | Operation could not complete in time |
-| Business rule violation | Application | Operation logic rejected request |
-| Unknown operation name | Protocol | Agent misconfigured or host sent wrong name |
-| Missing required field | Protocol | Malformed Execute message |
-| Invalid JSON | Protocol | Transport or serialization bug |
-| Agent not initialized | Protocol | Lifecycle violation |
+| Situation                    | Category    | Reason                                      |
+| ---------------------------- | ----------- | ------------------------------------------- |
+| Database query failed        | Application | Operation attempted, infrastructure failed  |
+| External API returned 500    | Application | Operation attempted, dependency failed      |
+| Input validation failed      | Application | Operation rejected input                    |
+| Timeout waiting for response | Application | Operation could not complete in time        |
+| Business rule violation      | Application | Operation logic rejected request            |
+| Unknown operation name       | Protocol    | Agent misconfigured or host sent wrong name |
+| Missing required field       | Protocol    | Malformed Execute message                   |
+| Invalid JSON                 | Protocol    | Transport or serialization bug              |
+| Agent not initialized        | Protocol    | Lifecycle violation                         |
 
 **Rule of thumb:** if the operation handler was invoked, the
 error is application. If the error occurred before the handler
@@ -506,8 +518,8 @@ could be invoked, it is protocol.
 
 ```typescript
 interface ApplicationError {
-  message: string;    // MUST be non-empty
-  name?: string;      // SHOULD be CamelCase error class name
+  message: string; // MUST be non-empty
+  name?: string; // SHOULD be CamelCase error class name
 }
 ```
 
@@ -525,7 +537,10 @@ If the operation handler throws an uncaught exception, the
 agent runtime MUST catch it and convert to an application error:
 
 ```json
-{ "ok": false, "error": { "message": "Internal error: <exception message>", "name": "InternalError" } }
+{
+  "ok": false,
+  "error": { "message": "Internal error: <exception message>", "name": "InternalError" }
+}
 ```
 
 The agent MUST NOT crash due to an unhandled exception in an
@@ -657,9 +672,11 @@ send Progress notifications.
 ### 10.2 Message
 
 ```json
-{ "jsonrpc":"2.0", "method":"progress",
-  "params": { "token": "root.0:2",
-    "value": { "phase": "downloading", "percent": 45 } } }
+{
+  "jsonrpc": "2.0",
+  "method": "progress",
+  "params": { "token": "root.0:2", "value": { "phase": "downloading", "percent": 45 } }
+}
 ```
 
 `token` MUST match the `progressToken` from the Execute request.
@@ -731,12 +748,16 @@ async function handleExecute(msg: ExecuteMessage) {
   const scope = createScope();
   activeScopesByCorrelationId.set(msg.id, scope);
   try {
-    const value = await scope.run(() =>
-      handler(...msg.params.args));
+    const value = await scope.run(() => handler(...msg.params.args));
     return { ok: true, value };
   } catch (error) {
-    return { ok: false, error: {
-      message: error.message, name: error.name } };
+    return {
+      ok: false,
+      error: {
+        message: error.message,
+        name: error.name,
+      },
+    };
   } finally {
     activeScopesByCorrelationId.delete(msg.id);
   }
@@ -781,11 +802,11 @@ Validation failures become application errors (§7.4).
 
 ### 12.1 Supported
 
-| Binding | Framing | Direction |
-|---------|---------|-----------|
-| WebSocket | WS messages | Bidirectional |
-| Stdio | NDJSON | Bidirectional |
-| SSE + POST | SSE↓ POST↑ | Asymmetric |
+| Binding    | Framing        | Direction     |
+| ---------- | -------------- | ------------- |
+| WebSocket  | WS messages    | Bidirectional |
+| Stdio      | NDJSON         | Bidirectional |
+| SSE + POST | SSE↓ POST↑     | Asymmetric    |
 | In-process | Object passing | Bidirectional |
 
 ### 12.2 Requirements
@@ -801,23 +822,23 @@ All transports MUST:
 
 ## 13. Conformance Checklist
 
-| # | Requirement | § |
-|---|-------------|---|
-| 1 | Initialize as first message | 3.1 |
-| 2 | Declare `agentId` and capabilities | 1.5, 6.1 |
-| 3 | Exactly one Result per Execute | 3.4 |
-| 4 | Protocol error for unknown operations | 2.3 |
-| 5 | Result values are JSON-serializable | 3.6 |
-| 6 | Tolerate duplicate Execute (at-least-once) | 4.1 |
-| 7 | Handle Cancel best-effort | 5.2 |
-| 8 | No crash on Cancel for unknown ID | 5.5 |
-| 9 | No crash on unhandled exception | 7.4 |
-| 10 | Respect declared concurrency limit | 6.1 |
-| 11 | Progress only when declared + token | 10.1, 10.6 |
-| 12 | Initialize on reconnect (fresh session) | 9.1 |
-| 13 | Treat arguments as opaque JSON | 8.4 |
-| 14 | Document idempotency per operation | 4.4 |
-| 15 | Handle Shutdown gracefully | 11.1 |
-| 16 | Side effects are agent's responsibility | 1.4 |
-| 17 | Do not interpret `tisyn` fields | 8.4 |
-| 18 | Application vs protocol error distinction | 7.1 |
+| #   | Requirement                                | §          |
+| --- | ------------------------------------------ | ---------- |
+| 1   | Initialize as first message                | 3.1        |
+| 2   | Declare `agentId` and capabilities         | 1.5, 6.1   |
+| 3   | Exactly one Result per Execute             | 3.4        |
+| 4   | Protocol error for unknown operations      | 2.3        |
+| 5   | Result values are JSON-serializable        | 3.6        |
+| 6   | Tolerate duplicate Execute (at-least-once) | 4.1        |
+| 7   | Handle Cancel best-effort                  | 5.2        |
+| 8   | No crash on Cancel for unknown ID          | 5.5        |
+| 9   | No crash on unhandled exception            | 7.4        |
+| 10  | Respect declared concurrency limit         | 6.1        |
+| 11  | Progress only when declared + token        | 10.1, 10.6 |
+| 12  | Initialize on reconnect (fresh session)    | 9.1        |
+| 13  | Treat arguments as opaque JSON             | 8.4        |
+| 14  | Document idempotency per operation         | 4.4        |
+| 15  | Handle Shutdown gracefully                 | 11.1       |
+| 16  | Side effects are agent's responsibility    | 1.4        |
+| 17  | Do not interpret `tisyn` fields            | 8.4        |
+| 18  | Application vs protocol error distinction  | 7.1        |

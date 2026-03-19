@@ -1,6 +1,9 @@
 {
   "name": "@tisyn/compiler",
   "version": "0.1.0",
+  "bin": {
+    "tisyn-compile": "./dist/cli.js"
+  },
   "type": "module",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
@@ -10,16 +13,13 @@
       "import": "./dist/index.js"
     }
   },
-  "bin": {
-    "tisyn-compile": "./dist/cli.js"
-  },
   "scripts": {
     "build": "tsc --build",
     "test": "vitest run"
   },
   "dependencies": {
-    "@tisyn/shared": "workspace:*",
     "@tisyn/kernel": "workspace:*",
+    "@tisyn/shared": "workspace:*",
     "typescript": "~5.8.0"
   },
   "devDependencies": {

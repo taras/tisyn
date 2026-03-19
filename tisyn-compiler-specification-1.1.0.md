@@ -30,25 +30,25 @@ This document specifies a compiler that transforms a restricted subset of JavaSc
 
 ### 2.1 Allowed Constructs
 
-| Construct | Authoring form | IR |
-|-----------|---------------|-----|
-| Effect | `yield* Agent().method(args)` | External Eval |
-| Concurrency | `yield* all([...])` / `yield* race([...])` | Compound Eval |
-| Sleep | `yield* sleep(ms)` | External Eval |
-| Sub-workflow | `yield* otherWorkflow(args)` | Inlined or `call` |
-| Variable | `const x = <expr>` | `let` |
-| Conditional | `if / else` | `if` |
-| While | `while (cond) { ... }` | `while` or recursive Fn |
-| Return | `return <expr>` | Final expression |
-| Throw | `throw new Error(msg)` | `throw` |
-| Property | `obj.prop` / `obj["literal"]` | `get` |
-| Arithmetic | `+`, `-`, `*`, `/`, `%`, unary `-` | `add`, `sub`, `mul`, `div`, `mod`, `neg` |
-| Comparison | `>`, `>=`, `<`, `<=`, `===`, `!==` | `gt`, `gte`, `lt`, `lte`, `eq`, `neq` |
-| Logical | `&&`, `\|\|`, `!` | `and`, `or`, `not` |
-| String template | `` `hello ${name}` `` | `concat` |
-| Object literal | `{ a: 1, b: x }` | `construct` |
-| Array literal | `[a, b, c]` | `array` |
-| Arrow function | `(x) => pureExpr` | `fn` |
+| Construct       | Authoring form                             | IR                                       |
+| --------------- | ------------------------------------------ | ---------------------------------------- |
+| Effect          | `yield* Agent().method(args)`              | External Eval                            |
+| Concurrency     | `yield* all([...])` / `yield* race([...])` | Compound Eval                            |
+| Sleep           | `yield* sleep(ms)`                         | External Eval                            |
+| Sub-workflow    | `yield* otherWorkflow(args)`               | Inlined or `call`                        |
+| Variable        | `const x = <expr>`                         | `let`                                    |
+| Conditional     | `if / else`                                | `if`                                     |
+| While           | `while (cond) { ... }`                     | `while` or recursive Fn                  |
+| Return          | `return <expr>`                            | Final expression                         |
+| Throw           | `throw new Error(msg)`                     | `throw`                                  |
+| Property        | `obj.prop` / `obj["literal"]`              | `get`                                    |
+| Arithmetic      | `+`, `-`, `*`, `/`, `%`, unary `-`         | `add`, `sub`, `mul`, `div`, `mod`, `neg` |
+| Comparison      | `>`, `>=`, `<`, `<=`, `===`, `!==`         | `gt`, `gte`, `lt`, `lte`, `eq`, `neq`    |
+| Logical         | `&&`, `\|\|`, `!`                          | `and`, `or`, `not`                       |
+| String template | `` `hello ${name}` ``                      | `concat`                                 |
+| Object literal  | `{ a: 1, b: x }`                           | `construct`                              |
+| Array literal   | `[a, b, c]`                                | `array`                                  |
+| Arrow function  | `(x) => pureExpr`                          | `fn`                                     |
 
 ### 2.2 Effects and the Durability Boundary
 
@@ -82,21 +82,24 @@ Compiler names: `__discard_0`, `__all_0`, `__loop_0`, `__sub_0`. User variables 
 
 ### 4.1 Three Cases
 
-| Case | Target | IR |
-|------|--------|----|
+| Case         | Target                        | IR                            |
+| ------------ | ----------------------------- | ----------------------------- |
 | Agent effect | `yield* Agent().method(args)` | External Eval (unquoted data) |
-| Concurrency | `yield* all/race([...])` | Compound Eval (quoted data) |
-| Built-in | `yield* sleep(ms)` | External Eval (unquoted data) |
+| Concurrency  | `yield* all/race([...])`      | Compound Eval (quoted data)   |
+| Built-in     | `yield* sleep(ms)`            | External Eval (unquoted data) |
 
 ### 4.2 Agent Effect
 
 ```typescript
-yield* OrderService().fetchOrder(orderId)
+yield * OrderService().fetchOrder(orderId);
 ```
 
 ```json
-{ "tisyn": "eval", "id": "order-service.fetchOrder",
-  "data": [{ "tisyn": "ref", "name": "orderId" }] }
+{
+  "tisyn": "eval",
+  "id": "order-service.fetchOrder",
+  "data": [{ "tisyn": "ref", "name": "orderId" }]
+}
 ```
 
 **ID:** `Agent.id + "." + methodName`. **Data:** plain array (NOT quoted). `resolve()` traverses at runtime.
@@ -104,15 +107,23 @@ yield* OrderService().fetchOrder(orderId)
 ### 4.3 Concurrency
 
 ```typescript
-yield* all([() => A().step1(x), () => B().step2(y)])
+yield * all([() => A().step1(x), () => B().step2(y)]);
 ```
 
 ```json
-{ "tisyn": "eval", "id": "all",
-  "data": { "tisyn": "quote", "expr": { "exprs": [
-    { "tisyn": "eval", "id": "a.step1", "data": [{ "tisyn": "ref", "name": "x" }] },
-    { "tisyn": "eval", "id": "b.step2", "data": [{ "tisyn": "ref", "name": "y" }] }
-  ]}}}
+{
+  "tisyn": "eval",
+  "id": "all",
+  "data": {
+    "tisyn": "quote",
+    "expr": {
+      "exprs": [
+        { "tisyn": "eval", "id": "a.step1", "data": [{ "tisyn": "ref", "name": "x" }] },
+        { "tisyn": "eval", "id": "b.step2", "data": [{ "tisyn": "ref", "name": "y" }] }
+      ]
+    }
+  }
+}
 ```
 
 **Data:** Quote wrapping `{ exprs: [...] }`. Children remain unevaluated. Execution layer uses `unquote()`, NOT `resolve()`. Arrow functions are unwrapped — body extracted into `exprs`.
@@ -191,8 +202,10 @@ Workflows with no explicit `return` emit `null` as terminal value.
 With early return:
 
 ```typescript
-if (x < 0) { return "negative"; }
-const result = yield* Agent().process(x);
+if (x < 0) {
+  return "negative";
+}
+const result = yield * Agent().process(x);
 return result;
 ```
 
@@ -213,7 +226,7 @@ This means `while` with `return` inside the body CANNOT compile to a `while` IR 
 
 ```typescript
 while (true) {
-  yield* Agent().tick();
+  yield * Agent().tick();
 }
 ```
 
@@ -227,11 +240,11 @@ This loop terminates only via error, cancellation, or the condition becoming fal
 
 ```typescript
 while (true) {
-  const status = yield* JobService().checkStatus(jobId);
+  const status = yield * JobService().checkStatus(jobId);
   if (status.state === "complete") {
-    return yield* JobService().getResult(jobId);
+    return yield * JobService().getResult(jobId);
   }
-  yield* sleep(1000);
+  yield * sleep(1000);
 }
 ```
 
@@ -290,13 +303,13 @@ All pure expressions compile to structural Eval nodes with quoted data:
 
 ### 7.2 Type Constraints
 
-| Operator | Operands | Note |
-|----------|----------|------|
-| `add/sub/mul/div/mod/neg` | number only | TypeError on non-number |
-| `gt/gte/lt/lte` | number only | TypeError on non-number |
-| `eq/neq` | any | Structural comparison via canonical encoding |
-| `and/or` | any | Returns operand values, not booleans |
-| `not` | any | Returns boolean |
+| Operator                  | Operands    | Note                                         |
+| ------------------------- | ----------- | -------------------------------------------- |
+| `add/sub/mul/div/mod/neg` | number only | TypeError on non-number                      |
+| `gt/gte/lt/lte`           | number only | TypeError on non-number                      |
+| `eq/neq`                  | any         | Structural comparison via canonical encoding |
+| `and/or`                  | any         | Returns operand values, not booleans         |
+| `not`                     | any         | Returns boolean                              |
 
 ### 7.3 `+` Disambiguation
 
@@ -354,20 +367,25 @@ Evaluator sorts keys lexicographically at runtime (Spec §6.10).
 ### 8.1 `all` with Simple Children
 
 ```typescript
-yield* all([
-  () => A().step(x),
-  () => B().step(y),
-])
+yield * all([() => A().step(x), () => B().step(y)]);
 ```
 
 Arrow functions unwrapped. Bodies placed in `exprs`:
 
 ```json
-{ "tisyn": "eval", "id": "all",
-  "data": { "tisyn": "quote", "expr": { "exprs": [
-    { "tisyn": "eval", "id": "a.step", "data": [{ "tisyn": "ref", "name": "x" }] },
-    { "tisyn": "eval", "id": "b.step", "data": [{ "tisyn": "ref", "name": "y" }] }
-  ]}}}
+{
+  "tisyn": "eval",
+  "id": "all",
+  "data": {
+    "tisyn": "quote",
+    "expr": {
+      "exprs": [
+        { "tisyn": "eval", "id": "a.step", "data": [{ "tisyn": "ref", "name": "x" }] },
+        { "tisyn": "eval", "id": "b.step", "data": [{ "tisyn": "ref", "name": "y" }] }
+      ]
+    }
+  }
+}
 ```
 
 ### 8.2 `all` with Multi-Step Children
@@ -375,26 +393,38 @@ Arrow functions unwrapped. Bodies placed in `exprs`:
 Generator functions compiled as inline expression trees:
 
 ```typescript
-yield* all([
-  function* () {
-    const order = yield* OrderService().fetchOrder("123");
-    return yield* Processor().process(order);
-  },
-  () => FastService().quick(),
-])
+yield *
+  all([
+    function* () {
+      const order = yield* OrderService().fetchOrder("123");
+      return yield* Processor().process(order);
+    },
+    () => FastService().quick(),
+  ]);
 ```
 
 ```json
-{ "exprs": [
-  { "tisyn": "eval", "id": "let",
-    "data": { "tisyn": "quote", "expr": {
-      "name": "order",
-      "value": { "tisyn": "eval", "id": "order-service.fetchOrder", "data": ["123"] },
-      "body": { "tisyn": "eval", "id": "processor.process",
-                "data": [{ "tisyn": "ref", "name": "order" }] }
-    }}},
-  { "tisyn": "eval", "id": "fast-service.quick", "data": [] }
-]}
+{
+  "exprs": [
+    {
+      "tisyn": "eval",
+      "id": "let",
+      "data": {
+        "tisyn": "quote",
+        "expr": {
+          "name": "order",
+          "value": { "tisyn": "eval", "id": "order-service.fetchOrder", "data": ["123"] },
+          "body": {
+            "tisyn": "eval",
+            "id": "processor.process",
+            "data": [{ "tisyn": "ref", "name": "order" }]
+          }
+        }
+      }
+    },
+    { "tisyn": "eval", "id": "fast-service.quick", "data": [] }
+  ]
+}
 ```
 
 Generator children are inlined, NOT compiled as Fn nodes.
@@ -430,10 +460,21 @@ const double = (x: number) => x * 2;
 ```
 
 ```json
-{ "tisyn": "fn", "params": ["x"],
-  "body": { "tisyn": "eval", "id": "mul",
-            "data": { "tisyn": "quote", "expr": {
-              "a": { "tisyn": "ref", "name": "x" }, "b": 2 }}}}
+{
+  "tisyn": "fn",
+  "params": ["x"],
+  "body": {
+    "tisyn": "eval",
+    "id": "mul",
+    "data": {
+      "tisyn": "quote",
+      "expr": {
+        "a": { "tisyn": "ref", "name": "x" },
+        "b": 2
+      }
+    }
+  }
+}
 ```
 
 ### 9.2 Arrow Function Bodies
@@ -491,32 +532,32 @@ Inner bindings shadow outer with same name. Outer restored after inner scope.
 
 ## 11. Unsupported Constructs
 
-| Construct | Code | Error |
-|-----------|------|-------|
-| Mutable binding | `let x = ...` | E001: Use "const" |
-| Var | `var x = ...` | E002: Use "const" |
-| Reassignment | `x = v` | E003 |
-| Property mutation | `obj.p = v` | E004 |
-| Computed property | `obj[expr]` | E005 |
-| `Math.random()` | | E006 |
-| `Date.now()` | | E007 |
-| `new Map/Set()` | | E008 |
-| `async/await` | | E009 |
-| `yield*` in expr position | `if (yield* ...)` | E010 |
-| Ambiguous `+` | | E011 |
-| `for...in` | | E013 |
-| `eval()/new Function()` | | E014 |
-| `try/catch` | | E015 |
-| `class/this` | | E016 |
-| `yield` (no `*`) | | E017 |
-| `call(() => ...)` | | E018 |
-| `typeof/instanceof` | | E019 |
-| `break/continue` | | E020 |
-| `Promise` | | E021 |
-| Non-Error throw | `throw "string"` | E023 |
-| Arrow block body | `(x) => { ... }` | E024 |
-| `delete`/`Symbol` | | E029/E030 |
-| User var `__` prefix | `const __x` | E028 |
+| Construct                 | Code              | Error             |
+| ------------------------- | ----------------- | ----------------- |
+| Mutable binding           | `let x = ...`     | E001: Use "const" |
+| Var                       | `var x = ...`     | E002: Use "const" |
+| Reassignment              | `x = v`           | E003              |
+| Property mutation         | `obj.p = v`       | E004              |
+| Computed property         | `obj[expr]`       | E005              |
+| `Math.random()`           |                   | E006              |
+| `Date.now()`              |                   | E007              |
+| `new Map/Set()`           |                   | E008              |
+| `async/await`             |                   | E009              |
+| `yield*` in expr position | `if (yield* ...)` | E010              |
+| Ambiguous `+`             |                   | E011              |
+| `for...in`                |                   | E013              |
+| `eval()/new Function()`   |                   | E014              |
+| `try/catch`               |                   | E015              |
+| `class/this`              |                   | E016              |
+| `yield` (no `*`)          |                   | E017              |
+| `call(() => ...)`         |                   | E018              |
+| `typeof/instanceof`       |                   | E019              |
+| `break/continue`          |                   | E020              |
+| `Promise`                 |                   | E021              |
+| Non-Error throw           | `throw "string"`  | E023              |
+| Arrow block body          | `(x) => { ... }`  | E024              |
+| `delete`/`Symbol`         |                   | E029/E030         |
+| User var `__` prefix      | `const __x`       | E028              |
 
 ---
 
@@ -538,25 +579,51 @@ function* processOrder(orderId: string): Workflow<Receipt> {
 
 ```json
 {
-  "tisyn": "fn", "params": ["orderId"],
+  "tisyn": "fn",
+  "params": ["orderId"],
   "body": {
-    "tisyn": "eval", "id": "let",
-    "data": { "tisyn": "quote", "expr": {
-      "name": "order",
-      "value": { "tisyn": "eval", "id": "order-service.fetchOrder",
-                 "data": [{ "tisyn": "ref", "name": "orderId" }] },
-      "body": {
-        "tisyn": "eval", "id": "let",
-        "data": { "tisyn": "quote", "expr": {
-          "name": "receipt",
-          "value": { "tisyn": "eval", "id": "payment-service.chargeCard",
-                     "data": [{ "tisyn": "eval", "id": "get",
-                                "data": { "tisyn": "quote", "expr": {
-                                  "obj": { "tisyn": "ref", "name": "order" },
-                                  "key": "payment" }}}] },
-          "body": { "tisyn": "ref", "name": "receipt" }
-        }}}
-    }}}
+    "tisyn": "eval",
+    "id": "let",
+    "data": {
+      "tisyn": "quote",
+      "expr": {
+        "name": "order",
+        "value": {
+          "tisyn": "eval",
+          "id": "order-service.fetchOrder",
+          "data": [{ "tisyn": "ref", "name": "orderId" }]
+        },
+        "body": {
+          "tisyn": "eval",
+          "id": "let",
+          "data": {
+            "tisyn": "quote",
+            "expr": {
+              "name": "receipt",
+              "value": {
+                "tisyn": "eval",
+                "id": "payment-service.chargeCard",
+                "data": [
+                  {
+                    "tisyn": "eval",
+                    "id": "get",
+                    "data": {
+                      "tisyn": "quote",
+                      "expr": {
+                        "obj": { "tisyn": "ref", "name": "order" },
+                        "key": "payment"
+                      }
+                    }
+                  }
+                ]
+              },
+              "body": { "tisyn": "ref", "name": "receipt" }
+            }
+          }
+        }
+      }
+    }
+  }
 }
 ```
 
@@ -592,73 +659,172 @@ function* pollJob(jobId: string): Workflow<Result> {
 
 ```json
 {
-  "tisyn": "fn", "params": ["jobId"],
+  "tisyn": "fn",
+  "params": ["jobId"],
   "body": {
-    "tisyn": "eval", "id": "let",
-    "data": { "tisyn": "quote", "expr": {
-      "name": "config",
-      "value": { "tisyn": "eval", "id": "config-service.getRetryConfig", "data": [] },
-      "body": {
-        "tisyn": "eval", "id": "let",
-        "data": { "tisyn": "quote", "expr": {
-          "name": "__loop_0",
-          "value": {
-            "tisyn": "fn", "params": [],
-            "body": {
-              "tisyn": "eval", "id": "let",
-              "data": { "tisyn": "quote", "expr": {
-                "name": "status",
-                "value": { "tisyn": "eval", "id": "job-service.checkStatus",
-                           "data": [{ "tisyn": "ref", "name": "jobId" }] },
+    "tisyn": "eval",
+    "id": "let",
+    "data": {
+      "tisyn": "quote",
+      "expr": {
+        "name": "config",
+        "value": { "tisyn": "eval", "id": "config-service.getRetryConfig", "data": [] },
+        "body": {
+          "tisyn": "eval",
+          "id": "let",
+          "data": {
+            "tisyn": "quote",
+            "expr": {
+              "name": "__loop_0",
+              "value": {
+                "tisyn": "fn",
+                "params": [],
                 "body": {
-                  "tisyn": "eval", "id": "if",
-                  "data": { "tisyn": "quote", "expr": {
-                    "condition": { "tisyn": "eval", "id": "eq",
-                      "data": { "tisyn": "quote", "expr": {
-                        "a": { "tisyn": "eval", "id": "get",
-                          "data": { "tisyn": "quote", "expr": {
-                            "obj": { "tisyn": "ref", "name": "status" },
-                            "key": "state" }}},
-                        "b": "complete" }}},
-                    "then": { "tisyn": "eval", "id": "job-service.getResult",
-                              "data": [{ "tisyn": "ref", "name": "jobId" }] },
-                    "else": {
-                      "tisyn": "eval", "id": "if",
-                      "data": { "tisyn": "quote", "expr": {
-                        "condition": { "tisyn": "eval", "id": "eq",
-                          "data": { "tisyn": "quote", "expr": {
-                            "a": { "tisyn": "eval", "id": "get",
-                              "data": { "tisyn": "quote", "expr": {
-                                "obj": { "tisyn": "ref", "name": "status" },
-                                "key": "state" }}},
-                            "b": "failed" }}},
-                        "then": { "tisyn": "eval", "id": "throw",
-                          "data": { "tisyn": "quote", "expr": {
-                            "message": "Job failed" }}},
-                        "else": {
-                          "tisyn": "eval", "id": "let",
-                          "data": { "tisyn": "quote", "expr": {
-                            "name": "__discard_0",
-                            "value": { "tisyn": "eval", "id": "sleep",
-                              "data": [{ "tisyn": "eval", "id": "get",
-                                "data": { "tisyn": "quote", "expr": {
-                                  "obj": { "tisyn": "ref", "name": "config" },
-                                  "key": "intervalMs" }}}] },
-                            "body": { "tisyn": "eval", "id": "call",
-                              "data": { "tisyn": "quote", "expr": {
-                                "fn": { "tisyn": "ref", "name": "__loop_0" },
-                                "args": [] }}}
-                          }}}
-                      }}}
-                  }}}
-              }}}
-          },
-          "body": { "tisyn": "eval", "id": "call",
-            "data": { "tisyn": "quote", "expr": {
-              "fn": { "tisyn": "ref", "name": "__loop_0" },
-              "args": [] }}}
-        }}}
-    }}}
+                  "tisyn": "eval",
+                  "id": "let",
+                  "data": {
+                    "tisyn": "quote",
+                    "expr": {
+                      "name": "status",
+                      "value": {
+                        "tisyn": "eval",
+                        "id": "job-service.checkStatus",
+                        "data": [{ "tisyn": "ref", "name": "jobId" }]
+                      },
+                      "body": {
+                        "tisyn": "eval",
+                        "id": "if",
+                        "data": {
+                          "tisyn": "quote",
+                          "expr": {
+                            "condition": {
+                              "tisyn": "eval",
+                              "id": "eq",
+                              "data": {
+                                "tisyn": "quote",
+                                "expr": {
+                                  "a": {
+                                    "tisyn": "eval",
+                                    "id": "get",
+                                    "data": {
+                                      "tisyn": "quote",
+                                      "expr": {
+                                        "obj": { "tisyn": "ref", "name": "status" },
+                                        "key": "state"
+                                      }
+                                    }
+                                  },
+                                  "b": "complete"
+                                }
+                              }
+                            },
+                            "then": {
+                              "tisyn": "eval",
+                              "id": "job-service.getResult",
+                              "data": [{ "tisyn": "ref", "name": "jobId" }]
+                            },
+                            "else": {
+                              "tisyn": "eval",
+                              "id": "if",
+                              "data": {
+                                "tisyn": "quote",
+                                "expr": {
+                                  "condition": {
+                                    "tisyn": "eval",
+                                    "id": "eq",
+                                    "data": {
+                                      "tisyn": "quote",
+                                      "expr": {
+                                        "a": {
+                                          "tisyn": "eval",
+                                          "id": "get",
+                                          "data": {
+                                            "tisyn": "quote",
+                                            "expr": {
+                                              "obj": { "tisyn": "ref", "name": "status" },
+                                              "key": "state"
+                                            }
+                                          }
+                                        },
+                                        "b": "failed"
+                                      }
+                                    }
+                                  },
+                                  "then": {
+                                    "tisyn": "eval",
+                                    "id": "throw",
+                                    "data": {
+                                      "tisyn": "quote",
+                                      "expr": {
+                                        "message": "Job failed"
+                                      }
+                                    }
+                                  },
+                                  "else": {
+                                    "tisyn": "eval",
+                                    "id": "let",
+                                    "data": {
+                                      "tisyn": "quote",
+                                      "expr": {
+                                        "name": "__discard_0",
+                                        "value": {
+                                          "tisyn": "eval",
+                                          "id": "sleep",
+                                          "data": [
+                                            {
+                                              "tisyn": "eval",
+                                              "id": "get",
+                                              "data": {
+                                                "tisyn": "quote",
+                                                "expr": {
+                                                  "obj": { "tisyn": "ref", "name": "config" },
+                                                  "key": "intervalMs"
+                                                }
+                                              }
+                                            }
+                                          ]
+                                        },
+                                        "body": {
+                                          "tisyn": "eval",
+                                          "id": "call",
+                                          "data": {
+                                            "tisyn": "quote",
+                                            "expr": {
+                                              "fn": { "tisyn": "ref", "name": "__loop_0" },
+                                              "args": []
+                                            }
+                                          }
+                                        }
+                                      }
+                                    }
+                                  }
+                                }
+                              }
+                            }
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              },
+              "body": {
+                "tisyn": "eval",
+                "id": "call",
+                "data": {
+                  "tisyn": "quote",
+                  "expr": {
+                    "fn": { "tisyn": "ref", "name": "__loop_0" },
+                    "args": []
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
 }
 ```
 
@@ -706,35 +872,74 @@ function* parallelProcess(id1: string, id2: string): Workflow<string> {
 
 ```json
 {
-  "tisyn": "fn", "params": ["id1", "id2"],
+  "tisyn": "fn",
+  "params": ["id1", "id2"],
   "body": {
-    "tisyn": "eval", "id": "let",
-    "data": { "tisyn": "quote", "expr": {
-      "name": "orderA",
-      "value": { "tisyn": "eval", "id": "order-service.fetchOrder",
-                 "data": [{ "tisyn": "ref", "name": "id1" }] },
-      "body": {
-        "tisyn": "eval", "id": "let",
-        "data": { "tisyn": "quote", "expr": {
-          "name": "orderB",
-          "value": { "tisyn": "eval", "id": "order-service.fetchOrder",
-                     "data": [{ "tisyn": "ref", "name": "id2" }] },
-          "body": {
-            "tisyn": "eval", "id": "let",
-            "data": { "tisyn": "quote", "expr": {
-              "name": "results",
-              "value": { "tisyn": "eval", "id": "all",
-                "data": { "tisyn": "quote", "expr": { "exprs": [
-                  { "tisyn": "eval", "id": "processor.process",
-                    "data": [{ "tisyn": "ref", "name": "orderA" }] },
-                  { "tisyn": "eval", "id": "processor.process",
-                    "data": [{ "tisyn": "ref", "name": "orderB" }] }
-                ]}}},
-              "body": { "tisyn": "eval", "id": "aggregator.combine",
-                        "data": [{ "tisyn": "ref", "name": "results" }] }
-            }}}
-        }}}
-    }}}
+    "tisyn": "eval",
+    "id": "let",
+    "data": {
+      "tisyn": "quote",
+      "expr": {
+        "name": "orderA",
+        "value": {
+          "tisyn": "eval",
+          "id": "order-service.fetchOrder",
+          "data": [{ "tisyn": "ref", "name": "id1" }]
+        },
+        "body": {
+          "tisyn": "eval",
+          "id": "let",
+          "data": {
+            "tisyn": "quote",
+            "expr": {
+              "name": "orderB",
+              "value": {
+                "tisyn": "eval",
+                "id": "order-service.fetchOrder",
+                "data": [{ "tisyn": "ref", "name": "id2" }]
+              },
+              "body": {
+                "tisyn": "eval",
+                "id": "let",
+                "data": {
+                  "tisyn": "quote",
+                  "expr": {
+                    "name": "results",
+                    "value": {
+                      "tisyn": "eval",
+                      "id": "all",
+                      "data": {
+                        "tisyn": "quote",
+                        "expr": {
+                          "exprs": [
+                            {
+                              "tisyn": "eval",
+                              "id": "processor.process",
+                              "data": [{ "tisyn": "ref", "name": "orderA" }]
+                            },
+                            {
+                              "tisyn": "eval",
+                              "id": "processor.process",
+                              "data": [{ "tisyn": "ref", "name": "orderB" }]
+                            }
+                          ]
+                        }
+                      }
+                    },
+                    "body": {
+                      "tisyn": "eval",
+                      "id": "aggregator.combine",
+                      "data": [{ "tisyn": "ref", "name": "results" }]
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
 }
 ```
 
@@ -781,11 +986,11 @@ Every compiled IR MUST:
 tisyn compile <input.ts> [--output <output.json>] [--validate] [--pretty]
 ```
 
-| Code | Meaning |
-|------|---------|
-| 0 | Success |
-| 1 | Compilation error |
-| 2 | Validation error |
-| 3 | Internal error |
+| Code | Meaning           |
+| ---- | ----------------- |
+| 0    | Success           |
+| 1    | Compilation error |
+| 2    | Validation error  |
+| 3    | Internal error    |
 
 Errors include source locations. Partial compilation: failing workflows produce errors; remaining workflows compile and output.
