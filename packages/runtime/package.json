@@ -1,0 +1,28 @@
+{
+  "name": "@tisyn/runtime",
+  "version": "0.1.0",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "scripts": {
+    "build": "tsc --build"
+  },
+  "dependencies": {
+    "@tisyn/shared": "workspace:*",
+    "@tisyn/kernel": "workspace:*",
+    "@tisyn/durable-streams": "workspace:*",
+    "@tisyn/agent": "workspace:*"
+  },
+  "peerDependencies": {
+    "effection": "^4"
+  },
+  "devDependencies": {
+    "effection": "^4"
+  }
+}
