@@ -1,1 +1,1 @@
-// @tisyn/conformance — conformance test harness and fixtures
+export { runFixture, type Fixture, type FixtureResult } from "./harness.js";
