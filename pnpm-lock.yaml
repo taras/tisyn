@@ -22,8 +22,8 @@ importers:
         version: link:../shared
     devDependencies:
       effection:
-        specifier: ^4
-        version: 4.0.2
+        specifier: 4.1.0-alpha.7
+        version: 4.1.0-alpha.7
 
   packages/compiler:
     dependencies:
@@ -60,8 +60,8 @@ importers:
         version: link:../shared
     devDependencies:
       effection:
-        specifier: ^4
-        version: 4.0.2
+        specifier: 4.1.0-alpha.7
+        version: 4.1.0-alpha.7
       vitest:
         specifier: ^3
         version: 3.2.4
@@ -73,8 +73,8 @@ importers:
         version: link:../shared
     devDependencies:
       effection:
-        specifier: ^4
-        version: 4.0.2
+        specifier: 4.1.0-alpha.7
+        version: 4.1.0-alpha.7
 
   packages/kernel:
     dependencies:
@@ -98,14 +98,14 @@ importers:
         version: link:../shared
     devDependencies:
       effection:
-        specifier: ^4
-        version: 4.0.2
+        specifier: 4.1.0-alpha.7
+        version: 4.1.0-alpha.7
 
   packages/shared:
     devDependencies:
       effection:
-        specifier: ^4
-        version: 4.0.2
+        specifier: 4.1.0-alpha.7
+        version: 4.1.0-alpha.7
 
 packages:
 
@@ -574,8 +574,8 @@ packages:
     resolution: {integrity: sha512-h5k/5U50IJJFpzfL6nO9jaaumfjO/f2NjK/oYB2Djzm4p9L+3T9qWpZqZ2hAbLPuuYq9wrU08WQyBTL5GbPk5Q==}
     engines: {node: '>=6'}
 
-  effection@4.0.2:
-    resolution: {integrity: sha512-O8WMGP10nPuJDwbNGILcaCNWS+CvDYjcdsUSD79nWZ+WtUQ8h1MEV7JJwCSZCSeKx8+TdEaZ/8r6qPTR2o/o8w==}
+  effection@4.1.0-alpha.7:
+    resolution: {integrity: sha512-ir7qM7vQXOo7eiuNxaD6FgwUetdy3XMB3dwtzUxp9ytiZl6abZUrXwM3vMqKWdMW4cW1KZzJqSEuXofJFscwFw==}
     engines: {node: '>= 16'}
 
   es-module-lexer@1.7.0:
@@ -1063,7 +1063,7 @@ snapshots:
 
   deep-eql@5.0.2: {}
 
-  effection@4.0.2: {}
+  effection@4.1.0-alpha.7: {}
 
   es-module-lexer@1.7.0: {}
 

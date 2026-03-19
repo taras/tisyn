@@ -17,9 +17,9 @@
     "@tisyn/shared": "workspace:*"
   },
   "devDependencies": {
-    "effection": "^4"
+    "effection": "4.1.0-alpha.7"
   },
   "peerDependencies": {
-    "effection": "^4"
+    "effection": "4.1.0-alpha.7"
   }
 }
