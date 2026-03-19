@@ -8,7 +8,8 @@
   },
   "devDependencies": {
     "oxlint": "^1.56.0",
-    "typescript": "~5.8.0"
+    "typescript": "~5.8.0",
+    "@effectionx/inspector": "https://pkg.pr.new/thefrontside/inspector/@effectionx/inspector@8c7cc3f"
   },
   "packageManager": "pnpm@9.15.9"
 }
