@@ -14,15 +14,15 @@
     "build": "tsc --build"
   },
   "dependencies": {
-    "@tisyn/shared": "workspace:*",
-    "@tisyn/kernel": "workspace:*",
+    "@tisyn/agent": "workspace:*",
     "@tisyn/durable-streams": "workspace:*",
-    "@tisyn/agent": "workspace:*"
-  },
-  "peerDependencies": {
-    "effection": "^4"
+    "@tisyn/kernel": "workspace:*",
+    "@tisyn/shared": "workspace:*"
   },
   "devDependencies": {
+    "effection": "^4"
+  },
+  "peerDependencies": {
     "effection": "^4"
   }
 }

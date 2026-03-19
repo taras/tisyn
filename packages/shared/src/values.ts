@@ -5,13 +5,7 @@
  */
 
 /** Any JSON-serializable value. */
-export type Json =
-  | string
-  | number
-  | boolean
-  | null
-  | Json[]
-  | { [key: string]: Json };
+export type Json = string | number | boolean | null | Json[] | { [key: string]: Json };
 
 /**
  * Val is the result of evaluating an expression.

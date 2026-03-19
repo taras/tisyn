@@ -22,11 +22,7 @@ import {
   EffectError,
 } from "@tisyn/shared";
 import { evaluate, validate, type Env, envFromRecord } from "@tisyn/kernel";
-import {
-  type DurableStream,
-  InMemoryStream,
-  ReplayIndex,
-} from "@tisyn/durable-streams";
+import { type DurableStream, InMemoryStream, ReplayIndex } from "@tisyn/durable-streams";
 import { AgentRegistry } from "@tisyn/agent";
 
 export interface ExecuteOptions {
@@ -97,7 +93,6 @@ export function* execute(options: ExecuteOptions): Operation<ExecuteResult> {
   const kernel = evaluate(ir, env);
 
   // Phase 4: Drive the kernel
-  let yieldIndex = 0;
   let nextValue: Val = null; // First .next() call gets undefined/null
 
   try {
@@ -160,10 +155,7 @@ export function* execute(options: ExecuteOptions): Operation<ExecuteResult> {
           nextValue = (stored.result.value ?? null) as Val;
         } else if (stored.result.status === "err") {
           // Re-raise stored error
-          const err = new EffectError(
-            stored.result.error.message,
-            stored.result.error.name,
-          );
+          const err = new EffectError(stored.result.error.message, stored.result.error.name);
           const throwResult = kernel.throw(err);
           if (throwResult.done) {
             const closeEvent: CloseEvent = {
@@ -185,7 +177,6 @@ export function* execute(options: ExecuteOptions): Operation<ExecuteResult> {
           throw new Error("Cannot replay cancelled result");
         }
 
-        yieldIndex++;
         continue;
       }
 
@@ -199,10 +190,7 @@ export function* execute(options: ExecuteOptions): Operation<ExecuteResult> {
       // CASE 3: No replay entry, no close — LIVE dispatch
       let effectResult: EventResult;
       try {
-        const resultValue = yield* agents.dispatch(
-          descriptor.id,
-          descriptor.data as Val,
-        );
+        const resultValue = yield* agents.dispatch(descriptor.id, descriptor.data as Val);
         effectResult = { status: "ok", value: resultValue as Json };
       } catch (error) {
         const err = error instanceof Error ? error : new Error(String(error));
@@ -226,10 +214,7 @@ export function* execute(options: ExecuteOptions): Operation<ExecuteResult> {
       if (effectResult.status === "ok") {
         nextValue = (effectResult.value ?? null) as Val;
       } else {
-        const err = new EffectError(
-          effectResult.error.message,
-          effectResult.error.name,
-        );
+        const err = new EffectError(effectResult.error.message, effectResult.error.name);
         const throwResult = kernel.throw(err);
         if (throwResult.done) {
           const closeEvent: CloseEvent = {
@@ -247,8 +232,6 @@ export function* execute(options: ExecuteOptions): Operation<ExecuteResult> {
         nextValue = null;
         continue;
       }
-
-      yieldIndex++;
     }
   } catch (error) {
     // Kernel threw — write Close(err)

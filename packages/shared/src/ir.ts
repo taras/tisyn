@@ -94,13 +94,7 @@ export function isLiteral(expr: unknown): boolean {
  * but required fields are missing or wrong type — per System Spec §10.2,
  * malformed nodes are errors, never treated as Literals.
  */
-export type NodeClassification =
-  | "eval"
-  | "quote"
-  | "ref"
-  | "fn"
-  | "literal"
-  | "malformed";
+export type NodeClassification = "eval" | "quote" | "ref" | "fn" | "literal" | "malformed";
 
 export function classifyNode(value: unknown): NodeClassification {
   if (!isPlainObject(value)) return "literal";
@@ -112,15 +106,13 @@ export function classifyNode(value: unknown): NodeClassification {
 
   switch (tisyn) {
     case "eval":
-      if (typeof value["id"] !== "string" || !("data" in value))
-        return "malformed";
+      if (typeof value["id"] !== "string" || !("data" in value)) return "malformed";
       return "eval";
     case "quote":
       if (!("expr" in value)) return "malformed";
       return "quote";
     case "ref":
-      if (typeof value["name"] !== "string" || value["name"] === "")
-        return "malformed";
+      if (typeof value["name"] !== "string" || value["name"] === "") return "malformed";
       return "ref";
     case "fn": {
       const params = value["params"];
