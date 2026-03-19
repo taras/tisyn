@@ -1,1 +1,1 @@
-// @tisyn/runtime — execution layer bridging kernel, journal, and agents
+export { execute, type ExecuteOptions, type ExecuteResult } from "./execute.js";

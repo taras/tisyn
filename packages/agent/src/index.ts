@@ -1,1 +1,1 @@
-// @tisyn/agent — agent registry and in-process agent
+export { AgentRegistry, type AgentHandler } from "./registry.js";
