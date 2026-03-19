@@ -13,10 +13,10 @@
   "scripts": {
     "build": "tsc --build"
   },
-  "peerDependencies": {
+  "devDependencies": {
     "effection": "^4"
   },
-  "devDependencies": {
+  "peerDependencies": {
     "effection": "^4"
   }
 }

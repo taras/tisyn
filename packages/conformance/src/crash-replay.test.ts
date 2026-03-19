@@ -12,7 +12,6 @@
 
 import { describe, it, expect } from "vitest";
 import { run } from "effection";
-import type { Val } from "@tisyn/shared";
 import { execute } from "@tisyn/runtime";
 import { InMemoryStream } from "@tisyn/durable-streams";
 import { AgentRegistry } from "@tisyn/agent";
@@ -106,15 +105,12 @@ describe("End-to-end crash/replay", () => {
     // Include ONLY the 2 successful Yield events for replay.
     // The yield(err) and close(err) from the crashed run are discarded —
     // we want to re-execute from the crash point.
-    const replayStream = new InMemoryStream([
-      firstSnapshot[0]!,
-      firstSnapshot[1]!,
-    ]);
+    const replayStream = new InMemoryStream([firstSnapshot[0]!, firstSnapshot[1]!]);
 
     let secondRunCallCount = 0;
     const secondRunAgents = new AgentRegistry();
     // biome-ignore lint/correctness/useYield: mock
-    secondRunAgents.register("x", function* (_op, args) {
+    secondRunAgents.register("x", function* (_op, _args) {
       secondRunCallCount++;
       // This should only be called for step3 (the live effect)
       return 30; // step3 result

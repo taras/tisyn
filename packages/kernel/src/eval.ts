@@ -43,10 +43,7 @@ function truthy(v: Val): boolean {
  * This is a generator that yields EffectDescriptors when it encounters
  * external operations. The caller feeds results back via .next(val).
  */
-export function* evaluate(
-  expr: Expr,
-  env: Env,
-): Generator<EffectDescriptor, Val, Val> {
+export function* evaluate(expr: Expr, env: Env): Generator<EffectDescriptor, Val, Val> {
   // Rule LITERAL: value without matching tisyn → itself
   if (expr === null || typeof expr !== "object") {
     return expr as Val;
@@ -56,8 +53,6 @@ export function* evaluate(
   if (Array.isArray(expr)) {
     return expr as Val;
   }
-
-  const obj = expr as Record<string, unknown>;
 
   // Rule REF: resolve in environment
   if (isRefNode(expr)) {
@@ -102,15 +97,8 @@ export function* evaluate(
 
 // ── Structural operations (Kernel Spec §5) ──
 
-function* evalStructural(
-  id: string,
-  data: Expr,
-  env: Env,
-): Generator<EffectDescriptor, Val, Val> {
-  const fields = (yield* unquote(data, env, evaluate)) as Record<
-    string,
-    unknown
-  >;
+function* evalStructural(id: string, data: Expr, env: Env): Generator<EffectDescriptor, Val, Val> {
+  const fields = (yield* unquote(data, env, evaluate)) as Record<string, unknown>;
 
   switch (id) {
     // §5.1 let
@@ -186,12 +174,7 @@ function* evalStructural(
     case "get": {
       const obj = yield* evaluate(fields["obj"] as Expr, env);
       const key = fields["key"] as string; // key is a literal, not evaluated
-      if (
-        typeof obj === "object" &&
-        obj !== null &&
-        !Array.isArray(obj) &&
-        key in obj
-      ) {
+      if (typeof obj === "object" && obj !== null && !Array.isArray(obj) && key in obj) {
         return (obj as Record<string, Val>)[key]!;
       }
       return null;
@@ -205,10 +188,8 @@ function* evalStructural(
     case "mod": {
       const a = yield* evaluate(fields["a"] as Expr, env);
       const b = yield* evaluate(fields["b"] as Expr, env);
-      if (typeof a !== "number")
-        throw new TypeError(`${id}: left operand is not a number`);
-      if (typeof b !== "number")
-        throw new TypeError(`${id}: right operand is not a number`);
+      if (typeof a !== "number") throw new TypeError(`${id}: left operand is not a number`);
+      if (typeof b !== "number") throw new TypeError(`${id}: right operand is not a number`);
       if ((id === "div" || id === "mod") && b === 0) throw new DivisionByZero();
       switch (id) {
         case "add":
@@ -232,10 +213,8 @@ function* evalStructural(
     case "lte": {
       const a = yield* evaluate(fields["a"] as Expr, env);
       const b = yield* evaluate(fields["b"] as Expr, env);
-      if (typeof a !== "number")
-        throw new TypeError(`${id}: left operand is not a number`);
-      if (typeof b !== "number")
-        throw new TypeError(`${id}: right operand is not a number`);
+      if (typeof a !== "number") throw new TypeError(`${id}: left operand is not a number`);
+      if (typeof b !== "number") throw new TypeError(`${id}: right operand is not a number`);
       switch (id) {
         case "gt":
           return a > b;
@@ -279,8 +258,7 @@ function* evalStructural(
 
     case "neg": {
       const a = yield* evaluate(fields["a"] as Expr, env);
-      if (typeof a !== "number")
-        throw new TypeError("neg: operand is not a number");
+      if (typeof a !== "number") throw new TypeError("neg: operand is not a number");
       return -a;
     }
 

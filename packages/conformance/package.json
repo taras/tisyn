@@ -15,11 +15,11 @@
     "test": "vitest run"
   },
   "dependencies": {
-    "@tisyn/shared": "workspace:*",
+    "@tisyn/agent": "workspace:*",
+    "@tisyn/durable-streams": "workspace:*",
     "@tisyn/kernel": "workspace:*",
     "@tisyn/runtime": "workspace:*",
-    "@tisyn/durable-streams": "workspace:*",
-    "@tisyn/agent": "workspace:*"
+    "@tisyn/shared": "workspace:*"
   },
   "devDependencies": {
     "effection": "^4",

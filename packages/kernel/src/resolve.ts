@@ -71,9 +71,7 @@ export function* resolve(
   // TRAVERSABLE: Plain object without matching tisyn → recurse
   if (typeof node === "object" && node !== null) {
     const result: Record<string, Val> = {};
-    for (const [key, child] of Object.entries(
-      node as Record<string, unknown>,
-    )) {
+    for (const [key, child] of Object.entries(node as Record<string, unknown>)) {
       result[key] = yield* resolve(child as Expr, env, evalFn);
     }
     return result;

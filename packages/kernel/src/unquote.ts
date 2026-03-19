@@ -12,12 +12,7 @@
  * operation selectively evaluates sub-fields.
  */
 
-import {
-  type Expr,
-  type Val,
-  type EffectDescriptor,
-  isQuoteNode,
-} from "@tisyn/shared";
+import { type Expr, type Val, type EffectDescriptor, isQuoteNode } from "@tisyn/shared";
 import type { Env } from "./environment.js";
 
 export function* unquote(

@@ -9,15 +9,7 @@
  * Both phases MUST complete before evaluation begins.
  */
 
-import {
-  type Expr,
-  classifyNode,
-  isEvalNode,
-  isQuoteNode,
-  isRefNode,
-  isFnNode,
-  MalformedIR,
-} from "@tisyn/shared";
+import { type Expr, classifyNode, isQuoteNode, MalformedIR } from "@tisyn/shared";
 import { isStructural } from "./classify.js";
 
 /**
@@ -81,20 +73,14 @@ function validateNode(node: unknown): void {
  * - data MUST be a Quote node
  * - No Quote at any evaluation position
  */
-function validateEvalNode(node: {
-  tisyn: "eval";
-  id: string;
-  data: unknown;
-}): void {
+function validateEvalNode(node: { tisyn: "eval"; id: string; data: unknown }): void {
   // Validate data recursively first
   validateNode(node.data);
 
   // Phase 2: Single-Quote rule for structural operations
   if (isStructural(node.id)) {
     if (!isQuoteNode(node.data as Expr)) {
-      throw new MalformedIR(
-        `Structural operation "${node.id}" requires data to be a Quote node`,
-      );
+      throw new MalformedIR(`Structural operation "${node.id}" requires data to be a Quote node`);
     }
 
     // Check positions — no Quote at evaluation positions
@@ -120,9 +106,7 @@ function checkPositions(id: string, fields: Record<string, unknown>): void {
       !Array.isArray(pos) &&
       (pos as Record<string, unknown>)["tisyn"] === "quote"
     ) {
-      throw new MalformedIR(
-        `Quote found at evaluation position in structural operation "${id}"`,
-      );
+      throw new MalformedIR(`Quote found at evaluation position in structural operation "${id}"`);
     }
   }
 }
@@ -131,10 +115,7 @@ function checkPositions(id: string, fields: Record<string, unknown>): void {
  * Returns the nodes at evaluation positions for a structural operation.
  * This is the exhaustive positions table from the spec.
  */
-function getEvaluationPositions(
-  id: string,
-  fields: Record<string, unknown>,
-): unknown[] {
+function getEvaluationPositions(id: string, fields: Record<string, unknown>): unknown[] {
   switch (id) {
     case "let":
       return [fields["value"], fields["body"]].filter((x) => x !== undefined);
@@ -149,8 +130,7 @@ function getEvaluationPositions(
     }
     case "while": {
       const wPositions: unknown[] = [];
-      if (fields["condition"] !== undefined)
-        wPositions.push(fields["condition"]);
+      if (fields["condition"] !== undefined) wPositions.push(fields["condition"]);
       if (Array.isArray(fields["exprs"])) wPositions.push(...fields["exprs"]);
       return wPositions;
     }

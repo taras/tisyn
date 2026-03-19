@@ -8,15 +8,9 @@
  */
 
 import { run } from "effection";
-import type {
-  Expr,
-  Val,
-  DurableEvent,
-  EventResult,
-  EffectDescriptor,
-} from "@tisyn/shared";
+import type { Expr, Val, DurableEvent, EventResult, EffectDescriptor } from "@tisyn/shared";
 import { canonical, type Json } from "@tisyn/shared";
-import { execute, type ExecuteOptions } from "@tisyn/runtime";
+import { execute } from "@tisyn/runtime";
 import { InMemoryStream } from "@tisyn/durable-streams";
 import { AgentRegistry } from "@tisyn/agent";
 
@@ -165,10 +159,7 @@ function journalMatches(
     }
 
     if (a.type === "yield" && e.type === "yield") {
-      if (
-        a.description.type !== e.description.type ||
-        a.description.name !== e.description.name
-      ) {
+      if (a.description.type !== e.description.type || a.description.name !== e.description.name) {
         return {
           pass: false,
           message: `Event ${i}: description mismatch: got ${a.description.type}.${a.description.name}, expected ${e.description.type}.${e.description.name}`,
@@ -209,9 +200,7 @@ function createMockAgents(
   const types = new Set(
     effects.map((e) => {
       const dotIdx = e.descriptor.id.indexOf(".");
-      return dotIdx >= 0
-        ? e.descriptor.id.substring(0, dotIdx)
-        : e.descriptor.id;
+      return dotIdx >= 0 ? e.descriptor.id.substring(0, dotIdx) : e.descriptor.id;
     }),
   );
 
@@ -277,9 +266,7 @@ export async function runFixture(fixture: Fixture): Promise<FixtureResult> {
   }
 }
 
-async function runEvaluationFixture(
-  fixture: EvaluationFixture,
-): Promise<FixtureResult> {
+async function runEvaluationFixture(fixture: EvaluationFixture): Promise<FixtureResult> {
   const result = await run(function* () {
     return yield* execute({
       ir: fixture.ir,
@@ -303,9 +290,7 @@ async function runEvaluationFixture(
   return { id: fixture.id, pass: true, message: "PASS" };
 }
 
-async function runEffectFixture(
-  fixture: EffectFixture,
-): Promise<FixtureResult> {
+async function runEffectFixture(fixture: EffectFixture): Promise<FixtureResult> {
   const agents = createMockAgents(fixture.effects);
 
   const result = await run(function* () {
@@ -332,9 +317,7 @@ async function runEffectFixture(
   return { id: fixture.id, pass: true, message: "PASS" };
 }
 
-async function runReplayFixture(
-  fixture: ReplayFixture,
-): Promise<FixtureResult> {
+async function runReplayFixture(fixture: ReplayFixture): Promise<FixtureResult> {
   // Pre-populate stream with stored journal
   const stream = new InMemoryStream(fixture.stored_journal);
 
@@ -404,9 +387,7 @@ async function runNegativeValidationFixture(
   return { id: fixture.id, pass: true, message: "PASS" };
 }
 
-async function runNegativeRuntimeFixture(
-  fixture: NegativeRuntimeFixture,
-): Promise<FixtureResult> {
+async function runNegativeRuntimeFixture(fixture: NegativeRuntimeFixture): Promise<FixtureResult> {
   const agents = createMockAgents(fixture.effects);
 
   const result = await run(function* () {

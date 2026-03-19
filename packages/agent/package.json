@@ -16,10 +16,10 @@
   "dependencies": {
     "@tisyn/shared": "workspace:*"
   },
-  "peerDependencies": {
+  "devDependencies": {
     "effection": "^4"
   },
-  "devDependencies": {
+  "peerDependencies": {
     "effection": "^4"
   }
 }

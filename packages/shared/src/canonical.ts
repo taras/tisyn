@@ -30,9 +30,7 @@ export function canonical(value: Json): string {
   }
   // Object — sort keys lexicographically
   const keys = Object.keys(value).sort();
-  const pairs = keys.map(
-    (key) => canonicalString(key) + ":" + canonical(value[key]!),
-  );
+  const pairs = keys.map((key) => canonicalString(key) + ":" + canonical(value[key]!));
   return "{" + pairs.join(",") + "}";
 }
 
