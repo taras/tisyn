@@ -20,6 +20,7 @@
     { "path": "packages/durable-streams" },
     { "path": "packages/runtime" },
     { "path": "packages/agent" },
-    { "path": "packages/conformance" }
+    { "path": "packages/conformance" },
+    { "path": "packages/compiler" }
   ]
 }
