@@ -85,7 +85,10 @@ export function* execute(options: ExecuteOptions): Operation<ExecuteResult> {
   // Phase 2: Read journal, build ReplayIndex
   const storedEvents = yield* stream.readAll();
   const replayIndex = new ReplayIndex(storedEvents);
-  const journal: DurableEvent[] = [...storedEvents];
+
+  // Track the full journal: replayed events are added as they are
+  // consumed, new events are added as they are appended to stream.
+  const journal: DurableEvent[] = [];
 
   // Build initial environment
   const env: Env = envFromRecord(envRecord);
@@ -139,17 +142,18 @@ export function* execute(options: ExecuteOptions): Operation<ExecuteResult> {
           );
         }
 
-        // Match — consume entry, emit stored Yield, feed stored result
+        // Match — consume entry, feed stored result
+        // DO NOT re-append to stream — the event is already there.
+        // Track the replayed event in the journal for the return value.
         replayIndex.consumeYield(coroutineId);
 
-        const yieldEvent: YieldEvent = {
+        const replayedEvent: YieldEvent = {
           type: "yield",
           coroutineId,
-          description: stored.description, // Use stored description byte-for-byte
+          description: stored.description,
           result: stored.result,
         };
-        yield* stream.append(yieldEvent);
-        journal.push(yieldEvent);
+        journal.push(replayedEvent);
 
         // Feed stored result to kernel
         if (stored.result.status === "ok") {
