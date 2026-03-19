@@ -1,0 +1,25 @@
+{
+  "compilerOptions": {
+    "composite": true,
+    "incremental": true,
+    "declaration": true,
+    "declarationMap": true,
+    "module": "NodeNext",
+    "moduleResolution": "NodeNext",
+    "target": "ES2022",
+    "strict": true,
+    "skipLibCheck": true,
+    "rewriteRelativeImportExtensions": true,
+    "outDir": "./dist",
+    "rootDir": "./src"
+  },
+  "files": [],
+  "references": [
+    { "path": "packages/shared" },
+    { "path": "packages/kernel" },
+    { "path": "packages/durable-streams" },
+    { "path": "packages/runtime" },
+    { "path": "packages/agent" },
+    { "path": "packages/conformance" }
+  ]
+}
