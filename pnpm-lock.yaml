@@ -18,8 +18,29 @@ importers:
         specifier: ~5.8.0
         version: 5.8.3
 
+  examples/ping-pong:
+    dependencies:
+      '@tisyn/agent':
+        specifier: workspace:*
+        version: link:../../packages/agent
+      '@tisyn/runtime':
+        specifier: workspace:*
+        version: link:../../packages/runtime
+      '@tisyn/shared':
+        specifier: workspace:*
+        version: link:../../packages/shared
+      effection:
+        specifier: 4.1.0-alpha.7
+        version: 4.1.0-alpha.7
+
   packages/agent:
     dependencies:
+      '@effectionx/websocket':
+        specifier: ^2.3.2
+        version: 2.3.2(effection@4.1.0-alpha.7)
+      '@effectionx/worker':
+        specifier: ^0.5.1
+        version: 0.5.1(effection@4.1.0-alpha.7)
       '@tisyn/shared':
         specifier: workspace:*
         version: link:../shared
@@ -154,6 +175,18 @@ packages:
 
   '@effectionx/timebox@0.4.2':
     resolution: {integrity: sha512-CT1XCCXmYgxFjIJmz0kzBbDG0W1Jc/i8l4r2Hecu+gYXp22DW8bAkVPKYIDdR4acAC1flqevlWA8xWaNBUfb6w==}
+    engines: {node: '>= 22'}
+    peerDependencies:
+      effection: ^3 || ^4
+
+  '@effectionx/websocket@2.3.2':
+    resolution: {integrity: sha512-wKQwYk5pCrc97C2qOLfppazZfEyx5vMp7DR+WtGVRT+VJ1cT/B1Gi53eAHFkg94hhdtuxE8Sl2kQPaD4Bm6NxA==}
+    engines: {node: '>= 22'}
+    peerDependencies:
+      effection: ^3 || ^4
+
+  '@effectionx/worker@0.5.1':
+    resolution: {integrity: sha512-2tRiQHhxX8k/bwXfFeHl1w20BJhbsxI2aof808MJSbJyGa/ktFIwCQoI/jm4/RFqGLA/Y60pU+lCCbr3Rik7eg==}
     engines: {node: '>= 22'}
     peerDependencies:
       effection: ^3 || ^4
@@ -891,6 +924,9 @@ packages:
       jsdom:
         optional: true
 
+  web-worker@1.5.0:
+    resolution: {integrity: sha512-RiMReJrTAiA+mBjGONMnjVDP2u3p9R1vkcGz6gDIrOMT3oGuYwX2WRMYI9ipkphSuE5XKEhydbhNEJh4NY9mlw==}
+
   which@2.0.2:
     resolution: {integrity: sha512-BLI3Tl1TW3Pvl70l3yq3Y64i+awpwXqsGBYWkkqMtnbXgrMD+yj7rhW0kuEDxzJaYXGjEW5ogapKNMEKNMjibA==}
     engines: {node: '>= 8'}
@@ -955,6 +991,17 @@ snapshots:
   '@effectionx/timebox@0.4.2(effection@4.1.0-alpha.7)':
     dependencies:
       effection: 4.1.0-alpha.7
+
+  '@effectionx/websocket@2.3.2(effection@4.1.0-alpha.7)':
+    dependencies:
+      effection: 4.1.0-alpha.7
+
+  '@effectionx/worker@0.5.1(effection@4.1.0-alpha.7)':
+    dependencies:
+      '@effectionx/signals': 0.5.2(effection@4.1.0-alpha.7)
+      '@effectionx/timebox': 0.4.2(effection@4.1.0-alpha.7)
+      effection: 4.1.0-alpha.7
+      web-worker: 1.5.0
 
   '@esbuild/aix-ppc64@0.27.4':
     optional: true
@@ -1517,6 +1564,8 @@ snapshots:
       - terser
       - tsx
       - yaml
+
+  web-worker@1.5.0: {}
 
   which@2.0.2:
     dependencies:

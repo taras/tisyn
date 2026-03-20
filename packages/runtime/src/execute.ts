@@ -32,8 +32,10 @@ export interface ExecuteOptions {
   env?: Record<string, Val>;
   /** The durable stream for journaling. */
   stream?: DurableStream;
-  /** Agent registry for live dispatch. */
+  /** Agent registry for live dispatch (legacy). */
   agents?: AgentRegistry;
+  /** Dispatch function for live effects (preferred over agents). */
+  dispatch?: (effectId: string, data: Val) => Operation<Val>;
   /** Coroutine ID for the root task. Defaults to "root". */
   coroutineId?: string;
 }
@@ -58,6 +60,7 @@ export function* execute(options: ExecuteOptions): Operation<ExecuteResult> {
     env: envRecord = {},
     stream = new InMemoryStream(),
     agents = new AgentRegistry(),
+    dispatch = (effectId: string, data: Val) => agents.dispatch(effectId, data),
     coroutineId = "root",
   } = options;
 
@@ -190,7 +193,7 @@ export function* execute(options: ExecuteOptions): Operation<ExecuteResult> {
       // CASE 3: No replay entry, no close — LIVE dispatch
       let effectResult: EventResult;
       try {
-        const resultValue = yield* agents.dispatch(descriptor.id, descriptor.data as Val);
+        const resultValue = yield* dispatch(descriptor.id, descriptor.data as Val);
         effectResult = { status: "ok", value: resultValue as Json };
       } catch (error) {
         const err = error instanceof Error ? error : new Error(String(error));

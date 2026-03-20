@@ -14,7 +14,9 @@
     "build": "tsc --build"
   },
   "dependencies": {
-    "@tisyn/shared": "workspace:*"
+    "@tisyn/shared": "workspace:*",
+    "@effectionx/websocket": "^2.3.2",
+    "@effectionx/worker": "^0.5.1"
   },
   "devDependencies": {
     "effection": "4.1.0-alpha.7"

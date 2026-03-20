@@ -1,0 +1,12 @@
+{
+  "name": "@tisyn/example-ping-pong",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "dependencies": {
+    "@tisyn/agent": "workspace:*",
+    "@tisyn/runtime": "workspace:*",
+    "@tisyn/shared": "workspace:*",
+    "effection": "4.1.0-alpha.7"
+  }
+}
