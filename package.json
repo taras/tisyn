@@ -9,6 +9,7 @@
   },
   "devDependencies": {
     "@effectionx/inspector": "https://pkg.pr.new/thefrontside/inspector/@effectionx/inspector@8c7cc3f",
+    "@types/node": "^25.5.0",
     "oxlint": "^1.56.0",
     "typescript": "~5.8.0"
   },
