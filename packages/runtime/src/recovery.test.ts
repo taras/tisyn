@@ -211,7 +211,7 @@ describe("Recovery", () => {
     const stored: DurableEvent[] = [
       yieldEvent("a", "op1", 10, "root.0"),
       closeOk(10, "root.0"),
-      closeOk(20, "root.1"), // loser still has close event
+      closeCancelled("root.1"), // loser was cancelled, never dispatched
     ];
 
     const stream = new InMemoryStream(stored);

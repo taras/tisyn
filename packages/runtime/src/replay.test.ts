@@ -1,6 +1,7 @@
 import { describe, it } from "@effectionx/vitest";
 import { expect } from "vitest";
 import { execute } from "./execute.js";
+import { DivergenceError } from "./errors.js";
 import { InMemoryStream } from "@tisyn/durable-streams";
 import { AgentRegistry } from "@tisyn/agent";
 import type { YieldEvent, CloseEvent, DurableEvent } from "@tisyn/kernel";
@@ -111,17 +112,17 @@ describe("Replay", () => {
     const stream = new InMemoryStream(stored);
     const agents = new AgentRegistry();
 
-    const { result } = yield* execute({
-      ir: singleEffectIR("b", "op") as never,
-      stream,
-      agents,
-    });
-
-    expect(result.status).toBe("err");
-    if (result.status === "err") {
-      expect(result.error.name).toBe("DivergenceError");
-      expect(result.error.message).toContain("expected a.op");
-      expect(result.error.message).toContain("got b.op");
+    try {
+      yield* execute({
+        ir: singleEffectIR("b", "op") as never,
+        stream,
+        agents,
+      });
+      expect.unreachable("should have thrown DivergenceError");
+    } catch (error) {
+      expect(error).toBeInstanceOf(DivergenceError);
+      expect((error as DivergenceError).message).toContain("expected a.op");
+      expect((error as DivergenceError).message).toContain("got b.op");
     }
   });
 
@@ -131,17 +132,17 @@ describe("Replay", () => {
     const stream = new InMemoryStream(stored);
     const agents = new AgentRegistry();
 
-    const { result } = yield* execute({
-      ir: singleEffectIR("a", "bar") as never,
-      stream,
-      agents,
-    });
-
-    expect(result.status).toBe("err");
-    if (result.status === "err") {
-      expect(result.error.name).toBe("DivergenceError");
-      expect(result.error.message).toContain("expected a.foo");
-      expect(result.error.message).toContain("got a.bar");
+    try {
+      yield* execute({
+        ir: singleEffectIR("a", "bar") as never,
+        stream,
+        agents,
+      });
+      expect.unreachable("should have thrown DivergenceError");
+    } catch (error) {
+      expect(error).toBeInstanceOf(DivergenceError);
+      expect((error as DivergenceError).message).toContain("expected a.foo");
+      expect((error as DivergenceError).message).toContain("got a.bar");
     }
   });
 
@@ -151,16 +152,16 @@ describe("Replay", () => {
     const stream = new InMemoryStream(stored);
     const agents = new AgentRegistry();
 
-    const { result } = yield* execute({
-      ir: singleEffectIR("a", "op") as never,
-      stream,
-      agents,
-    });
-
-    expect(result.status).toBe("err");
-    if (result.status === "err") {
-      expect(result.error.name).toBe("DivergenceError");
-      expect(result.error.message).toContain("closed");
+    try {
+      yield* execute({
+        ir: singleEffectIR("a", "op") as never,
+        stream,
+        agents,
+      });
+      expect.unreachable("should have thrown DivergenceError");
+    } catch (error) {
+      expect(error).toBeInstanceOf(DivergenceError);
+      expect((error as DivergenceError).message).toContain("closed");
     }
   });
 
