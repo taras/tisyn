@@ -7,9 +7,7 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
 
 describe("@tisyn/ir boundary", () => {
   it("has zero dependencies in package.json", () => {
-    const pkg = JSON.parse(
-      readFileSync(resolve(__dirname, "../package.json"), "utf-8"),
-    );
+    const pkg = JSON.parse(readFileSync(resolve(__dirname, "../package.json"), "utf-8"));
     expect(pkg.dependencies).toBeUndefined();
     expect(pkg.peerDependencies).toBeUndefined();
   });
