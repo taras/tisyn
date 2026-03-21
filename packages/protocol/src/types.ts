@@ -17,12 +17,19 @@ export interface JsonRpcNotification {
   params: Record<string, unknown>;
 }
 
-export interface JsonRpcResponse {
+export interface JsonRpcSuccessResponse {
   jsonrpc: "2.0";
   id: string | number;
-  result?: unknown;
-  error?: JsonRpcError;
+  result: unknown;
 }
+
+export interface JsonRpcErrorResponse {
+  jsonrpc: "2.0";
+  id: string | number;
+  error: JsonRpcError;
+}
+
+export type JsonRpcResponse = JsonRpcSuccessResponse | JsonRpcErrorResponse;
 
 export interface JsonRpcError {
   code: number;
@@ -61,6 +68,12 @@ export interface InitializeResponse {
     protocolVersion: string;
     sessionId: string;
   };
+}
+
+export interface InitializeProtocolError {
+  jsonrpc: "2.0";
+  id: string | number;
+  error: JsonRpcError;
 }
 
 // ---------------------------------------------------------------------------
