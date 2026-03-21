@@ -481,6 +481,34 @@ export const KERN_014: Fixture = {
   ],
 };
 
+/** NEG_021: Empty string id is rejected as MalformedIR */
+export const NEG_021: Fixture = {
+  id: "NEG-021",
+  suite_version: "2.0.0",
+  tier: "core",
+  level: 3,
+  category: "negative.validation",
+  spec_ref: "ir.2.1",
+  type: "negative_validation",
+  description: "Empty string eval id is rejected as MalformedIR",
+  ir: { tisyn: "eval", id: "", data: 1 },
+  expected_error: "MalformedIR",
+};
+
+/** NEG_022: Extra fields on tagged node rejected as MalformedIR */
+export const NEG_022: Fixture = {
+  id: "NEG-022",
+  suite_version: "2.0.0",
+  tier: "core",
+  level: 3,
+  category: "negative.validation",
+  spec_ref: "ir.2.2",
+  type: "negative_validation",
+  description: "Extra fields on eval node rejected as MalformedIR",
+  ir: { tisyn: "eval", id: "add", data: 1, extra: "junk" },
+  expected_error: "MalformedIR",
+};
+
 /** All conformance fixtures. */
 export const ALL_FIXTURES: Fixture[] = [
   KERN_001,
@@ -494,4 +522,6 @@ export const ALL_FIXTURES: Fixture[] = [
   NEG_001,
   DET_005,
   KERN_014,
+  NEG_021,
+  NEG_022,
 ];
