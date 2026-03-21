@@ -16,6 +16,6 @@
   },
   "devDependencies": {
     "expect-type": "^1",
-    "vitest": "^3"
+    "vitest": "^4"
   }
 }
