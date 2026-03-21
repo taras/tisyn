@@ -14,3 +14,10 @@ export class DivergenceError extends Error {
     super(message);
   }
 }
+
+export class RuntimeBugError extends Error {
+  override name = "RuntimeBugError" as const;
+  constructor(message: string) {
+    super(message);
+  }
+}

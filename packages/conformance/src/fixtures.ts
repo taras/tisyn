@@ -481,6 +481,91 @@ export const KERN_014: Fixture = {
   ],
 };
 
+/** NEG_021: Empty string id is rejected as MalformedIR */
+export const NEG_021: Fixture = {
+  id: "NEG-021",
+  suite_version: "2.0.0",
+  tier: "core",
+  level: 3,
+  category: "negative.validation",
+  spec_ref: "ir.2.1",
+  type: "negative_validation",
+  description: "Empty string eval id is rejected as MalformedIR",
+  ir: { tisyn: "eval", id: "", data: 1 },
+  expected_error: "MalformedIR",
+};
+
+/** KERN_050: Construct evaluates fields in lexicographic key order */
+export const KERN_050: Fixture = {
+  id: "KERN-050",
+  suite_version: "2.0.0",
+  tier: "core",
+  level: 3,
+  category: "kernel.evaluation.construct",
+  spec_ref: "kernel.5.12",
+  type: "evaluation",
+  description: "Construct evaluates fields in lexicographic key order",
+  ir: {
+    tisyn: "eval",
+    id: "construct",
+    data: {
+      tisyn: "quote",
+      expr: {
+        z: 1,
+        a: 2,
+        m: 3,
+      },
+    },
+  },
+  env: {},
+  expected_result: { status: "ok", value: { a: 2, m: 3, z: 1 } },
+  expected_journal: [
+    {
+      coroutineId: "root",
+      result: { status: "ok", value: { a: 2, m: 3, z: 1 } },
+      type: "close",
+    },
+  ],
+};
+
+/** DET_002: Resolve traversable object produces sorted keys in effect data */
+export const DET_002: Fixture = {
+  id: "DET-002",
+  suite_version: "2.0.0",
+  tier: "core",
+  level: 3,
+  category: "determinism.resolve",
+  spec_ref: "kernel.3.3",
+  type: "effect",
+  description: "Resolve traversable object produces sorted keys in effect data",
+  ir: {
+    tisyn: "eval",
+    id: "a.op",
+    data: { z: 1, a: 2, m: 3 },
+  },
+  env: {},
+  effects: [
+    {
+      descriptor: { id: "a.op", data: { a: 2, m: 3, z: 1 } },
+      result: { status: "ok", value: "done" },
+    },
+  ],
+  expected_result: { status: "ok", value: "done" },
+  expected_journal: [
+    {
+      type: "yield",
+      coroutineId: "root",
+      description: { type: "a", name: "op" },
+      result: { status: "ok", value: "done" },
+    },
+    {
+      coroutineId: "root",
+      result: { status: "ok", value: "done" },
+      type: "close",
+    },
+  ],
+};
+
 /** All conformance fixtures. */
 export const ALL_FIXTURES: Fixture[] = [
   KERN_001,
@@ -494,4 +579,7 @@ export const ALL_FIXTURES: Fixture[] = [
   NEG_001,
   DET_005,
   KERN_014,
+  NEG_021,
+  KERN_050,
+  DET_002,
 ];

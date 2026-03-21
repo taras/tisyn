@@ -18,6 +18,10 @@ function canonicalNumber(n: number): string {
   return String(n);
 }
 
+// NOTE: Uses JSON.stringify per kernel spec §11.5 pseudocode.
+// Conformance suite §3.3 may define stricter rules (literal UTF-8).
+// If conformance suite is normative on this point, this function
+// needs to be updated. See audit finding E-1.
 function canonicalString(s: string): string {
   return JSON.stringify(s);
 }
