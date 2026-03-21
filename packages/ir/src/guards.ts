@@ -47,7 +47,8 @@ export function classifyNode(value: unknown): NodeClassification {
 
   switch (tisyn) {
     case "eval":
-      if (typeof value["id"] !== "string" || !("data" in value)) return "malformed";
+      if (typeof value["id"] !== "string" || value["id"] === "" || !("data" in value))
+        return "malformed";
       return "eval";
     case "quote":
       if (!("expr" in value)) return "malformed";
