@@ -11,14 +11,19 @@
     }
   },
   "scripts": {
-    "build": "tsc --build"
+    "build": "tsc --build",
+    "test": "vitest run"
   },
   "dependencies": {
     "@tisyn/ir": "workspace:*",
     "@tisyn/kernel": "workspace:*"
   },
   "devDependencies": {
-    "effection": "4.1.0-alpha.7"
+    "@effectionx/vitest": "^0.3.0",
+    "@tisyn/durable-streams": "workspace:*",
+    "@tisyn/runtime": "workspace:*",
+    "effection": "4.1.0-alpha.7",
+    "vitest": "^4"
   },
   "peerDependencies": {
     "effection": "4.1.0-alpha.7"

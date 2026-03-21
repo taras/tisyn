@@ -22,7 +22,7 @@ import {
 import { DivergenceError, EffectError, RuntimeBugError } from "./errors.js";
 import { evaluate, validate, type Env, envFromRecord } from "@tisyn/kernel";
 import { type DurableStream, InMemoryStream, ReplayIndex } from "@tisyn/durable-streams";
-import { AgentRegistry } from "@tisyn/agent";
+import { dispatch } from "@tisyn/agent";
 
 export interface ExecuteOptions {
   /** The IR tree to evaluate. */
@@ -31,8 +31,6 @@ export interface ExecuteOptions {
   env?: Record<string, Val>;
   /** The durable stream for journaling. */
   stream?: DurableStream;
-  /** Agent registry for live dispatch. */
-  agents?: AgentRegistry;
   /** Coroutine ID for the root task. Defaults to "root". */
   coroutineId?: string;
 }
@@ -46,7 +44,6 @@ export interface ExecuteResult {
 interface DriveContext {
   replayIndex: ReplayIndex;
   stream: DurableStream;
-  agents: AgentRegistry;
   journal: DurableEvent[];
 }
 
@@ -60,13 +57,7 @@ interface DriveContext {
  * 5. Write Close event on completion/error
  */
 export function* execute(options: ExecuteOptions): Operation<ExecuteResult> {
-  const {
-    ir,
-    env: envRecord = {},
-    stream = new InMemoryStream(),
-    agents = new AgentRegistry(),
-    coroutineId = "root",
-  } = options;
+  const { ir, env: envRecord = {}, stream = new InMemoryStream(), coroutineId = "root" } = options;
 
   // Phase 1: Validate IR before evaluation
   try {
@@ -98,7 +89,7 @@ export function* execute(options: ExecuteOptions): Operation<ExecuteResult> {
 
   // Phase 3: Create kernel generator and drive it
   const kernel = evaluate(ir, env);
-  const ctx: DriveContext = { replayIndex, stream, agents, journal };
+  const ctx: DriveContext = { replayIndex, stream, journal };
 
   let result: EventResult;
   try {
@@ -271,7 +262,7 @@ function* driveKernel(
       // CASE 3: No replay entry, no close — LIVE dispatch
       let effectResult: EventResult;
       try {
-        const resultValue = yield* ctx.agents.dispatch(descriptor.id, descriptor.data as Val);
+        const resultValue = yield* dispatch(descriptor.id, descriptor.data as Val);
         effectResult = { status: "ok", value: resultValue as Json };
       } catch (error) {
         const err = error instanceof Error ? error : new Error(String(error));

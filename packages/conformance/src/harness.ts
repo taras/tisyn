@@ -13,7 +13,7 @@ import type { DurableEvent, EventResult, EffectDescriptor } from "@tisyn/kernel"
 import { canonical } from "@tisyn/kernel";
 import { execute } from "@tisyn/runtime";
 import { InMemoryStream } from "@tisyn/durable-streams";
-import { AgentRegistry } from "@tisyn/agent";
+import { Dispatch } from "@tisyn/agent";
 
 // ── Fixture types ──
 
@@ -183,35 +183,25 @@ function journalMatches(
   return { pass: true, message: "OK" };
 }
 
-// ── Fixture runners ──
+// ── Mock dispatch middleware ──
 
 /**
- * Create an agent registry that feeds predetermined results.
+ * Install dispatch middleware that feeds predetermined results.
  *
  * For effect and negative_runtime fixtures, effects are provided
- * in order. The agent feeds them sequentially.
+ * in order. The middleware feeds them sequentially.
  */
-function createMockAgents(
+function* installMockDispatch(
   effects: Array<{
     descriptor: EffectDescriptor;
     result: EventResult;
   }>,
-): AgentRegistry {
-  const agents = new AgentRegistry();
+) {
   let effectIndex = 0;
 
-  // Register a catch-all agent that feeds effects in order
-  // We use a proxy pattern: register agents for each unique type
-  const types = new Set(
-    effects.map((e) => {
-      const dotIdx = e.descriptor.id.indexOf(".");
-      return dotIdx >= 0 ? e.descriptor.id.substring(0, dotIdx) : e.descriptor.id;
-    }),
-  );
-
-  for (const type of types) {
+  yield* Dispatch.around({
     // biome-ignore lint/correctness/useYield: synchronous for mock
-    agents.register(type, function* (_operation, _args) {
+    *dispatch([_effectId, _data]: [string, any]) {
       if (effectIndex >= effects.length) {
         throw new Error("More effects than expected");
       }
@@ -227,11 +217,11 @@ function createMockAgents(
         throw err;
       }
       throw new Error("Unexpected cancelled result in mock");
-    });
-  }
-
-  return agents;
+    },
+  });
 }
+
+// ── Fixture runners ──
 
 export interface FixtureResult {
   id: string;
@@ -296,13 +286,11 @@ async function runEvaluationFixture(fixture: EvaluationFixture): Promise<Fixture
 }
 
 async function runEffectFixture(fixture: EffectFixture): Promise<FixtureResult> {
-  const agents = createMockAgents(fixture.effects);
-
   const result = await run(function* () {
+    yield* installMockDispatch(fixture.effects);
     return yield* execute({
       ir: fixture.ir,
       env: fixture.env,
-      agents,
     });
   });
 
@@ -326,15 +314,13 @@ async function runReplayFixture(fixture: ReplayFixture): Promise<FixtureResult> 
   // Pre-populate stream with stored journal
   const stream = new InMemoryStream(fixture.stored_journal);
 
-  // Create mock agents for live effects (if any)
-  const agents = createMockAgents(fixture.live_effects);
-
   const result = await run(function* () {
+    // Install mock dispatch for live effects (if any)
+    yield* installMockDispatch(fixture.live_effects);
     return yield* execute({
       ir: fixture.ir,
       env: fixture.env,
       stream,
-      agents,
     });
   });
 
@@ -393,13 +379,11 @@ async function runNegativeValidationFixture(
 }
 
 async function runNegativeRuntimeFixture(fixture: NegativeRuntimeFixture): Promise<FixtureResult> {
-  const agents = createMockAgents(fixture.effects);
-
   const result = await run(function* () {
+    yield* installMockDispatch(fixture.effects);
     return yield* execute({
       ir: fixture.ir,
       env: fixture.env,
-      agents,
     });
   });
 
