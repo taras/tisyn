@@ -17,9 +17,8 @@ describe("Journal", () => {
     stream.append = function* (event) {
       yield* originalAppend(event);
       appendTimestamps.push({
-        event: event.type === "yield"
-          ? `yield:${(event as YieldEvent).description.name}`
-          : event.type,
+        event:
+          event.type === "yield" ? `yield:${(event as YieldEvent).description.name}` : event.type,
         appendCount: stream.appendCount,
       });
     };

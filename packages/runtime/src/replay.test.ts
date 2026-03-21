@@ -15,10 +15,7 @@ function singleEffectIR(agentType: string, opName: string, data: unknown = []) {
 }
 
 // IR that yields two sequential effects via let bindings
-function twoEffectIR(
-  type1: string, name1: string,
-  type2: string, name2: string,
-) {
+function twoEffectIR(type1: string, name1: string, type2: string, name2: string) {
   return {
     tisyn: "eval",
     id: "let",
@@ -33,12 +30,7 @@ function twoEffectIR(
   };
 }
 
-function yieldEvent(
-  type: string,
-  name: string,
-  value: unknown,
-  coroutineId = "root",
-): YieldEvent {
+function yieldEvent(type: string, name: string, value: unknown, coroutineId = "root"): YieldEvent {
   return {
     type: "yield",
     coroutineId,
@@ -47,10 +39,7 @@ function yieldEvent(
   };
 }
 
-function closeEvent(
-  value: unknown,
-  coroutineId = "root",
-): CloseEvent {
+function closeEvent(value: unknown, coroutineId = "root"): CloseEvent {
   return {
     type: "close",
     coroutineId,
@@ -60,9 +49,7 @@ function closeEvent(
 
 describe("Replay", () => {
   it("replay hit returns stored result", async () => {
-    const stored: DurableEvent[] = [
-      yieldEvent("a", "op", 42),
-    ];
+    const stored: DurableEvent[] = [yieldEvent("a", "op", 42)];
     const stream = new InMemoryStream(stored);
 
     const agents = new AgentRegistry();
@@ -92,9 +79,7 @@ describe("Replay", () => {
 
   it("replay miss transitions to live", async () => {
     // Store only the first effect
-    const stored: DurableEvent[] = [
-      yieldEvent("a", "step1", 10),
-    ];
+    const stored: DurableEvent[] = [yieldEvent("a", "step1", 10)];
     const stream = new InMemoryStream(stored);
 
     let liveCallCount = 0;
@@ -126,9 +111,7 @@ describe("Replay", () => {
 
   it("replay divergence: wrong type", async () => {
     // Stored says type "a", but kernel will yield type "b"
-    const stored: DurableEvent[] = [
-      yieldEvent("a", "op", 10),
-    ];
+    const stored: DurableEvent[] = [yieldEvent("a", "op", 10)];
     const stream = new InMemoryStream(stored);
     const agents = new AgentRegistry();
 
@@ -150,9 +133,7 @@ describe("Replay", () => {
 
   it("replay divergence: wrong name", async () => {
     // Stored says name "foo", but kernel will yield name "bar"
-    const stored: DurableEvent[] = [
-      yieldEvent("a", "foo", 10),
-    ];
+    const stored: DurableEvent[] = [yieldEvent("a", "foo", 10)];
     const stream = new InMemoryStream(stored);
     const agents = new AgentRegistry();
 
@@ -174,9 +155,7 @@ describe("Replay", () => {
 
   it("replay divergence: continue past close", async () => {
     // Journal has a close event — kernel shouldn't yield more effects
-    const stored: DurableEvent[] = [
-      closeEvent(42),
-    ];
+    const stored: DurableEvent[] = [closeEvent(42)];
     const stream = new InMemoryStream(stored);
     const agents = new AgentRegistry();
 
@@ -198,9 +177,7 @@ describe("Replay", () => {
   it("replay ignores data differences", async () => {
     // Stored yield has data that differs from current IR args,
     // but type/name match — should replay successfully
-    const stored: DurableEvent[] = [
-      yieldEvent("a", "op", 99),
-    ];
+    const stored: DurableEvent[] = [yieldEvent("a", "op", 99)];
     const stream = new InMemoryStream(stored);
 
     let agentCalled = false;
