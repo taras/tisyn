@@ -8,7 +8,8 @@ import { describe, it } from "@effectionx/vitest";
 import { expect } from "vitest";
 import { execute } from "./execute.js";
 import { InMemoryStream } from "@tisyn/durable-streams";
-import { AgentRegistry } from "@tisyn/agent";
+import { Dispatch } from "@tisyn/agent";
+import { parseEffectId } from "@tisyn/kernel";
 import type { CloseEvent, DurableEvent, YieldEvent } from "@tisyn/kernel";
 
 // ── IR helpers ──
@@ -37,18 +38,19 @@ function raceIR(...exprs: unknown[]) {
 
 describe("all", () => {
   it("results in exprs order", function* () {
-    const agents = new AgentRegistry();
     const values = [10, 20, 30];
     let callIndex = 0;
-    // biome-ignore lint/correctness/useYield: mock
-    agents.register("a", function* (operation) {
-      const val = values[callIndex++];
-      return val;
+    yield* Dispatch.around({
+      // biome-ignore lint/correctness/useYield: mock
+      *dispatch([_effectId, _data]: [string, any]) {
+        const val = values[callIndex++];
+        return val;
+      },
     });
 
     const ir = allIR(effectIR("a", "op1"), effectIR("a", "op2"), effectIR("a", "op3"));
 
-    const { result } = yield* execute({ ir: ir as never, agents });
+    const { result } = yield* execute({ ir: ir as never });
 
     expect(result.status).toBe("ok");
     if (result.status === "ok") {
@@ -67,19 +69,20 @@ describe("all", () => {
   });
 
   it("child failure propagates error", function* () {
-    const agents = new AgentRegistry();
-    let callCount = 0;
-    agents.register("a", function* (operation) {
-      callCount++;
-      if (operation === "fail") {
-        throw new Error("child failed");
-      }
-      return 42;
+    yield* Dispatch.around({
+      // biome-ignore lint/correctness/useYield: mock
+      *dispatch([effectId, _data]: [string, any]) {
+        const { name } = parseEffectId(effectId);
+        if (name === "fail") {
+          throw new Error("child failed");
+        }
+        return 42;
+      },
     });
 
     const ir = allIR(effectIR("a", "ok"), effectIR("a", "fail"), effectIR("a", "ok"));
 
-    const { result } = yield* execute({ ir: ir as never, agents });
+    const { result } = yield* execute({ ir: ir as never });
 
     expect(result.status).toBe("err");
     if (result.status === "err") {
@@ -88,16 +91,19 @@ describe("all", () => {
   });
 
   it("lowest-index error wins when multiple children fail", function* () {
-    const agents = new AgentRegistry();
-    agents.register("a", function* (operation) {
-      if (operation === "fail1") throw new Error("error from child 0");
-      if (operation === "fail2") throw new Error("error from child 1");
-      return 42;
+    yield* Dispatch.around({
+      // biome-ignore lint/correctness/useYield: mock
+      *dispatch([effectId, _data]: [string, any]) {
+        const { name } = parseEffectId(effectId);
+        if (name === "fail1") throw new Error("error from child 0");
+        if (name === "fail2") throw new Error("error from child 1");
+        return 42;
+      },
     });
 
     const ir = allIR(effectIR("a", "fail1"), effectIR("a", "fail2"));
 
-    const { result } = yield* execute({ ir: ir as never, agents });
+    const { result } = yield* execute({ ir: ir as never });
 
     expect(result.status).toBe("err");
     if (result.status === "err") {
@@ -106,15 +112,18 @@ describe("all", () => {
   });
 
   it("child close events appear in journal", function* () {
-    const agents = new AgentRegistry();
-    agents.register("a", function* (operation) {
-      if (operation === "fail") throw new Error("boom");
-      return 42;
+    yield* Dispatch.around({
+      // biome-ignore lint/correctness/useYield: mock
+      *dispatch([effectId, _data]: [string, any]) {
+        const { name } = parseEffectId(effectId);
+        if (name === "fail") throw new Error("boom");
+        return 42;
+      },
     });
 
     const ir = allIR(effectIR("a", "ok"), effectIR("a", "fail"));
 
-    const { result, journal } = yield* execute({ ir: ir as never, agents });
+    const { result, journal } = yield* execute({ ir: ir as never });
 
     expect(result.status).toBe("err");
 
@@ -128,16 +137,18 @@ describe("all", () => {
 
 describe("race", () => {
   it("first complete wins", function* () {
-    const agents = new AgentRegistry();
-    // biome-ignore lint/correctness/useYield: mock
-    agents.register("a", function* (operation) {
-      if (operation === "fast") return "winner";
-      return "loser";
+    yield* Dispatch.around({
+      // biome-ignore lint/correctness/useYield: mock
+      *dispatch([effectId, _data]: [string, any]) {
+        const { name } = parseEffectId(effectId);
+        if (name === "fast") return "winner";
+        return "loser";
+      },
     });
 
     const ir = raceIR(effectIR("a", "fast"), effectIR("a", "slow"));
 
-    const { result } = yield* execute({ ir: ir as never, agents });
+    const { result } = yield* execute({ ir: ir as never });
 
     expect(result.status).toBe("ok");
     if (result.status === "ok") {
@@ -147,15 +158,16 @@ describe("race", () => {
   });
 
   it("all children have close events in journal", function* () {
-    const agents = new AgentRegistry();
-    // biome-ignore lint/correctness/useYield: mock
-    agents.register("a", function* () {
-      return 42;
+    yield* Dispatch.around({
+      // biome-ignore lint/correctness/useYield: mock
+      *dispatch([_effectId, _data]: [string, any]) {
+        return 42;
+      },
     });
 
     const ir = raceIR(effectIR("a", "op1"), effectIR("a", "op2"));
 
-    const { result, journal } = yield* execute({ ir: ir as never, agents });
+    const { result, journal } = yield* execute({ ir: ir as never });
 
     expect(result.status).toBe("ok");
 
@@ -167,15 +179,18 @@ describe("race", () => {
   });
 
   it("failure does not win", function* () {
-    const agents = new AgentRegistry();
-    agents.register("a", function* (operation) {
-      if (operation === "fail") throw new Error("nope");
-      return "success";
+    yield* Dispatch.around({
+      // biome-ignore lint/correctness/useYield: mock
+      *dispatch([effectId, _data]: [string, any]) {
+        const { name } = parseEffectId(effectId);
+        if (name === "fail") throw new Error("nope");
+        return "success";
+      },
     });
 
     const ir = raceIR(effectIR("a", "fail"), effectIR("a", "ok"));
 
-    const { result } = yield* execute({ ir: ir as never, agents });
+    const { result } = yield* execute({ ir: ir as never });
 
     expect(result.status).toBe("ok");
     if (result.status === "ok") {
@@ -184,16 +199,19 @@ describe("race", () => {
   });
 
   it("all fail -> lowest-index error", function* () {
-    const agents = new AgentRegistry();
-    agents.register("a", function* (operation) {
-      if (operation === "fail1") throw new Error("error 0");
-      if (operation === "fail2") throw new Error("error 1");
-      throw new Error("unknown");
+    yield* Dispatch.around({
+      // biome-ignore lint/correctness/useYield: mock
+      *dispatch([effectId, _data]: [string, any]) {
+        const { name } = parseEffectId(effectId);
+        if (name === "fail1") throw new Error("error 0");
+        if (name === "fail2") throw new Error("error 1");
+        throw new Error("unknown");
+      },
     });
 
     const ir = raceIR(effectIR("a", "fail1"), effectIR("a", "fail2"));
 
-    const { result } = yield* execute({ ir: ir as never, agents });
+    const { result } = yield* execute({ ir: ir as never });
 
     expect(result.status).toBe("err");
     if (result.status === "err") {
