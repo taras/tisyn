@@ -8,7 +8,7 @@ import { describe, it } from "@effectionx/vitest";
 import { expect } from "vitest";
 import { execute } from "./execute.js";
 import { InMemoryStream } from "@tisyn/durable-streams";
-import { AgentRegistry } from "@tisyn/agent";
+import { Dispatch } from "@tisyn/agent";
 import type { CloseEvent, DurableEvent } from "@tisyn/kernel";
 
 // ── IR helpers ──
@@ -37,14 +37,15 @@ function raceIR(...exprs: unknown[]) {
 
 describe("Cancellation", () => {
   it("normal completion writes Close(ok), not Close(cancelled)", function* () {
-    const agents = new AgentRegistry();
-    // biome-ignore lint/correctness/useYield: mock
-    agents.register("a", function* () {
-      return 42;
+    yield* Dispatch.around({
+      // biome-ignore lint/correctness/useYield: mock
+      *dispatch([_effectId, _data]: [string, any]) {
+        return 42;
+      },
     });
 
     const ir = effectIR("a", "op1");
-    const { result, journal } = yield* execute({ ir: ir as never, agents });
+    const { result, journal } = yield* execute({ ir: ir as never });
 
     expect(result.status).toBe("ok");
 
@@ -57,13 +58,15 @@ describe("Cancellation", () => {
   });
 
   it("error completion writes Close(err), not Close(cancelled)", function* () {
-    const agents = new AgentRegistry();
-    agents.register("a", function* () {
-      throw new Error("boom");
+    yield* Dispatch.around({
+      // biome-ignore lint/correctness/useYield: mock
+      *dispatch([_effectId, _data]: [string, any]) {
+        throw new Error("boom");
+      },
     });
 
     const ir = effectIR("a", "op1");
-    const { result, journal } = yield* execute({ ir: ir as never, agents });
+    const { result, journal } = yield* execute({ ir: ir as never });
 
     expect(result.status).toBe("err");
 
@@ -75,15 +78,16 @@ describe("Cancellation", () => {
   });
 
   it("all children have close events in journal", function* () {
-    const agents = new AgentRegistry();
-    // biome-ignore lint/correctness/useYield: mock
-    agents.register("a", function* () {
-      return 42;
+    yield* Dispatch.around({
+      // biome-ignore lint/correctness/useYield: mock
+      *dispatch([_effectId, _data]: [string, any]) {
+        return 42;
+      },
     });
 
     const ir = allIR(effectIR("a", "op1"), effectIR("a", "op2"), effectIR("a", "op3"));
 
-    const { result, journal } = yield* execute({ ir: ir as never, agents });
+    const { result, journal } = yield* execute({ ir: ir as never });
 
     expect(result.status).toBe("ok");
 
@@ -95,15 +99,16 @@ describe("Cancellation", () => {
   });
 
   it("race losers have close events in journal", function* () {
-    const agents = new AgentRegistry();
-    // biome-ignore lint/correctness/useYield: mock
-    agents.register("a", function* () {
-      return 42;
+    yield* Dispatch.around({
+      // biome-ignore lint/correctness/useYield: mock
+      *dispatch([_effectId, _data]: [string, any]) {
+        return 42;
+      },
     });
 
     const ir = raceIR(effectIR("a", "op1"), effectIR("a", "op2"));
 
-    const { result, journal } = yield* execute({ ir: ir as never, agents });
+    const { result, journal } = yield* execute({ ir: ir as never });
 
     expect(result.status).toBe("ok");
 
@@ -116,10 +121,12 @@ describe("Cancellation", () => {
 
   it("Close(cancelled) is persisted to durable stream, not just in-memory journal", function* () {
     const stream = new InMemoryStream();
-    const agents = new AgentRegistry();
-    // biome-ignore lint/correctness/useYield: mock
-    agents.register("a", function* () {
-      return 42;
+
+    yield* Dispatch.around({
+      // biome-ignore lint/correctness/useYield: mock
+      *dispatch([_effectId, _data]: [string, any]) {
+        return 42;
+      },
     });
 
     // Race: both children complete synchronously, but losers get cancelled
@@ -128,7 +135,6 @@ describe("Cancellation", () => {
     const { result } = yield* execute({
       ir: ir as never,
       stream,
-      agents,
     });
 
     expect(result.status).toBe("ok");
@@ -142,15 +148,16 @@ describe("Cancellation", () => {
   });
 
   it("child close events precede root close in journal", function* () {
-    const agents = new AgentRegistry();
-    // biome-ignore lint/correctness/useYield: mock
-    agents.register("a", function* () {
-      return 42;
+    yield* Dispatch.around({
+      // biome-ignore lint/correctness/useYield: mock
+      *dispatch([_effectId, _data]: [string, any]) {
+        return 42;
+      },
     });
 
     const ir = allIR(effectIR("a", "op1"), effectIR("a", "op2"));
 
-    const { result, journal } = yield* execute({ ir: ir as never, agents });
+    const { result, journal } = yield* execute({ ir: ir as never });
 
     expect(result.status).toBe("ok");
 

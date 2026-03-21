@@ -6,9 +6,10 @@
 
 import { describe, it } from "@effectionx/vitest";
 import { expect } from "vitest";
+import { scoped } from "effection";
 import { execute } from "./execute.js";
 import { InMemoryStream } from "@tisyn/durable-streams";
-import { AgentRegistry } from "@tisyn/agent";
+import { Dispatch } from "@tisyn/agent";
 import type { YieldEvent, CloseEvent, DurableEvent } from "@tisyn/kernel";
 
 // ── IR helpers ──
@@ -83,11 +84,12 @@ describe("Recovery", () => {
     const stream = new InMemoryStream(stored);
 
     let agentCalled = false;
-    const agents = new AgentRegistry();
-    // biome-ignore lint/correctness/useYield: mock
-    agents.register("a", function* () {
-      agentCalled = true;
-      return 999;
+    yield* Dispatch.around({
+      // biome-ignore lint/correctness/useYield: mock
+      *dispatch([_effectId, _data]: [string, any]) {
+        agentCalled = true;
+        return 999;
+      },
     });
 
     const ir = allIR(effectIR("a", "op1"), effectIR("a", "op2"));
@@ -95,7 +97,6 @@ describe("Recovery", () => {
     const { result } = yield* execute({
       ir: ir as never,
       stream,
-      agents,
     });
 
     expect(agentCalled).toBe(false);
@@ -112,11 +113,12 @@ describe("Recovery", () => {
     const stream = new InMemoryStream(stored);
 
     let liveCallCount = 0;
-    const agents = new AgentRegistry();
-    // biome-ignore lint/correctness/useYield: mock
-    agents.register("a", function* () {
-      liveCallCount++;
-      return 20;
+    yield* Dispatch.around({
+      // biome-ignore lint/correctness/useYield: mock
+      *dispatch([_effectId, _data]: [string, any]) {
+        liveCallCount++;
+        return 20;
+      },
     });
 
     const ir = allIR(effectIR("a", "op1"), effectIR("a", "op2"));
@@ -124,7 +126,6 @@ describe("Recovery", () => {
     const { result } = yield* execute({
       ir: ir as never,
       stream,
-      agents,
     });
 
     // Only child 1 should dispatch live
@@ -140,11 +141,12 @@ describe("Recovery", () => {
     const stream = new InMemoryStream();
 
     let liveCallCount = 0;
-    const agents = new AgentRegistry();
-    // biome-ignore lint/correctness/useYield: mock
-    agents.register("a", function* () {
-      liveCallCount++;
-      return liveCallCount * 10;
+    yield* Dispatch.around({
+      // biome-ignore lint/correctness/useYield: mock
+      *dispatch([_effectId, _data]: [string, any]) {
+        liveCallCount++;
+        return liveCallCount * 10;
+      },
     });
 
     const ir = allIR(effectIR("a", "op1"), effectIR("a", "op2"));
@@ -152,7 +154,6 @@ describe("Recovery", () => {
     const { result } = yield* execute({
       ir: ir as never,
       stream,
-      agents,
     });
 
     // Both children should dispatch live
@@ -161,31 +162,30 @@ describe("Recovery", () => {
   });
 
   it("deterministic child IDs across replay", function* () {
-    // Run 1: fresh execution
-    const agents1 = new AgentRegistry();
-    let callCount1 = 0;
-    // biome-ignore lint/correctness/useYield: mock
-    agents1.register("a", function* () {
-      return ++callCount1 * 10;
-    });
-
     const ir = allIR(effectIR("a", "op1"), effectIR("a", "op2"));
-    const { journal: journal1 } = yield* execute({
-      ir: ir as never,
-      agents: agents1,
+
+    // Run 1: fresh execution
+    const { journal: journal1 } = yield* scoped(function* () {
+      let callCount = 0;
+      yield* Dispatch.around({
+        // biome-ignore lint/correctness/useYield: mock
+        *dispatch([_effectId, _data]: [string, any]) {
+          return ++callCount * 10;
+        },
+      });
+      return yield* execute({ ir: ir as never });
     });
 
     // Run 2: fresh execution with same IR
-    const agents2 = new AgentRegistry();
-    let callCount2 = 0;
-    // biome-ignore lint/correctness/useYield: mock
-    agents2.register("a", function* () {
-      return ++callCount2 * 10;
-    });
-
-    const { journal: journal2 } = yield* execute({
-      ir: ir as never,
-      agents: agents2,
+    const { journal: journal2 } = yield* scoped(function* () {
+      let callCount = 0;
+      yield* Dispatch.around({
+        // biome-ignore lint/correctness/useYield: mock
+        *dispatch([_effectId, _data]: [string, any]) {
+          return ++callCount * 10;
+        },
+      });
+      return yield* execute({ ir: ir as never });
     });
 
     // Extract coroutineIds from both runs
@@ -209,11 +209,12 @@ describe("Recovery", () => {
     const stream = new InMemoryStream(stored);
 
     let agentCalled = false;
-    const agents = new AgentRegistry();
-    // biome-ignore lint/correctness/useYield: mock
-    agents.register("a", function* () {
-      agentCalled = true;
-      return 999;
+    yield* Dispatch.around({
+      // biome-ignore lint/correctness/useYield: mock
+      *dispatch([_effectId, _data]: [string, any]) {
+        agentCalled = true;
+        return 999;
+      },
     });
 
     const ir = raceIR(effectIR("a", "op1"), effectIR("a", "op2"));
@@ -221,7 +222,6 @@ describe("Recovery", () => {
     const { result } = yield* execute({
       ir: ir as never,
       stream,
-      agents,
     });
 
     expect(agentCalled).toBe(false);

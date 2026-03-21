@@ -11,7 +11,7 @@ import { describe, it } from "@effectionx/vitest";
 import { expect } from "vitest";
 import { spawn, ensure, suspend, scoped, sleep } from "effection";
 import { execute } from "./execute.js";
-import { AgentRegistry } from "@tisyn/agent";
+import { Dispatch } from "@tisyn/agent";
 import type { CloseEvent, YieldEvent } from "@tisyn/kernel";
 
 describe("Substrate Conformance", () => {
@@ -41,11 +41,12 @@ describe("Substrate Conformance", () => {
 
   describe("V2: child close before parent resumes after compound", () => {
     it("child Close events appear in journal before post-compound Yield", function* () {
-      const agents = new AgentRegistry();
       let callCount = 0;
-      // biome-ignore lint/correctness/useYield: mock
-      agents.register("a", function* () {
-        return ++callCount * 10;
+      yield* Dispatch.around({
+        // biome-ignore lint/correctness/useYield: mock
+        *dispatch([_effectId, _data]: [string, any]) {
+          return ++callCount * 10;
+        },
       });
 
       // IR: let x = all(a.op1, a.op2); a.final(x)
@@ -74,7 +75,7 @@ describe("Substrate Conformance", () => {
         },
       };
 
-      const { journal } = yield* execute({ ir: ir as never, agents });
+      const { journal } = yield* execute({ ir: ir as never });
 
       // Find the post-compound Yield (a.final)
       const finalYieldIdx = journal.findIndex(
