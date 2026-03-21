@@ -10,7 +10,7 @@
  * 6. Verify: final journal matches expected
  */
 
-import { describe, it } from "@effectionx/bdd/node";
+import { describe, it } from "@effectionx/vitest";
 import { expect } from "vitest";
 import { execute } from "@tisyn/runtime";
 import { InMemoryStream } from "@tisyn/durable-streams";
