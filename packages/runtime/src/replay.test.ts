@@ -1,4 +1,4 @@
-import { describe, it } from "@effectionx/bdd/node";
+import { describe, it } from "@effectionx/vitest";
 import { expect } from "vitest";
 import { execute } from "./execute.js";
 import { InMemoryStream } from "@tisyn/durable-streams";

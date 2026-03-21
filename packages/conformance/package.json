@@ -12,7 +12,7 @@
   },
   "scripts": {
     "build": "tsc --build",
-    "test": "vitest run && node --import tsx --test src/crash-replay.test.ts"
+    "test": "vitest run"
   },
   "dependencies": {
     "@tisyn/agent": "workspace:*",
@@ -22,7 +22,7 @@
     "@tisyn/runtime": "workspace:*"
   },
   "devDependencies": {
-    "@effectionx/bdd": "^0.5.1",
+    "@effectionx/vitest": "^0.3.0",
     "effection": "4.1.0-alpha.7",
     "vitest": "^4"
   }
