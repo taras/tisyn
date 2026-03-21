@@ -1,5 +1,5 @@
 {
-  "name": "@tisyn/shared",
+  "name": "@tisyn/ir",
   "version": "0.1.0",
   "type": "module",
   "main": "./dist/index.js",
@@ -11,15 +11,11 @@
     }
   },
   "scripts": {
-    "build": "tsc --build"
-  },
-  "dependencies": {
-    "@tisyn/ir": "workspace:*"
+    "build": "tsc --build",
+    "test": "vitest run"
   },
   "devDependencies": {
-    "effection": "4.1.0-alpha.7"
-  },
-  "peerDependencies": {
-    "effection": "4.1.0-alpha.7"
+    "expect-type": "^1",
+    "vitest": "^3"
   }
 }
