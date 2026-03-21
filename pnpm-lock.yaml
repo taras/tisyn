@@ -71,9 +71,9 @@ importers:
         specifier: workspace:*
         version: link:../runtime
     devDependencies:
-      '@effectionx/bdd':
-        specifier: ^0.5.1
-        version: 0.5.1(effection@4.1.0-alpha.7)
+      '@effectionx/vitest':
+        specifier: ^0.3.0
+        version: 0.3.0(effection@4.1.0-alpha.7)(vitest@4.1.0(@types/node@25.5.0)(vite@7.3.1(@types/node@25.5.0)(tsx@4.21.0)))
       effection:
         specifier: 4.1.0-alpha.7
         version: 4.1.0-alpha.7
@@ -121,9 +121,9 @@ importers:
         specifier: workspace:*
         version: link:../kernel
     devDependencies:
-      '@effectionx/bdd':
-        specifier: ^0.5.1
-        version: 0.5.1(effection@4.1.0-alpha.7)
+      '@effectionx/vitest':
+        specifier: ^0.3.0
+        version: 0.3.0(effection@4.1.0-alpha.7)(vitest@4.1.0(@types/node@25.5.0)(vite@7.3.1(@types/node@25.5.0)(tsx@4.21.0)))
       effection:
         specifier: 4.1.0-alpha.7
         version: 4.1.0-alpha.7
@@ -141,12 +141,6 @@ packages:
 
   '@b9g/crank@0.7.8':
     resolution: {integrity: sha512-22osqQnltRa/ekYktqO5L0WQsY8MLXkcdqwfzIPW+3ZKNJCE0P4vuna4Y2WHCYVFtv9SO2xwjOxLa/gOcmjitw==}
-
-  '@effectionx/bdd@0.5.1':
-    resolution: {integrity: sha512-VY4CGDWRiCyfWrMf/9SE+nIGuH/U+XKg8vJF2vI5hPpCnf1jSIz3dP+38TYBz3+ekzz8fBHSM1hKgwPqsmXTrA==}
-    engines: {node: '>= 22'}
-    peerDependencies:
-      effection: ^3 || ^4
 
   '@effectionx/inspector@https://pkg.pr.new/thefrontside/inspector/@effectionx/inspector@8c7cc3f':
     resolution: {tarball: https://pkg.pr.new/thefrontside/inspector/@effectionx/inspector@8c7cc3f}
@@ -190,6 +184,12 @@ packages:
     engines: {node: '>= 22'}
     peerDependencies:
       effection: ^3 || ^4
+
+  '@effectionx/vitest@0.3.0':
+    resolution: {integrity: sha512-STDCPKgn5l4fYVzodBmT//Rg4gUhIEoKz/LtXco2XYcRC6bi/QTTcpVGGOeQ25waYFA3mFpcAbrxrqTPyD3GfA==}
+    peerDependencies:
+      effection: ^3 || ^4
+      vitest: ^3 || ^4
 
   '@esbuild/aix-ppc64@0.27.4':
     resolution: {integrity: sha512-cQPwL2mp2nSmHHJlCyoXgHGhbEPMrEEU5xhkcy3Hs/O7nGZqEpZ2sUtLaL9MORLtDfRvVl2/3PAuEkYZH0Ty8Q==}
@@ -925,11 +925,6 @@ snapshots:
 
   '@b9g/crank@0.7.8': {}
 
-  '@effectionx/bdd@0.5.1(effection@4.1.0-alpha.7)':
-    dependencies:
-      '@effectionx/test-adapter': 0.7.3(effection@4.1.0-alpha.7)
-      effection: 4.1.0-alpha.7
-
   '@effectionx/inspector@https://pkg.pr.new/thefrontside/inspector/@effectionx/inspector@8c7cc3f(effection@4.1.0-alpha.7)':
     dependencies:
       '@ark/util': 0.56.0
@@ -978,6 +973,12 @@ snapshots:
   '@effectionx/timebox@0.4.2(effection@4.1.0-alpha.7)':
     dependencies:
       effection: 4.1.0-alpha.7
+
+  '@effectionx/vitest@0.3.0(effection@4.1.0-alpha.7)(vitest@4.1.0(@types/node@25.5.0)(vite@7.3.1(@types/node@25.5.0)(tsx@4.21.0)))':
+    dependencies:
+      '@effectionx/test-adapter': 0.7.3(effection@4.1.0-alpha.7)
+      effection: 4.1.0-alpha.7
+      vitest: 4.1.0(@types/node@25.5.0)(vite@7.3.1(@types/node@25.5.0)(tsx@4.21.0))
 
   '@esbuild/aix-ppc64@0.27.4':
     optional: true

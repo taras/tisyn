@@ -12,7 +12,7 @@
   },
   "scripts": {
     "build": "tsc --build",
-    "test": "node --import tsx --test src/**/*.test.ts"
+    "test": "vitest run"
   },
   "dependencies": {
     "@tisyn/agent": "workspace:*",
@@ -21,7 +21,7 @@
     "@tisyn/kernel": "workspace:*"
   },
   "devDependencies": {
-    "@effectionx/bdd": "^0.5.1",
+    "@effectionx/vitest": "^0.3.0",
     "effection": "4.1.0-alpha.7",
     "vitest": "^4"
   },
