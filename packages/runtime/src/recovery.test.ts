@@ -35,12 +35,7 @@ function raceIR(...exprs: unknown[]) {
 
 // ── Journal event helpers ──
 
-function yieldEvent(
-  type: string,
-  name: string,
-  value: unknown,
-  coroutineId: string,
-): YieldEvent {
+function yieldEvent(type: string, name: string, value: unknown, coroutineId: string): YieldEvent {
   return {
     type: "yield",
     coroutineId,
@@ -112,10 +107,7 @@ describe("Recovery", () => {
 
   it("partial replay mid-all — child 0 replays, child 1 goes live", function* () {
     // Journal has only child 0's events
-    const stored: DurableEvent[] = [
-      yieldEvent("a", "op1", 10, "root.0"),
-      closeOk(10, "root.0"),
-    ];
+    const stored: DurableEvent[] = [yieldEvent("a", "op1", 10, "root.0"), closeOk(10, "root.0")];
 
     const stream = new InMemoryStream(stored);
 

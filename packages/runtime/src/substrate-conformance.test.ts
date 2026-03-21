@@ -59,10 +59,15 @@ describe("Substrate Conformance", () => {
             value: {
               tisyn: "eval",
               id: "all",
-              data: { tisyn: "quote", expr: { exprs: [
-                { tisyn: "eval", id: "a.op1", data: [] },
-                { tisyn: "eval", id: "a.op2", data: [] },
-              ] } },
+              data: {
+                tisyn: "quote",
+                expr: {
+                  exprs: [
+                    { tisyn: "eval", id: "a.op1", data: [] },
+                    { tisyn: "eval", id: "a.op2", data: [] },
+                  ],
+                },
+              },
             },
             body: { tisyn: "eval", id: "a.final", data: [] },
           },
@@ -77,9 +82,7 @@ describe("Substrate Conformance", () => {
       );
       // Find child Close events
       const childCloseIndices = journal
-        .map((e, i) =>
-          e.type === "close" && e.coroutineId.startsWith("root.") ? i : -1,
-        )
+        .map((e, i) => (e.type === "close" && e.coroutineId.startsWith("root.") ? i : -1))
         .filter((i) => i >= 0);
 
       expect(finalYieldIdx).toBeGreaterThan(-1);

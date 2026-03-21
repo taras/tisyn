@@ -3,7 +3,7 @@
 **Document version:** 1.3.2-draft  
 **Status:** Normative  
 **Replaces:** 1.3.1-draft  
-**Applies to:** Tisyn runtime, kernel version ≥ 0.4, Effection ≥ 3.x  
+**Applies to:** Tisyn runtime, kernel version ≥ 0.4, Effection ≥ 3.x
 
 ---
 
@@ -120,18 +120,18 @@ The practical consequence is that this specification does not need a separate "b
 
 Effection provides correct lifetime and cancellation mechanics. Tisyn adds a deterministic overlay:
 
-| Concern | Owner |
-|---|---|
-| Lifetime enforcement (child ≤ parent) | Effection |
-| Cooperative cancellation propagation | Effection |
-| Concurrent child execution | Effection |
-| Deterministic task IDs | Tisyn runtime |
-| Replay cursors (yieldIndex) | Tisyn runtime |
-| Journal writes and ordering | Tisyn runtime |
-| Typed close reasons | Tisyn runtime |
-| Divergence detection | Tisyn runtime |
-| Compound failure selection rules | Tisyn runtime |
-| Source-order result collection | Tisyn runtime |
+| Concern                               | Owner         |
+| ------------------------------------- | ------------- |
+| Lifetime enforcement (child ≤ parent) | Effection     |
+| Cooperative cancellation propagation  | Effection     |
+| Concurrent child execution            | Effection     |
+| Deterministic task IDs                | Tisyn runtime |
+| Replay cursors (yieldIndex)           | Tisyn runtime |
+| Journal writes and ordering           | Tisyn runtime |
+| Typed close reasons                   | Tisyn runtime |
+| Divergence detection                  | Tisyn runtime |
+| Compound failure selection rules      | Tisyn runtime |
+| Source-order result collection        | Tisyn runtime |
 
 The implementation should feel like Effection with a deterministic runtime layer. It should not feel like a separate orchestration engine that happens to use Effection internally.
 
@@ -289,16 +289,16 @@ The `spawn_index` is the child's position in the `exprs` array of the originatin
 
 State transitions:
 
-| From        | Event                                        | To          | CloseReason     |
-|-------------|----------------------------------------------|-------------|-----------------|
-| `running`   | kernel completes normally                    | `closed`    | `ok`            |
-| `running`   | kernel propagates unhandled error            | `closed`    | `error`         |
-| `running`   | `halt()` called                              | `cancelling`| —               |
-| `cancelling`| cleanup runs; all children `closed`          | `closed`    | `cancelled`     |
-| `running`   | divergence detected                          | `closed`    | `diverged`      |
-| `running`   | protocol/runtime bug detected                | `closed`    | `bug`           |
-| `cancelling`| `halt()` called again                        | `cancelling`| no-op           |
-| `closed`    | `halt()` called                              | `closed`    | no-op           |
+| From         | Event                               | To           | CloseReason |
+| ------------ | ----------------------------------- | ------------ | ----------- |
+| `running`    | kernel completes normally           | `closed`     | `ok`        |
+| `running`    | kernel propagates unhandled error   | `closed`     | `error`     |
+| `running`    | `halt()` called                     | `cancelling` | —           |
+| `cancelling` | cleanup runs; all children `closed` | `closed`     | `cancelled` |
+| `running`    | divergence detected                 | `closed`     | `diverged`  |
+| `running`    | protocol/runtime bug detected       | `closed`     | `bug`       |
+| `cancelling` | `halt()` called again               | `cancelling` | no-op       |
+| `closed`     | `halt()` called                     | `closed`     | no-op       |
 
 **`halt()` is idempotent.** Calling `halt()` on a task already in `cancelling` or `closed` state MUST have no effect. This is true even when cleanup/finally logic is currently running.
 
@@ -330,14 +330,14 @@ Each Tisyn runtime task **MUST** be hosted by exactly one Effection task. The Ef
 
 The mapping is:
 
-| Tisyn concept              | Effection equivalent              |
-|----------------------------|-----------------------------------|
-| Task spawn                 | `spawn(operation)` inside scope   |
-| Task cancellation          | Effection scope cancellation      |
-| Blocked-on-children        | `yield*` on structured children   |
-| Structured lifetime        | Effection parent/child scoping    |
-| Cleanup (finally)          | `finally {}` / Effection `ensure` |
-| Concurrent children        | Multiple `spawn()` within scope   |
+| Tisyn concept       | Effection equivalent              |
+| ------------------- | --------------------------------- |
+| Task spawn          | `spawn(operation)` inside scope   |
+| Task cancellation   | Effection scope cancellation      |
+| Blocked-on-children | `yield*` on structured children   |
+| Structured lifetime | Effection parent/child scoping    |
+| Cleanup (finally)   | `finally {}` / Effection `ensure` |
+| Concurrent children | Multiple `spawn()` within scope   |
 
 ### 5.2 RuntimeTaskHost
 
@@ -539,17 +539,17 @@ Any state where the drain loop completes with no winner recorded **and** `errors
 ```
 function halt(task_id: TaskId): void:
   task = get_task(task_id)
-  
+
   // Idempotent: no-op if already cancelling or closed
   if task.state != "running":
     return
-  
+
   task.state = "cancelling"
-  
+
   // Propagate downward in reverse spawn order
   for child_id in reversed(task.children):
     halt(child_id)   // recursive; idempotent at each level
-  
+
   // Signal the hosting Effection scope
   signal_effection_halt(task)
 ```
@@ -650,12 +650,14 @@ A task closing with `CloseReason: cancelled` **MUST** journal a `Close(cancelled
 ```
 
 Children may interleave with one another freely. The constraint is only:
+
 1. All child `Close` events precede any new parent journal event.
 2. Within each child, events are in `yieldIndex` order.
 
 ### 9.6 Journal Ordering Is a Lifecycle Consequence
 
 Journal ordering is not enforced by a separate mechanism. It is the natural consequence of:
+
 - Tasks cannot close before their children close.
 - Parents cannot resume before their children are closed.
 - `yieldIndex` is monotonic.
@@ -733,6 +735,7 @@ The boundary between "must replay" and "may re-dispatch" is determined by whethe
 - An effect with **no durable recorded Yield** — meaning the host crashed after dispatching to the agent but before journaling the result — MUST be treated as in-flight and is eligible for re-dispatch on recovery. The runtime SHOULD re-dispatch such effects as if they are being executed for the first time from the agent's perspective.
 
 This rule applies uniformly to:
+
 - Standard external effects.
 - Child task effects created by compound operations (`all`, `race`), using each child's own `(taskId, yieldIndex)` replay cursor.
 
@@ -756,12 +759,12 @@ Because an in-flight effect may have been delivered to an agent before the host 
 
 ### 11.1 Failure Categories
 
-| Category           | Definition                                                        | Journaled?      | Effect on siblings in `all`              | Effect on siblings in `race`        |
-|--------------------|-------------------------------------------------------------------|-----------------|------------------------------------------|-------------------------------------|
-| Application Error  | Agent returned error, or IR raised error.                        | Yes (`error`)   | Halt running siblings, propagate error   | No win; check remaining children   |
-| Cancellation       | `halt()` called. Not an application error.                       | Yes (`cancelled`)| N/A — initiated by sibling error        | N/A                                 |
-| Protocol/Runtime Bug| Runtime invariant violated.                                      | Yes (`bug`)     | Halt siblings, fatal propagation         | Halt siblings, fatal propagation    |
-| Divergence         | Replay mismatch detected.                                         | Yes (`diverged`)| Halt siblings, fatal propagation         | Halt siblings, fatal propagation    |
+| Category             | Definition                                 | Journaled?        | Effect on siblings in `all`            | Effect on siblings in `race`     |
+| -------------------- | ------------------------------------------ | ----------------- | -------------------------------------- | -------------------------------- |
+| Application Error    | Agent returned error, or IR raised error.  | Yes (`error`)     | Halt running siblings, propagate error | No win; check remaining children |
+| Cancellation         | `halt()` called. Not an application error. | Yes (`cancelled`) | N/A — initiated by sibling error       | N/A                              |
+| Protocol/Runtime Bug | Runtime invariant violated.                | Yes (`bug`)       | Halt siblings, fatal propagation       | Halt siblings, fatal propagation |
+| Divergence           | Replay mismatch detected.                  | Yes (`diverged`)  | Halt siblings, fatal propagation       | Halt siblings, fatal propagation |
 
 ### 11.2 Application Errors
 
@@ -781,6 +784,7 @@ Cancellation **MUST NOT** be treated as an application error. A cancelled child 
 When multiple children fail (in `all`) or all children fail (in `race`), the runtime **MUST** propagate the application error from the **lowest-index failing child** in the `exprs` array.
 
 This rule is:
+
 - Source-order based, not timing-based.
 - Deterministic under any scheduler.
 - Stable across replay runs.
@@ -793,26 +797,26 @@ Protocol bugs and divergence are not catchable at the application level. They **
 
 ## 12. Normative Invariants
 
-| # | Invariant |
-|---|-----------|
-| I-1 | No child task outlives its parent. When a parent closes, all children MUST already be closed. |
-| I-2 | A parent's `Close` event is journaled only after all of its children's `Close` events are journaled. |
-| I-3 | A task's `yieldIndex` is strictly monotonically increasing. It never resets. |
-| I-4 | Once a task enters `cancelling`, no journal event is written from an agent result (late results are discarded). |
-| I-5 | The result order of `all` is the source order of `exprs`. Completion order does not affect result order. |
-| I-6 | The winner of `race` is the first child to close with `CloseReason: ok`. A failed child never wins. |
-| I-7 | The kernel never creates child tasks, never halts tasks, and never writes to the journal. |
-| I-8 | Child task IDs are deterministic: given the same IR and journal, the same task IDs are produced. |
-| I-9 | Each task has an independent replay cursor. Advancing one task's cursor does not affect another's. |
-| I-10 | Cancelled tasks emit `Close(cancelled)` to the journal. This is the terminal event for the task. |
-| I-11 | The parent's `yieldIndex` does not advance while the parent is blocked on children. |
-| I-12 | Cleanup/finally effect yields continue the same `yieldIndex` sequence as the main task flow. |
+| #    | Invariant                                                                                                                                   |
+| ---- | ------------------------------------------------------------------------------------------------------------------------------------------- |
+| I-1  | No child task outlives its parent. When a parent closes, all children MUST already be closed.                                               |
+| I-2  | A parent's `Close` event is journaled only after all of its children's `Close` events are journaled.                                        |
+| I-3  | A task's `yieldIndex` is strictly monotonically increasing. It never resets.                                                                |
+| I-4  | Once a task enters `cancelling`, no journal event is written from an agent result (late results are discarded).                             |
+| I-5  | The result order of `all` is the source order of `exprs`. Completion order does not affect result order.                                    |
+| I-6  | The winner of `race` is the first child to close with `CloseReason: ok`. A failed child never wins.                                         |
+| I-7  | The kernel never creates child tasks, never halts tasks, and never writes to the journal.                                                   |
+| I-8  | Child task IDs are deterministic: given the same IR and journal, the same task IDs are produced.                                            |
+| I-9  | Each task has an independent replay cursor. Advancing one task's cursor does not affect another's.                                          |
+| I-10 | Cancelled tasks emit `Close(cancelled)` to the journal. This is the terminal event for the task.                                            |
+| I-11 | The parent's `yieldIndex` does not advance while the parent is blocked on children.                                                         |
+| I-12 | Cleanup/finally effect yields continue the same `yieldIndex` sequence as the main task flow.                                                |
 | I-13 | `race([])` is a protocol/runtime bug (`CloseReason: bug`). It is not a never-resolving suspension and is not a catchable application error. |
-| I-14 | Children in `all` and `race` inherit the parent's environment immutably. |
-| I-15 | `halt()` is idempotent. Calling it on a `cancelling` or `closed` task has no effect. |
-| I-16 | Children are torn down in reverse spawn order. This is a Tisyn runtime guarantee, independent of substrate behavior. |
-| I-17 | When multiple children fail, the propagated error is from the lowest-index failing child. |
-| I-18 | Agent effects are coroutine suspension/resumption points. They are not detached jobs. |
+| I-14 | Children in `all` and `race` inherit the parent's environment immutably.                                                                    |
+| I-15 | `halt()` is idempotent. Calling it on a `cancelling` or `closed` task has no effect.                                                        |
+| I-16 | Children are torn down in reverse spawn order. This is a Tisyn runtime guarantee, independent of substrate behavior.                        |
+| I-17 | When multiple children fail, the propagated error is from the lowest-index failing child.                                                   |
+| I-18 | Agent effects are coroutine suspension/resumption points. They are not detached jobs.                                                       |
 
 ---
 
@@ -825,7 +829,7 @@ The pseudocode uses generator-style notation (`yield*`) consistent with Effectio
 ```
 function create_task(parent_id: TaskId | null, spawn_index: uint): TaskRecord:
   id = if parent_id is null then "0" else parent_id + "." + spawn_index
-  
+
   task = TaskRecord {
     id:          id,
     parentId:    parent_id,
@@ -835,12 +839,12 @@ function create_task(parent_id: TaskId | null, spawn_index: uint): TaskRecord:
     closeReason: null,
   }
   register_task(task)
-  
+
   if parent_id is not null:
     parent = get_task(parent_id)
     assert parent.children.length == spawn_index
     parent.children.push(id)
-  
+
   return task
 ```
 
@@ -851,7 +855,7 @@ function create_task(parent_id: TaskId | null, spawn_index: uint): TaskRecord:
 // Used by spawnChild; hosted inside an Effection structured scope.
 function* run_child_kernel(child: TaskRecord, expr: Expr, env: Env):
   kernel_gen = make_kernel_generator(expr, env)
-  
+
   try:
     result = yield* drive_kernel(child, kernel_gen)
     yield* complete_task(child, CloseReason.ok(result))
@@ -867,10 +871,10 @@ function* run_child_kernel(child: TaskRecord, expr: Expr, env: Env):
 // Returns the kernel's final return value.
 function* drive_kernel(task: TaskRecord, gen: Generator): Val:
   result = gen.next()   // start the generator
-  
+
   while not result.done:
     descriptor = result.value  // SuspendDescriptor from kernel yield
-    
+
     if descriptor.id in { "all", "race" }:
       // Compound effect: runtime orchestrates children
       compound_result = yield* dispatch_compound(task, descriptor)
@@ -879,7 +883,7 @@ function* drive_kernel(task: TaskRecord, gen: Generator): Val:
       // Standard effect: dispatch to agent (with replay)
       effect_result = yield* dispatch_effect(task, descriptor)
       result = gen.next(effect_result)
-  
+
   return result.value
 ```
 
@@ -889,25 +893,25 @@ function* drive_kernel(task: TaskRecord, gen: Generator): Val:
 function* dispatch_effect(task: TaskRecord, desc: StandardDescriptor): Val:
   yield_idx = task.yieldIndex
   task.yieldIndex += 1
-  
+
   // Replay path
   replayed = journal_lookup(task.id, yield_idx)
   if replayed is not null:
     if replayed.outcome.tag == "ok":   return replayed.outcome.value
     else:                              throw replayed.outcome.error
-  
+
   // Live path: suspend coroutine, dispatch to agent
   // The substrate suspends this coroutine here.
   agent_response = yield* invoke_agent(desc)
-  
+
   // Check for cancellation after resumption
   if task.state != "running":
     // Late result: discard, do not journal
     yield* effection_halt()   // unwind via substrate cancellation
-  
+
   // Journal before resuming the kernel
   journal_write(task.id, TaskEvent.Yield(yield_idx, desc.id, agent_response))
-  
+
   return agent_response
 ```
 
@@ -927,21 +931,21 @@ function* dispatch_compound(parent: TaskRecord, desc: CompoundDescriptor): Val:
 function* orchestrate_all(parent: TaskRecord, exprs: Expr[], env: Env): Val[]:
   if exprs.length == 0:
     return []
-  
+
   N = exprs.length
-  
+
   // Allocate and register all child task records before any child runs.
   children = []
   for i in [0, N):
     child = create_task(parent.id, i)
     children.push(child)
-  
+
   // Spawn all children as structured Effection tasks within this scope.
   child_tasks = []
   for i in [0, N):
     ct = spawn(run_child_kernel(children[i], exprs[i], env))
     child_tasks.push(ct)
-  
+
   // Observe child completions in arrival order.
   // CompletionChannel collects (index, CloseReason) pairs as each child closes,
   // regardless of spawn order. Each child posts to the channel from within its
@@ -950,14 +954,14 @@ function* orchestrate_all(parent: TaskRecord, exprs: Expr[], env: Env): Val[]:
   results      = new Array(N)      // indexed by spawn order, filled as children close
   errors_by_idx = new Map()        // index → AppError, for deterministic selection
   closed_count = 0
-  
+
   while closed_count < N:
     (idx, reason) = yield* completions.next()
     closed_count += 1
-    
+
     if reason.tag == "ok":
       results[idx] = reason.value
-    
+
     else if reason.tag == "error":
       errors_by_idx.set(idx, reason.error)
       if errors_by_idx.size == 1:
@@ -966,18 +970,18 @@ function* orchestrate_all(parent: TaskRecord, exprs: Expr[], env: Env): Val[]:
         for j in [0, N):
           if children[j].state == "running":
             halt(children[j].id)
-    
+
     // "cancelled" close reasons require no action: these are siblings that were
     // halted as a consequence of a prior error. They are drained by the loop.
-  
+
   // All children are now closed. Journal ordering is enforced by complete_task().
-  
+
   if not errors_by_idx.isEmpty():
     // Propagate the error from the lowest-index failing child.
     // This is source-order based, not arrival-order based.
     failing_idx = min(errors_by_idx.keys())
     throw errors_by_idx.get(failing_idx)
-  
+
   return results   // in source-expression (spawn) order
 ```
 
@@ -989,21 +993,21 @@ function* orchestrate_race(parent: TaskRecord, exprs: Expr[], env: Env): Val:
     // Protocol/runtime bug: race([]) is never valid (see §7.3.1).
     close_as_bug(parent, "race([]) called with empty expression list")
     return  // unreachable; close_as_bug unwinds the coroutine
-  
+
   N = exprs.length
-  
+
   // Allocate and register all child task records before any child runs.
   children = []
   for i in [0, N):
     child = create_task(parent.id, i)
     children.push(child)
-  
+
   // Spawn all children as structured Effection tasks within this scope.
   child_tasks = []
   for i in [0, N):
     ct = spawn(run_child_kernel(children[i], exprs[i], env))
     child_tasks.push(ct)
-  
+
   // Observe child completions in arrival order.
   // CompletionChannel is an illustrative abstraction — see note below §13.7.
   // It yields (index, CloseReason) in the order completions actually occur,
@@ -1014,11 +1018,11 @@ function* orchestrate_race(parent: TaskRecord, exprs: Expr[], env: Env): Val:
   winner        = null        // { index, value } of first ok child
   errors_by_idx = new Map()   // index → AppError for deterministic selection
   closed_count  = 0
-  
+
   while closed_count < N:
     (idx, reason) = yield* completions.next()
     closed_count += 1
-    
+
     if reason.tag == "ok" and winner is null:
       // First successful child: this is the winner.
       winner = { index: idx, value: reason.value }
@@ -1027,26 +1031,26 @@ function* orchestrate_race(parent: TaskRecord, exprs: Expr[], env: Env): Val:
       for j in [0, N):
         if children[j].state == "running":
           halt(children[j].id)
-    
+
     else if reason.tag == "error":
       errors_by_idx.set(idx, reason.error)
-    
+
     // "cancelled" close reasons require no action: these are losers halted
     // after the winner was determined (or after the all-fail path began).
     // They are drained by the loop.
-  
+
   // All children are now closed.
-  
+
   if winner is not null:
     return winner.value
-  
+
   if not errors_by_idx.isEmpty():
     // All children failed: propagate the error from the lowest-index failing
     // child. Source-order based, not arrival-order based (see §7.3.4).
     for i in [0, N):
       if errors_by_idx.has(i):
         throw errors_by_idx.get(i)
-  
+
   // Impossible state: drain completed with no winner and no errors.
   // Per §7.3.5 this cannot arise in normal execution. Classify as a
   // protocol/runtime bug (CloseReason: bug), not a vague catch-all.
@@ -1067,17 +1071,17 @@ Suitable implementations include an Effection channel, a task-group with a compl
 ```
 function halt(task_id: TaskId): void:
   task = get_task(task_id)
-  
+
   // Idempotent
   if task.state != "running":
     return
-  
+
   task.state = "cancelling"
-  
+
   // Propagate in reverse spawn order
   for child_id in reversed(task.children):
     halt(child_id)
-  
+
   signal_effection_halt(task)
 ```
 
@@ -1087,7 +1091,7 @@ function halt(task_id: TaskId): void:
 function* complete_task(task: TaskRecord, reason: CloseReason): void:
   // If cancelled, override reason
   effective_reason = if task.state == "cancelling" then CloseReason.cancelled() else reason
-  
+
   // Wait for all children to be closed first (Effection scope ensures this
   // structurally, but explicit check is provided for clarity).
   // NOTE: this loop iterates children in forward/source order solely as a
@@ -1100,13 +1104,13 @@ function* complete_task(task: TaskRecord, reason: CloseReason): void:
     child = get_task(child_id)
     if child.state != "closed":
       yield* wait_for_close(child_id)
-  
+
   // All children are closed. Journal and finalize.
   task.closeReason = effective_reason
   task.state       = "closed"
-  
+
   journal_write(task.id, TaskEvent.Close(effective_reason))
-  
+
   if task.parentId is not null:
     signal_parent_child_closed(task.parentId, task.id)
 ```
@@ -1118,6 +1122,7 @@ function* complete_task(task: TaskRecord, reason: CloseReason): void:
 Diagrams use Mermaid. Prose in this spec is authoritative where prose and diagram diverge.
 
 Participants used:
+
 - `PK` — Parent Kernel (suspended generator)
 - `RT` — Runtime (Tisyn orchestration logic)
 - `EF` — Effection (substrate)
@@ -1444,7 +1449,7 @@ Added §10.6 "Host Crash and Restart Recovery" as a new subsection immediately a
 
 - **§10.6.4 At-Least-Once Re-Dispatch and Idempotency.** Notes that in-flight effects may be delivered to agents more than once across a crash/recovery boundary. The runtime MUST re-dispatch; implementations SHOULD surface the at-least-once guarantee to agent authors.
 
-**Relationship to existing replay semantics:** §10.6 is a semantic framing layer on top of the existing replay mechanism. It does not introduce new recovery machinery — §10.1–10.5 already define how replay cursors work, how compound effects are replayed, and how tasks transition from replay to live. §10.6 makes explicit *what event triggers that machinery* (host crash/restart), *what state is authoritative* (the journal), and *what the re-dispatch eligibility rule is* (durable Yield present or absent).
+**Relationship to existing replay semantics:** §10.6 is a semantic framing layer on top of the existing replay mechanism. It does not introduce new recovery machinery — §10.1–10.5 already define how replay cursors work, how compound effects are replayed, and how tasks transition from replay to live. §10.6 makes explicit _what event triggers that machinery_ (host crash/restart), _what state is authoritative_ (the journal), and _what the re-dispatch eligibility rule is_ (durable Yield present or absent).
 
 ---
 
@@ -1461,6 +1466,7 @@ Unified the `race([])` description to read consistently as a protocol/runtime bu
 #### §7.3.5 new subsection — terminal-outcome classification for `race`
 
 Added §7.3.5 to make the exhaustive normal outcomes of `race` explicit:
+
 - At least one child `ok` → first in arrival order wins.
 - All children `error` → lowest-index error propagated.
 - No winner and no errors → impossible in normal execution; MUST be treated as `CloseReason: bug`.

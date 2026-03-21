@@ -46,11 +46,7 @@ describe("all", () => {
       return val;
     });
 
-    const ir = allIR(
-      effectIR("a", "op1"),
-      effectIR("a", "op2"),
-      effectIR("a", "op3"),
-    );
+    const ir = allIR(effectIR("a", "op1"), effectIR("a", "op2"), effectIR("a", "op3"));
 
     const { result } = yield* execute({ ir: ir as never, agents });
 
@@ -81,11 +77,7 @@ describe("all", () => {
       return 42;
     });
 
-    const ir = allIR(
-      effectIR("a", "ok"),
-      effectIR("a", "fail"),
-      effectIR("a", "ok"),
-    );
+    const ir = allIR(effectIR("a", "ok"), effectIR("a", "fail"), effectIR("a", "ok"));
 
     const { result } = yield* execute({ ir: ir as never, agents });
 
@@ -120,10 +112,7 @@ describe("all", () => {
       return 42;
     });
 
-    const ir = allIR(
-      effectIR("a", "ok"),
-      effectIR("a", "fail"),
-    );
+    const ir = allIR(effectIR("a", "ok"), effectIR("a", "fail"));
 
     const { result, journal } = yield* execute({ ir: ir as never, agents });
 
@@ -131,8 +120,7 @@ describe("all", () => {
 
     // All children should have close events (ok or err)
     const childCloses = journal.filter(
-      (e): e is CloseEvent =>
-        e.type === "close" && e.coroutineId.startsWith("root."),
+      (e): e is CloseEvent => e.type === "close" && e.coroutineId.startsWith("root."),
     );
     expect(childCloses.length).toBe(2);
   });
@@ -173,8 +161,7 @@ describe("race", () => {
 
     // Both children should have close events
     const childCloses = journal.filter(
-      (e): e is CloseEvent =>
-        e.type === "close" && e.coroutineId.startsWith("root."),
+      (e): e is CloseEvent => e.type === "close" && e.coroutineId.startsWith("root."),
     );
     expect(childCloses.length).toBe(2);
   });

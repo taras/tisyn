@@ -375,9 +375,7 @@ function* orchestrateAll(
 
         if (completed === N) {
           // All children succeeded
-          const values = results.map((r) =>
-            (r as { status: "ok"; value: Json }).value,
-          );
+          const values = results.map((r) => (r as { status: "ok"; value: Json }).value);
           resolve(values as Val);
         }
       });
