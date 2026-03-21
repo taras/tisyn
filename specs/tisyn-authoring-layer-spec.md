@@ -577,12 +577,30 @@ pattern matching and API signatures, not source-of-truth.
 
 ```typescript
 type StructuralNode =
-  | LetNode | SeqNode | IfNode | WhileNode | CallNode
+  | LetNode
+  | SeqNode
+  | IfNode
+  | WhileNode
+  | CallNode
   | GetNode
-  | AddNode | SubNode | MulNode | DivNode | ModNode | NegNode
-  | GtNode | GteNode | LtNode | LteNode | EqNode | NeqNode
-  | AndNode | OrNode | NotNode
-  | ConstructNode | ArrayNode | ConcatNode
+  | AddNode
+  | SubNode
+  | MulNode
+  | DivNode
+  | ModNode
+  | NegNode
+  | GtNode
+  | GteNode
+  | LtNode
+  | LteNode
+  | EqNode
+  | NeqNode
+  | AndNode
+  | OrNode
+  | NotNode
+  | ConstructNode
+  | ArrayNode
+  | ConcatNode
   | ThrowNode;
 
 type CompoundExternalNode = AllNode | RaceNode;
@@ -594,11 +612,31 @@ interface StandardExternalEvalNode {
 }
 
 const STRUCTURAL_IDS = [
-  "let", "seq", "if", "while", "call", "get",
-  "add", "sub", "mul", "div", "mod", "neg",
-  "gt", "gte", "lt", "lte", "eq", "neq",
-  "and", "or", "not",
-  "construct", "array", "concat", "throw",
+  "let",
+  "seq",
+  "if",
+  "while",
+  "call",
+  "get",
+  "add",
+  "sub",
+  "mul",
+  "div",
+  "mod",
+  "neg",
+  "gt",
+  "gte",
+  "lt",
+  "lte",
+  "eq",
+  "neq",
+  "and",
+  "or",
+  "not",
+  "construct",
+  "array",
+  "concat",
+  "throw",
 ] as const;
 
 type StructuralId = (typeof STRUCTURAL_IDS)[number];
@@ -643,7 +681,7 @@ interface Eval<T, TData = unknown> {
   readonly tisyn: "eval";
   readonly id: string;
   readonly data: TData;
-  readonly T?: T;          // phantom — stripped by JSON.stringify
+  readonly T?: T; // phantom — stripped by JSON.stringify
 }
 
 interface Quote<T> {
@@ -654,14 +692,14 @@ interface Quote<T> {
 interface Ref<T> {
   readonly tisyn: "ref";
   readonly name: string;
-  readonly T?: T;          // phantom
+  readonly T?: T; // phantom
 }
 
 interface TisynFn<A extends unknown[], R> {
   readonly tisyn: "fn";
   readonly params: readonly string[];
   readonly body: Expr<R>;
-  readonly T?: (...args: A) => R;   // phantom — function signature
+  readonly T?: (...args: A) => R; // phantom — function signature
 }
 ```
 
@@ -754,10 +792,7 @@ that hide shape mismatches are not.
 ```typescript
 function Ref<T>(name: string): Ref<T>;
 function Q<T>(expr: Expr<T>): Quote<T>;
-function Fn<A extends unknown[], R>(
-  params: string[],
-  body: Expr<R>,
-): Expr<(...args: A) => R>;
+function Fn<A extends unknown[], R>(params: string[], body: Expr<R>): Expr<(...args: A) => R>;
 ```
 
 Note: `Fn`'s parameter types `A` are asserted by the caller,
@@ -771,26 +806,15 @@ types, not scope" principle.
 ```typescript
 // ── Binding ──
 
-function Let<T>(
-  name: string,
-  value: Expr<unknown>,
-  body: Expr<T>,
-): Expr<T>;
+function Let<T>(name: string, value: Expr<unknown>, body: Expr<T>): Expr<T>;
 
 function Seq<T>(...exprs: [...Expr<unknown>[], Expr<T>]): Expr<T>;
 
 // ── Control flow ──
 
-function If<T>(
-  condition: Expr<boolean>,
-  then_: Expr<T>,
-  else_?: Expr<T>,
-): Expr<T>;
+function If<T>(condition: Expr<boolean>, then_: Expr<T>, else_?: Expr<T>): Expr<T>;
 
-function While<T>(
-  condition: Expr<boolean>,
-  exprs: [...Expr<unknown>[], Expr<T>],
-): Expr<T>;
+function While<T>(condition: Expr<boolean>, exprs: [...Expr<unknown>[], Expr<T>]): Expr<T>;
 
 function Call<A extends unknown[], R>(
   fn: Expr<(...args: A) => R>,
@@ -827,9 +851,9 @@ function Not(a: Expr<unknown>): Expr<boolean>;
 
 // ── Data construction ──
 
-function Construct<T extends Record<string, unknown>>(
-  fields: { [K in keyof T]: Expr<T[K]> },
-): Expr<T>;
+function Construct<T extends Record<string, unknown>>(fields: {
+  [K in keyof T]: Expr<T[K]>;
+}): Expr<T>;
 
 function Arr<T>(...items: Expr<T>[]): Expr<T[]>;
 
@@ -874,9 +898,7 @@ Data is a plain array, NOT wrapped in Quote.
 ### 4.5 Compound External Constructors
 
 ```typescript
-function All<T extends unknown[]>(
-  ...exprs: { [K in keyof T]: Expr<T[K]> }
-): Expr<T>;
+function All<T extends unknown[]>(...exprs: { [K in keyof T]: Expr<T[K]> }): Expr<T>;
 
 function Race<T>(...exprs: Expr<T>[]): Expr<T>;
 ```
@@ -891,11 +913,7 @@ Constructors produce structurally correct nodes. The phantom
 annotation, not by runtime values:
 
 ```typescript
-function Let<T>(
-  name: string,
-  value: Expr<unknown>,
-  body: Expr<T>,
-): Expr<T> {
+function Let<T>(name: string, value: Expr<unknown>, body: Expr<T>): Expr<T> {
   return {
     tisyn: "eval",
     id: "let",
@@ -913,11 +931,7 @@ is verified by TypeScript without the cast.
 Binary operations share a helper:
 
 ```typescript
-function binary<T>(
-  id: string,
-  a: Expr<unknown>,
-  b: Expr<unknown>,
-): Expr<T> {
+function binary<T>(id: string, a: Expr<unknown>, b: Expr<unknown>): Expr<T> {
   return {
     tisyn: "eval",
     id,
@@ -999,7 +1013,7 @@ interface TisynAlgebra<A> {
   literal(value: JsonPrimitive | JsonArray | JsonObject): A;
   ref(name: string): A;
   fn(params: string[], body: A): A;
-  quote(expr: TisynExpr): A;  // receives raw expr, not folded
+  quote(expr: TisynExpr): A; // receives raw expr, not folded
 
   // Structural operations
   let(name: string, value: A, body: A): A;
@@ -1076,11 +1090,11 @@ function defaultAlgebra<A>(zero: () => A): TisynAlgebra<A>;
 
 ```typescript
 type Visitor = {
-  [K in "ref" | "fn" | "eval" | "quote" | "literal"]?:
-    (node: NodeOfKind<K>) => TisynExpr | undefined;
+  [K in "ref" | "fn" | "eval" | "quote" | "literal"]?: (
+    node: NodeOfKind<K>,
+  ) => TisynExpr | undefined;
 } & {
-  [K in StructuralId]?:
-    (node: StructuralNodeOfKind<K>) => TisynExpr | undefined;
+  [K in StructuralId]?: (node: StructuralNodeOfKind<K>) => TisynExpr | undefined;
 };
 
 function transform(expr: TisynExpr, visitor: Visitor): TisynExpr;
@@ -1110,9 +1124,9 @@ function collectFreeRefs(expr: TisynExpr): string[];
 function print(expr: TisynExpr, options?: PrintOptions): string;
 
 interface PrintOptions {
-  indent?: number;      // spaces per level, default 2
-  maxWidth?: number;    // target line width, default 80
-  compact?: boolean;    // single-line when fits, default true
+  indent?: number; // spaces per level, default 2
+  maxWidth?: number; // target line width, default 80
+  compact?: boolean; // single-line when fits, default true
 }
 ```
 
@@ -1172,16 +1186,11 @@ type ValidationError = {
   code: string;
 };
 
-type ValidationResult =
-  | { ok: true; node: TisynExpr }
-  | { ok: false; errors: ValidationError[] };
+type ValidationResult = { ok: true; node: TisynExpr } | { ok: false; errors: ValidationError[] };
 
 function validateGrammar(json: unknown): ValidationResult;
 function validateScope(expr: TisynExpr): ValidationError[];
-function validateIr(
-  json: unknown,
-  options?: { scope?: boolean },
-): ValidationResult;
+function validateIr(json: unknown, options?: { scope?: boolean }): ValidationResult;
 ```
 
 `validateIr(json)` runs Levels 1 + 2 by default. With
@@ -1207,10 +1216,7 @@ to one grammar type. CI tests SHOULD verify TypeBox
 ## 9. Agent Types (`@tisyn/protocol`)
 
 ```typescript
-type AgentOperations = Record<
-  string,
-  (...args: any[]) => Operation<any>
->;
+type AgentOperations = Record<string, (...args: any[]) => Operation<any>>;
 
 type AgentClient<T extends AgentOperations> = {
   [K in keyof T]: T[K] extends (...args: infer A) => Operation<infer R>
@@ -1218,25 +1224,22 @@ type AgentClient<T extends AgentOperations> = {
     : never;
 };
 
-function Agent<T extends AgentOperations>(
-  id: string,
-  operations: T,
-): AgentDefinition<T>;
+function Agent<T extends AgentOperations>(id: string, operations: T): AgentDefinition<T>;
 ```
 
 ---
 
 ## 10. What `@tisyn/shared` Becomes
 
-| Current content              | New location        |
-| ---------------------------- | ------------------- |
-| IR node types                | `@tisyn/ir`         |
-| `classify` function          | `@tisyn/ir`         |
-| Wire protocol message types  | `@tisyn/protocol`   |
-| Journal event types          | `@tisyn/runtime`    |
-| Agent definition types       | `@tisyn/protocol`   |
-| Validation logic             | `@tisyn/validate`   |
-| Utility functions on IR      | `@tisyn/ir`         |
+| Current content             | New location      |
+| --------------------------- | ----------------- |
+| IR node types               | `@tisyn/ir`       |
+| `classify` function         | `@tisyn/ir`       |
+| Wire protocol message types | `@tisyn/protocol` |
+| Journal event types         | `@tisyn/runtime`  |
+| Agent definition types      | `@tisyn/protocol` |
+| Validation logic            | `@tisyn/validate` |
+| Utility functions on IR     | `@tisyn/ir`       |
 
 ---
 
@@ -1247,9 +1250,16 @@ function Agent<T extends AgentOperations>(
 ```typescript
 // Grammar types (untyped, for traversal/validation/kernel)
 export type {
-  TisynExpr, TisynTaggedNode, TisynLiteral,
-  EvalNode, QuoteNode, RefNode, FnNode,
-  JsonPrimitive, JsonArray, JsonObject,
+  TisynExpr,
+  TisynTaggedNode,
+  TisynLiteral,
+  EvalNode,
+  QuoteNode,
+  RefNode,
+  FnNode,
+  JsonPrimitive,
+  JsonArray,
+  JsonObject,
 };
 
 // Authoring types (result-typed, for construction)
@@ -1257,44 +1267,105 @@ export type { Expr, Eval, Quote, Ref, TisynFn };
 
 // Data shapes
 export type {
-  LetShape, SeqShape, IfShape, WhileShape, CallShape, GetShape,
-  BinaryShape, UnaryShape,
-  ConstructShape, ArrayShape, ConcatShape, ThrowShape,
-  AllShape, RaceShape,
+  LetShape,
+  SeqShape,
+  IfShape,
+  WhileShape,
+  CallShape,
+  GetShape,
+  BinaryShape,
+  UnaryShape,
+  ConstructShape,
+  ArrayShape,
+  ConcatShape,
+  ThrowShape,
+  AllShape,
+  RaceShape,
 };
 
 // Narrowed structural node types
 export type {
-  LetNode, SeqNode, IfNode, WhileNode, CallNode, GetNode,
-  AddNode, SubNode, MulNode, DivNode, ModNode, NegNode,
-  GtNode, GteNode, LtNode, LteNode, EqNode, NeqNode,
-  AndNode, OrNode, NotNode,
-  ConstructNode, ArrayNode, ConcatNode, ThrowNode,
-  AllNode, RaceNode,
+  LetNode,
+  SeqNode,
+  IfNode,
+  WhileNode,
+  CallNode,
+  GetNode,
+  AddNode,
+  SubNode,
+  MulNode,
+  DivNode,
+  ModNode,
+  NegNode,
+  GtNode,
+  GteNode,
+  LtNode,
+  LteNode,
+  EqNode,
+  NeqNode,
+  AndNode,
+  OrNode,
+  NotNode,
+  ConstructNode,
+  ArrayNode,
+  ConcatNode,
+  ThrowNode,
+  AllNode,
+  RaceNode,
 };
 
 // Derived unions
 export type {
-  StructuralNode, CompoundExternalNode, StandardExternalEvalNode,
-  StructuralId, CompoundExternalId,
+  StructuralNode,
+  CompoundExternalNode,
+  StandardExternalEvalNode,
+  StructuralId,
+  CompoundExternalId,
 };
 
 // Classification
 export {
-  STRUCTURAL_IDS, COMPOUND_EXTERNAL_IDS,
-  classify, isStructural, isExternal, isCompoundExternal,
+  STRUCTURAL_IDS,
+  COMPOUND_EXTERNAL_IDS,
+  classify,
+  isStructural,
+  isExternal,
+  isCompoundExternal,
 };
 
 // Constructors (return Expr<T>)
 export {
-  Ref, Q, Fn,
-  Let, Seq, If, While, Call, Get,
-  Add, Sub, Mul, Div, Mod, Neg,
-  Gt, Gte, Lt, Lte, Eq, Neq,
-  And, Or, Not,
-  Construct, Arr, Concat,
+  Ref,
+  Q,
+  Fn,
+  Let,
+  Seq,
+  If,
+  While,
+  Call,
+  Get,
+  Add,
+  Sub,
+  Mul,
+  Div,
+  Mod,
+  Neg,
+  Gt,
+  Gte,
+  Lt,
+  Lte,
+  Eq,
+  Neq,
+  And,
+  Or,
+  Not,
+  Construct,
+  Arr,
+  Concat,
   Throw,
-  Eval, All, Race,
+  Eval,
+  All,
+  Race,
 };
 
 // Traversal (operates on TisynExpr)
@@ -1318,10 +1389,16 @@ export { validateGrammar, validateScope, validateIr };
 
 ```typescript
 export type {
-  AgentConfig, AgentOperations, AgentDefinition, AgentClient,
-  ExecuteRequest, ExecuteResponse,
-  CancelNotification, ProgressNotification,
-  ShutdownNotification, InitializeRequest,
+  AgentConfig,
+  AgentOperations,
+  AgentDefinition,
+  AgentClient,
+  ExecuteRequest,
+  ExecuteResponse,
+  CancelNotification,
+  ProgressNotification,
+  ShutdownNotification,
+  InitializeRequest,
 };
 export { Agent };
 ```
@@ -1329,10 +1406,7 @@ export { Agent };
 ### 11.4 `@tisyn/runtime` Exports
 
 ```typescript
-export type {
-  YieldEvent, CloseEvent, EventResult,
-  ReplayIndex, Task, TaskState,
-};
+export type { YieldEvent, CloseEvent, EventResult, ReplayIndex, Task, TaskState };
 ```
 
 ---
@@ -1367,20 +1441,39 @@ export type {
 ## Appendix A: Full Constructor Example
 
 ```typescript
-type R = Result;  // workflow return type
+type R = Result; // workflow return type
 
-const pollJob = Fn<[string], R>(["jobId"],
-  Let("config", Eval<RetryConfig>("config-service.getRetryConfig", []),
-    Let("__loop_0", Fn<[], R>([],
-      Let("status", Eval<JobStatus>("job-service.checkStatus", [Ref("jobId")]),
-        If(Eq(Get<string>(Ref("status"), "state"), "complete"),
-          Eval<R>("job-service.getResult", [Ref("jobId")]),
-          If(Eq(Get<string>(Ref("status"), "state"), "failed"),
-            Throw("Job failed"),
-            Let("__discard_0",
-              Eval<void>("sleep", [Get<number>(Ref("config"), "intervalMs")]),
-              Call(Ref<() => R>("__loop_0"))))))),
-      Call(Ref<() => R>("__loop_0")))));
+const pollJob = Fn<[string], R>(
+  ["jobId"],
+  Let(
+    "config",
+    Eval<RetryConfig>("config-service.getRetryConfig", []),
+    Let(
+      "__loop_0",
+      Fn<[], R>(
+        [],
+        Let(
+          "status",
+          Eval<JobStatus>("job-service.checkStatus", [Ref("jobId")]),
+          If(
+            Eq(Get<string>(Ref("status"), "state"), "complete"),
+            Eval<R>("job-service.getResult", [Ref("jobId")]),
+            If(
+              Eq(Get<string>(Ref("status"), "state"), "failed"),
+              Throw("Job failed"),
+              Let(
+                "__discard_0",
+                Eval<void>("sleep", [Get<number>(Ref("config"), "intervalMs")]),
+                Call(Ref<() => R>("__loop_0")),
+              ),
+            ),
+          ),
+        ),
+      ),
+      Call(Ref<() => R>("__loop_0")),
+    ),
+  ),
+);
 ```
 
 Type annotations on `Eval<T>`, `Ref<T>`, and `Get<T>` are
@@ -1437,7 +1530,6 @@ const freeVars = foldWith<Set<string>>(expr, {
 
 ```typescript
 const inlined = transform(expr, {
-  ref: (node) =>
-    node.name === "x" ? 42 : undefined,
+  ref: (node) => (node.name === "x" ? 42 : undefined),
 });
 ```

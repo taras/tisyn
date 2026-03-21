@@ -32,9 +32,7 @@ describe("print", () => {
 
 describe("decompile", () => {
   it("decompile external eval", () => {
-    const result = decompile(
-      Eval("order-service.fetchOrder", [Ref("id")]) as TisynExpr,
-    );
+    const result = decompile(Eval("order-service.fetchOrder", [Ref("id")]) as TisynExpr);
     expect(result).toContain("yield*");
     expect(result).toContain("OrderService");
     expect(result).toContain("fetchOrder");
@@ -53,20 +51,14 @@ describe("decompile", () => {
   });
 
   it("decompile Let chain", () => {
-    const fn = Fn(
-      ["id"],
-      Let("result", Eval("a.b", [Ref("id")]), Ref("result")),
-    ) as TisynExpr;
+    const fn = Fn(["id"], Let("result", Eval("a.b", [Ref("id")]), Ref("result"))) as TisynExpr;
     const result = decompile(fn, { namedExport: "test" });
     expect(result).toContain("const result = yield* A().b(id)");
     expect(result).toContain("return result");
   });
 
   it("decompile discard binding", () => {
-    const fn = Fn(
-      [],
-      Let("__discard_0", Eval("x.y", []), 1),
-    ) as TisynExpr;
+    const fn = Fn([], Let("__discard_0", Eval("x.y", []), 1)) as TisynExpr;
     const result = decompile(fn, { namedExport: "test" });
     expect(result).not.toContain("const __discard");
     expect(result).toContain("yield* X().y()");
