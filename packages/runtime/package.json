@@ -11,7 +11,8 @@
     }
   },
   "scripts": {
-    "build": "tsc --build"
+    "build": "tsc --build",
+    "test": "vitest run"
   },
   "dependencies": {
     "@tisyn/agent": "workspace:*",
@@ -20,7 +21,8 @@
     "@tisyn/kernel": "workspace:*"
   },
   "devDependencies": {
-    "effection": "4.1.0-alpha.7"
+    "effection": "4.1.0-alpha.7",
+    "vitest": "^3"
   },
   "peerDependencies": {
     "effection": "4.1.0-alpha.7"
