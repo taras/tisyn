@@ -325,14 +325,44 @@ async function runReplayFixture(fixture: ReplayFixture): Promise<FixtureResult> 
   // Create mock agents for live effects (if any)
   const agents = createMockAgents(fixture.live_effects);
 
-  const result = await run(function* () {
-    return yield* execute({
-      ir: fixture.ir,
-      env: fixture.env,
-      stream,
-      agents,
+  let result: { result: EventResult; journal: DurableEvent[] };
+  try {
+    result = await run(function* () {
+      return yield* execute({
+        ir: fixture.ir,
+        env: fixture.env,
+        stream,
+        agents,
+      });
     });
-  });
+  } catch (error) {
+    // DivergenceError propagates fatally — convert to result for comparison
+    const err = error instanceof Error ? error : new Error(String(error));
+    if (err.name === "DivergenceError") {
+      const errResult: EventResult = {
+        status: "err",
+        error: { message: err.message, name: err.name },
+      };
+      // Check if the expected result matches the divergence
+      if (!resultMatches(errResult, fixture.expected_result)) {
+        return {
+          id: fixture.id,
+          pass: false,
+          message: `Result mismatch: got ${JSON.stringify(errResult)}, expected ${JSON.stringify(fixture.expected_result)}`,
+        };
+      }
+      // DivergenceError aborts before journal is returned — check events
+      // added after the stored journal (new events only)
+      const streamSnapshot = stream.snapshot();
+      const newEvents = streamSnapshot.slice(fixture.stored_journal.length);
+      const jm = journalMatches(newEvents, fixture.expected_journal);
+      if (!jm.pass) {
+        return { id: fixture.id, pass: false, message: jm.message };
+      }
+      return { id: fixture.id, pass: true, message: "PASS" };
+    }
+    throw error;
+  }
 
   if (!resultMatches(result.result, fixture.expected_result)) {
     return {

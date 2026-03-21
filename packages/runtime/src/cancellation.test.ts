@@ -7,6 +7,7 @@
 import { describe, it } from "@effectionx/vitest";
 import { expect } from "vitest";
 import { execute } from "./execute.js";
+import { InMemoryStream } from "@tisyn/durable-streams";
 import { AgentRegistry } from "@tisyn/agent";
 import type { CloseEvent, DurableEvent } from "@tisyn/kernel";
 
@@ -113,6 +114,34 @@ describe("Cancellation", () => {
 
     // Both children should have close events
     const childCloses = journal.filter(
+      (e): e is CloseEvent =>
+        e.type === "close" && e.coroutineId.startsWith("root."),
+    );
+    expect(childCloses.length).toBe(2);
+  });
+
+  it("Close(cancelled) is persisted to durable stream, not just in-memory journal", function* () {
+    const stream = new InMemoryStream();
+    const agents = new AgentRegistry();
+    // biome-ignore lint/correctness/useYield: mock
+    agents.register("a", function* () {
+      return 42;
+    });
+
+    // Race: both children complete synchronously, but losers get cancelled
+    const ir = raceIR(effectIR("a", "op1"), effectIR("a", "op2"));
+
+    const { result } = yield* execute({
+      ir: ir as never,
+      stream,
+      agents,
+    });
+
+    expect(result.status).toBe("ok");
+
+    // Verify the durable stream (not just journal) contains Close events for both children
+    const snapshot = stream.snapshot();
+    const childCloses = snapshot.filter(
       (e): e is CloseEvent =>
         e.type === "close" && e.coroutineId.startsWith("root."),
     );
