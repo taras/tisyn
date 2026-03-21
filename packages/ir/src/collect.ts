@@ -64,9 +64,13 @@ function collectFreeRefsSet(expr: TisynExpr, bound: Set<string>): Set<string> {
     // Check if this is a structural "let" — it introduces a binding
     if (expr.id === "let") {
       const data = expr.data as Record<string, unknown>;
-      const shape = (data && typeof data === "object" && "tisyn" in data && (data as Record<string, unknown>)["tisyn"] === "quote")
-        ? (data as { expr: Record<string, unknown> }).expr
-        : data;
+      const shape =
+        data &&
+        typeof data === "object" &&
+        "tisyn" in data &&
+        (data as Record<string, unknown>)["tisyn"] === "quote"
+          ? (data as { expr: Record<string, unknown> }).expr
+          : data;
       const s = shape as { name: string; value: TisynExpr; body: TisynExpr };
       const valueFree = collectFreeRefsSet(s.value, bound);
       const newBound = new Set(bound);
@@ -89,7 +93,10 @@ function collectFreeRefsSet(expr: TisynExpr, bound: Set<string>): Set<string> {
   // Plain object — recurse into values
   const result = new Set<string>();
   for (const key of Object.keys(expr)) {
-    for (const ref of collectFreeRefsSet((expr as Record<string, TisynExpr>)[key] as TisynExpr, bound)) {
+    for (const ref of collectFreeRefsSet(
+      (expr as Record<string, TisynExpr>)[key] as TisynExpr,
+      bound,
+    )) {
       result.add(ref);
     }
   }

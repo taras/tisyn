@@ -30,9 +30,9 @@ export function isLiteral(expr: unknown): boolean {
 }
 
 export function isTaggedNode(expr: unknown): expr is EvalNode | QuoteNode | RefNode | FnNode {
-  return isPlainObject(expr) &&
-    typeof expr["tisyn"] === "string" &&
-    IR_DISCRIMINANTS.has(expr["tisyn"]);
+  return (
+    isPlainObject(expr) && typeof expr["tisyn"] === "string" && IR_DISCRIMINANTS.has(expr["tisyn"])
+  );
 }
 
 export type NodeClassification = "eval" | "quote" | "ref" | "fn" | "literal" | "malformed";

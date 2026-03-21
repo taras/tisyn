@@ -89,9 +89,10 @@ function foldNode<A>(expr: TisynExpr, alg: TisynAlgebra<A>): A {
 
     // Structural eval — unquote data and recurse into children
     const data = expr.data as Record<string, unknown>;
-    const shape = (data && typeof data === "object" && "tisyn" in data && data["tisyn"] === "quote")
-      ? (data as { expr: Record<string, unknown> }).expr
-      : data;
+    const shape =
+      data && typeof data === "object" && "tisyn" in data && data["tisyn"] === "quote"
+        ? (data as { expr: Record<string, unknown> }).expr
+        : data;
 
     return foldStructural(expr.id, shape as Record<string, unknown>, alg);
   }
@@ -100,11 +101,7 @@ function foldNode<A>(expr: TisynExpr, alg: TisynAlgebra<A>): A {
   return alg.literal(expr);
 }
 
-function foldStructural<A>(
-  id: string,
-  shape: Record<string, unknown>,
-  alg: TisynAlgebra<A>,
-): A {
+function foldStructural<A>(id: string, shape: Record<string, unknown>, alg: TisynAlgebra<A>): A {
   switch (id) {
     case "let": {
       const s = shape as { name: string; value: TisynExpr; body: TisynExpr };
@@ -140,19 +137,32 @@ function foldStructural<A>(
       const s = shape as { obj: TisynExpr; key: string };
       return alg.get(foldNode(s.obj, alg), s.key);
     }
-    case "add": return foldBinary(shape, alg.add.bind(alg), alg);
-    case "sub": return foldBinary(shape, alg.sub.bind(alg), alg);
-    case "mul": return foldBinary(shape, alg.mul.bind(alg), alg);
-    case "div": return foldBinary(shape, alg.div.bind(alg), alg);
-    case "mod": return foldBinary(shape, alg.mod.bind(alg), alg);
-    case "gt": return foldBinary(shape, alg.gt.bind(alg), alg);
-    case "gte": return foldBinary(shape, alg.gte.bind(alg), alg);
-    case "lt": return foldBinary(shape, alg.lt.bind(alg), alg);
-    case "lte": return foldBinary(shape, alg.lte.bind(alg), alg);
-    case "eq": return foldBinary(shape, alg.eq.bind(alg), alg);
-    case "neq": return foldBinary(shape, alg.neq.bind(alg), alg);
-    case "and": return foldBinary(shape, alg.and.bind(alg), alg);
-    case "or": return foldBinary(shape, alg.or.bind(alg), alg);
+    case "add":
+      return foldBinary(shape, alg.add.bind(alg), alg);
+    case "sub":
+      return foldBinary(shape, alg.sub.bind(alg), alg);
+    case "mul":
+      return foldBinary(shape, alg.mul.bind(alg), alg);
+    case "div":
+      return foldBinary(shape, alg.div.bind(alg), alg);
+    case "mod":
+      return foldBinary(shape, alg.mod.bind(alg), alg);
+    case "gt":
+      return foldBinary(shape, alg.gt.bind(alg), alg);
+    case "gte":
+      return foldBinary(shape, alg.gte.bind(alg), alg);
+    case "lt":
+      return foldBinary(shape, alg.lt.bind(alg), alg);
+    case "lte":
+      return foldBinary(shape, alg.lte.bind(alg), alg);
+    case "eq":
+      return foldBinary(shape, alg.eq.bind(alg), alg);
+    case "neq":
+      return foldBinary(shape, alg.neq.bind(alg), alg);
+    case "and":
+      return foldBinary(shape, alg.and.bind(alg), alg);
+    case "or":
+      return foldBinary(shape, alg.or.bind(alg), alg);
     case "not": {
       const s = shape as { a: TisynExpr };
       return alg.not(foldNode(s.a, alg));
