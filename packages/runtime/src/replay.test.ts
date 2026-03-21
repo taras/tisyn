@@ -2,7 +2,7 @@ import { describe, it } from "@effectionx/vitest";
 import { expect } from "vitest";
 import { execute } from "./execute.js";
 import { InMemoryStream } from "@tisyn/durable-streams";
-import { AgentRegistry } from "@tisyn/agent";
+import { Dispatch } from "@tisyn/agent";
 import type { YieldEvent, CloseEvent, DurableEvent } from "@tisyn/kernel";
 
 // IR that yields a single external effect: agent.op(data)
@@ -52,18 +52,18 @@ describe("Replay", () => {
     const stored: DurableEvent[] = [yieldEvent("a", "op", 42)];
     const stream = new InMemoryStream(stored);
 
-    const agents = new AgentRegistry();
     let agentCalled = false;
-    // biome-ignore lint/correctness/useYield: mock
-    agents.register("a", function* () {
-      agentCalled = true;
-      return 999;
+    yield* Dispatch.around({
+      // biome-ignore lint/correctness/useYield: mock
+      *dispatch([_effectId, _data]: [string, any]) {
+        agentCalled = true;
+        return 999;
+      },
     });
 
     const { result, journal } = yield* execute({
       ir: singleEffectIR("a", "op") as never,
       stream,
-      agents,
     });
 
     expect(agentCalled).toBe(false);
@@ -81,17 +81,17 @@ describe("Replay", () => {
     const stream = new InMemoryStream(stored);
 
     let liveCallCount = 0;
-    const agents = new AgentRegistry();
-    // biome-ignore lint/correctness/useYield: mock
-    agents.register("a", function* () {
-      liveCallCount++;
-      return 20;
+    yield* Dispatch.around({
+      // biome-ignore lint/correctness/useYield: mock
+      *dispatch([_effectId, _data]: [string, any]) {
+        liveCallCount++;
+        return 20;
+      },
     });
 
     const { result, journal } = yield* execute({
       ir: twoEffectIR("a", "step1", "a", "step2") as never,
       stream,
-      agents,
     });
 
     // Only the second effect should trigger live dispatch
@@ -109,12 +109,10 @@ describe("Replay", () => {
     // Stored says type "a", but kernel will yield type "b"
     const stored: DurableEvent[] = [yieldEvent("a", "op", 10)];
     const stream = new InMemoryStream(stored);
-    const agents = new AgentRegistry();
 
     const { result } = yield* execute({
       ir: singleEffectIR("b", "op") as never,
       stream,
-      agents,
     });
 
     expect(result.status).toBe("err");
@@ -129,12 +127,10 @@ describe("Replay", () => {
     // Stored says name "foo", but kernel will yield name "bar"
     const stored: DurableEvent[] = [yieldEvent("a", "foo", 10)];
     const stream = new InMemoryStream(stored);
-    const agents = new AgentRegistry();
 
     const { result } = yield* execute({
       ir: singleEffectIR("a", "bar") as never,
       stream,
-      agents,
     });
 
     expect(result.status).toBe("err");
@@ -149,12 +145,10 @@ describe("Replay", () => {
     // Journal has a close event — kernel shouldn't yield more effects
     const stored: DurableEvent[] = [closeEvent(42)];
     const stream = new InMemoryStream(stored);
-    const agents = new AgentRegistry();
 
     const { result } = yield* execute({
       ir: singleEffectIR("a", "op") as never,
       stream,
-      agents,
     });
 
     expect(result.status).toBe("err");
@@ -171,18 +165,18 @@ describe("Replay", () => {
     const stream = new InMemoryStream(stored);
 
     let agentCalled = false;
-    const agents = new AgentRegistry();
-    // biome-ignore lint/correctness/useYield: mock
-    agents.register("a", function* () {
-      agentCalled = true;
-      return 1;
+    yield* Dispatch.around({
+      // biome-ignore lint/correctness/useYield: mock
+      *dispatch([_effectId, _data]: [string, any]) {
+        agentCalled = true;
+        return 1;
+      },
     });
 
     // IR sends different data than what was stored — shouldn't matter
     const { result } = yield* execute({
       ir: singleEffectIR("a", "op", ["different", "data"]) as never,
       stream,
-      agents,
     });
 
     expect(agentCalled).toBe(false);
