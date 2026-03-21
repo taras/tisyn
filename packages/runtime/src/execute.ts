@@ -128,19 +128,27 @@ function* driveKernel(
   // actually halted, not when it completed normally.
   let closed = false;
 
-  yield* ensure(() => {
+  yield* ensure(function* () {
     if (!closed) {
       const closeEvent: CloseEvent = {
         type: "close",
         coroutineId,
         result: { status: "cancelled" as const },
       };
-      // Sync push — stream.append is async but we're in a sync
-      // ensure callback. We push to journal for tracking; the
-      // stream write happens in the orchestration layer.
+      yield* ctx.stream.append(closeEvent);
       ctx.journal.push(closeEvent);
     }
   });
+
+  // Early return for children that were cancelled in a previous run.
+  // During replay, their journal has Close(cancelled) but no yield events.
+  // Skip the kernel entirely to avoid spurious DivergenceErrors.
+  const preClose = ctx.replayIndex.getClose(coroutineId);
+  if (preClose && preClose.result.status === "cancelled") {
+    closed = true;
+    ctx.journal.push(preClose);
+    return preClose.result;
+  }
 
   let nextValue: Val = null;
 
@@ -287,6 +295,22 @@ function* driveKernel(
       }
     }
   } catch (error) {
+    // DivergenceError = journal corruption — persist Close(err) then propagate fatally
+    if (error instanceof DivergenceError) {
+      closed = true;
+      const closeEvent: CloseEvent = {
+        type: "close",
+        coroutineId,
+        result: {
+          status: "err",
+          error: { message: error.message, name: error.name },
+        },
+      };
+      yield* ctx.stream.append(closeEvent);
+      ctx.journal.push(closeEvent);
+      throw error;
+    }
+
     closed = true;
     const err = error instanceof Error ? error : new Error(String(error));
     const closeEvent: CloseEvent = {
@@ -339,21 +363,22 @@ function* orchestrateAll(
         results[i] = result;
         completed++;
 
+        if (result.status === "err") {
+          // Fail-fast: reject immediately, scope teardown halts siblings
+          const err = result as {
+            status: "err";
+            error: { message: string; name?: string };
+          };
+          reject(new EffectError(err.error.message, err.error.name));
+          return;
+        }
+
         if (completed === N) {
-          // All children done — check for errors
-          const firstErrorIdx = results.findIndex((r) => r?.status === "err");
-          if (firstErrorIdx >= 0) {
-            const err = results[firstErrorIdx]! as {
-              status: "err";
-              error: { message: string; name?: string };
-            };
-            reject(new EffectError(err.error.message, err.error.name));
-          } else {
-            const values = results.map((r) =>
-              (r as { status: "ok"; value: Json }).value,
-            );
-            resolve(values as Val);
-          }
+          // All children succeeded
+          const values = results.map((r) =>
+            (r as { status: "ok"; value: Json }).value,
+          );
+          resolve(values as Val);
         }
       });
     }
