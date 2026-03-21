@@ -46,25 +46,16 @@ export function classifyNode(value: unknown): NodeClassification {
   }
 
   switch (tisyn) {
-    case "eval": {
+    case "eval":
       if (typeof value["id"] !== "string" || value["id"] === "" || !("data" in value))
         return "malformed";
-      const evalAllowed = new Set(["tisyn", "id", "data"]);
-      if (Object.keys(value).some((k) => !evalAllowed.has(k))) return "malformed";
       return "eval";
-    }
-    case "quote": {
+    case "quote":
       if (!("expr" in value)) return "malformed";
-      const quoteAllowed = new Set(["tisyn", "expr"]);
-      if (Object.keys(value).some((k) => !quoteAllowed.has(k))) return "malformed";
       return "quote";
-    }
-    case "ref": {
+    case "ref":
       if (typeof value["name"] !== "string" || value["name"] === "") return "malformed";
-      const refAllowed = new Set(["tisyn", "name"]);
-      if (Object.keys(value).some((k) => !refAllowed.has(k))) return "malformed";
       return "ref";
-    }
     case "fn": {
       const params = value["params"];
       if (!Array.isArray(params)) return "malformed";
@@ -73,8 +64,6 @@ export function classifyNode(value: unknown): NodeClassification {
       }
       if (new Set(params).size !== params.length) return "malformed";
       if (!("body" in value)) return "malformed";
-      const fnAllowed = new Set(["tisyn", "params", "body"]);
-      if (Object.keys(value).some((k) => !fnAllowed.has(k))) return "malformed";
       return "fn";
     }
     default:

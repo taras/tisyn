@@ -77,13 +77,15 @@ export function* evaluate(expr: Expr, env: Env): Generator<EffectDescriptor, Val
     // EXTERNAL: compound or standard
     if (isCompoundExternal(id)) {
       // Compound: use unquote to preserve child expressions.
-      // Attach __env so the runtime can spawn child kernels in the
-      // parent's scope. The runtime MUST strip __env immediately —
-      // it must never escape the orchestration boundary.
+      // Attach env via wrapper struct so the runtime can spawn child
+      // kernels in the parent's scope. Using a wrapper (not spread)
+      // prevents collision with user data fields.
+      // The runtime MUST strip these immediately — they must never
+      // escape the orchestration boundary.
       const inner = yield* unquote(data, env, evaluate);
       const descriptor: EffectDescriptor = {
         id,
-        data: { ...(inner as object), __env: env },
+        data: { __tisyn_inner: inner, __tisyn_env: env },
       };
       return yield descriptor;
     }
