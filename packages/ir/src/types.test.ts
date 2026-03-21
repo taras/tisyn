@@ -2,8 +2,31 @@ import { describe, it } from "vitest";
 import { expectTypeOf } from "expect-type";
 import type { Expr, Eval as EvalType, Ref, TisynFn } from "./expr.js";
 import {
-  Add, Sub, Mul, Div, Mod, Gt, Eq, Not, Neg, If, Let, Throw, Concat, Get,
-  Arr, Construct, Fn, Call, All, Race, Eval, And, Or, Seq, While,
+  Add,
+  Sub,
+  Mul,
+  Div,
+  Mod,
+  Gt,
+  Eq,
+  Not,
+  Neg,
+  If,
+  Let,
+  Throw,
+  Concat,
+  Get,
+  Arr,
+  Construct,
+  Fn,
+  Call,
+  All,
+  Race,
+  Eval,
+  And,
+  Or,
+  Seq,
+  While,
   Ref as RefCtor,
 } from "./constructors.js";
 

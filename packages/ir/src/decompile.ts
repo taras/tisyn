@@ -103,9 +103,7 @@ function decompileExpr(
 
   // Plain object literal
   const obj = expr as Record<string, TisynExpr>;
-  const entries = Object.entries(obj).map(
-    ([k, v]) => `${k}: ${decompileExpr(v, depth, opts)}`,
-  );
+  const entries = Object.entries(obj).map(([k, v]) => `${k}: ${decompileExpr(v, depth, opts)}`);
   return `{ ${entries.join(", ")} }`;
 }
 
@@ -150,19 +148,32 @@ function decompileStructural(
       }
       return `(${condStr}) ? ${thenStr} : null`;
     }
-    case "add": return binOp(shape, "+", depth, opts);
-    case "sub": return binOp(shape, "-", depth, opts);
-    case "mul": return binOp(shape, "*", depth, opts);
-    case "div": return binOp(shape, "/", depth, opts);
-    case "mod": return binOp(shape, "%", depth, opts);
-    case "gt": return binOp(shape, ">", depth, opts);
-    case "gte": return binOp(shape, ">=", depth, opts);
-    case "lt": return binOp(shape, "<", depth, opts);
-    case "lte": return binOp(shape, "<=", depth, opts);
-    case "eq": return binOp(shape, "===", depth, opts);
-    case "neq": return binOp(shape, "!==", depth, opts);
-    case "and": return binOp(shape, "&&", depth, opts);
-    case "or": return binOp(shape, "||", depth, opts);
+    case "add":
+      return binOp(shape, "+", depth, opts);
+    case "sub":
+      return binOp(shape, "-", depth, opts);
+    case "mul":
+      return binOp(shape, "*", depth, opts);
+    case "div":
+      return binOp(shape, "/", depth, opts);
+    case "mod":
+      return binOp(shape, "%", depth, opts);
+    case "gt":
+      return binOp(shape, ">", depth, opts);
+    case "gte":
+      return binOp(shape, ">=", depth, opts);
+    case "lt":
+      return binOp(shape, "<", depth, opts);
+    case "lte":
+      return binOp(shape, "<=", depth, opts);
+    case "eq":
+      return binOp(shape, "===", depth, opts);
+    case "neq":
+      return binOp(shape, "!==", depth, opts);
+    case "and":
+      return binOp(shape, "&&", depth, opts);
+    case "or":
+      return binOp(shape, "||", depth, opts);
     case "not": {
       const s = shape as { a: TisynExpr };
       return `!${decompileExpr(s.a, depth, opts)}`;
@@ -316,7 +327,11 @@ function decompileLoopBody(
   }
 
   if (isEvalNode(expr) && expr.id === "if") {
-    const shape = unquoteShape(expr.data) as { condition: TisynExpr; then: TisynExpr; else?: TisynExpr };
+    const shape = unquoteShape(expr.data) as {
+      condition: TisynExpr;
+      then: TisynExpr;
+      else?: TisynExpr;
+    };
     const condStr = decompileExpr(shape.condition, depth, opts);
     const thenStr = decompileIfBranch(shape.then as TisynExpr, depth + 1, opts);
     let result = `${pad}if (${condStr}) {\n${thenStr}\n${pad}}`;

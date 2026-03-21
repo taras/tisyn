@@ -1,24 +1,26 @@
-import type {
-  TisynExpr, EvalNode, QuoteNode, RefNode, FnNode,
-} from "./types.js";
+import type { TisynExpr, EvalNode, QuoteNode, RefNode, FnNode } from "./types.js";
 import type { StructuralId } from "./derived.js";
 import { isEvalNode, isQuoteNode, isRefNode, isFnNode } from "./guards.js";
 import { classify } from "./classify.js";
 
-type NodeOfKind<K extends string> =
-  K extends "ref" ? RefNode :
-  K extends "fn" ? FnNode :
-  K extends "eval" ? EvalNode :
-  K extends "quote" ? QuoteNode :
-  K extends "literal" ? TisynExpr :
-  never;
+type NodeOfKind<K extends string> = K extends "ref"
+  ? RefNode
+  : K extends "fn"
+    ? FnNode
+    : K extends "eval"
+      ? EvalNode
+      : K extends "quote"
+        ? QuoteNode
+        : K extends "literal"
+          ? TisynExpr
+          : never;
 
 export type Visitor = {
-  [K in "ref" | "fn" | "eval" | "quote" | "literal"]?:
-    (node: NodeOfKind<K>) => TisynExpr | undefined;
+  [K in "ref" | "fn" | "eval" | "quote" | "literal"]?: (
+    node: NodeOfKind<K>,
+  ) => TisynExpr | undefined;
 } & {
-  [K in StructuralId]?:
-    (node: EvalNode) => TisynExpr | undefined;
+  [K in StructuralId]?: (node: EvalNode) => TisynExpr | undefined;
 };
 
 export function transform(expr: TisynExpr, visitor: Visitor): TisynExpr {

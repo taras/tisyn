@@ -10,20 +10,32 @@ import { isRefNode, isEvalNode } from "./guards.js";
 describe("walk", () => {
   it("visits literal", () => {
     const visited: TisynExpr[] = [];
-    walk(42, { enter(node) { visited.push(node); } });
+    walk(42, {
+      enter(node) {
+        visited.push(node);
+      },
+    });
     expect(visited).toEqual([42]);
   });
 
   it("visits Ref", () => {
     const visited: TisynExpr[] = [];
-    walk(Ref("x") as TisynExpr, { enter(node) { visited.push(node); } });
+    walk(Ref("x") as TisynExpr, {
+      enter(node) {
+        visited.push(node);
+      },
+    });
     expect(visited).toHaveLength(1);
     expect(isRefNode(visited[0])).toBe(true);
   });
 
   it("enters Quote contents", () => {
     const visited: TisynExpr[] = [];
-    walk(Q(Ref("x")) as TisynExpr, { enter(node) { visited.push(node); } });
+    walk(Q(Ref("x")) as TisynExpr, {
+      enter(node) {
+        visited.push(node);
+      },
+    });
     const refs = visited.filter(isRefNode);
     expect(refs).toHaveLength(1);
     expect(refs[0].name).toBe("x");
@@ -31,7 +43,11 @@ describe("walk", () => {
 
   it("enters external Eval data", () => {
     const visited: TisynExpr[] = [];
-    walk(Eval("a.b", [Ref("x")]) as TisynExpr, { enter(node) { visited.push(node); } });
+    walk(Eval("a.b", [Ref("x")]) as TisynExpr, {
+      enter(node) {
+        visited.push(node);
+      },
+    });
     const refs = visited.filter(isRefNode);
     expect(refs).toHaveLength(1);
     expect(refs[0].name).toBe("x");
@@ -64,13 +80,34 @@ describe("fold", () => {
     const calls: string[] = [];
     const alg = {
       ...defaultAlgebra(() => 0),
-      literal(v: TisynExpr) { calls.push("literal"); return 0; },
-      ref(name: string) { calls.push(`ref:${name}`); return 0; },
-      add(a: number, b: number) { calls.push("add"); return a + b; },
-      quote(expr: TisynExpr) { calls.push("quote"); return 0; },
-      eval(id: string, data: TisynExpr) { calls.push(`eval:${id}`); return 0; },
-      let(name: string, value: number, body: number) { calls.push("let"); return body; },
-      if(cond: number, then_: number, else_: number | null) { calls.push("if"); return then_; },
+      literal(v: TisynExpr) {
+        calls.push("literal");
+        return 0;
+      },
+      ref(name: string) {
+        calls.push(`ref:${name}`);
+        return 0;
+      },
+      add(a: number, b: number) {
+        calls.push("add");
+        return a + b;
+      },
+      quote(expr: TisynExpr) {
+        calls.push("quote");
+        return 0;
+      },
+      eval(id: string, data: TisynExpr) {
+        calls.push(`eval:${id}`);
+        return 0;
+      },
+      let(name: string, value: number, body: number) {
+        calls.push("let");
+        return body;
+      },
+      if(cond: number, then_: number, else_: number | null) {
+        calls.push("if");
+        return then_;
+      },
     };
     return { alg, calls };
   };
@@ -125,9 +162,15 @@ describe("fold", () => {
   it("fold arithmetic: nested", () => {
     const evalAlg = {
       ...defaultAlgebra(() => 0),
-      literal(v: TisynExpr) { return typeof v === "number" ? v : 0; },
-      add(a: number, b: number) { return a + b; },
-      sub(a: number, b: number) { return a - b; },
+      literal(v: TisynExpr) {
+        return typeof v === "number" ? v : 0;
+      },
+      add(a: number, b: number) {
+        return a + b;
+      },
+      sub(a: number, b: number) {
+        return a - b;
+      },
     };
     const result = fold(Add(Add(1, 2), 3) as TisynExpr, evalAlg);
     expect(result).toBe(6);
@@ -137,7 +180,7 @@ describe("fold", () => {
 describe("transform", () => {
   it("replaces Ref", () => {
     const result = transform(Ref("x") as TisynExpr, {
-      ref: (n) => n.name === "x" ? 42 : undefined,
+      ref: (n) => (n.name === "x" ? 42 : undefined),
     });
     expect(result).toBe(42);
   });
@@ -171,7 +214,7 @@ describe("transform", () => {
 
   it("recurses into children", () => {
     const result = transform(Let("x", Ref("a"), Ref("b")) as TisynExpr, {
-      ref: (n) => n.name === "a" ? 42 : undefined,
+      ref: (n) => (n.name === "a" ? 42 : undefined),
     });
     const data = (result as { data: { expr: { value: unknown; body: unknown } } }).data.expr;
     expect(data.value).toBe(42);
@@ -198,9 +241,7 @@ describe("collectRefs", () => {
 
 describe("collectExternalIds", () => {
   it("finds external eval IDs", () => {
-    const ids = collectExternalIds(
-      Let("x", Eval("a.b", []), Eval("c.d", [])) as TisynExpr,
-    );
+    const ids = collectExternalIds(Let("x", Eval("a.b", []), Eval("c.d", [])) as TisynExpr);
     expect(ids.sort()).toEqual(["a.b", "c.d"]);
   });
 
@@ -228,8 +269,6 @@ describe("collectFreeRefs", () => {
   });
 
   it("shadowing", () => {
-    expect(
-      collectFreeRefs(Let("x", 1, Let("x", 2, Ref("x"))) as TisynExpr),
-    ).toEqual([]);
+    expect(collectFreeRefs(Let("x", 1, Let("x", 2, Ref("x"))) as TisynExpr)).toEqual([]);
   });
 });

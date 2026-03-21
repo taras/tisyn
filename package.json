@@ -4,12 +4,14 @@
     "build": "tsc --build",
     "test": "pnpm -r run test",
     "lint": "pnpm exec oxlint .",
-    "format": "npx oxfmt . --write"
+    "format": "npx oxfmt . --write",
+    "format:check": "npx oxfmt . --check"
   },
   "devDependencies": {
+    "@effectionx/inspector": "https://pkg.pr.new/thefrontside/inspector/@effectionx/inspector@8c7cc3f",
+    "@types/node": "^25.5.0",
     "oxlint": "^1.56.0",
-    "typescript": "~5.8.0",
-    "@effectionx/inspector": "https://pkg.pr.new/thefrontside/inspector/@effectionx/inspector@8c7cc3f"
+    "typescript": "~5.8.0"
   },
   "packageManager": "pnpm@9.15.9"
 }
