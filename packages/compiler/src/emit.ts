@@ -9,7 +9,7 @@
  */
 
 import ts from "typescript";
-import type { Expr } from "@tisyn/shared";
+import type { TisynExpr as Expr } from "@tisyn/ir";
 import {
   Let,
   If,

@@ -6,7 +6,7 @@
   },
   "include": ["src"],
   "references": [
-    { "path": "../shared" },
+    { "path": "../ir" },
     { "path": "../kernel" },
     { "path": "../runtime" },
     { "path": "../durable-streams" },

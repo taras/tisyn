@@ -12,7 +12,7 @@
  */
 
 import type { Operation } from "effection";
-import type { DurableEvent } from "@tisyn/shared";
+import type { DurableEvent } from "@tisyn/kernel";
 
 function cloneEvent(event: DurableEvent): DurableEvent {
   return structuredClone(event);

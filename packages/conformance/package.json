@@ -17,9 +17,9 @@
   "dependencies": {
     "@tisyn/agent": "workspace:*",
     "@tisyn/durable-streams": "workspace:*",
+    "@tisyn/ir": "workspace:*",
     "@tisyn/kernel": "workspace:*",
-    "@tisyn/runtime": "workspace:*",
-    "@tisyn/shared": "workspace:*"
+    "@tisyn/runtime": "workspace:*"
   },
   "devDependencies": {
     "effection": "4.1.0-alpha.7",
