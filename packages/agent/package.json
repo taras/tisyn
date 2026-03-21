@@ -14,7 +14,8 @@
     "build": "tsc --build"
   },
   "dependencies": {
-    "@tisyn/shared": "workspace:*"
+    "@tisyn/ir": "workspace:*",
+    "@tisyn/kernel": "workspace:*"
   },
   "devDependencies": {
     "effection": "4.1.0-alpha.7"

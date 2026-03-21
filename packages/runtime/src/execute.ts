@@ -8,19 +8,16 @@
  */
 
 import type { Operation } from "effection";
+import type { TisynExpr as Expr, Val, Json } from "@tisyn/ir";
 import {
-  type Expr,
-  type Val,
-  type Json,
   type DurableEvent,
   type YieldEvent,
   type CloseEvent,
   type EffectDescriptor,
   type EventResult,
   parseEffectId,
-  DivergenceError,
-  EffectError,
-} from "@tisyn/shared";
+} from "@tisyn/kernel";
+import { DivergenceError, EffectError } from "./errors.js";
 import { evaluate, validate, type Env, envFromRecord } from "@tisyn/kernel";
 import { type DurableStream, InMemoryStream, ReplayIndex } from "@tisyn/durable-streams";
 import { AgentRegistry } from "@tisyn/agent";

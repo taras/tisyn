@@ -9,7 +9,8 @@
  */
 
 import type { Operation } from "effection";
-import { type Val, parseEffectId } from "@tisyn/shared";
+import type { Val } from "@tisyn/ir";
+import { parseEffectId } from "@tisyn/kernel";
 
 /**
  * An agent handler receives an operation name and arguments,

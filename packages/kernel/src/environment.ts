@@ -10,7 +10,8 @@
  * - Inner bindings shadow outer (I4)
  */
 
-import { type Val, UnboundVariable, ArityMismatch } from "@tisyn/shared";
+import type { Val } from "@tisyn/ir";
+import { UnboundVariable, ArityMismatch } from "./errors.js";
 
 export interface Env {
   readonly frame: ReadonlyMap<string, Val>;

@@ -20,9 +20,12 @@ importers:
 
   packages/agent:
     dependencies:
-      '@tisyn/shared':
+      '@tisyn/ir':
         specifier: workspace:*
-        version: link:../shared
+        version: link:../ir
+      '@tisyn/kernel':
+        specifier: workspace:*
+        version: link:../kernel
     devDependencies:
       effection:
         specifier: 4.1.0-alpha.7
@@ -36,9 +39,6 @@ importers:
       '@tisyn/kernel':
         specifier: workspace:*
         version: link:../kernel
-      '@tisyn/shared':
-        specifier: workspace:*
-        version: link:../shared
       typescript:
         specifier: ~5.8.0
         version: 5.8.3
@@ -55,15 +55,15 @@ importers:
       '@tisyn/durable-streams':
         specifier: workspace:*
         version: link:../durable-streams
+      '@tisyn/ir':
+        specifier: workspace:*
+        version: link:../ir
       '@tisyn/kernel':
         specifier: workspace:*
         version: link:../kernel
       '@tisyn/runtime':
         specifier: workspace:*
         version: link:../runtime
-      '@tisyn/shared':
-        specifier: workspace:*
-        version: link:../shared
     devDependencies:
       effection:
         specifier: 4.1.0-alpha.7
@@ -74,9 +74,9 @@ importers:
 
   packages/durable-streams:
     dependencies:
-      '@tisyn/shared':
+      '@tisyn/kernel':
         specifier: workspace:*
-        version: link:../shared
+        version: link:../kernel
     devDependencies:
       effection:
         specifier: 4.1.0-alpha.7
@@ -93,9 +93,9 @@ importers:
 
   packages/kernel:
     dependencies:
-      '@tisyn/shared':
+      '@tisyn/ir':
         specifier: workspace:*
-        version: link:../shared
+        version: link:../ir
 
   packages/runtime:
     dependencies:
@@ -105,22 +105,12 @@ importers:
       '@tisyn/durable-streams':
         specifier: workspace:*
         version: link:../durable-streams
-      '@tisyn/kernel':
-        specifier: workspace:*
-        version: link:../kernel
-      '@tisyn/shared':
-        specifier: workspace:*
-        version: link:../shared
-    devDependencies:
-      effection:
-        specifier: 4.1.0-alpha.7
-        version: 4.1.0-alpha.7
-
-  packages/shared:
-    dependencies:
       '@tisyn/ir':
         specifier: workspace:*
         version: link:../ir
+      '@tisyn/kernel':
+        specifier: workspace:*
+        version: link:../kernel
     devDependencies:
       effection:
         specifier: 4.1.0-alpha.7

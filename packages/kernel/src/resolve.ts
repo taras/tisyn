@@ -15,14 +15,14 @@
  */
 
 import {
-  type Expr,
+  type TisynExpr as Expr,
   type Val,
-  type EffectDescriptor,
   isEvalNode,
   isQuoteNode,
   isRefNode,
   isFnNode,
-} from "@tisyn/shared";
+} from "@tisyn/ir";
+import type { EffectDescriptor } from "./events.js";
 import { lookup } from "./environment.js";
 import type { Env } from "./environment.js";
 

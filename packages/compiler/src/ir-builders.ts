@@ -8,7 +8,7 @@
  * External operations leave data unquoted.
  */
 
-import type { Expr, EvalNode, QuoteNode, RefNode, FnNode } from "@tisyn/shared";
+import type { TisynExpr as Expr, EvalNode, QuoteNode, RefNode, FnNode } from "@tisyn/ir";
 
 // ── Quote ──
 
