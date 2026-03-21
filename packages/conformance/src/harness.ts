@@ -128,7 +128,31 @@ function resultMatches(actual: EventResult, expected: EventResult): boolean {
 }
 
 /**
+ * Apply the "<any>" sentinel: if the expected event has an error
+ * result with message "<any>", replace it with the actual message
+ * so that canonical comparison passes.
+ */
+function applySentinel(actual: DurableEvent, expected: DurableEvent): DurableEvent {
+  if (
+    expected.result.status === "err" &&
+    expected.result.error.message === "<any>" &&
+    actual.result.status === "err" &&
+    actual.result.error.message.length > 0
+  ) {
+    return {
+      ...expected,
+      result: {
+        ...expected.result,
+        error: { ...expected.result.error, message: actual.result.error.message },
+      },
+    };
+  }
+  return expected;
+}
+
+/**
  * Compare journal events per §9.4 sequential mode.
+ * Uses canonical byte comparison for strictness.
  */
 function journalMatches(
   actual: DurableEvent[],
@@ -143,35 +167,15 @@ function journalMatches(
 
   for (let i = 0; i < expected.length; i++) {
     const a = actual[i]!;
-    const e = expected[i]!;
+    const e = applySentinel(a, expected[i]!);
 
-    if (a.type !== e.type) {
+    const aCanonical = canonical(a as unknown as Json);
+    const eCanonical = canonical(e as unknown as Json);
+
+    if (aCanonical !== eCanonical) {
       return {
         pass: false,
-        message: `Event ${i}: type mismatch: got "${a.type}", expected "${e.type}"`,
-      };
-    }
-
-    if (a.coroutineId !== e.coroutineId) {
-      return {
-        pass: false,
-        message: `Event ${i}: coroutineId mismatch: got "${a.coroutineId}", expected "${e.coroutineId}"`,
-      };
-    }
-
-    if (a.type === "yield" && e.type === "yield") {
-      if (a.description.type !== e.description.type || a.description.name !== e.description.name) {
-        return {
-          pass: false,
-          message: `Event ${i}: description mismatch: got ${a.description.type}.${a.description.name}, expected ${e.description.type}.${e.description.name}`,
-        };
-      }
-    }
-
-    if (!resultMatches(a.result, e.result)) {
-      return {
-        pass: false,
-        message: `Event ${i}: result mismatch: got ${JSON.stringify(a.result)}, expected ${JSON.stringify(e.result)}`,
+        message: `Event ${i}: mismatch:\n  got:      ${aCanonical}\n  expected: ${eCanonical}`,
       };
     }
   }
@@ -325,44 +329,14 @@ async function runReplayFixture(fixture: ReplayFixture): Promise<FixtureResult> 
   // Create mock agents for live effects (if any)
   const agents = createMockAgents(fixture.live_effects);
 
-  let result: { result: EventResult; journal: DurableEvent[] };
-  try {
-    result = await run(function* () {
-      return yield* execute({
-        ir: fixture.ir,
-        env: fixture.env,
-        stream,
-        agents,
-      });
+  const result = await run(function* () {
+    return yield* execute({
+      ir: fixture.ir,
+      env: fixture.env,
+      stream,
+      agents,
     });
-  } catch (error) {
-    // DivergenceError propagates fatally — convert to result for comparison
-    const err = error instanceof Error ? error : new Error(String(error));
-    if (err.name === "DivergenceError") {
-      const errResult: EventResult = {
-        status: "err",
-        error: { message: err.message, name: err.name },
-      };
-      // Check if the expected result matches the divergence
-      if (!resultMatches(errResult, fixture.expected_result)) {
-        return {
-          id: fixture.id,
-          pass: false,
-          message: `Result mismatch: got ${JSON.stringify(errResult)}, expected ${JSON.stringify(fixture.expected_result)}`,
-        };
-      }
-      // DivergenceError aborts before journal is returned — check events
-      // added after the stored journal (new events only)
-      const streamSnapshot = stream.snapshot();
-      const newEvents = streamSnapshot.slice(fixture.stored_journal.length);
-      const jm = journalMatches(newEvents, fixture.expected_journal);
-      if (!jm.pass) {
-        return { id: fixture.id, pass: false, message: jm.message };
-      }
-      return { id: fixture.id, pass: true, message: "PASS" };
-    }
-    throw error;
-  }
+  });
 
   if (!resultMatches(result.result, fixture.expected_result)) {
     return {

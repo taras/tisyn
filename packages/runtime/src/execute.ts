@@ -100,7 +100,21 @@ export function* execute(options: ExecuteOptions): Operation<ExecuteResult> {
   const kernel = evaluate(ir, env);
   const ctx: DriveContext = { replayIndex, stream, agents, journal };
 
-  const result = yield* driveKernel(kernel, coroutineId, env, ctx);
+  let result: EventResult;
+  try {
+    result = yield* driveKernel(kernel, coroutineId, env, ctx);
+  } catch (error) {
+    if (error instanceof DivergenceError) {
+      return {
+        result: {
+          status: "err" as const,
+          error: { message: error.message, name: "DivergenceError" },
+        },
+        journal,
+      };
+    }
+    throw error;
+  }
 
   return { result, journal };
 }
@@ -174,10 +188,13 @@ function* driveKernel(
 
       // ── Compound effect interception ──
       if (isCompoundExternal(descriptor.id)) {
-        // Strip __env immediately — must not escape orchestration boundary
-        const compoundData = descriptor.data as { exprs: Expr[]; __env: Env };
-        const childEnv = compoundData.__env;
-        const exprs = compoundData.exprs;
+        // Strip wrapper immediately — must not escape orchestration boundary
+        const compoundData = descriptor.data as {
+          __tisyn_inner: { exprs: Expr[] };
+          __tisyn_env: Env;
+        };
+        const childEnv = compoundData.__tisyn_env;
+        const exprs = compoundData.__tisyn_inner.exprs;
 
         if (descriptor.id === "all") {
           nextValue = yield* orchestrateAll(exprs, coroutineId, childEnv, ctx);
@@ -425,7 +442,11 @@ function* orchestrateRace(
         } else if (result.status === "err") {
           errors.set(i, result.error);
           if (errors.size === N) {
-            // All children failed — propagate lowest-index error
+            // All children failed — propagate lowest-index error.
+            // NOTE: Spec inconsistency — system spec §8.4 says "last error",
+            // compound concurrency spec says "lowest-index error."
+            // Implementation follows compound concurrency spec (lowest-index).
+            // See audit finding B-1.
             const lowestIdx = Math.min(...errors.keys());
             const err = errors.get(lowestIdx)!;
             reject(new EffectError(err.message, err.name));
