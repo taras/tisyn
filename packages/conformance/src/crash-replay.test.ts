@@ -10,14 +10,14 @@
  * 6. Verify: final journal matches expected
  */
 
-import { describe, it, expect } from "vitest";
-import { run } from "effection";
+import { describe, it } from "@effectionx/bdd/node";
+import { expect } from "vitest";
 import { execute } from "@tisyn/runtime";
 import { InMemoryStream } from "@tisyn/durable-streams";
 import { AgentRegistry } from "@tisyn/agent";
 
 describe("End-to-end crash/replay", () => {
-  it("should replay stored effects and continue with live dispatch", async () => {
+  it("should replay stored effects and continue with live dispatch", function* () {
     // IR: three sequential effects
     // const a = yield* x.step1([]);
     // const b = yield* x.step2([a]);
@@ -82,12 +82,10 @@ describe("End-to-end crash/replay", () => {
     });
 
     // First run will fail on 3rd effect
-    const firstResult = await run(function* () {
-      return yield* execute({
-        ir: ir as never,
-        stream: firstRunStream,
-        agents: firstRunAgents,
-      });
+    const firstResult = yield* execute({
+      ir: ir as never,
+      stream: firstRunStream,
+      agents: firstRunAgents,
     });
 
     // First run should have error result (crashed on step3)
@@ -116,12 +114,10 @@ describe("End-to-end crash/replay", () => {
       return 30; // step3 result
     });
 
-    const secondResult = await run(function* () {
-      return yield* execute({
-        ir: ir as never,
-        stream: replayStream,
-        agents: secondRunAgents,
-      });
+    const secondResult = yield* execute({
+      ir: ir as never,
+      stream: replayStream,
+      agents: secondRunAgents,
     });
 
     // Verify: only 1 live agent call (step3)
