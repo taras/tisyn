@@ -15,6 +15,7 @@
   },
   "files": [],
   "references": [
+    { "path": "packages/ir" },
     { "path": "packages/shared" },
     { "path": "packages/kernel" },
     { "path": "packages/durable-streams" },
