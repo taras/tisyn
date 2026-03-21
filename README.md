@@ -59,7 +59,7 @@ const shopifyImpl = implementAgent(shopify, {
   },
 });
 
-yield* shopifyImpl.install();
+yield * shopifyImpl.install();
 ```
 
 ### Dispatching invocations with `invoke()`
@@ -72,15 +72,17 @@ invocations, or inside agent implementations to call other agents.
 import { invoke } from "@tisyn/agent";
 
 // Dispatch a received invocation
-const result = yield* invoke(shopify.createOrder(input));
+const result = yield * invoke(shopify.createOrder(input));
 
 // Call another agent from within an implementation
 const shopifyImpl = implementAgent(shopify, {
   *createOrder(input) {
-    return yield* invoke(graphql.execute({
-      document: CREATE_ORDER_MUTATION,
-      variables: { input },
-    }));
+    return yield* invoke(
+      graphql.execute({
+        document: CREATE_ORDER_MUTATION,
+        variables: { input },
+      }),
+    );
   },
 });
 ```
@@ -94,10 +96,12 @@ dispatch middleware is installed in the current scope.
 ```ts
 import { executeRemote } from "@tisyn/runtime";
 
-const result = yield* executeRemote({
-  program: receivedIR,
-  env: { customerId: "123" },
-});
+const result =
+  yield *
+  executeRemote({
+    program: receivedIR,
+    env: { customerId: "123" },
+  });
 ```
 
 `executeRemote()` returns the result value on success or throws on
