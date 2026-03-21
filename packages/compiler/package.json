@@ -18,6 +18,7 @@
     "test": "vitest run"
   },
   "dependencies": {
+    "@tisyn/ir": "workspace:*",
     "@tisyn/kernel": "workspace:*",
     "@tisyn/shared": "workspace:*",
     "typescript": "~5.8.0"
