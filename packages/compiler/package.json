@@ -23,6 +23,6 @@
     "typescript": "~5.8.0"
   },
   "devDependencies": {
-    "vitest": "^3"
+    "vitest": "^4"
   }
 }

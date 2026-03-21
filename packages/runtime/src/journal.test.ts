@@ -1,12 +1,12 @@
-import { describe, it, expect } from "vitest";
-import { run } from "effection";
+import { describe, it } from "@effectionx/bdd/node";
+import { expect } from "vitest";
 import { execute } from "./execute.js";
 import { InMemoryStream } from "@tisyn/durable-streams";
 import { AgentRegistry } from "@tisyn/agent";
 import type { YieldEvent } from "@tisyn/kernel";
 
 describe("Journal", () => {
-  it("yield event written before resume", async () => {
+  it("yield event written before resume", function* () {
     const stream = new InMemoryStream();
     const agents = new AgentRegistry();
 
@@ -35,12 +35,10 @@ describe("Journal", () => {
       data: [],
     };
 
-    const { result, journal } = await run(function* () {
-      return yield* execute({
-        ir: ir as never,
-        stream,
-        agents,
-      });
+    const { result, journal } = yield* execute({
+      ir: ir as never,
+      stream,
+      agents,
     });
 
     expect(result).toEqual({ status: "ok", value: 42 });
