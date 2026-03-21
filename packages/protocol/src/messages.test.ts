@@ -2,6 +2,7 @@ import { describe, it, expect } from "vitest";
 import type {
   InitializeRequest,
   InitializeResponse,
+  InitializeProtocolError,
   ExecuteRequest,
   ExecuteResponse,
   ExecuteProtocolError,
@@ -48,6 +49,21 @@ describe("Protocol v1 message shapes", () => {
 
     expect(msg.result.protocolVersion).toBe("1.0");
     expect(msg.result.sessionId).toBe("sess-abc-123");
+  });
+
+  it("initialize protocol error rejects incompatible version via JSON-RPC error", () => {
+    const msg: InitializeProtocolError = {
+      jsonrpc: "2.0",
+      id: 1,
+      error: {
+        code: ProtocolErrorCode.IncompatibleVersion,
+        message: "Unsupported protocol version: 99.0",
+      },
+    };
+
+    expect(msg.error.code).toBe(-32002);
+    expect(msg.error.message).toBeTruthy();
+    expect(msg).not.toHaveProperty("result");
   });
 
   it("execute request includes correlation ID, executionId, taskId, operation, args", () => {
