@@ -20,7 +20,11 @@ export function print(expr: TisynExpr, options?: PrintOptions): string {
   return printNode(expr, 0, opts);
 }
 
-function printNode(expr: TisynExpr, depth: number, opts: PrintOptions & { indent: number; maxWidth: number; compact: boolean }): string {
+function printNode(
+  expr: TisynExpr,
+  depth: number,
+  opts: PrintOptions & { indent: number; maxWidth: number; compact: boolean },
+): string {
   if (expr === null) return "null";
   if (typeof expr === "string") return JSON.stringify(expr);
   if (typeof expr === "number" || typeof expr === "boolean") return String(expr);
@@ -97,9 +101,10 @@ function printStructural(
 ): string {
   // Unwrap Quote
   const qdata = data as Record<string, unknown>;
-  const shape = (qdata && typeof qdata === "object" && "tisyn" in qdata && qdata["tisyn"] === "quote")
-    ? (qdata as { expr: unknown }).expr as Record<string, unknown>
-    : qdata;
+  const shape =
+    qdata && typeof qdata === "object" && "tisyn" in qdata && qdata["tisyn"] === "quote"
+      ? ((qdata as { expr: unknown }).expr as Record<string, unknown>)
+      : qdata;
 
   const name = constructorName(id);
 
@@ -120,10 +125,7 @@ function printStructural(
     }
     case "if": {
       const s = shape as { condition: TisynExpr; then: TisynExpr; else?: TisynExpr };
-      const args = [
-        printNode(s.condition, depth + 1, opts),
-        printNode(s.then, depth + 1, opts),
-      ];
+      const args = [printNode(s.condition, depth + 1, opts), printNode(s.then, depth + 1, opts)];
       if (s.else !== undefined) {
         args.push(printNode(s.else, depth + 1, opts));
       }
@@ -151,15 +153,25 @@ function printStructural(
       const args = [printNode(s.obj, depth + 1, opts), JSON.stringify(s.key)];
       return formatCall(name, args, depth, opts);
     }
-    case "add": case "sub": case "mul": case "div": case "mod":
-    case "gt": case "gte": case "lt": case "lte":
-    case "eq": case "neq":
-    case "and": case "or": {
+    case "add":
+    case "sub":
+    case "mul":
+    case "div":
+    case "mod":
+    case "gt":
+    case "gte":
+    case "lt":
+    case "lte":
+    case "eq":
+    case "neq":
+    case "and":
+    case "or": {
       const s = shape as { a: TisynExpr; b: TisynExpr };
       const args = [printNode(s.a, depth + 1, opts), printNode(s.b, depth + 1, opts)];
       return formatCall(name, args, depth, opts);
     }
-    case "not": case "neg": {
+    case "not":
+    case "neg": {
       const s = shape as { a: TisynExpr };
       return formatCall(name, [printNode(s.a, depth + 1, opts)], depth, opts);
     }
@@ -199,9 +211,10 @@ function printCompoundExternal(
   opts: PrintOptions & { indent: number; maxWidth: number; compact: boolean },
 ): string {
   const qdata = data as Record<string, unknown>;
-  const shape = (qdata && typeof qdata === "object" && "tisyn" in qdata && qdata["tisyn"] === "quote")
-    ? (qdata as { expr: Record<string, unknown> }).expr
-    : qdata;
+  const shape =
+    qdata && typeof qdata === "object" && "tisyn" in qdata && qdata["tisyn"] === "quote"
+      ? (qdata as { expr: Record<string, unknown> }).expr
+      : qdata;
   const s = shape as { exprs: TisynExpr[] };
   const name = constructorName(id);
   const args = s.exprs.map((e) => printNode(e, depth + 1, opts));
@@ -210,34 +223,62 @@ function printCompoundExternal(
 
 function constructorName(id: string): string {
   switch (id) {
-    case "let": return "Let";
-    case "seq": return "Seq";
-    case "if": return "If";
-    case "while": return "While";
-    case "call": return "Call";
-    case "get": return "Get";
-    case "add": return "Add";
-    case "sub": return "Sub";
-    case "mul": return "Mul";
-    case "div": return "Div";
-    case "mod": return "Mod";
-    case "neg": return "Neg";
-    case "gt": return "Gt";
-    case "gte": return "Gte";
-    case "lt": return "Lt";
-    case "lte": return "Lte";
-    case "eq": return "Eq";
-    case "neq": return "Neq";
-    case "and": return "And";
-    case "or": return "Or";
-    case "not": return "Not";
-    case "construct": return "Construct";
-    case "array": return "Arr";
-    case "concat": return "Concat";
-    case "throw": return "Throw";
-    case "all": return "All";
-    case "race": return "Race";
-    default: return id;
+    case "let":
+      return "Let";
+    case "seq":
+      return "Seq";
+    case "if":
+      return "If";
+    case "while":
+      return "While";
+    case "call":
+      return "Call";
+    case "get":
+      return "Get";
+    case "add":
+      return "Add";
+    case "sub":
+      return "Sub";
+    case "mul":
+      return "Mul";
+    case "div":
+      return "Div";
+    case "mod":
+      return "Mod";
+    case "neg":
+      return "Neg";
+    case "gt":
+      return "Gt";
+    case "gte":
+      return "Gte";
+    case "lt":
+      return "Lt";
+    case "lte":
+      return "Lte";
+    case "eq":
+      return "Eq";
+    case "neq":
+      return "Neq";
+    case "and":
+      return "And";
+    case "or":
+      return "Or";
+    case "not":
+      return "Not";
+    case "construct":
+      return "Construct";
+    case "array":
+      return "Arr";
+    case "concat":
+      return "Concat";
+    case "throw":
+      return "Throw";
+    case "all":
+      return "All";
+    case "race":
+      return "Race";
+    default:
+      return id;
   }
 }
 

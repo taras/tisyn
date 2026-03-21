@@ -1,11 +1,7 @@
 import type { TisynExpr } from "./types.js";
 import type { Expr, Eval as EvalT, Quote as QuoteT, Ref as RefT, TisynFn } from "./expr.js";
 
-function binary<T>(
-  id: string,
-  a: Expr<unknown>,
-  b: Expr<unknown>,
-): EvalT<T> {
+function binary<T>(id: string, a: Expr<unknown>, b: Expr<unknown>): EvalT<T> {
   return {
     tisyn: "eval",
     id,
@@ -13,10 +9,7 @@ function binary<T>(
   } as EvalT<T>;
 }
 
-function unary<T>(
-  id: string,
-  a: Expr<unknown>,
-): EvalT<T> {
+function unary<T>(id: string, a: Expr<unknown>): EvalT<T> {
   return {
     tisyn: "eval",
     id,
@@ -32,20 +25,13 @@ export function Q<T>(expr: Expr<T>): QuoteT<T> {
   return { tisyn: "quote", expr } as QuoteT<T>;
 }
 
-export function Fn<A extends unknown[], R>(
-  params: string[],
-  body: Expr<R>,
-): TisynFn<A, R> {
+export function Fn<A extends unknown[], R>(params: string[], body: Expr<R>): TisynFn<A, R> {
   return { tisyn: "fn", params, body } as TisynFn<A, R>;
 }
 
 // ── Structural Operation Constructors ──
 
-export function Let<T>(
-  name: string,
-  value: Expr<unknown>,
-  body: Expr<T>,
-): EvalT<T> {
+export function Let<T>(name: string, value: Expr<unknown>, body: Expr<T>): EvalT<T> {
   return {
     tisyn: "eval",
     id: "let",
@@ -61,11 +47,7 @@ export function Seq<T>(...exprs: [...Expr<unknown>[], Expr<T>]): EvalT<T> {
   } as EvalT<T>;
 }
 
-export function If<T>(
-  condition: Expr<boolean>,
-  then_: Expr<T>,
-  else_?: Expr<T>,
-): EvalT<T> {
+export function If<T>(condition: Expr<boolean>, then_: Expr<T>, else_?: Expr<T>): EvalT<T> {
   const fields: Record<string, unknown> = { condition, then: then_ };
   if (else_ !== undefined) {
     fields["else"] = else_;
@@ -77,10 +59,7 @@ export function If<T>(
   } as EvalT<T>;
 }
 
-export function While<T>(
-  condition: Expr<boolean>,
-  exprs: [...Expr<unknown>[], Expr<T>],
-): EvalT<T> {
+export function While<T>(condition: Expr<boolean>, exprs: [...Expr<unknown>[], Expr<T>]): EvalT<T> {
   return {
     tisyn: "eval",
     id: "while",
@@ -175,9 +154,9 @@ export function Not(a: Expr<unknown>): EvalT<boolean> {
 
 // ── Data construction ──
 
-export function Construct<T extends Record<string, unknown>>(
-  fields: { [K in keyof T]: Expr<T[K]> },
-): EvalT<T> {
+export function Construct<T extends Record<string, unknown>>(fields: {
+  [K in keyof T]: Expr<T[K]>;
+}): EvalT<T> {
   return {
     tisyn: "eval",
     id: "construct",
@@ -219,9 +198,7 @@ export function Eval<T>(id: string, data: Expr<unknown>[]): EvalT<T> {
   } as EvalT<T>;
 }
 
-export function All<T extends unknown[]>(
-  ...exprs: { [K in keyof T]: Expr<T[K]> }
-): EvalT<T> {
+export function All<T extends unknown[]>(...exprs: { [K in keyof T]: Expr<T[K]> }): EvalT<T> {
   return {
     tisyn: "eval",
     id: "all",
