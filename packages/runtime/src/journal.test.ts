@@ -2,13 +2,12 @@ import { describe, it } from "@effectionx/vitest";
 import { expect } from "vitest";
 import { execute } from "./execute.js";
 import { InMemoryStream } from "@tisyn/durable-streams";
-import { AgentRegistry } from "@tisyn/agent";
+import { Dispatch } from "@tisyn/agent";
 import type { YieldEvent } from "@tisyn/kernel";
 
 describe("Journal", () => {
   it("yield event written before resume", function* () {
     const stream = new InMemoryStream();
-    const agents = new AgentRegistry();
 
     const appendTimestamps: Array<{ event: string; appendCount: number }> = [];
 
@@ -23,9 +22,11 @@ describe("Journal", () => {
       });
     };
 
-    // biome-ignore lint/correctness/useYield: mock
-    agents.register("a", function* () {
-      return 42;
+    yield* Dispatch.around({
+      // biome-ignore lint/correctness/useYield: mock
+      *dispatch([_effectId, _data]: [string, any]) {
+        return 42;
+      },
     });
 
     // IR: single effect a.op
@@ -38,7 +39,6 @@ describe("Journal", () => {
     const { result, journal } = yield* execute({
       ir: ir as never,
       stream,
-      agents,
     });
 
     expect(result).toEqual({ status: "ok", value: 42 });

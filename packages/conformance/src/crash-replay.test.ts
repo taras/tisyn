@@ -12,9 +12,10 @@
 
 import { describe, it } from "@effectionx/vitest";
 import { expect } from "vitest";
+import { scoped } from "effection";
 import { execute } from "@tisyn/runtime";
 import { InMemoryStream } from "@tisyn/durable-streams";
-import { AgentRegistry } from "@tisyn/agent";
+import { Dispatch } from "@tisyn/agent";
 
 describe("End-to-end crash/replay", () => {
   it("should replay stored effects and continue with live dispatch", function* () {
@@ -67,25 +68,25 @@ describe("End-to-end crash/replay", () => {
     };
 
     // ── First run: complete 2 effects, then "crash" ──
-    // We simulate this by running with an agent that only handles 2 effects
     const firstRunStream = new InMemoryStream();
-    let firstRunCallCount = 0;
 
-    const firstRunAgents = new AgentRegistry();
-    // biome-ignore lint/correctness/useYield: mock
-    firstRunAgents.register("x", function* (_op, _args) {
-      firstRunCallCount++;
-      if (firstRunCallCount === 1) return 10;
-      if (firstRunCallCount === 2) return 20;
-      // "Crash" on the 3rd call — simulate by throwing
-      throw new Error("SIMULATED_CRASH");
-    });
+    const firstResult = yield* scoped(function* () {
+      let firstRunCallCount = 0;
+      yield* Dispatch.around({
+        // biome-ignore lint/correctness/useYield: mock
+        *dispatch([_effectId, _data]: [string, any]) {
+          firstRunCallCount++;
+          if (firstRunCallCount === 1) return 10;
+          if (firstRunCallCount === 2) return 20;
+          // "Crash" on the 3rd call — simulate by throwing
+          throw new Error("SIMULATED_CRASH");
+        },
+      });
 
-    // First run will fail on 3rd effect
-    const firstResult = yield* execute({
-      ir: ir as never,
-      stream: firstRunStream,
-      agents: firstRunAgents,
+      return yield* execute({
+        ir: ir as never,
+        stream: firstRunStream,
+      });
     });
 
     // First run should have error result (crashed on step3)
@@ -106,18 +107,20 @@ describe("End-to-end crash/replay", () => {
     const replayStream = new InMemoryStream([firstSnapshot[0]!, firstSnapshot[1]!]);
 
     let secondRunCallCount = 0;
-    const secondRunAgents = new AgentRegistry();
-    // biome-ignore lint/correctness/useYield: mock
-    secondRunAgents.register("x", function* (_op, _args) {
-      secondRunCallCount++;
-      // This should only be called for step3 (the live effect)
-      return 30; // step3 result
-    });
+    const secondResult = yield* scoped(function* () {
+      yield* Dispatch.around({
+        // biome-ignore lint/correctness/useYield: mock
+        *dispatch([_effectId, _data]: [string, any]) {
+          secondRunCallCount++;
+          // This should only be called for step3 (the live effect)
+          return 30; // step3 result
+        },
+      });
 
-    const secondResult = yield* execute({
-      ir: ir as never,
-      stream: replayStream,
-      agents: secondRunAgents,
+      return yield* execute({
+        ir: ir as never,
+        stream: replayStream,
+      });
     });
 
     // Verify: only 1 live agent call (step3)
