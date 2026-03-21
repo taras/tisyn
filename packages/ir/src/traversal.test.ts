@@ -4,7 +4,7 @@ import { walk } from "./walk.js";
 import { fold, defaultAlgebra, foldWith } from "./fold.js";
 import { transform } from "./transform.js";
 import { collectRefs, collectExternalIds, collectFreeRefs } from "./collect.js";
-import { Ref, Let, Add, Q, Fn, TisynEval, If, Seq } from "./constructors.js";
+import { Ref, Let, Add, Q, Fn, Eval, If, Seq } from "./constructors.js";
 import { isRefNode, isEvalNode } from "./guards.js";
 
 describe("walk", () => {
@@ -31,7 +31,7 @@ describe("walk", () => {
 
   it("enters external Eval data", () => {
     const visited: TisynExpr[] = [];
-    walk(TisynEval("a.b", [Ref("x")]) as TisynExpr, { enter(node) { visited.push(node); } });
+    walk(Eval("a.b", [Ref("x")]) as TisynExpr, { enter(node) { visited.push(node); } });
     const refs = visited.filter(isRefNode);
     expect(refs).toHaveLength(1);
     expect(refs[0].name).toBe("x");
@@ -96,7 +96,7 @@ describe("fold", () => {
 
   it("fold does NOT recurse into external Eval data", () => {
     const { alg, calls } = countingAlgebra();
-    fold(TisynEval("a.b", [Ref("x")]) as TisynExpr, alg);
+    fold(Eval("a.b", [Ref("x")]) as TisynExpr, alg);
     expect(calls).toContain("eval:a.b");
     expect(calls).not.toContain("ref:x");
   });
@@ -191,7 +191,7 @@ describe("collectRefs", () => {
   });
 
   it("enters external data", () => {
-    const refs = collectRefs(TisynEval("a", [Ref("y")]) as TisynExpr);
+    const refs = collectRefs(Eval("a", [Ref("y")]) as TisynExpr);
     expect(refs).toEqual(["y"]);
   });
 });
@@ -199,7 +199,7 @@ describe("collectRefs", () => {
 describe("collectExternalIds", () => {
   it("finds external eval IDs", () => {
     const ids = collectExternalIds(
-      Let("x", TisynEval("a.b", []), TisynEval("c.d", [])) as TisynExpr,
+      Let("x", Eval("a.b", []), Eval("c.d", [])) as TisynExpr,
     );
     expect(ids.sort()).toEqual(["a.b", "c.d"]);
   });

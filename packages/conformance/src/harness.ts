@@ -8,8 +8,9 @@
  */
 
 import { run } from "effection";
-import type { Expr, Val, DurableEvent, EventResult, EffectDescriptor } from "@tisyn/shared";
-import { canonical, type Json } from "@tisyn/shared";
+import type { TisynExpr as Expr, Val, Json } from "@tisyn/ir";
+import type { DurableEvent, EventResult, EffectDescriptor } from "@tisyn/kernel";
+import { canonical } from "@tisyn/kernel";
 import { execute } from "@tisyn/runtime";
 import { InMemoryStream } from "@tisyn/durable-streams";
 import { AgentRegistry } from "@tisyn/agent";

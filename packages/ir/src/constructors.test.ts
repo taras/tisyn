@@ -5,7 +5,7 @@ import {
   Gt, Gte, Lt, Lte, Eq, Neq,
   And, Or, Not,
   Construct, Arr, Concat,
-  Throw, TisynEval, All, Race,
+  Throw, Eval, All, Race,
 } from "./constructors.js";
 
 describe("structural constructors", () => {
@@ -140,8 +140,8 @@ describe("structural constructors", () => {
 });
 
 describe("external constructors", () => {
-  it("TisynEval produces unquoted data", () => {
-    const node = TisynEval("a.b", [1, Ref("x")]);
+  it("Eval produces unquoted data", () => {
+    const node = Eval("a.b", [1, Ref("x")]);
     expect(node.tisyn).toBe("eval");
     expect(node.id).toBe("a.b");
     expect(Array.isArray(node.data)).toBe(true);
@@ -149,7 +149,7 @@ describe("external constructors", () => {
   });
 
   it("All wraps in Quote with exprs", () => {
-    const node = All(TisynEval("a.b", []), TisynEval("c.d", []));
+    const node = All(Eval("a.b", []), Eval("c.d", []));
     expect(node.tisyn).toBe("eval");
     expect(node.id).toBe("all");
     const data = node.data as { tisyn: string; expr: { exprs: unknown[] } };
@@ -158,7 +158,7 @@ describe("external constructors", () => {
   });
 
   it("Race wraps in Quote with exprs", () => {
-    const node = Race(TisynEval("a.b", []));
+    const node = Race(Eval("a.b", []));
     expect(node.tisyn).toBe("eval");
     expect(node.id).toBe("race");
     const data = node.data as { tisyn: string; expr: { exprs: unknown[] } };
@@ -194,7 +194,7 @@ describe("JSON round-trip safety", () => {
   });
 
   it("Eval phantom absent", () => {
-    const node = TisynEval("a.b", []);
+    const node = Eval("a.b", []);
     const json = JSON.stringify(node);
     expect(json).not.toContain('"T"');
   });
@@ -208,13 +208,13 @@ describe("JSON round-trip safety", () => {
   it("nested tree round-trips", () => {
     const node = Let(
       "config",
-      TisynEval("config-service.getRetryConfig", []),
+      Eval("config-service.getRetryConfig", []),
       Let(
         "status",
-        TisynEval("job-service.checkStatus", [Ref("jobId")]),
+        Eval("job-service.checkStatus", [Ref("jobId")]),
         If(
           Eq(Get(Ref("status"), "state"), "complete"),
-          TisynEval("job-service.getResult", [Ref("jobId")]),
+          Eval("job-service.getResult", [Ref("jobId")]),
           Throw("Job failed"),
         ),
       ),

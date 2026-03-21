@@ -10,20 +10,17 @@
  */
 
 import {
-  type Expr,
+  type TisynExpr as Expr,
   type Val,
   type Json,
-  type EffectDescriptor,
   isEvalNode,
   isQuoteNode,
   isRefNode,
   isFnNode,
-  canonical,
-  TypeError,
-  DivisionByZero,
-  ExplicitThrow,
-  NotCallable,
-} from "@tisyn/shared";
+} from "@tisyn/ir";
+import type { EffectDescriptor } from "./events.js";
+import { canonical } from "./canonical.js";
+import { TypeError, DivisionByZero, ExplicitThrow, NotCallable } from "./errors.js";
 import { type Env, lookup, extend, extendMulti } from "./environment.js";
 import { classify, isCompoundExternal } from "./classify.js";
 import { resolve } from "./resolve.js";

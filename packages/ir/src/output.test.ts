@@ -2,7 +2,7 @@ import { describe, it, expect } from "vitest";
 import type { TisynExpr } from "./types.js";
 import { print } from "./print.js";
 import { decompile } from "./decompile.js";
-import { Ref, Let, Add, TisynEval, Fn, If, Eq, Get, Throw, Call } from "./constructors.js";
+import { Ref, Let, Add, Eval, Fn, If, Eq, Get, Throw, Call } from "./constructors.js";
 
 describe("print", () => {
   it("print literal", () => {
@@ -26,14 +26,14 @@ describe("print", () => {
   });
 
   it("print Eval", () => {
-    expect(print(TisynEval("a.b", []) as TisynExpr)).toBe('Eval("a.b", [])');
+    expect(print(Eval("a.b", []) as TisynExpr)).toBe('Eval("a.b", [])');
   });
 });
 
 describe("decompile", () => {
   it("decompile external eval", () => {
     const result = decompile(
-      TisynEval("order-service.fetchOrder", [Ref("id")]) as TisynExpr,
+      Eval("order-service.fetchOrder", [Ref("id")]) as TisynExpr,
     );
     expect(result).toContain("yield*");
     expect(result).toContain("OrderService");
@@ -42,7 +42,7 @@ describe("decompile", () => {
   });
 
   it("decompile sleep", () => {
-    const result = decompile(TisynEval("sleep", [1000]) as TisynExpr);
+    const result = decompile(Eval("sleep", [1000]) as TisynExpr);
     expect(result).toBe("yield* sleep(1000)");
   });
 
@@ -55,7 +55,7 @@ describe("decompile", () => {
   it("decompile Let chain", () => {
     const fn = Fn(
       ["id"],
-      Let("result", TisynEval("a.b", [Ref("id")]), Ref("result")),
+      Let("result", Eval("a.b", [Ref("id")]), Ref("result")),
     ) as TisynExpr;
     const result = decompile(fn, { namedExport: "test" });
     expect(result).toContain("const result = yield* A().b(id)");
@@ -65,7 +65,7 @@ describe("decompile", () => {
   it("decompile discard binding", () => {
     const fn = Fn(
       [],
-      Let("__discard_0", TisynEval("x.y", []), 1),
+      Let("__discard_0", Eval("x.y", []), 1),
     ) as TisynExpr;
     const result = decompile(fn, { namedExport: "test" });
     expect(result).not.toContain("const __discard");

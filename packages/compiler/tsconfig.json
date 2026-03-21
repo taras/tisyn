@@ -5,5 +5,5 @@
     "rootDir": "./src"
   },
   "include": ["src"],
-  "references": [{ "path": "../ir" }, { "path": "../shared" }, { "path": "../kernel" }]
+  "references": [{ "path": "../ir" }, { "path": "../kernel" }]
 }

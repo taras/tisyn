@@ -9,7 +9,8 @@
  * Both phases MUST complete before evaluation begins.
  */
 
-import { type Expr, classifyNode, isQuoteNode, MalformedIR } from "@tisyn/shared";
+import { type TisynExpr as Expr, classifyNode, isQuoteNode } from "@tisyn/ir";
+import { MalformedIR } from "./errors.js";
 import { isStructural } from "./classify.js";
 
 /**

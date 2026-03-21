@@ -10,7 +10,7 @@
  */
 
 import ts from "typescript";
-import type { Expr } from "@tisyn/shared";
+import type { TisynExpr as Expr } from "@tisyn/ir";
 import { validate } from "@tisyn/kernel";
 import { parseSource } from "./parse.js";
 import { emitBlock, createContext } from "./emit.js";

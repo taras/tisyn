@@ -22,7 +22,7 @@ export type {
   AllNode, RaceNode,
 } from "./types.js";
 
-export type { Expr, Eval, Quote, TisynFn, ExprResult, AsExpr } from "./expr.js";
+export type { Expr, Quote, TisynFn, ExprResult, AsExpr } from "./expr.js";
 
 export type {
   StructuralNode, CompoundExternalNode, StandardExternalEvalNode,
@@ -46,7 +46,7 @@ export {
   And, Or, Not,
   Construct, Arr, Concat,
   Throw,
-  TisynEval, All, Race,
+  Eval, All, Race,
 } from "./constructors.js";
 
 export type { Walker } from "./walk.js";
