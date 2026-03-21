@@ -81,11 +81,7 @@ describe("Cancellation", () => {
       return 42;
     });
 
-    const ir = allIR(
-      effectIR("a", "op1"),
-      effectIR("a", "op2"),
-      effectIR("a", "op3"),
-    );
+    const ir = allIR(effectIR("a", "op1"), effectIR("a", "op2"), effectIR("a", "op3"));
 
     const { result, journal } = yield* execute({ ir: ir as never, agents });
 
@@ -93,8 +89,7 @@ describe("Cancellation", () => {
 
     // All 3 children should have close events
     const childCloses = journal.filter(
-      (e): e is CloseEvent =>
-        e.type === "close" && e.coroutineId.startsWith("root."),
+      (e): e is CloseEvent => e.type === "close" && e.coroutineId.startsWith("root."),
     );
     expect(childCloses.length).toBe(3);
   });
@@ -114,8 +109,7 @@ describe("Cancellation", () => {
 
     // Both children should have close events
     const childCloses = journal.filter(
-      (e): e is CloseEvent =>
-        e.type === "close" && e.coroutineId.startsWith("root."),
+      (e): e is CloseEvent => e.type === "close" && e.coroutineId.startsWith("root."),
     );
     expect(childCloses.length).toBe(2);
   });
@@ -142,8 +136,7 @@ describe("Cancellation", () => {
     // Verify the durable stream (not just journal) contains Close events for both children
     const snapshot = stream.snapshot();
     const childCloses = snapshot.filter(
-      (e): e is CloseEvent =>
-        e.type === "close" && e.coroutineId.startsWith("root."),
+      (e): e is CloseEvent => e.type === "close" && e.coroutineId.startsWith("root."),
     );
     expect(childCloses.length).toBe(2);
   });
@@ -162,13 +155,9 @@ describe("Cancellation", () => {
     expect(result.status).toBe("ok");
 
     // Find positions
-    const rootCloseIdx = journal.findIndex(
-      (e) => e.type === "close" && e.coroutineId === "root",
-    );
+    const rootCloseIdx = journal.findIndex((e) => e.type === "close" && e.coroutineId === "root");
     const childCloseIndices = journal
-      .map((e, i) =>
-        e.type === "close" && e.coroutineId.startsWith("root.") ? i : -1,
-      )
+      .map((e, i) => (e.type === "close" && e.coroutineId.startsWith("root.") ? i : -1))
       .filter((i) => i >= 0);
 
     expect(rootCloseIdx).toBeGreaterThan(-1);
