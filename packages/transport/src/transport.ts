@@ -5,9 +5,9 @@ import type { HostMessage, AgentMessage } from "@tisyn/protocol";
  * Generic bidirectional transport: send outgoing messages, receive incoming
  * messages as a stream.
  */
-export interface Transport<TSend, TReceive> {
+export interface Transport<TSend, TReceive, TClose = unknown> {
   send(message: TSend): Operation<void>;
-  receive: Stream<TReceive, void>;
+  receive: Stream<TReceive, TClose>;
 }
 
 export type { HostMessage, AgentMessage };

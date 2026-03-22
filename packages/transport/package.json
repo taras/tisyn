@@ -18,6 +18,7 @@
     "@effectionx/node": "^0.2.2",
     "@effectionx/process": "^0.7.3",
     "@effectionx/stream-helpers": "^0.8.1",
+    "@effectionx/websocket": "^2.3.2",
     "@tisyn/agent": "workspace:*",
     "@tisyn/ir": "workspace:*",
     "@tisyn/kernel": "workspace:*",
@@ -27,8 +28,10 @@
   "devDependencies": {
     "@effectionx/vitest": "^0.3.0",
     "@types/node": "^25.5.0",
+    "@types/ws": "^8",
     "effection": "4.1.0-alpha.7",
-    "vitest": "^4"
+    "vitest": "^4",
+    "ws": "^8"
   },
   "peerDependencies": {
     "effection": "4.1.0-alpha.7"
