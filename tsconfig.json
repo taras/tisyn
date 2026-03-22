@@ -23,6 +23,7 @@
     { "path": "packages/conformance" },
     { "path": "packages/compiler" },
     { "path": "packages/protocol" },
-    { "path": "packages/transport" }
+    { "path": "packages/transport" },
+    { "path": "packages/validate" }
   ]
 }
