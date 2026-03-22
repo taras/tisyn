@@ -1,9 +1,9 @@
 import type { Operation } from "effection";
 import type { Val } from "@tisyn/ir";
-import type { OperationSpec, AgentDeclaration } from "./types.js";
+import type { OperationSpec, AgentDeclaration } from "@tisyn/agent";
 import type { AgentTransportFactory } from "./transport.js";
 import { parseEffectId } from "@tisyn/kernel";
-import { Dispatch } from "./dispatch.js";
+import { Dispatch } from "@tisyn/agent";
 import { createSession } from "./session.js";
 
 let executionCounter = 0;
