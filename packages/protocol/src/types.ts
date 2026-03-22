@@ -163,3 +163,20 @@ export const ProtocolErrorCode = {
   InvalidRequest: -32600,
   InternalError: -32603,
 } as const;
+
+// ---------------------------------------------------------------------------
+// Message unions
+// ---------------------------------------------------------------------------
+
+export type HostMessage =
+  | InitializeRequest
+  | ExecuteRequest
+  | CancelNotification
+  | ShutdownNotification;
+
+export type AgentMessage =
+  | InitializeResponse
+  | InitializeProtocolError
+  | ExecuteResponse
+  | ExecuteProtocolError
+  | ProgressNotification;
