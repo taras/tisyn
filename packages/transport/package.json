@@ -8,10 +8,6 @@
     ".": {
       "types": "./dist/index.d.ts",
       "import": "./dist/index.js"
-    },
-    "./stdio-agent": {
-      "types": "./dist/stdio-agent.d.ts",
-      "import": "./dist/stdio-agent.js"
     }
   },
   "scripts": {
