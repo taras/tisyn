@@ -1,12 +1,34 @@
+import { spawn, createQueue } from "effection";
+import { workerMain } from "@effectionx/worker";
 import { agent, operation } from "@tisyn/agent";
-import { runWorkerAgent } from "@tisyn/transport";
+import { parseHostMessage } from "@tisyn/protocol";
+import type { HostMessage, AgentMessage } from "@tisyn/protocol";
+import { runAgentHandler } from "@tisyn/transport";
 
 const math = agent("math-worker", {
   double: operation<{ value: number }, number>(),
 });
 
-runWorkerAgent(math, {
-  *double({ value }) {
-    return value * 2;
+workerMain<HostMessage, void, void, void, AgentMessage, void>(
+  function* ({ messages, send }) {
+    const queue = createQueue<HostMessage, void>();
+
+    yield* spawn(function* () {
+      yield* messages.forEach(function* (raw) {
+        queue.add(parseHostMessage(JSON.parse(JSON.stringify(raw))));
+      });
+      queue.close();
+    });
+
+    yield* runAgentHandler(math, {
+      *double({ value }) {
+        return value * 2;
+      },
+    }, {
+      receive: queue,
+      *send(agentMsg) {
+        yield* send(agentMsg);
+      },
+    });
   },
-});
+);
