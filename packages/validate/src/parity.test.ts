@@ -33,37 +33,142 @@ const fixtures: Fixture[] = [
 
   // ── Arrays ──
   { name: "empty array", input: [], grammarAccepted: true, semanticAccepted: true },
-  { name: "array of literals", input: [1, "a", null], grammarAccepted: true, semanticAccepted: true },
+  {
+    name: "array of literals",
+    input: [1, "a", null],
+    grammarAccepted: true,
+    semanticAccepted: true,
+  },
 
   // ── Object literals ──
   { name: "plain object", input: { a: 1, b: 2 }, grammarAccepted: true, semanticAccepted: true },
-  { name: "object with unknown tisyn", input: { tisyn: "unknown", x: 1 }, grammarAccepted: true, semanticAccepted: true },
+  {
+    name: "object with unknown tisyn",
+    input: { tisyn: "unknown", x: 1 },
+    grammarAccepted: true,
+    semanticAccepted: true,
+  },
   { name: "empty object", input: {}, grammarAccepted: true, semanticAccepted: true },
 
   // ── Valid tagged nodes ──
-  { name: "valid eval", input: { tisyn: "eval", id: "custom", data: 1 }, grammarAccepted: true, semanticAccepted: true },
-  { name: "valid quote", input: { tisyn: "quote", expr: 42 }, grammarAccepted: true, semanticAccepted: true },
-  { name: "valid ref", input: { tisyn: "ref", name: "x" }, grammarAccepted: true, semanticAccepted: true },
-  { name: "valid fn", input: { tisyn: "fn", params: ["x", "y"], body: 1 }, grammarAccepted: true, semanticAccepted: true },
-  { name: "fn with empty params array", input: { tisyn: "fn", params: [], body: 1 }, grammarAccepted: true, semanticAccepted: true },
+  {
+    name: "valid eval",
+    input: { tisyn: "eval", id: "custom", data: 1 },
+    grammarAccepted: true,
+    semanticAccepted: true,
+  },
+  {
+    name: "valid quote",
+    input: { tisyn: "quote", expr: 42 },
+    grammarAccepted: true,
+    semanticAccepted: true,
+  },
+  {
+    name: "valid ref",
+    input: { tisyn: "ref", name: "x" },
+    grammarAccepted: true,
+    semanticAccepted: true,
+  },
+  {
+    name: "valid fn",
+    input: { tisyn: "fn", params: ["x", "y"], body: 1 },
+    grammarAccepted: true,
+    semanticAccepted: true,
+  },
+  {
+    name: "fn with empty params array",
+    input: { tisyn: "fn", params: [], body: 1 },
+    grammarAccepted: true,
+    semanticAccepted: true,
+  },
 
   // ── Extra fields on tagged nodes (accepted) ──
-  { name: "eval with extra fields", input: { tisyn: "eval", id: "x", data: 1, extra: true }, grammarAccepted: true, semanticAccepted: true },
-  { name: "ref with extra fields", input: { tisyn: "ref", name: "x", extra: true }, grammarAccepted: true, semanticAccepted: true },
+  {
+    name: "eval with extra fields",
+    input: { tisyn: "eval", id: "x", data: 1, extra: true },
+    grammarAccepted: true,
+    semanticAccepted: true,
+  },
+  {
+    name: "ref with extra fields",
+    input: { tisyn: "ref", name: "x", extra: true },
+    grammarAccepted: true,
+    semanticAccepted: true,
+  },
 
   // ── Malformed tagged nodes (grammar rejected) ──
-  { name: "eval missing id", input: { tisyn: "eval", data: 1 }, grammarAccepted: false, semanticAccepted: false },
-  { name: "eval empty id", input: { tisyn: "eval", id: "", data: 1 }, grammarAccepted: false, semanticAccepted: false },
-  { name: "eval non-string id", input: { tisyn: "eval", id: 42, data: 1 }, grammarAccepted: false, semanticAccepted: false },
-  { name: "eval missing data", input: { tisyn: "eval", id: "x" }, grammarAccepted: false, semanticAccepted: false },
-  { name: "quote missing expr", input: { tisyn: "quote" }, grammarAccepted: false, semanticAccepted: false },
-  { name: "ref missing name", input: { tisyn: "ref" }, grammarAccepted: false, semanticAccepted: false },
-  { name: "ref empty name", input: { tisyn: "ref", name: "" }, grammarAccepted: false, semanticAccepted: false },
-  { name: "ref non-string name", input: { tisyn: "ref", name: 42 }, grammarAccepted: false, semanticAccepted: false },
-  { name: "fn non-array params", input: { tisyn: "fn", params: "x", body: 1 }, grammarAccepted: false, semanticAccepted: false },
-  { name: "fn empty string param", input: { tisyn: "fn", params: [""], body: 1 }, grammarAccepted: false, semanticAccepted: false },
-  { name: "fn duplicate params", input: { tisyn: "fn", params: ["x", "x"], body: 1 }, grammarAccepted: false, semanticAccepted: false },
-  { name: "fn missing body", input: { tisyn: "fn", params: ["x"] }, grammarAccepted: false, semanticAccepted: false },
+  {
+    name: "eval missing id",
+    input: { tisyn: "eval", data: 1 },
+    grammarAccepted: false,
+    semanticAccepted: false,
+  },
+  {
+    name: "eval empty id",
+    input: { tisyn: "eval", id: "", data: 1 },
+    grammarAccepted: false,
+    semanticAccepted: false,
+  },
+  {
+    name: "eval non-string id",
+    input: { tisyn: "eval", id: 42, data: 1 },
+    grammarAccepted: false,
+    semanticAccepted: false,
+  },
+  {
+    name: "eval missing data",
+    input: { tisyn: "eval", id: "x" },
+    grammarAccepted: false,
+    semanticAccepted: false,
+  },
+  {
+    name: "quote missing expr",
+    input: { tisyn: "quote" },
+    grammarAccepted: false,
+    semanticAccepted: false,
+  },
+  {
+    name: "ref missing name",
+    input: { tisyn: "ref" },
+    grammarAccepted: false,
+    semanticAccepted: false,
+  },
+  {
+    name: "ref empty name",
+    input: { tisyn: "ref", name: "" },
+    grammarAccepted: false,
+    semanticAccepted: false,
+  },
+  {
+    name: "ref non-string name",
+    input: { tisyn: "ref", name: 42 },
+    grammarAccepted: false,
+    semanticAccepted: false,
+  },
+  {
+    name: "fn non-array params",
+    input: { tisyn: "fn", params: "x", body: 1 },
+    grammarAccepted: false,
+    semanticAccepted: false,
+  },
+  {
+    name: "fn empty string param",
+    input: { tisyn: "fn", params: [""], body: 1 },
+    grammarAccepted: false,
+    semanticAccepted: false,
+  },
+  {
+    name: "fn duplicate params",
+    input: { tisyn: "fn", params: ["x", "x"], body: 1 },
+    grammarAccepted: false,
+    semanticAccepted: false,
+  },
+  {
+    name: "fn missing body",
+    input: { tisyn: "fn", params: ["x"] },
+    grammarAccepted: false,
+    semanticAccepted: false,
+  },
 
   // ── Structural ops: semantic accepted ──
   {
@@ -74,7 +179,11 @@ const fixtures: Fixture[] = [
   },
   {
     name: "structural let with quote data",
-    input: { tisyn: "eval", id: "let", data: { tisyn: "quote", expr: { name: "x", value: 1, body: 2 } } },
+    input: {
+      tisyn: "eval",
+      id: "let",
+      data: { tisyn: "quote", expr: { name: "x", value: 1, body: 2 } },
+    },
     grammarAccepted: true,
     semanticAccepted: true,
   },
@@ -88,7 +197,11 @@ const fixtures: Fixture[] = [
   },
   {
     name: "structural add with quote at eval position",
-    input: { tisyn: "eval", id: "add", data: { tisyn: "quote", expr: { a: { tisyn: "quote", expr: 1 }, b: 2 } } },
+    input: {
+      tisyn: "eval",
+      id: "add",
+      data: { tisyn: "quote", expr: { a: { tisyn: "quote", expr: 1 }, b: 2 } },
+    },
     grammarAccepted: true,
     semanticAccepted: false,
   },
