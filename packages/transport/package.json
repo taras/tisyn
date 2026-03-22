@@ -8,6 +8,10 @@
     ".": {
       "types": "./dist/index.d.ts",
       "import": "./dist/index.js"
+    },
+    "./stdio-agent": {
+      "types": "./dist/stdio-agent.d.ts",
+      "import": "./dist/stdio-agent.js"
     }
   },
   "scripts": {
@@ -15,10 +19,14 @@
     "test": "vitest run"
   },
   "dependencies": {
+    "@effectionx/node": "^0.2.2",
+    "@effectionx/process": "^0.7.3",
+    "@effectionx/stream-helpers": "^0.8.1",
     "@tisyn/agent": "workspace:*",
     "@tisyn/ir": "workspace:*",
     "@tisyn/kernel": "workspace:*",
-    "@tisyn/protocol": "workspace:*"
+    "@tisyn/protocol": "workspace:*",
+    "remeda": "^2.33.6"
   },
   "devDependencies": {
     "@effectionx/vitest": "^0.3.0",
