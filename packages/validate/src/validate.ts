@@ -44,11 +44,7 @@ export function validateGrammar(json: unknown): ValidationResult {
   return { ok: true, node: json as TisynExpr };
 }
 
-function walkGrammar(
-  value: unknown,
-  path: string[],
-  errors: ValidationError[],
-): void {
+function walkGrammar(value: unknown, path: string[], errors: ValidationError[]): void {
   if (value === null || typeof value !== "object") return;
 
   if (Array.isArray(value)) {
@@ -177,11 +173,7 @@ export function validateIr(json: unknown): ValidationResult {
   return { ok: true, node: json as TisynExpr };
 }
 
-function walkSemantic(
-  value: unknown,
-  path: string[],
-  errors: ValidationError[],
-): void {
+function walkSemantic(value: unknown, path: string[], errors: ValidationError[]): void {
   if (value === null || typeof value !== "object") return;
 
   if (Array.isArray(value)) {
@@ -210,10 +202,7 @@ function walkSemantic(
       walkSemantic(data, [...path, "data"], errors);
 
       if (isStructural(id)) {
-        if (
-          !isPlainObject(data) ||
-          (data as Record<string, unknown>)["tisyn"] !== "quote"
-        ) {
+        if (!isPlainObject(data) || (data as Record<string, unknown>)["tisyn"] !== "quote") {
           errors.push({
             level: 2,
             path,
@@ -225,12 +214,7 @@ function walkSemantic(
 
         const fields = (data as Record<string, unknown>)["expr"];
         if (isPlainObject(fields)) {
-          checkPositions(
-            id,
-            fields as Record<string, unknown>,
-            path,
-            errors,
-          );
+          checkPositions(id, fields as Record<string, unknown>, path, errors);
         }
       }
       break;
@@ -256,10 +240,7 @@ function checkPositions(
 ): void {
   const positions = getEvaluationPositions(id, fields);
   for (const pos of positions) {
-    if (
-      isPlainObject(pos) &&
-      (pos as Record<string, unknown>)["tisyn"] === "quote"
-    ) {
+    if (isPlainObject(pos) && (pos as Record<string, unknown>)["tisyn"] === "quote") {
       errors.push({
         level: 2,
         path,
@@ -274,10 +255,7 @@ function checkPositions(
  * Evaluation positions table — ported from kernel validate.ts.
  * See Kernel Spec §5 and Conformance Suite §10.5.
  */
-function getEvaluationPositions(
-  id: string,
-  fields: Record<string, unknown>,
-): unknown[] {
+function getEvaluationPositions(id: string, fields: Record<string, unknown>): unknown[] {
   switch (id) {
     case "let":
       return [fields["value"], fields["body"]].filter((x) => x !== undefined);

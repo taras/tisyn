@@ -73,14 +73,10 @@ describe("validateGrammar", () => {
 
   describe("eval nodes", () => {
     it("accepts valid eval", () => {
-      expect(validateGrammar({ tisyn: "eval", id: "add", data: 1 }).ok).toBe(
-        true,
-      );
+      expect(validateGrammar({ tisyn: "eval", id: "add", data: 1 }).ok).toBe(true);
     });
     it("accepts eval with extra fields", () => {
-      expect(
-        validateGrammar({ tisyn: "eval", id: "add", data: 1, extra: 2 }).ok,
-      ).toBe(true);
+      expect(validateGrammar({ tisyn: "eval", id: "add", data: 1, extra: 2 }).ok).toBe(true);
     });
     it("rejects eval missing id", () => {
       const result = validateGrammar({ tisyn: "eval", data: 1 });
@@ -154,14 +150,10 @@ describe("validateGrammar", () => {
 
   describe("fn nodes", () => {
     it("accepts valid fn", () => {
-      expect(
-        validateGrammar({ tisyn: "fn", params: ["x"], body: 1 }).ok,
-      ).toBe(true);
+      expect(validateGrammar({ tisyn: "fn", params: ["x"], body: 1 }).ok).toBe(true);
     });
     it("accepts fn with empty params array", () => {
-      expect(validateGrammar({ tisyn: "fn", params: [], body: 1 }).ok).toBe(
-        true,
-      );
+      expect(validateGrammar({ tisyn: "fn", params: [], body: 1 }).ok).toBe(true);
     });
     it("rejects fn with non-array params", () => {
       const result = validateGrammar({
