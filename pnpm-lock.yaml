@@ -155,6 +155,15 @@ importers:
 
   packages/transport:
     dependencies:
+      '@effectionx/node':
+        specifier: ^0.2.2
+        version: 0.2.2(effection@4.1.0-alpha.7)
+      '@effectionx/process':
+        specifier: ^0.7.3
+        version: 0.7.3(effection@4.1.0-alpha.7)
+      '@effectionx/stream-helpers':
+        specifier: ^0.8.1
+        version: 0.8.1(effection@4.1.0-alpha.7)
       '@tisyn/agent':
         specifier: workspace:*
         version: link:../agent
@@ -167,6 +176,9 @@ importers:
       '@tisyn/protocol':
         specifier: workspace:*
         version: link:../protocol
+      remeda:
+        specifier: ^2.33.6
+        version: 2.33.6
     devDependencies:
       '@effectionx/vitest':
         specifier: ^0.3.0

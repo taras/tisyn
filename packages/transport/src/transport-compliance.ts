@@ -37,7 +37,6 @@ export function transportComplianceSuite(name: string, createFactory: TransportF
 
         // Create a wrapping factory that records messages
         const innerFactory = createFactory(math, {
-          // biome-ignore lint/correctness/useYield: simple handler
           *double({ value }) {
             return value * 2;
           },
@@ -73,7 +72,6 @@ export function transportComplianceSuite(name: string, createFactory: TransportF
         });
 
         const innerFactory = createFactory(math, {
-          // biome-ignore lint/correctness/useYield: simple handler
           *double({ value }) {
             return value * 2;
           },
@@ -107,7 +105,6 @@ export function transportComplianceSuite(name: string, createFactory: TransportF
         });
 
         const factory = createFactory(math, {
-          // biome-ignore lint/correctness/useYield: simple handler
           *double({ value }) {
             return value * 2;
           },
@@ -129,7 +126,6 @@ export function transportComplianceSuite(name: string, createFactory: TransportF
         });
 
         const innerFactory = createFactory(math, {
-          // biome-ignore lint/correctness/useYield: simple handler
           *double({ value }) {
             return value * 2;
           },
@@ -165,7 +161,6 @@ export function transportComplianceSuite(name: string, createFactory: TransportF
         });
 
         const factory = createFactory(math, {
-          // biome-ignore lint/correctness/useYield: simple handler
           *double({ value }) {
             return value * 2;
           },
@@ -184,7 +179,6 @@ export function transportComplianceSuite(name: string, createFactory: TransportF
         });
 
         const factory = createFactory(failing, {
-          // biome-ignore lint/correctness/useYield: throws
           *boom() {
             throw new Error("kaboom");
           },
@@ -208,7 +202,6 @@ export function transportComplianceSuite(name: string, createFactory: TransportF
         });
 
         const factory = createFactory(math, {
-          // biome-ignore lint/correctness/useYield: simple handler
           *double({ value }) {
             return value * 2;
           },
@@ -240,7 +233,6 @@ export function transportComplianceSuite(name: string, createFactory: TransportF
         });
 
         const factory = createFactory(realAgent, {
-          // biome-ignore lint/correctness/useYield: simple handler
           *op() {},
         });
 
@@ -266,7 +258,6 @@ export function transportComplianceSuite(name: string, createFactory: TransportF
         });
 
         const factory = createFactory(failing, {
-          // biome-ignore lint/correctness/useYield: throws
           *boom() {
             throw new Error("app-level failure");
           },
@@ -342,7 +333,6 @@ export function transportComplianceSuite(name: string, createFactory: TransportF
         });
 
         const factory = createFactory(math, {
-          // biome-ignore lint/correctness/useYield: simple handler
           *double({ value }) {
             return value * 2;
           },
