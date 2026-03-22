@@ -1,5 +1,5 @@
 import { agent, operation } from "@tisyn/agent";
-import { runWorkerAgent } from "@tisyn/transport/worker-agent";
+import { runWorkerAgent } from "@tisyn/transport";
 
 const failing = agent("failing-worker", {
   boom: operation<void, never>(),
