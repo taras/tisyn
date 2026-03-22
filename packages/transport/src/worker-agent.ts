@@ -31,7 +31,9 @@ export function runWorkerAgent<Ops extends Record<string, OperationSpec>>(
 
       yield* spawn(function* () {
         yield* messages.forEach(function* (raw) {
-          queue.add(parseHostMessage(raw));
+          // JSON roundtrip: structured-cloned objects fail TypeBox
+          // validation, so normalize to plain JSON objects first.
+          queue.add(parseHostMessage(JSON.parse(JSON.stringify(raw))));
         });
         queue.close();
       });
