@@ -16,7 +16,8 @@
   },
   "dependencies": {
     "@tisyn/ir": "workspace:*",
-    "@tisyn/kernel": "workspace:*"
+    "@tisyn/kernel": "workspace:*",
+    "@tisyn/protocol": "workspace:*"
   },
   "devDependencies": {
     "@effectionx/vitest": "^0.3.0",
