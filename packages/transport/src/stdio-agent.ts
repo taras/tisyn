@@ -1,5 +1,6 @@
 import type { Operation, Task } from "effection";
 import { spawn } from "effection";
+import process from "node:process";
 import { fromReadable } from "@effectionx/node/stream";
 import { lines } from "@effectionx/stream-helpers";
 import type { Val } from "@tisyn/ir";
