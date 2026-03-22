@@ -11,7 +11,7 @@
 
 import ts from "typescript";
 import type { TisynExpr as Expr } from "@tisyn/ir";
-import { validate } from "@tisyn/kernel";
+import { assertValidIr } from "@tisyn/validate";
 import { parseSource } from "./parse.js";
 import { emitBlock, createContext } from "./emit.js";
 import { Fn } from "./ir-builders.js";
@@ -71,7 +71,7 @@ export function compile(source: string, options: CompileOptions = {}): CompileRe
     // Phase 4: Validate
     if (shouldValidate) {
       try {
-        validate(irFn);
+        assertValidIr(irFn);
       } catch (error) {
         if (error instanceof Error && error.name === "MalformedIR") {
           throw new CompileError(

@@ -1,6 +1,9 @@
 /**
  * Parity tests — verifies that @tisyn/validate produces the same
- * accept/reject outcomes as the current classifyNode + kernel validate.
+ * accept/reject outcomes as classifyNode from @tisyn/ir.
+ *
+ * Also exercises validateIr against a shared fixture set to confirm
+ * expected semantic outcomes.
  *
  * These tests check outcome and error class/code, NOT exact error
  * message strings. Behavioral parity, not string-level compatibility.
@@ -8,8 +11,6 @@
 
 import { describe, it, expect } from "vitest";
 import { classifyNode } from "@tisyn/ir";
-import { validate as kernelValidate, MalformedIR as KernelMalformedIR } from "@tisyn/kernel";
-import type { TisynExpr } from "@tisyn/ir";
 import { validateGrammar, validateIr } from "./validate.js";
 
 // ── Fixture definitions ──
@@ -17,9 +18,9 @@ import { validateGrammar, validateIr } from "./validate.js";
 interface Fixture {
   name: string;
   input: unknown;
-  /** What classifyNode returns for this input (if it's an object) */
+  /** Whether classifyNode (recursively) accepts this input */
   grammarAccepted: boolean;
-  /** Whether kernel validate() passes without throwing */
+  /** Whether full IR validation (grammar + semantic) accepts this input */
   semanticAccepted: boolean;
 }
 
@@ -117,7 +118,7 @@ const fixtures: Fixture[] = [
   },
 ];
 
-// ── Helpers to check current behavior ──
+// ── Helper: recursive classifyNode walk ──
 
 function classifyAccepts(input: unknown): boolean {
   if (input === null || typeof input !== "object") return true;
@@ -131,7 +132,6 @@ function classifyAccepts(input: unknown): boolean {
     return Object.values(obj).every(classifyAccepts);
   }
 
-  // Valid tagged node — check children
   switch (classification) {
     case "eval":
       return classifyAccepts(obj["data"]);
@@ -146,17 +146,7 @@ function classifyAccepts(input: unknown): boolean {
   }
 }
 
-function kernelAccepts(input: unknown): boolean {
-  try {
-    kernelValidate(input as TisynExpr);
-    return true;
-  } catch (e) {
-    if (e instanceof KernelMalformedIR) return false;
-    throw e;
-  }
-}
-
-// ── Parity test suite ──
+// ── Parity test suites ──
 
 describe("parity with classifyNode (Level 1 grammar)", () => {
   for (const fixture of fixtures) {
@@ -171,22 +161,11 @@ describe("parity with classifyNode (Level 1 grammar)", () => {
   }
 });
 
-describe("parity with kernel validate (Level 1 + Level 2)", () => {
+describe("validateIr fixture outcomes (Level 1 + Level 2)", () => {
   for (const fixture of fixtures) {
     it(`${fixture.name}: validateIr ${fixture.semanticAccepted ? "accepts" : "rejects"}`, () => {
-      // Only run kernel validate on grammar-valid inputs
-      // (kernel validate assumes grammar-valid input and throws on malformed)
-      const validateResult = validateIr(fixture.input);
-
-      if (fixture.grammarAccepted) {
-        const kernelResult = kernelAccepts(fixture.input);
-        expect(kernelResult).toBe(fixture.semanticAccepted);
-        expect(validateResult.ok).toBe(fixture.semanticAccepted);
-        expect(validateResult.ok).toBe(kernelResult);
-      } else {
-        // Grammar-invalid inputs: validateIr should also reject
-        expect(validateResult.ok).toBe(false);
-      }
+      const result = validateIr(fixture.input);
+      expect(result.ok).toBe(fixture.semanticAccepted);
     });
   }
 });

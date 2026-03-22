@@ -11,9 +11,9 @@ export {
 } from "./errors.js";
 export { validateGrammar, validateIr, assertValidIr } from "./validate.js";
 export {
-  tisynExprSchema,
-  evalSchema,
-  quoteSchema,
-  refSchema,
-  fnSchema,
-} from "./json-schema.js";
+  TisynExprSchema as tisynExprSchema,
+  EvalNodeSchema as evalSchema,
+  QuoteNodeSchema as quoteSchema,
+  RefNodeSchema as refSchema,
+  FnNodeSchema as fnSchema,
+} from "./schemas.js";

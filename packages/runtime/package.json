@@ -18,7 +18,8 @@
     "@tisyn/agent": "workspace:*",
     "@tisyn/durable-streams": "workspace:*",
     "@tisyn/ir": "workspace:*",
-    "@tisyn/kernel": "workspace:*"
+    "@tisyn/kernel": "workspace:*",
+    "@tisyn/validate": "workspace:*"
   },
   "devDependencies": {
     "@effectionx/vitest": "^0.3.0",

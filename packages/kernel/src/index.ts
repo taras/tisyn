@@ -1,5 +1,4 @@
 export { evaluate } from "./eval.js";
-export { validate } from "./validate.js";
 export { classify, isStructural, isCompoundExternal } from "./classify.js";
 export { resolve } from "./resolve.js";
 export { unquote } from "./unquote.js";

@@ -19,7 +19,6 @@
     "@tisyn/ir": "workspace:*"
   },
   "devDependencies": {
-    "@tisyn/kernel": "workspace:*",
     "vitest": "^4"
   }
 }
