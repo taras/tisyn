@@ -75,20 +75,9 @@ transportComplianceSuite("worker", workerBuilder);
 //
 // These test the actual `workerTransport()` + `runWorkerAgent()` stack through
 // a real worker thread via `@effectionx/worker`.
-//
-// SKIPPED: Vitest 4 passes --conditions=development in fork execArgv.
-// Worker threads (threads.Worker) inherit these from the C++ process argv,
-// which cannot be mutated at runtime. This causes @effectionx/worker to
-// resolve to mod.ts inside node_modules, and Node 24 refuses to strip types
-// there (ERR_UNSUPPORTED_NODE_MODULES_TYPE_STRIPPING).
-// web-worker@1.5 doesn't forward execArgv to threads.Worker, so we cannot
-// filter the conditions out. This will be unblocked when either:
-//   - web-worker gains execArgv passthrough
-//   - @effectionx/worker drops the "development" export condition
-//   - vitest stops injecting --conditions into fork execArgv
 // ---------------------------------------------------------------------------
 
-describe.skip("worker transport (real worker)", () => {
+describe("worker transport (real worker)", () => {
   it("success round-trip through a real worker thread", function* () {
     const math = agent("math-worker", {
       double: operation<{ value: number }, number>(),
