@@ -22,6 +22,7 @@
     { "path": "packages/agent" },
     { "path": "packages/conformance" },
     { "path": "packages/compiler" },
-    { "path": "packages/protocol" }
+    { "path": "packages/protocol" },
+    { "path": "packages/transport" }
   ]
 }
