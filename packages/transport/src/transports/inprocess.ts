@@ -2,6 +2,13 @@ import type { Operation, Task } from "effection";
 import { createChannel, spawn } from "effection";
 import type { Val } from "@tisyn/ir";
 import type { OperationSpec, AgentDeclaration, ImplementationHandlers } from "@tisyn/agent";
+import {
+  initializeResponse,
+  initializeProtocolError,
+  executeSuccess,
+  executeApplicationError,
+  ProtocolErrorCode,
+} from "@tisyn/protocol";
 import type {
   AgentTransport,
   AgentTransportFactory,
@@ -39,28 +46,20 @@ export function inprocessTransport<Ops extends Record<string, OperationSpec>>(
         if (done) break;
 
         if (msg.method === "initialize") {
-          const params = msg.params as {
-            agentId: string;
-            protocolVersion: string;
-          };
-          if (params.agentId !== declaration.id) {
-            yield* agentToHost.send({
-              jsonrpc: "2.0",
-              id: msg.id as string | number,
-              error: {
-                code: -32002,
-                message: `Unknown agent: ${params.agentId}`,
-              },
-            });
+          if (msg.params.agentId !== declaration.id) {
+            yield* agentToHost.send(
+              initializeProtocolError(msg.id, {
+                code: ProtocolErrorCode.IncompatibleVersion,
+                message: `Unknown agent: ${msg.params.agentId}`,
+              }),
+            );
           } else {
-            yield* agentToHost.send({
-              jsonrpc: "2.0",
-              id: msg.id as string | number,
-              result: {
+            yield* agentToHost.send(
+              initializeResponse(msg.id, {
                 protocolVersion: "1.0",
                 sessionId: `session-${declaration.id}-${Date.now()}`,
-              },
-            });
+              }),
+            );
           }
         } else if (msg.method === "execute") {
           const { id, params } = msg;
@@ -68,39 +67,25 @@ export function inprocessTransport<Ops extends Record<string, OperationSpec>>(
           const handler = (handlers as Record<string, (args: Val) => Operation<Val>>)[opName];
 
           if (!handler) {
-            yield* agentToHost.send({
-              jsonrpc: "2.0",
-              id,
-              result: {
-                ok: false,
-                error: {
-                  message: `No handler for operation: ${opName}`,
-                  name: "MethodNotFound",
-                },
-              },
-            });
+            yield* agentToHost.send(
+              executeApplicationError(id, {
+                message: `No handler for operation: ${opName}`,
+                name: "MethodNotFound",
+              }),
+            );
           } else {
             // Spawn combined handler+response task so errors don't crash the agent loop
             const task = yield* spawn(function* () {
               try {
                 const val = yield* handler(args[0] as Val);
                 inflight.delete(id);
-                yield* agentToHost.send({
-                  jsonrpc: "2.0",
-                  id,
-                  result: { ok: true, value: val as Val },
-                });
+                yield* agentToHost.send(executeSuccess(id, val as Val));
               } catch (error) {
                 inflight.delete(id);
                 const err = error instanceof Error ? error : new Error(String(error));
-                yield* agentToHost.send({
-                  jsonrpc: "2.0",
-                  id,
-                  result: {
-                    ok: false,
-                    error: { message: err.message, name: err.name },
-                  },
-                });
+                yield* agentToHost.send(
+                  executeApplicationError(id, { message: err.message, name: err.name }),
+                );
               }
             });
 

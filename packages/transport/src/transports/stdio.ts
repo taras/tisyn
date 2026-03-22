@@ -3,7 +3,9 @@ import { resource } from "effection";
 import { exec } from "@effectionx/process";
 import { lines, filter, map } from "@effectionx/stream-helpers";
 import { pipe } from "remeda";
-import type { AgentTransportFactory, HostMessage, AgentMessage } from "../transport.js";
+import type { AgentMessage } from "@tisyn/protocol";
+import { parseAgentMessage } from "@tisyn/protocol";
+import type { AgentTransportFactory, HostMessage } from "../transport.js";
 
 export interface StdioTransportOptions {
   command: string;
@@ -33,7 +35,7 @@ export function stdioTransport(options: StdioTransportOptions): AgentTransportFa
         }),
         map(function* (line: string) {
           try {
-            return JSON.parse(line) as AgentMessage;
+            return parseAgentMessage(JSON.parse(line));
           } catch {
             throw new Error(`Malformed JSON from child process: ${line}`);
           }

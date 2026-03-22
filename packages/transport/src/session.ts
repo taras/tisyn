@@ -1,8 +1,14 @@
 import type { Operation, Stream } from "effection";
 import { resource, spawn, createSignal, withResolvers } from "effection";
-import type { AgentCapabilities, ExecuteRequest, ResultPayload } from "@tisyn/protocol";
+import type {
+  AgentCapabilities,
+  ExecuteRequest,
+  ResultPayload,
+  AgentMessage,
+} from "@tisyn/protocol";
+import { initializeRequest, cancelNotification, shutdownNotification } from "@tisyn/protocol";
 import type { Val } from "@tisyn/ir";
-import type { AgentTransport, AgentMessage } from "./transport.js";
+import type { AgentTransport } from "./transport.js";
 
 /**
  * A protocol session over a transport. Handles initialize handshake,
@@ -52,13 +58,13 @@ export function createSession(options: CreateSessionOptions): Operation<Protocol
       }
 
       const initMsg = initResult.value;
-      if (hasError(initMsg)) {
+      if ("error" in initMsg) {
         rejectInit(
           new Error(`Initialize failed: ${initMsg.error.message} (code ${initMsg.error.code})`),
         );
         return;
       }
-      if (!hasSessionId(initMsg)) {
+      if (!("result" in initMsg && "sessionId" in initMsg.result)) {
         rejectInit(new Error("Unexpected message during initialize"));
         return;
       }
@@ -70,14 +76,14 @@ export function createSession(options: CreateSessionOptions): Operation<Protocol
           const { value, done } = yield* sub.next();
           if (done) break;
 
-          if (hasResultPayload(value)) {
+          if ("result" in value && "ok" in value.result) {
             const req = pending.get(String(value.id));
             if (req) {
               pending.delete(String(value.id));
               req.onResult(value.result as ResultPayload);
             }
-          } else if (hasError(value) && "id" in value) {
-            const id = String((value as { id: string | number }).id);
+          } else if ("error" in value && "id" in value) {
+            const id = String(value.id);
             const req = pending.get(id);
             if (req) {
               pending.delete(id);
@@ -85,7 +91,7 @@ export function createSession(options: CreateSessionOptions): Operation<Protocol
                 new Error(`Protocol error: ${value.error.message} (code ${value.error.code})`),
               );
             }
-          } else if (isProgress(value)) {
+          } else if ("method" in value && value.method === "progress") {
             const req = pending.get(value.params.token);
             if (req) {
               req.onProgress(value.params.value);
@@ -110,16 +116,7 @@ export function createSession(options: CreateSessionOptions): Operation<Protocol
     });
 
     // Send initialize and wait for response
-    yield* transport.send({
-      jsonrpc: "2.0",
-      id: 1,
-      method: "initialize",
-      params: {
-        protocolVersion: "1.0",
-        agentId,
-        capabilities,
-      },
-    });
+    yield* transport.send(initializeRequest(1, { protocolVersion: "1.0", agentId, capabilities }));
 
     yield* initOp;
 
@@ -170,11 +167,7 @@ export function createSession(options: CreateSessionOptions): Operation<Protocol
             if (pending.has(request.id)) {
               pending.delete(request.id);
               try {
-                yield* transport.send({
-                  jsonrpc: "2.0",
-                  method: "cancel",
-                  params: { id: request.id },
-                });
+                yield* transport.send(cancelNotification(request.id));
               } catch {
                 // Transport may already be closed
               }
@@ -188,46 +181,10 @@ export function createSession(options: CreateSessionOptions): Operation<Protocol
       yield* provide(session);
     } finally {
       try {
-        yield* transport.send({
-          jsonrpc: "2.0",
-          method: "shutdown",
-          params: {},
-        });
+        yield* transport.send(shutdownNotification());
       } catch {
         // Transport may already be closed (e.g. child process exited)
       }
     }
   });
-}
-
-// --- Message discriminators ---
-
-function hasError(
-  msg: AgentMessage,
-): msg is AgentMessage & { error: { code: number; message: string } } {
-  return "error" in msg;
-}
-
-function hasSessionId(msg: AgentMessage): boolean {
-  return (
-    "result" in msg &&
-    typeof (msg as { result: Record<string, unknown> }).result === "object" &&
-    "sessionId" in ((msg as { result: Record<string, unknown> }).result as Record<string, unknown>)
-  );
-}
-
-function hasResultPayload(
-  msg: AgentMessage,
-): msg is AgentMessage & { id: string | number; result: ResultPayload } {
-  return (
-    "result" in msg &&
-    typeof (msg as { result: Record<string, unknown> }).result === "object" &&
-    "ok" in ((msg as { result: Record<string, unknown> }).result as Record<string, unknown>)
-  );
-}
-
-function isProgress(
-  msg: AgentMessage,
-): msg is { jsonrpc: "2.0"; method: "progress"; params: { token: string; value: Val } } {
-  return "method" in msg && msg.method === "progress";
 }
