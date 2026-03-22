@@ -1,5 +1,5 @@
 {
-  "name": "@tisyn/kernel",
+  "name": "@tisyn/validate",
   "version": "0.1.0",
   "type": "module",
   "main": "./dist/index.js",
@@ -11,10 +11,14 @@
     }
   },
   "scripts": {
-    "build": "tsc --build"
+    "build": "tsc --build",
+    "test": "vitest run"
   },
   "dependencies": {
-    "@tisyn/ir": "workspace:*",
-    "@tisyn/validate": "workspace:*"
+    "@sinclair/typebox": "^0.34.0",
+    "@tisyn/ir": "workspace:*"
+  },
+  "devDependencies": {
+    "vitest": "^4"
   }
 }

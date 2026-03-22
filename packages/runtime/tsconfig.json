@@ -9,6 +9,7 @@
     { "path": "../ir" },
     { "path": "../kernel" },
     { "path": "../durable-streams" },
-    { "path": "../agent" }
+    { "path": "../agent" },
+    { "path": "../validate" }
   ]
 }
