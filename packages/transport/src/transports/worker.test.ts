@@ -1,7 +1,7 @@
 import { MessageChannel } from "node:worker_threads";
 import { describe, it } from "@effectionx/vitest";
 import { expect } from "vitest";
-import { resource, useScope, createQueue, createChannel, scoped, spawn } from "effection";
+import { resource, useScope, createQueue, createChannel, spawn } from "effection";
 import type { HostMessage } from "@tisyn/protocol";
 import { parseHostMessage, parseAgentMessage } from "@tisyn/protocol";
 import { agent, operation, invoke } from "@tisyn/agent";
@@ -83,16 +83,14 @@ describe("worker transport (real worker)", () => {
       double: operation<{ value: number }, number>(),
     });
 
-    yield* scoped(function* () {
-      const factory = workerTransport({
-        url: import.meta.resolve("./test-assets/math-worker.ts"),
-      });
-
-      yield* installRemoteAgent(math, factory);
-
-      const result = yield* invoke(math.double({ value: 21 }));
-      expect(result).toBe(42);
+    const factory = workerTransport({
+      url: import.meta.resolve("./test-assets/math-worker.ts"),
     });
+
+    yield* installRemoteAgent(math, factory);
+
+    const result = yield* invoke(math.double({ value: 21 }));
+    expect(result).toBe(42);
   });
 
   it("handles concurrent requests through a real worker", function* () {
@@ -100,29 +98,27 @@ describe("worker transport (real worker)", () => {
       double: operation<{ value: number }, number>(),
     });
 
-    yield* scoped(function* () {
-      const factory = workerTransport({
-        url: import.meta.resolve("./test-assets/math-worker.ts"),
-      });
-
-      yield* installRemoteAgent(math, factory);
-
-      const tasks = [];
-      for (let i = 1; i <= 5; i++) {
-        tasks.push(
-          yield* spawn(function* () {
-            return yield* invoke(math.double({ value: i }));
-          }),
-        );
-      }
-
-      const results = [];
-      for (const task of tasks) {
-        results.push(yield* task);
-      }
-
-      expect(results.sort((a, b) => a - b)).toEqual([2, 4, 6, 8, 10]);
+    const factory = workerTransport({
+      url: import.meta.resolve("./test-assets/math-worker.ts"),
     });
+
+    yield* installRemoteAgent(math, factory);
+
+    const tasks = [];
+    for (let i = 1; i <= 5; i++) {
+      tasks.push(
+        yield* spawn(function* () {
+          return yield* invoke(math.double({ value: i }));
+        }),
+      );
+    }
+
+    const results = [];
+    for (const task of tasks) {
+      results.push(yield* task);
+    }
+
+    expect(results.sort((a, b) => a - b)).toEqual([2, 4, 6, 8, 10]);
   });
 
   it("propagates application errors from a real worker", function* () {
@@ -130,20 +126,18 @@ describe("worker transport (real worker)", () => {
       boom: operation<void, never>(),
     });
 
-    yield* scoped(function* () {
-      const factory = workerTransport({
-        url: import.meta.resolve("./test-assets/failing-worker.ts"),
-      });
-
-      yield* installRemoteAgent(failing, factory);
-
-      try {
-        yield* invoke(failing.boom());
-        expect.unreachable("should have thrown");
-      } catch (error) {
-        expect(error).toBeInstanceOf(Error);
-        expect((error as Error).message).toBe("worker-kaboom");
-      }
+    const factory = workerTransport({
+      url: import.meta.resolve("./test-assets/failing-worker.ts"),
     });
+
+    yield* installRemoteAgent(failing, factory);
+
+    try {
+      yield* invoke(failing.boom());
+      expect.unreachable("should have thrown");
+    } catch (error) {
+      expect(error).toBeInstanceOf(Error);
+      expect((error as Error).message).toBe("worker-kaboom");
+    }
   });
 });
