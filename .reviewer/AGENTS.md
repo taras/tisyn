@@ -35,18 +35,18 @@ Current caution:
 
 ## Package Status
 
-| Package | Status | Notes |
-|------|------|------|
-| `@tisyn/ir` | `implemented` | Types, constructors, traversal, print, decompile, classify |
-| `@tisyn/kernel` | `implemented` | Eval, env, resolve, unquote, canonical, errors, validation |
-| `@tisyn/runtime` | `implemented` | Execute loop, replay/live dispatch, journaling, cancellation |
-| `@tisyn/compiler` | `implemented` | Parse + emit + validation flow |
-| `@tisyn/agent` | `partial` | Declarations, implementations, contextual dispatch, `invoke()`; no transport runtime on `main` yet |
-| `@tisyn/protocol` | `implemented` | Types-only JSON-RPC/protocol package landed |
-| `@tisyn/validate` | `missing` | Validation exists in kernel, not as a standalone boundary package |
-| `@tisyn/durable-streams` | `partial` | In-memory stream/replay support only |
-| `@tisyn/conformance` | `implemented` | Conformance tests present |
-| `@tisyn/cli` | `missing` | No standalone CLI package |
+| Package                  | Status        | Notes                                                                                              |
+| ------------------------ | ------------- | -------------------------------------------------------------------------------------------------- |
+| `@tisyn/ir`              | `implemented` | Types, constructors, traversal, print, decompile, classify                                         |
+| `@tisyn/kernel`          | `implemented` | Eval, env, resolve, unquote, canonical, errors, validation                                         |
+| `@tisyn/runtime`         | `implemented` | Execute loop, replay/live dispatch, journaling, cancellation                                       |
+| `@tisyn/compiler`        | `implemented` | Parse + emit + validation flow                                                                     |
+| `@tisyn/agent`           | `partial`     | Declarations, implementations, contextual dispatch, `invoke()`; no transport runtime on `main` yet |
+| `@tisyn/protocol`        | `implemented` | Types-only JSON-RPC/protocol package landed                                                        |
+| `@tisyn/validate`        | `missing`     | Validation exists in kernel, not as a standalone boundary package                                  |
+| `@tisyn/durable-streams` | `partial`     | In-memory stream/replay support only                                                               |
+| `@tisyn/conformance`     | `implemented` | Conformance tests present                                                                          |
+| `@tisyn/cli`             | `missing`     | No standalone CLI package                                                                          |
 
 ## Major Gaps
 
