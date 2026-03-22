@@ -1,6 +1,7 @@
 import { describe, it } from "@effectionx/vitest";
 import { expect } from "vitest";
 import { spawn, scoped, sleep, suspend } from "effection";
+import type { Operation } from "effection";
 import type { Val } from "@tisyn/ir";
 import type { AgentDeclaration, OperationSpec, ImplementationHandlers } from "./types.js";
 import type { AgentTransportFactory, HostMessage } from "./transport.js";
