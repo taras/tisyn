@@ -1,9 +1,7 @@
-import type { Stream } from "effection";
 import { resource } from "effection";
 import { exec } from "@effectionx/process";
 import { lines, filter, map } from "@effectionx/stream-helpers";
 import { pipe } from "remeda";
-import type { AgentMessage } from "@tisyn/protocol";
 import { parseAgentMessage } from "@tisyn/protocol";
 import type { AgentTransportFactory, HostMessage } from "../transport.js";
 
@@ -40,7 +38,7 @@ export function stdioTransport(options: StdioTransportOptions): AgentTransportFa
             throw new Error(`Malformed JSON from child process: ${line}`);
           }
         }),
-      ) as Stream<AgentMessage, void>;
+      );
 
       const transport = {
         *send(message: HostMessage) {
