@@ -6,5 +6,10 @@
   },
   "include": ["src"],
   "exclude": ["src/**/*.test.ts"],
-  "references": [{ "path": "../ir" }, { "path": "../kernel" }]
+  "references": [
+    { "path": "../agent" },
+    { "path": "../ir" },
+    { "path": "../kernel" },
+    { "path": "../protocol" }
+  ]
 }

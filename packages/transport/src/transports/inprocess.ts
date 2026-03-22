@@ -1,13 +1,13 @@
 import type { Operation, Task } from "effection";
 import { createChannel, spawn } from "effection";
 import type { Val } from "@tisyn/ir";
-import type { OperationSpec, AgentDeclaration, ImplementationHandlers } from "./types.js";
+import type { OperationSpec, AgentDeclaration, ImplementationHandlers } from "@tisyn/agent";
 import type {
   AgentTransport,
   AgentTransportFactory,
   HostMessage,
   AgentMessage,
-} from "./transport.js";
+} from "../transport.js";
 
 /**
  * Create a transport factory for an in-process agent. The agent-side
