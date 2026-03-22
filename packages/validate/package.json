@@ -1,0 +1,25 @@
+{
+  "name": "@tisyn/validate",
+  "version": "0.1.0",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "scripts": {
+    "build": "tsc --build",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@sinclair/typebox": "^0.34.0",
+    "@tisyn/ir": "workspace:*"
+  },
+  "devDependencies": {
+    "@tisyn/kernel": "workspace:*",
+    "vitest": "^4"
+  }
+}
