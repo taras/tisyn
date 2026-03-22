@@ -3,19 +3,23 @@ Topic to revisit: transport future phases
 Expected transport sequence after Phase 1:
 
 1. Real wire transports
+
 - `stdio`
 - `websocket`
 
 2. Richer protocol/session behavior
+
 - opt-in progress forwarding
 - stronger cancel behavior across all backends
 - reconnect as fresh session
 
 3. Additional bindings
+
 - `worker`
 - `SSE + POST`
 
 4. Hardening
+
 - multiplexing multiple agents over one connection/session
 - transport reuse and pooling
 - observability and backpressure
