@@ -1,10 +1,3 @@
-export class MalformedIR extends Error {
-  override name = "MalformedIR" as const;
-  constructor(message: string) {
-    super(message);
-  }
-}
-
 export class UnboundVariable extends Error {
   override name = "UnboundVariable" as const;
   constructor(varName: string) {

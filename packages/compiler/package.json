@@ -19,7 +19,7 @@
   },
   "dependencies": {
     "@tisyn/ir": "workspace:*",
-    "@tisyn/kernel": "workspace:*",
+    "@tisyn/validate": "workspace:*",
     "typescript": "~5.8.0"
   },
   "devDependencies": {
