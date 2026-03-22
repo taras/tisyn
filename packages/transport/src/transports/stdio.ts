@@ -1,13 +1,9 @@
+import type { Stream } from "effection";
 import { resource } from "effection";
 import { exec } from "@effectionx/process";
 import { lines, filter, map } from "@effectionx/stream-helpers";
 import { pipe } from "remeda";
-import type {
-  AgentTransport,
-  AgentTransportFactory,
-  HostMessage,
-  AgentMessage,
-} from "../transport.js";
+import type { AgentTransportFactory, HostMessage, AgentMessage } from "../transport.js";
 
 export interface StdioTransportOptions {
   command: string;
@@ -29,24 +25,26 @@ export function stdioTransport(options: StdioTransportOptions): AgentTransportFa
         cwd: options.cwd,
       });
 
-      const transport: AgentTransport = {
+      const receive = pipe(
+        proc.stdout,
+        lines(),
+        filter(function* (line: string) {
+          return line.trim().length > 0;
+        }),
+        map(function* (line: string) {
+          try {
+            return JSON.parse(line) as AgentMessage;
+          } catch {
+            throw new Error(`Malformed JSON from child process: ${line}`);
+          }
+        }),
+      ) as Stream<AgentMessage, void>;
+
+      const transport = {
         *send(message: HostMessage) {
           proc.stdin.send(JSON.stringify(message) + "\n");
         },
-        receive: pipe(
-          proc.stdout,
-          lines(),
-          filter(function* (line: string) {
-            return line.trim().length > 0;
-          }),
-          map(function* (line: string) {
-            try {
-              return JSON.parse(line) as AgentMessage;
-            } catch {
-              throw new Error(`Malformed JSON from child process: ${line}`);
-            }
-          }),
-        ),
+        receive,
       };
 
       yield* provide(transport);
