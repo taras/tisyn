@@ -1,15 +1,5 @@
 import type { Operation, Stream } from "effection";
-import type {
-  InitializeRequest,
-  InitializeResponse,
-  InitializeProtocolError,
-  ExecuteRequest,
-  ExecuteResponse,
-  ExecuteProtocolError,
-  ProgressNotification,
-  CancelNotification,
-  ShutdownNotification,
-} from "@tisyn/protocol";
+import type { HostMessage, AgentMessage } from "@tisyn/protocol";
 
 /**
  * Generic bidirectional transport: send outgoing messages, receive incoming
@@ -20,24 +10,7 @@ export interface Transport<TSend, TReceive> {
   receive: Stream<TReceive, void>;
 }
 
-/**
- * Messages the host sends to the agent.
- */
-export type HostMessage =
-  | InitializeRequest
-  | ExecuteRequest
-  | CancelNotification
-  | ShutdownNotification;
-
-/**
- * Messages the agent sends to the host.
- */
-export type AgentMessage =
-  | InitializeResponse
-  | InitializeProtocolError
-  | ExecuteResponse
-  | ExecuteProtocolError
-  | ProgressNotification;
+export type { HostMessage, AgentMessage };
 
 /**
  * A transport typed for the Tisyn protocol message catalog.
