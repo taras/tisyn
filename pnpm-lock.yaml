@@ -117,6 +117,9 @@ importers:
       '@tisyn/ir':
         specifier: workspace:*
         version: link:../ir
+      '@tisyn/validate':
+        specifier: workspace:*
+        version: link:../validate
 
   packages/protocol:
     dependencies:
