@@ -65,31 +65,47 @@ export function createSession(options: CreateSessionOptions): Operation<Protocol
       resolveInit(undefined);
 
       // Continue as execute-response receiver loop
-      for (;;) {
-        const { value, done } = yield* sub.next();
-        if (done) break;
+      try {
+        for (;;) {
+          const { value, done } = yield* sub.next();
+          if (done) break;
 
-        if (hasResultPayload(value)) {
-          const req = pending.get(String(value.id));
-          if (req) {
-            pending.delete(String(value.id));
-            req.onResult(value.result as ResultPayload);
-          }
-        } else if (hasError(value) && "id" in value) {
-          const id = String((value as { id: string | number }).id);
-          const req = pending.get(id);
-          if (req) {
-            pending.delete(id);
-            req.onProtocolError(
-              new Error(`Protocol error: ${value.error.message} (code ${value.error.code})`),
-            );
-          }
-        } else if (isProgress(value)) {
-          const req = pending.get(value.params.token);
-          if (req) {
-            req.onProgress(value.params.value);
+          if (hasResultPayload(value)) {
+            const req = pending.get(String(value.id));
+            if (req) {
+              pending.delete(String(value.id));
+              req.onResult(value.result as ResultPayload);
+            }
+          } else if (hasError(value) && "id" in value) {
+            const id = String((value as { id: string | number }).id);
+            const req = pending.get(id);
+            if (req) {
+              pending.delete(id);
+              req.onProtocolError(
+                new Error(`Protocol error: ${value.error.message} (code ${value.error.code})`),
+              );
+            }
+          } else if (isProgress(value)) {
+            const req = pending.get(value.params.token);
+            if (req) {
+              req.onProgress(value.params.value);
+            }
           }
         }
+      } catch (error) {
+        // Transport stream error (e.g. malformed data) — reject all pending requests
+        const transportError = error instanceof Error ? error : new Error(String(error));
+        for (const [id, req] of pending) {
+          pending.delete(id);
+          req.onProtocolError(transportError);
+        }
+        return;
+      }
+
+      // Transport stream ended — reject all pending requests
+      for (const [id, req] of pending) {
+        pending.delete(id);
+        req.onProtocolError(new Error("Transport closed with in-flight request"));
       }
     });
 
@@ -153,11 +169,15 @@ export function createSession(options: CreateSessionOptions): Operation<Protocol
           } finally {
             if (pending.has(request.id)) {
               pending.delete(request.id);
-              yield* transport.send({
-                jsonrpc: "2.0",
-                method: "cancel",
-                params: { id: request.id },
-              });
+              try {
+                yield* transport.send({
+                  jsonrpc: "2.0",
+                  method: "cancel",
+                  params: { id: request.id },
+                });
+              } catch {
+                // Transport may already be closed
+              }
             }
           }
         });
@@ -167,11 +187,15 @@ export function createSession(options: CreateSessionOptions): Operation<Protocol
     try {
       yield* provide(session);
     } finally {
-      yield* transport.send({
-        jsonrpc: "2.0",
-        method: "shutdown",
-        params: {},
-      });
+      try {
+        yield* transport.send({
+          jsonrpc: "2.0",
+          method: "shutdown",
+          params: {},
+        });
+      } catch {
+        // Transport may already be closed (e.g. child process exited)
+      }
     }
   });
 }
