@@ -32,6 +32,9 @@ importers:
       '@tisyn/kernel':
         specifier: workspace:*
         version: link:../kernel
+      '@tisyn/protocol':
+        specifier: workspace:*
+        version: link:../protocol
     devDependencies:
       '@effectionx/vitest':
         specifier: ^0.3.0
