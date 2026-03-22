@@ -13,3 +13,5 @@ export { transportComplianceSuite } from "./transport-compliance.js";
 export type { TransportFactoryBuilder } from "./transport-compliance.js";
 export { stdioTransport } from "./transports/stdio.js";
 export type { StdioTransportOptions } from "./transports/stdio.js";
+export { websocketTransport } from "./transports/websocket.js";
+export type { WebSocketTransportOptions } from "./transports/websocket.js";
