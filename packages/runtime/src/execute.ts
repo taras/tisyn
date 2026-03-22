@@ -20,7 +20,8 @@ import {
   isCompoundExternal,
 } from "@tisyn/kernel";
 import { DivergenceError, EffectError, RuntimeBugError } from "./errors.js";
-import { evaluate, validate, type Env, envFromRecord } from "@tisyn/kernel";
+import { assertValidIr } from "@tisyn/validate";
+import { evaluate, type Env, envFromRecord } from "@tisyn/kernel";
 import { type DurableStream, InMemoryStream, ReplayIndex } from "@tisyn/durable-streams";
 import { dispatch } from "@tisyn/agent";
 
@@ -61,7 +62,7 @@ export function* execute(options: ExecuteOptions): Operation<ExecuteResult> {
 
   // Phase 1: Validate IR before evaluation
   try {
-    validate(ir);
+    assertValidIr(ir);
   } catch (error) {
     if (error instanceof Error && error.name === "MalformedIR") {
       // MalformedIR produces NO journal events (Conformance §4.1)
