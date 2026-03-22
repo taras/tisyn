@@ -3,11 +3,10 @@ import { expect } from "vitest";
 import { spawn, scoped, sleep, suspend } from "effection";
 import type { Operation } from "effection";
 import type { Val } from "@tisyn/ir";
-import type { AgentDeclaration, OperationSpec, ImplementationHandlers } from "./types.js";
+import type { AgentDeclaration, OperationSpec, ImplementationHandlers } from "@tisyn/agent";
 import type { AgentTransportFactory, HostMessage } from "./transport.js";
-import { agent, operation, Dispatch, dispatch } from "./index.js";
+import { agent, operation, Dispatch, dispatch, invoke } from "@tisyn/agent";
 import { installRemoteAgent } from "./install-remote.js";
-import { invoke } from "./invoke.js";
 import { parseEffectId } from "@tisyn/kernel";
 
 /**

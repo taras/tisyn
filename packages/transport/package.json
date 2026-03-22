@@ -1,5 +1,5 @@
 {
-  "name": "@tisyn/agent",
+  "name": "@tisyn/transport",
   "version": "0.1.0",
   "type": "module",
   "main": "./dist/index.js",
@@ -15,13 +15,13 @@
     "test": "vitest run"
   },
   "dependencies": {
+    "@tisyn/agent": "workspace:*",
     "@tisyn/ir": "workspace:*",
-    "@tisyn/kernel": "workspace:*"
+    "@tisyn/kernel": "workspace:*",
+    "@tisyn/protocol": "workspace:*"
   },
   "devDependencies": {
     "@effectionx/vitest": "^0.3.0",
-    "@tisyn/durable-streams": "workspace:*",
-    "@tisyn/runtime": "workspace:*",
     "effection": "4.1.0-alpha.7",
     "vitest": "^4"
   },
