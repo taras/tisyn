@@ -8,6 +8,10 @@
     ".": {
       "types": "./dist/index.d.ts",
       "import": "./dist/index.js"
+    },
+    "./worker-agent": {
+      "types": "./dist/worker-agent.d.ts",
+      "import": "./dist/worker-agent.js"
     }
   },
   "scripts": {
@@ -19,6 +23,7 @@
     "@effectionx/process": "^0.7.3",
     "@effectionx/stream-helpers": "^0.8.1",
     "@effectionx/websocket": "^2.3.2",
+    "@effectionx/worker": "^0.5.1",
     "@tisyn/agent": "workspace:*",
     "@tisyn/ir": "workspace:*",
     "@tisyn/kernel": "workspace:*",
