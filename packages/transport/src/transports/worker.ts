@@ -33,7 +33,9 @@ export function workerTransport(options: WorkerTransportOptions): AgentTransport
 
       yield* spawn(function* () {
         yield* worker.forEach<AgentMessage, void>(function* (raw) {
-          yield* channel.send(parseAgentMessage(raw));
+          // JSON roundtrip: structured-cloned objects fail TypeBox
+          // validation, so normalize to plain JSON objects first.
+          yield* channel.send(parseAgentMessage(JSON.parse(JSON.stringify(raw))));
         });
         yield* channel.close();
       });
