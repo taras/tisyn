@@ -63,6 +63,7 @@ Current caution:
 
 ## Follow-Up Topics
 
+- [effectionx-process-epipe-topic.md](/Users/tarasmankovski/Repositories/cowboyd/tisyn/.reviewer/effectionx-process-epipe-topic.md)
 - [remote-execution-error-api-topic.md](/Users/tarasmankovski/Repositories/cowboyd/tisyn/.reviewer/remote-execution-error-api-topic.md)
 - [protocol-adapter-tests-topic.md](/Users/tarasmankovski/Repositories/cowboyd/tisyn/.reviewer/protocol-adapter-tests-topic.md)
 - [transport-future-phases.md](/Users/tarasmankovski/Repositories/cowboyd/tisyn/.reviewer/transport-future-phases.md)
