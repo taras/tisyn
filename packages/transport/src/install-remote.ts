@@ -4,6 +4,7 @@ import type { OperationSpec, AgentDeclaration } from "@tisyn/agent";
 import type { AgentTransportFactory } from "./transport.js";
 import { parseEffectId } from "@tisyn/kernel";
 import { Dispatch } from "@tisyn/agent";
+import { executeRequest } from "@tisyn/protocol";
 import { createSession } from "./session.js";
 
 let executionCounter = 0;
@@ -40,17 +41,14 @@ export function* installRemoteAgent<Ops extends Record<string, OperationSpec>>(
       if (type === id) {
         const requestId = `${id}:${requestCounter++}`;
 
-        const stream = session.execute({
-          jsonrpc: "2.0",
-          id: requestId,
-          method: "execute",
-          params: {
+        const stream = session.execute(
+          executeRequest(requestId, {
             executionId,
             taskId: "root",
             operation: name,
             args: [data],
-          },
-        });
+          }),
+        );
 
         // Subscribe and drain — Phase 1 discards progress
         const sub = yield* stream;
