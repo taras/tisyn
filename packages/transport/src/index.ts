@@ -15,3 +15,5 @@ export { stdioTransport } from "./transports/stdio.js";
 export type { StdioTransportOptions } from "./transports/stdio.js";
 export { websocketTransport } from "./transports/websocket.js";
 export type { WebSocketTransportOptions } from "./transports/websocket.js";
+export { workerTransport } from "./transports/worker.js";
+export type { WorkerTransportOptions } from "./transports/worker.js";

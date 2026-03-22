@@ -176,6 +176,9 @@ importers:
       '@effectionx/websocket':
         specifier: ^2.3.2
         version: 2.3.2(effection@4.1.0-alpha.7)
+      '@effectionx/worker':
+        specifier: ^0.5.1
+        version: 0.5.1(effection@4.1.0-alpha.7)
       '@tisyn/agent':
         specifier: workspace:*
         version: link:../agent
@@ -286,6 +289,12 @@ packages:
 
   '@effectionx/websocket@2.3.2':
     resolution: {integrity: sha512-wKQwYk5pCrc97C2qOLfppazZfEyx5vMp7DR+WtGVRT+VJ1cT/B1Gi53eAHFkg94hhdtuxE8Sl2kQPaD4Bm6NxA==}
+    engines: {node: '>= 22'}
+    peerDependencies:
+      effection: ^3 || ^4
+
+  '@effectionx/worker@0.5.1':
+    resolution: {integrity: sha512-2tRiQHhxX8k/bwXfFeHl1w20BJhbsxI2aof808MJSbJyGa/ktFIwCQoI/jm4/RFqGLA/Y60pU+lCCbr3Rik7eg==}
     engines: {node: '>= 22'}
     peerDependencies:
       effection: ^3 || ^4
@@ -1010,6 +1019,9 @@ packages:
       jsdom:
         optional: true
 
+  web-worker@1.5.0:
+    resolution: {integrity: sha512-RiMReJrTAiA+mBjGONMnjVDP2u3p9R1vkcGz6gDIrOMT3oGuYwX2WRMYI9ipkphSuE5XKEhydbhNEJh4NY9mlw==}
+
   which@2.0.2:
     resolution: {integrity: sha512-BLI3Tl1TW3Pvl70l3yq3Y64i+awpwXqsGBYWkkqMtnbXgrMD+yj7rhW0kuEDxzJaYXGjEW5ogapKNMEKNMjibA==}
     engines: {node: '>= 8'}
@@ -1100,6 +1112,13 @@ snapshots:
   '@effectionx/websocket@2.3.2(effection@4.1.0-alpha.7)':
     dependencies:
       effection: 4.1.0-alpha.7
+
+  '@effectionx/worker@0.5.1(effection@4.1.0-alpha.7)':
+    dependencies:
+      '@effectionx/signals': 0.5.2(effection@4.1.0-alpha.7)
+      '@effectionx/timebox': 0.4.2(effection@4.1.0-alpha.7)
+      effection: 4.1.0-alpha.7
+      web-worker: 1.5.0
 
   '@esbuild/aix-ppc64@0.27.4':
     optional: true
@@ -1627,6 +1646,8 @@ snapshots:
       '@types/node': 25.5.0
     transitivePeerDependencies:
       - msw
+
+  web-worker@1.5.0: {}
 
   which@2.0.2:
     dependencies:
