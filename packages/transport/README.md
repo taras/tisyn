@@ -29,8 +29,8 @@ const math = agent("math", {
   double: operation<{ value: number }, number>(),
 });
 
-yield * installRemoteAgent(math, websocketTransport({ url: "ws://localhost:8080" }));
-const result = yield * invoke(math.double({ value: 21 }));
+yield* installRemoteAgent(math, websocketTransport({ url: "ws://localhost:8080" }));
+const result = yield* invoke(math.double({ value: 21 }));
 ```
 
 ## Available transports

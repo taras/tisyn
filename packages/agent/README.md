@@ -46,7 +46,7 @@ const shopifyImpl = implementAgent(shopify, {
   },
 });
 
-yield * shopifyImpl.install();
+yield* shopifyImpl.install();
 ```
 
 `install()` adds dispatch middleware to the current Effection scope. `call()` is available on the returned implementation when you want to invoke a bound handler directly without going through `invoke()`.
@@ -57,7 +57,7 @@ yield * shopifyImpl.install();
 import { invoke } from "@tisyn/agent";
 
 const result =
-  yield *
+  yield*
   invoke(
     shopify.createOrder({
       customerId: "123",

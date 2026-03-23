@@ -60,7 +60,7 @@ import { Add, Q } from "@tisyn/ir";
 import { execute } from "@tisyn/runtime";
 
 const ir = Add(Q(20), Q(22));
-const { result } = yield * execute({ ir });
+const { result } = yield* execute({ ir });
 ```
 
 ### Define an agent and install a remote transport
@@ -73,8 +73,8 @@ const math = agent("math", {
   double: operation<{ value: number }, number>(),
 });
 
-yield * installRemoteAgent(math, websocketTransport({ url: "ws://localhost:8080" }));
-const result = yield * invoke(math.double({ value: 21 }));
+yield* installRemoteAgent(math, websocketTransport({ url: "ws://localhost:8080" }));
+const result = yield* invoke(math.double({ value: 21 }));
 ```
 
 For the detailed agent model and API examples, see [`@tisyn/agent`](./packages/agent/README.md).

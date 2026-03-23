@@ -17,8 +17,8 @@ import { InMemoryStream } from "@tisyn/durable-streams";
 import { execute } from "@tisyn/runtime";
 
 const stream = new InMemoryStream();
-const first = yield * execute({ ir, stream });
-const second = yield * execute({ ir, stream });
+const first = yield* execute({ ir, stream });
+const second = yield* execute({ ir, stream });
 ```
 
 `InMemoryStream` is useful for tests. Real adapters can implement the `DurableStream` interface against durable storage.
