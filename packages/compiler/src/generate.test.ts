@@ -163,6 +163,16 @@ describe("discoverContracts", () => {
     expect(() => discoverContracts(sf)).toThrow(CompileError);
     expect(() => discoverContracts(sf)).toThrow(/Workflow<T> return type/);
   });
+
+  it("rejects untyped optional instance parameter", () => {
+    const sf = parseSource(`
+      declare function OrderService(instance?): {
+        fetchOrder(orderId: string): Workflow<Order>;
+      };
+    `);
+    expect(() => discoverContracts(sf)).toThrow(CompileError);
+    expect(() => discoverContracts(sf)).toThrow(/type annotation/);
+  });
 });
 
 // ── Type Import Collection ──
@@ -227,6 +237,56 @@ describe("collectReferencedTypeImports", () => {
       import type { Order } from "./types.js";
     `);
     const imports = collectReferencedTypeImports(sf, []);
+    expect(imports).toHaveLength(0);
+  });
+
+  it("extracts type identifiers from composite types like Record<string, Order>", () => {
+    const sf = parseSource(`
+      import type { Order } from "./types.js";
+      declare function OrderService(): {
+        fetchOrder(orderId: string): Workflow<Record<string, Order>>;
+      };
+    `);
+    const contracts = discoverContracts(sf);
+    const imports = collectReferencedTypeImports(sf, contracts);
+    expect(imports).toHaveLength(1);
+    expect(imports[0]).toContain("Order");
+  });
+
+  it("rejects source-local interface types with clear error", () => {
+    const sf = parseSource(`
+      interface Order { id: string; }
+      declare function OrderService(): {
+        fetchOrder(orderId: string): Workflow<Order>;
+      };
+    `);
+    const contracts = discoverContracts(sf);
+    expect(() => collectReferencedTypeImports(sf, contracts)).toThrow(CompileError);
+    expect(() => collectReferencedTypeImports(sf, contracts)).toThrow(/source-local type 'Order'/);
+  });
+
+  it("rejects source-local type alias types with clear error", () => {
+    const sf = parseSource(`
+      type Receipt = { amount: number };
+      declare function PaymentService(): {
+        charge(amount: number): Workflow<Receipt>;
+      };
+    `);
+    const contracts = discoverContracts(sf);
+    expect(() => collectReferencedTypeImports(sf, contracts)).toThrow(
+      /source-local type 'Receipt'/,
+    );
+  });
+
+  it("allows ambient types not found in imports or local declarations", () => {
+    const sf = parseSource(`
+      declare function OrderService(): {
+        fetchOrder(orderId: string): Workflow<Order>;
+      };
+    `);
+    const contracts = discoverContracts(sf);
+    // Order is neither imported nor locally defined — assumed ambient
+    const imports = collectReferencedTypeImports(sf, contracts);
     expect(imports).toHaveLength(0);
   });
 });
@@ -403,6 +463,20 @@ describe("generateWorkflowModule", () => {
       `;
       expect(() => generateWorkflowModule(source, { validate: false })).toThrow(
         /expects 2 argument.*got 1/,
+      );
+    });
+
+    it("rejects workflow name that collides with contract name", () => {
+      const source = `
+        declare function OrderService(): {
+          fetchOrder(orderId: string): Workflow<Order>;
+        };
+        export function* OrderService(orderId: string) {
+          return orderId;
+        }
+      `;
+      expect(() => generateWorkflowModule(source, { validate: false })).toThrow(
+        /collides with contract name/,
       );
     });
   });
