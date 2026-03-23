@@ -1,26 +1,13 @@
 {
   "compilerOptions": {
-    "composite": true,
-    "incremental": true,
-    "declaration": true,
-    "declarationMap": true,
     "module": "NodeNext",
     "moduleResolution": "NodeNext",
     "target": "ES2022",
     "strict": true,
     "skipLibCheck": true,
-    "rewriteRelativeImportExtensions": true,
-    "outDir": "./dist",
-    "rootDir": "./src"
+    "noEmit": true,
+    "rewriteRelativeImportExtensions": true
   },
-  "include": ["src"],
-  "references": [
-    { "path": "../../packages/ir" },
-    { "path": "../../packages/kernel" },
-    { "path": "../../packages/runtime" },
-    { "path": "../../packages/agent" },
-    { "path": "../../packages/compiler" },
-    { "path": "../../packages/protocol" },
-    { "path": "../../packages/transport" }
-  ]
+  "include": ["src", "test"],
+  "exclude": ["src/workflow.ts", "src/build-workflow.ts"]
 }
