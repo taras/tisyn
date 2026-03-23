@@ -1,0 +1,27 @@
+{
+  "$schema": "https://unpkg.com/@changesets/config@3.1.3/schema.json",
+  "changelog": "@changesets/cli/changelog",
+  "commit": false,
+  "fixed": [
+    [
+      "@tisyn/ir",
+      "@tisyn/kernel",
+      "@tisyn/agent",
+      "@tisyn/runtime",
+      "@tisyn/compiler",
+      "@tisyn/protocol",
+      "@tisyn/validate",
+      "@tisyn/transport",
+      "@tisyn/durable-streams"
+    ]
+  ],
+  "linked": [],
+  "access": "public",
+  "baseBranch": "main",
+  "updateInternalDependencies": "patch",
+  "ignore": ["@tisyn/conformance"],
+  "privatePackages": {
+    "version": false,
+    "tag": false
+  }
+}
