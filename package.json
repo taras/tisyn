@@ -5,9 +5,13 @@
     "test": "pnpm -r run test",
     "lint": "pnpm exec oxlint .",
     "format": "npx oxfmt . --write",
-    "format:check": "npx oxfmt . --check"
+    "format:check": "npx oxfmt . --check",
+    "changeset": "changeset",
+    "version-packages": "changeset version",
+    "release": "pnpm run build && changeset publish"
   },
   "devDependencies": {
+    "@changesets/cli": "^2.30.0",
     "@effectionx/inspector": "https://pkg.pr.new/thefrontside/inspector/@effectionx/inspector@8c7cc3f",
     "@types/node": "^25.5.0",
     "oxlint": "^1.56.0",

@@ -1,6 +1,17 @@
 {
   "name": "@tisyn/protocol",
   "version": "0.1.0",
+  "license": "UNLICENSED",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/cowboyd/tisyn.git",
+    "directory": "packages/protocol"
+  },
+  "files": ["dist"],
+  "publishConfig": {
+    "access": "public",
+    "provenance": true
+  },
   "type": "module",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
