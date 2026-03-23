@@ -6,6 +6,8 @@ export { invoke } from "./invoke.js";
 export type {
   OperationSpec,
   AgentDeclaration,
+  AgentCalls,
+  DeclaredAgent,
   AgentImplementation,
   ImplementationHandlers,
   Invocation,

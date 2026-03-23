@@ -60,7 +60,7 @@ export type {
   RaceNode,
 } from "./types.js";
 
-export type { Expr, Quote, TisynFn, ExprResult, AsExpr } from "./expr.js";
+export type { Expr, Quote, TisynFn, ExprResult, AsExpr, IrInput } from "./expr.js";
 
 export type {
   StructuralNode,

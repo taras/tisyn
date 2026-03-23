@@ -10,6 +10,10 @@ import ts from "typescript";
 export interface ParsedFunction {
   name: string;
   params: string[];
+  /** Type annotation text per param (parallel to params), defaults to "unknown". */
+  paramTypes: string[];
+  /** Return type extracted from Workflow<T> annotation, defaults to "unknown". */
+  returnType: string;
   body: ts.Block;
   node: ts.FunctionDeclaration;
 }
@@ -41,15 +45,31 @@ export function parseSource(source: string, filename = "input.ts"): ParsedFuncti
     if (isAsync) continue; // async generators are rejected in discover
 
     const params: string[] = [];
+    const paramTypes: string[] = [];
     for (const param of stmt.parameters) {
       if (ts.isIdentifier(param.name)) {
         params.push(param.name.text);
+        paramTypes.push(param.type ? param.type.getText(sourceFile) : "unknown");
       }
+    }
+
+    // Extract return type from Workflow<T> annotation if present
+    let returnType = "unknown";
+    if (
+      stmt.type &&
+      ts.isTypeReferenceNode(stmt.type) &&
+      ts.isIdentifier(stmt.type.typeName) &&
+      stmt.type.typeName.text === "Workflow" &&
+      stmt.type.typeArguments?.length === 1
+    ) {
+      returnType = stmt.type.typeArguments[0]!.getText(sourceFile);
     }
 
     functions.push({
       name: stmt.name.text,
       params,
+      paramTypes,
+      returnType,
       body: stmt.body,
       node: stmt,
     });

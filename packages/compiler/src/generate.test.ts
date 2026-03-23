@@ -782,7 +782,7 @@ describe("generateWorkflowModule", () => {
 
     it("generates named workflow IR export", () => {
       const result = generateWorkflowModule(source, { validate: false });
-      expect(result.source).toContain("export const processOrder =");
+      expect(result.source).toContain("export const processOrder: TisynFn<");
     });
 
     it("generates grouped agents and workflows exports", () => {
@@ -883,8 +883,37 @@ describe("generateWorkflowModule", () => {
           exports: { ".": { types: "./index.d.ts" } },
         }),
         "/node_modules/@tisyn/agent/index.d.ts": `
-          export declare function agent<T>(id: string, ops: T): T;
-          export declare function operation<Args = void, Result = void>(): any;
+          export interface OperationSpec<Args = unknown, Result = unknown> {
+            readonly __args?: Args;
+            readonly __result?: Result;
+          }
+          export interface AgentDeclaration<Ops extends Record<string, OperationSpec>> {
+            readonly id: string;
+            readonly operations: Ops;
+          }
+          export type AgentCalls<D extends AgentDeclaration<Record<string, OperationSpec>>> = {
+            [K in keyof D["operations"]]: any;
+          };
+          export type DeclaredAgent<Ops extends Record<string, OperationSpec>> =
+            AgentDeclaration<Ops> & AgentCalls<AgentDeclaration<Ops>>;
+          export declare function agent<const Ops extends Record<string, OperationSpec<any, any>>>(
+            id: string, ops: Ops
+          ): DeclaredAgent<Ops>;
+          export declare function operation<Args = void, Result = void>(): OperationSpec<Args, Result>;
+        `,
+        // Minimal @tisyn/ir stub
+        "/node_modules/@tisyn/ir/package.json": JSON.stringify({
+          name: "@tisyn/ir",
+          types: "./index.d.ts",
+          exports: { ".": { types: "./index.d.ts" } },
+        }),
+        "/node_modules/@tisyn/ir/index.d.ts": `
+          export interface TisynFn<A extends unknown[], R> {
+            readonly tisyn: "fn";
+            readonly params: readonly string[];
+            readonly body: unknown;
+            readonly T?: (...args: A) => R;
+          }
         `,
         ...extraFiles,
       };
