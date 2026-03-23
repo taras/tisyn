@@ -85,6 +85,18 @@ export function generateWorkflowModule(
     );
   }
 
+  // Check for name collisions between contracts and workflows
+  for (const fn of exportedFunctions) {
+    if (contractsMap.has(fn.name)) {
+      throw new CompileError(
+        "E999",
+        `Workflow name '${fn.name}' collides with contract name '${fn.name}'`,
+        1,
+        1,
+      );
+    }
+  }
+
   // Compile each workflow with contract-aware emit context
   const workflows: Record<string, Expr> = {};
 

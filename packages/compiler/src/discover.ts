@@ -96,7 +96,7 @@ export function discoverContracts(sourceFile: ts.SourceFile): DiscoveredContract
 
 // ── Type import collection ──
 
-const PRIMITIVE_TYPES = new Set([
+const BUILTIN_TYPES = new Set([
   "string",
   "number",
   "boolean",
@@ -109,36 +109,103 @@ const PRIMITIVE_TYPES = new Set([
   "object",
   "bigint",
   "symbol",
+  // Well-known utility types
+  "Record",
+  "Array",
+  "Map",
+  "Set",
+  "Promise",
+  "Partial",
+  "Required",
+  "Readonly",
+  "Pick",
+  "Omit",
+  "Exclude",
+  "Extract",
+  "ReturnType",
+  "Parameters",
+  "NonNullable",
+  "Awaited",
 ]);
+
+/**
+ * Extract non-builtin type identifiers from a type text string.
+ * E.g., "Record<string, Order>" → Set(["Order"])
+ */
+function extractTypeIdentifiers(typeText: string): Set<string> {
+  const identifiers = new Set<string>();
+  const matches = typeText.match(/[A-Za-z_$][A-Za-z0-9_$]*/g);
+  if (matches) {
+    for (const m of matches) {
+      if (!BUILTIN_TYPES.has(m)) {
+        identifiers.add(m);
+      }
+    }
+  }
+  return identifiers;
+}
+
+/**
+ * Collect locally-defined type names (interface/type alias declarations) from source.
+ */
+function collectLocalTypeNames(sourceFile: ts.SourceFile): Set<string> {
+  const locals = new Set<string>();
+  for (const stmt of sourceFile.statements) {
+    if (ts.isInterfaceDeclaration(stmt) && stmt.name) {
+      locals.add(stmt.name.text);
+    }
+    if (ts.isTypeAliasDeclaration(stmt) && stmt.name) {
+      locals.add(stmt.name.text);
+    }
+  }
+  return locals;
+}
 
 /**
  * Collect type-only imports from source that are referenced by contract signatures.
  *
- * Only forwards `import type` declarations (or type-only specifiers from mixed imports)
- * for type names that appear in the contract param types or result types.
- * Value imports are never forwarded.
+ * Extracts individual type identifiers from composite type expressions
+ * (e.g., `Record<string, Order>` → `Order`), then forwards matching
+ * `import type` declarations. Value imports are never forwarded.
+ *
+ * Rejects source-local types (interface/type alias in the same file) with
+ * a CompileError — they must be moved to an importable file.
  */
 export function collectReferencedTypeImports(
   sourceFile: ts.SourceFile,
   contracts: DiscoveredContract[],
 ): string[] {
-  // Build set of referenced type names from contracts
-  const referencedTypes = new Set<string>();
+  // Build set of referenced non-builtin type identifiers from contracts
+  const referencedIds = new Set<string>();
   for (const contract of contracts) {
     for (const method of contract.methods) {
       for (const param of method.params) {
-        if (!PRIMITIVE_TYPES.has(param.type)) {
-          referencedTypes.add(param.type);
+        for (const id of extractTypeIdentifiers(param.type)) {
+          referencedIds.add(id);
         }
       }
-      if (!PRIMITIVE_TYPES.has(method.resultType)) {
-        referencedTypes.add(method.resultType);
+      for (const id of extractTypeIdentifiers(method.resultType)) {
+        referencedIds.add(id);
       }
     }
   }
 
-  if (referencedTypes.size === 0) return [];
+  if (referencedIds.size === 0) return [];
 
+  // Reject source-local types
+  const localTypes = collectLocalTypeNames(sourceFile);
+  for (const id of referencedIds) {
+    if (localTypes.has(id)) {
+      throw new CompileError(
+        "E999",
+        `Contract references source-local type '${id}'. Move it to an importable file and use 'import type'.`,
+        1,
+        1,
+      );
+    }
+  }
+
+  // Collect matching type-only imports
   const imports: string[] = [];
 
   for (const stmt of sourceFile.statements) {
@@ -151,10 +218,9 @@ export function collectReferencedTypeImports(
 
     // Only process type-only imports
     if (clause.isTypeOnly) {
-      // `import type { A, B } from "..."` — filter to referenced names
       if (clause.namedBindings && ts.isNamedImports(clause.namedBindings)) {
         const matchingSpecifiers = clause.namedBindings.elements.filter((el) =>
-          referencedTypes.has(el.name.text),
+          referencedIds.has(el.name.text),
         );
         if (matchingSpecifiers.length > 0) {
           const names = matchingSpecifiers
@@ -171,7 +237,7 @@ export function collectReferencedTypeImports(
     // Mixed import: check for individual type-only specifiers
     if (clause.namedBindings && ts.isNamedImports(clause.namedBindings)) {
       const typeSpecifiers = clause.namedBindings.elements.filter(
-        (el) => el.isTypeOnly && referencedTypes.has(el.name.text),
+        (el) => el.isTypeOnly && referencedIds.has(el.name.text),
       );
       if (typeSpecifiers.length > 0) {
         const names = typeSpecifiers
@@ -217,16 +283,19 @@ function validateFactoryParams(decl: ts.FunctionDeclaration, sourceFile: ts.Sour
     );
   }
 
+  // Must have a type annotation
+  if (!param.type) {
+    const loc = getLocation(param, sourceFile);
+    throw new CompileError(
+      "E999",
+      `Ambient contract factory parameter must have a type annotation (instance?: string)`,
+      loc.line,
+      loc.column,
+    );
+  }
+
   // Must be typed as string
-  if (
-    param.type &&
-    !(
-      ts.isTypeReferenceNode(param.type) &&
-      ts.isIdentifier(param.type.typeName) &&
-      param.type.typeName.text === "string"
-    ) &&
-    param.type.kind !== ts.SyntaxKind.StringKeyword
-  ) {
+  if (param.type.kind !== ts.SyntaxKind.StringKeyword) {
     const loc = getLocation(param, sourceFile);
     throw new CompileError(
       "E999",
