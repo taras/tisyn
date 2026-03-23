@@ -8,10 +8,12 @@ import { resolve } from "node:path";
 
 const fixturesDir = resolve(import.meta.dirname, "../../test/fixtures");
 
+const testTsconfig = resolve(import.meta.dirname, "../../tsconfig.test.json");
+
 function fixtureTransport(name: string) {
   return stdioTransport({
     command: "npx",
-    arguments: ["tsx", resolve(fixturesDir, `${name}.ts`)],
+    arguments: ["tsx", "--tsconfig", testTsconfig, resolve(fixturesDir, `${name}.ts`)],
   });
 }
 
