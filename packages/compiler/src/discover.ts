@@ -146,6 +146,22 @@ function extractTypeIdentifiers(typeText: string): Set<string> {
 }
 
 /**
+ * Extract namespace qualifiers from type text (the X in X.Y patterns).
+ * E.g., "Record<string, T.Order>" → Set(["T"])
+ */
+function extractNamespaceQualifiers(typeText: string): Set<string> {
+  const qualifiers = new Set<string>();
+  const matches = typeText.matchAll(/([A-Za-z_$][A-Za-z0-9_$]*)\.[A-Za-z_$]/g);
+  for (const m of matches) {
+    const qualifier = m[1]!;
+    if (!BUILTIN_TYPES.has(qualifier)) {
+      qualifiers.add(qualifier);
+    }
+  }
+  return qualifiers;
+}
+
+/**
  * Collect locally-defined type names (interface/type alias declarations) from source.
  */
 function collectLocalTypeNames(sourceFile: ts.SourceFile): Set<string> {
@@ -175,22 +191,27 @@ export function collectReferencedTypeImports(
   sourceFile: ts.SourceFile,
   contracts: DiscoveredContract[],
 ): string[] {
-  // Build set of referenced non-builtin type identifiers from contracts
+  // Build set of referenced non-builtin type identifiers and namespace qualifiers
   const referencedIds = new Set<string>();
+  const nsQualifiers = new Set<string>();
   for (const contract of contracts) {
     for (const method of contract.methods) {
-      for (const param of method.params) {
-        for (const id of extractTypeIdentifiers(param.type)) {
+      const typeTexts = [...method.params.map((p) => p.type), method.resultType];
+      for (const typeText of typeTexts) {
+        for (const id of extractTypeIdentifiers(typeText)) {
           referencedIds.add(id);
         }
-      }
-      for (const id of extractTypeIdentifiers(method.resultType)) {
-        referencedIds.add(id);
+        for (const q of extractNamespaceQualifiers(typeText)) {
+          nsQualifiers.add(q);
+          // Remove namespace qualifiers from bare identifiers
+          // (T in T.Order is a qualifier, not a standalone type)
+          referencedIds.delete(q);
+        }
       }
     }
   }
 
-  if (referencedIds.size === 0) return [];
+  if (referencedIds.size === 0 && nsQualifiers.size === 0) return [];
 
   // Reject source-local types
   const localTypes = collectLocalTypeNames(sourceFile);
@@ -207,6 +228,7 @@ export function collectReferencedTypeImports(
 
   // Collect matching type-only imports
   const imports: string[] = [];
+  const resolvedNsQualifiers = new Set<string>();
 
   for (const stmt of sourceFile.statements) {
     if (!ts.isImportDeclaration(stmt)) continue;
@@ -218,6 +240,17 @@ export function collectReferencedTypeImports(
 
     // Only process type-only imports
     if (clause.isTypeOnly) {
+      // Namespace import: import type * as T from "..."
+      if (clause.namedBindings && ts.isNamespaceImport(clause.namedBindings)) {
+        const nsName = clause.namedBindings.name.text;
+        if (nsQualifiers.has(nsName)) {
+          imports.push(`import type * as ${nsName} from "${moduleSpecifier}";`);
+          resolvedNsQualifiers.add(nsName);
+        }
+        continue;
+      }
+
+      // Named import: import type { A, B } from "..."
       if (clause.namedBindings && ts.isNamedImports(clause.namedBindings)) {
         const matchingSpecifiers = clause.namedBindings.elements.filter((el) =>
           referencedIds.has(el.name.text),
@@ -247,6 +280,18 @@ export function collectReferencedTypeImports(
           .join(", ");
         imports.push(`import type { ${names} } from "${moduleSpecifier}";`);
       }
+    }
+  }
+
+  // Reject unresolved namespace qualifiers
+  for (const q of nsQualifiers) {
+    if (!resolvedNsQualifiers.has(q)) {
+      throw new CompileError(
+        "E999",
+        `Contract references namespace-qualified type '${q}.*' but no 'import type * as ${q}' was found in source`,
+        1,
+        1,
+      );
     }
   }
 

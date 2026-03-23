@@ -289,6 +289,58 @@ describe("collectReferencedTypeImports", () => {
     const imports = collectReferencedTypeImports(sf, contracts);
     expect(imports).toHaveLength(0);
   });
+
+  it("forwards namespace imports for qualified types like T.Order", () => {
+    const sf = parseSource(`
+      import type * as T from "./types.js";
+      declare function OrderService(): {
+        fetchOrder(orderId: string): Workflow<T.Order>;
+      };
+    `);
+    const contracts = discoverContracts(sf);
+    const imports = collectReferencedTypeImports(sf, contracts);
+    expect(imports).toHaveLength(1);
+    expect(imports[0]).toBe('import type * as T from "./types.js";');
+  });
+
+  it("forwards namespace imports for qualified types in composite types", () => {
+    const sf = parseSource(`
+      import type * as T from "./types.js";
+      declare function OrderService(): {
+        fetchOrder(orderId: string): Workflow<Record<string, T.Order>>;
+      };
+    `);
+    const contracts = discoverContracts(sf);
+    const imports = collectReferencedTypeImports(sf, contracts);
+    expect(imports).toHaveLength(1);
+    expect(imports[0]).toContain("* as T");
+  });
+
+  it("rejects unresolved namespace qualifiers", () => {
+    const sf = parseSource(`
+      declare function OrderService(): {
+        fetchOrder(orderId: string): Workflow<T.Order>;
+      };
+    `);
+    const contracts = discoverContracts(sf);
+    expect(() => collectReferencedTypeImports(sf, contracts)).toThrow(CompileError);
+    expect(() => collectReferencedTypeImports(sf, contracts)).toThrow(
+      /namespace-qualified type 'T\.\*'.*import type \* as T/,
+    );
+  });
+
+  it("preserves aliases in forwarded imports", () => {
+    const sf = parseSource(`
+      import type { Original as Aliased } from "./types.js";
+      declare function OrderService(): {
+        fetchOrder(orderId: string): Workflow<Aliased>;
+      };
+    `);
+    const contracts = discoverContracts(sf);
+    const imports = collectReferencedTypeImports(sf, contracts);
+    expect(imports).toHaveLength(1);
+    expect(imports[0]).toBe('import type { Original as Aliased } from "./types.js";');
+  });
 });
 
 // ── generateWorkflowModule ──
