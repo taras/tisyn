@@ -1,4 +1,4 @@
-import type { OperationSpec, AgentDeclaration, AgentCalls } from "./types.js";
+import type { OperationSpec, DeclaredAgent } from "./types.js";
 
 /**
  * Declare an agent with typed operations.
@@ -9,7 +9,7 @@ import type { OperationSpec, AgentDeclaration, AgentCalls } from "./types.js";
 export function agent<const Ops extends Record<string, OperationSpec<any, any>>>(
   id: string,
   operations: Ops,
-): AgentDeclaration<Ops> & AgentCalls<AgentDeclaration<Ops>> {
+): DeclaredAgent<Ops> {
   const calls: Record<string, Function> = {};
   for (const opName of Object.keys(operations)) {
     calls[opName] = (args: unknown) => ({

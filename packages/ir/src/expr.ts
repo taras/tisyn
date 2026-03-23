@@ -31,3 +31,7 @@ export type Expr<T> = T | Eval<T> | Quote<T> | Ref<T> | TisynFn<any[], T>;
 export type ExprResult<E> = E extends Expr<infer T> ? T : never;
 
 export type AsExpr<T> = TisynExpr & Expr<T>;
+
+/** Accepts both untyped TisynExpr and phantom-typed Expr nodes as IR input. */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export type IrInput = TisynExpr | Expr<any>;
