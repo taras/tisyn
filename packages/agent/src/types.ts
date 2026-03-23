@@ -49,8 +49,5 @@ export interface AgentImplementation<Ops extends Record<string, OperationSpec>> 
   /** Install this agent's dispatch middleware into the current scope. */
   install(): Operation<void>;
   /** Call a bound operation directly with typed args and result. */
-  call<K extends keyof Ops & string>(
-    name: K,
-    args: ArgsOf<Ops[K]>,
-  ): Operation<ResultOf<Ops[K]>>;
+  call<K extends keyof Ops & string>(name: K, args: ArgsOf<Ops[K]>): Operation<ResultOf<Ops[K]>>;
 }
