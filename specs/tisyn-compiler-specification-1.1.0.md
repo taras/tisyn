@@ -91,7 +91,7 @@ Compiler names: `__discard_0`, `__all_0`, `__loop_0`, `__sub_0`. User variables 
 ### 4.2 Agent Effect
 
 ```typescript
-yield * OrderService().fetchOrder(orderId);
+yield* OrderService().fetchOrder(orderId);
 ```
 
 ```json
@@ -107,7 +107,7 @@ yield * OrderService().fetchOrder(orderId);
 ### 4.3 Concurrency
 
 ```typescript
-yield * all([() => A().step1(x), () => B().step2(y)]);
+yield* all([() => A().step1(x), () => B().step2(y)]);
 ```
 
 ```json
@@ -205,7 +205,7 @@ With early return:
 if (x < 0) {
   return "negative";
 }
-const result = yield * Agent().process(x);
+const result = yield* Agent().process(x);
 return result;
 ```
 
@@ -226,7 +226,7 @@ This means `while` with `return` inside the body CANNOT compile to a `while` IR 
 
 ```typescript
 while (true) {
-  yield * Agent().tick();
+  yield* Agent().tick();
 }
 ```
 
@@ -240,11 +240,11 @@ This loop terminates only via error, cancellation, or the condition becoming fal
 
 ```typescript
 while (true) {
-  const status = yield * JobService().checkStatus(jobId);
+  const status = yield* JobService().checkStatus(jobId);
   if (status.state === "complete") {
-    return yield * JobService().getResult(jobId);
+    return yield* JobService().getResult(jobId);
   }
-  yield * sleep(1000);
+  yield* sleep(1000);
 }
 ```
 
@@ -367,7 +367,7 @@ Evaluator sorts keys lexicographically at runtime (Spec §6.10).
 ### 8.1 `all` with Simple Children
 
 ```typescript
-yield * all([() => A().step(x), () => B().step(y)]);
+yield* all([() => A().step(x), () => B().step(y)]);
 ```
 
 Arrow functions unwrapped. Bodies placed in `exprs`:
@@ -393,8 +393,7 @@ Arrow functions unwrapped. Bodies placed in `exprs`:
 Generator functions compiled as inline expression trees:
 
 ```typescript
-yield *
-  all([
+yield* all([
     function* () {
       const order = yield* OrderService().fetchOrder("123");
       return yield* Processor().process(order);

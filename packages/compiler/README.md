@@ -114,7 +114,7 @@ When a workflow calls a contract method via `yield*`, the compiler lowers it to 
 
 ```typescript
 // Authored
-const order = yield * OrderService().fetchOrder(orderId);
+const order = yield* OrderService().fetchOrder(orderId);
 
 // Compiles to (conceptual IR)
 // ExternalEval("order-service.fetchOrder", Construct({ orderId: Ref("orderId") }))
@@ -125,7 +125,7 @@ const order = yield * OrderService().fetchOrder(orderId);
 **Instance variant**: When the factory is called with an instance string, the agent ID includes it as a suffix:
 
 ```typescript
-yield * OrderService("legacy").fetchOrder(orderId);
+yield* OrderService("legacy").fetchOrder(orderId);
 // Agent ID: "order-service:legacy"
 // Effect ID: "order-service:legacy.fetchOrder"
 ```
@@ -133,7 +133,7 @@ yield * OrderService("legacy").fetchOrder(orderId);
 Without an instance argument, the base agent ID is used:
 
 ```typescript
-yield * OrderService().fetchOrder(orderId);
+yield* OrderService().fetchOrder(orderId);
 // Agent ID: "order-service"
 // Effect ID: "order-service.fetchOrder"
 ```
@@ -378,9 +378,7 @@ The generated module is used by a host application to execute workflows:
 import { processOrder } from "./orders.generated.js";
 import { execute } from "@tisyn/runtime";
 
-const { result, journal } =
-  yield *
-  execute({
+const { result, journal } = yield* execute({
     ir: processOrder,
     env: { orderId: "abc-123" },
   });
@@ -421,7 +419,7 @@ const orderAgent = implementAgent(OrderService(), {
 });
 
 // Install the agent's dispatch middleware
-yield * orderAgent.install();
+yield* orderAgent.install();
 ```
 
 Each handler is an Effection generator function that receives the typed payload and returns the typed result. The `install()` method registers the agent's handlers as dispatch middleware — when a workflow executes an `ExternalEval` for this agent, the corresponding handler runs.
@@ -547,9 +545,7 @@ export const workflows = { fulfillOrder };
 import { fulfillOrder } from "./orders.generated.js";
 import { execute } from "@tisyn/runtime";
 
-const { result, journal } =
-  yield *
-  execute({
+const { result, journal } = yield* execute({
     ir: fulfillOrder,
     env: { orderId: "order-42" },
   });
@@ -577,6 +573,6 @@ const billingAgent = implementAgent(BillingService(), {
   },
 });
 
-yield * orderAgent.install();
-yield * billingAgent.install();
+yield* orderAgent.install();
+yield* billingAgent.install();
 ```
