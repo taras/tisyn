@@ -4,8 +4,9 @@ import { fromReadable } from "@effectionx/node/stream";
 import { lines, map } from "@effectionx/stream-helpers";
 import { pipe } from "remeda";
 import type { OperationSpec, AgentDeclaration, ImplementationHandlers } from "@tisyn/agent";
+import { implementAgent } from "@tisyn/agent";
 import { parseHostMessage } from "@tisyn/protocol";
-import { runAgentHandler } from "./agent-handler.js";
+import { createProtocolServer } from "./protocol-server.js";
 
 /**
  * Run an agent over stdio using NDJSON framing. This is the agent-side
@@ -29,7 +30,10 @@ export function* runStdioAgent<Ops extends Record<string, OperationSpec>>(
 
   const sub = yield* messageStream;
 
-  yield* runAgentHandler(declaration, handlers, {
+  const impl = implementAgent(declaration, handlers);
+  const server = createProtocolServer(impl);
+
+  yield* server.use({
     receive: sub,
     *send(msg) {
       process.stdout.write(JSON.stringify(msg) + "\n");

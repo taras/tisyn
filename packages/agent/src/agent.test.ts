@@ -42,6 +42,21 @@ describe("@tisyn/agent", () => {
     }
   });
 
+  it("executes a named operation directly via execute()", function* () {
+    const math = agent("math", {
+      double: operation<{ value: number }, number>(),
+    });
+
+    const impl = implementAgent(math, {
+      *double({ value }) {
+        return value * 2;
+      },
+    });
+
+    const result = yield* impl.execute("double", { value: 21 });
+    expect(result).toBe(42);
+  });
+
   it("fails cleanly for unknown operation", function* () {
     const math = agent("math", {
       double: operation<{ value: number }, number>(),

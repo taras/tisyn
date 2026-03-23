@@ -1,13 +1,21 @@
 import { spawn, createQueue } from "effection";
 import { workerMain } from "@effectionx/worker";
-import { agent, operation } from "@tisyn/agent";
+import { agent, operation, implementAgent } from "@tisyn/agent";
 import { parseHostMessage } from "@tisyn/protocol";
 import type { HostMessage, AgentMessage } from "@tisyn/protocol";
-import { runAgentHandler } from "@tisyn/transport";
+import { createProtocolServer } from "@tisyn/transport";
 
 const math = agent("math-worker", {
   double: operation<{ value: number }, number>(),
 });
+
+const impl = implementAgent(math, {
+  *double({ value }) {
+    return value * 2;
+  },
+});
+
+const server = createProtocolServer(impl);
 
 workerMain<HostMessage, void, void, void, AgentMessage, void>(
   function* ({ messages, send }) {
@@ -20,11 +28,7 @@ workerMain<HostMessage, void, void, void, AgentMessage, void>(
       queue.close();
     });
 
-    yield* runAgentHandler(math, {
-      *double({ value }) {
-        return value * 2;
-      },
-    }, {
+    yield* server.use({
       receive: queue,
       *send(agentMsg) {
         yield* send(agentMsg);
