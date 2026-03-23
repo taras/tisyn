@@ -45,12 +45,14 @@ import { toAgentId } from "./agent-id.js";
 import { Counter } from "./counter.js";
 import { CompileError } from "./errors.js";
 import { getLocation } from "./parse.js";
+import type { DiscoveredContract } from "./discover.js";
 
 // ── Context ──
 
 interface EmitContext {
   counter: Counter;
   sourceFile: ts.SourceFile;
+  contracts?: Map<string, DiscoveredContract>;
 }
 
 function error(code: string, message: string, node: ts.Node, ctx: EmitContext): CompileError {
@@ -70,8 +72,11 @@ export function emitBlock(stmts: readonly ts.Statement[], ctx: EmitContext): Exp
 /**
  * Create an EmitContext for compilation.
  */
-export function createContext(sourceFile: ts.SourceFile): EmitContext {
-  return { counter: new Counter(), sourceFile };
+export function createContext(
+  sourceFile: ts.SourceFile,
+  contracts?: Map<string, DiscoveredContract>,
+): EmitContext {
+  return { counter: new Counter(), sourceFile, contracts };
 }
 
 // ── Statement compilation (Spec §5.1) ──
@@ -585,8 +590,58 @@ function emitAgentEffect(
     throw error("E999", "Agent factory must be an identifier", agentFactory, ctx);
   }
 
-  const agentId = toAgentId(agentFactory.text);
-  const effectId = `${agentId}.${methodName}`;
+  const baseAgentId = toAgentId(agentFactory.text);
+
+  // Contract-aware mode: validate against discovered contracts and normalize to payload object
+  if (ctx.contracts) {
+    const contract = ctx.contracts.get(agentFactory.text);
+    if (!contract) {
+      throw error("E999", `Unknown contract: '${agentFactory.text}'`, agentFactory, ctx);
+    }
+
+    // Instance handling
+    const factoryArgs = receiver.arguments;
+    let agentId = baseAgentId;
+
+    if (factoryArgs.length > 1) {
+      throw error("E999", `Contract factory '${agentFactory.text}' accepts at most one argument (instance)`, receiver, ctx);
+    }
+
+    if (factoryArgs.length === 1) {
+      const instanceArg = factoryArgs[0]!;
+      if (!ts.isStringLiteral(instanceArg)) {
+        throw error("E999", `Contract factory instance argument must be a string literal (dynamic instance routing is not supported in v1)`, instanceArg, ctx);
+      }
+      agentId = `${baseAgentId}:${instanceArg.text}`;
+    }
+
+    // Validate method exists
+    const method = contract.methods.find((m) => m.name === methodName);
+    if (!method) {
+      throw error("E999", `Unknown method '${methodName}' on contract '${agentFactory.text}'`, propAccess.name, ctx);
+    }
+
+    // Validate arity
+    if (args.length !== method.params.length) {
+      throw error(
+        "E999",
+        `Method '${agentFactory.text}.${methodName}' expects ${method.params.length} argument(s) but got ${args.length}`,
+        propAccess,
+        ctx,
+      );
+    }
+
+    // Build Construct node with named parameters
+    const effectId = `${agentId}.${methodName}`;
+    const fields: Record<string, Expr> = {};
+    for (let i = 0; i < method.params.length; i++) {
+      fields[method.params[i]!.name] = emitExpression(args[i]!, ctx);
+    }
+    return ExternalEval(effectId, Construct(fields));
+  }
+
+  // Legacy mode: positional array (preserves backward compat for compile/compileOne)
+  const effectId = `${baseAgentId}.${methodName}`;
   const compiledArgs = args.map((a) => emitExpression(a, ctx));
 
   // Data is an unquoted array (resolve at runtime) — Spec §4.2
