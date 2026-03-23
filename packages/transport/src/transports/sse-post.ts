@@ -77,7 +77,11 @@ export function ssePostTransport(options: SsePostTransportOptions): AgentTranspo
       });
 
       // Wrap the queue as a Stream (Operation<Subscription>).
-      const receive = { *[Symbol.iterator]() { return queue; } };
+      const receive = {
+        *[Symbol.iterator]() {
+          return queue;
+        },
+      };
 
       yield* provide({
         *send(message: HostMessage) {
