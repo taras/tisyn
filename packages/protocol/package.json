@@ -7,11 +7,9 @@
     "url": "https://github.com/taras/tisyn.git",
     "directory": "packages/protocol"
   },
-  "files": ["dist"],
-  "publishConfig": {
-    "access": "public",
-    "provenance": true
-  },
+  "files": [
+    "dist"
+  ],
   "type": "module",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
@@ -20,6 +18,10 @@
       "types": "./dist/index.d.ts",
       "import": "./dist/index.js"
     }
+  },
+  "publishConfig": {
+    "access": "public",
+    "provenance": true
   },
   "scripts": {
     "build": "tsc --build",
