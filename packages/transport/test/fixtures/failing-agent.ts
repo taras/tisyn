@@ -1,15 +1,18 @@
 import { main } from "effection";
-import { agent, operation } from "@tisyn/agent";
-import { runStdioAgent } from "../../src/stdio-agent.js";
+import { agent, operation, implementAgent } from "@tisyn/agent";
+import { createProtocolServer } from "../../src/protocol-server.js";
+import { createStdioAgentTransport } from "../../src/stdio-agent.js";
 
 const failing = agent("failing", {
   boom: operation<void, never>(),
 });
 
 await main(function* () {
-  yield* runStdioAgent(failing, {
+  const impl = implementAgent(failing, {
     *boom() {
       throw new Error("kaboom");
     },
   });
+  const server = createProtocolServer(impl);
+  yield* server.use(createStdioAgentTransport());
 });
