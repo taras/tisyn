@@ -173,6 +173,12 @@ function collectLocalTypeNames(sourceFile: ts.SourceFile): Set<string> {
     if (ts.isTypeAliasDeclaration(stmt) && stmt.name) {
       locals.add(stmt.name.text);
     }
+    if (ts.isClassDeclaration(stmt) && stmt.name) {
+      locals.add(stmt.name.text);
+    }
+    if (ts.isEnumDeclaration(stmt) && stmt.name) {
+      locals.add(stmt.name.text);
+    }
   }
   return locals;
 }
@@ -240,6 +246,11 @@ export function collectReferencedTypeImports(
 
     // Only process type-only imports
     if (clause.isTypeOnly) {
+      // Default import: import type Foo from "..."
+      if (clause.name && referencedIds.has(clause.name.text)) {
+        imports.push(`import type ${clause.name.text} from "${moduleSpecifier}";`);
+      }
+
       // Namespace import: import type * as T from "..."
       if (clause.namedBindings && ts.isNamespaceImport(clause.namedBindings)) {
         const nsName = clause.namedBindings.name.text;
