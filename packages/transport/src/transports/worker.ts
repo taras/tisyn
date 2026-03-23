@@ -21,10 +21,9 @@ export interface WorkerTransportOptions {
 export function workerTransport(options: WorkerTransportOptions): AgentTransportFactory {
   return () =>
     resource(function* (provide) {
-      const worker = yield* useWorker<HostMessage, void, void, void>(
-        options.url,
-        { type: "module" },
-      );
+      const worker = yield* useWorker<HostMessage, void, void, void>(options.url, {
+        type: "module",
+      });
 
       // Channel bridges worker messages to the transport's receive stream.
       // Safe from races: the session subscribes before sending initialize,
