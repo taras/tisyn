@@ -350,6 +350,28 @@ describe("collectReferencedTypeImports", () => {
     );
   });
 
+  it("rejects global type Date without explicit import", () => {
+    const sf = parseSource(`
+      declare function OrderService(): {
+        getCreatedAt(orderId: string): Workflow<Date>;
+      };
+    `);
+    const contracts = discoverContracts(sf);
+    expect(() => collectReferencedTypeImports(sf, contracts)).toThrow(CompileError);
+    expect(() => collectReferencedTypeImports(sf, contracts)).toThrow(/import type/);
+  });
+
+  it("rejects global type Uint8Array without explicit import", () => {
+    const sf = parseSource(`
+      declare function OrderService(): {
+        getData(orderId: string): Workflow<Uint8Array>;
+      };
+    `);
+    const contracts = discoverContracts(sf);
+    expect(() => collectReferencedTypeImports(sf, contracts)).toThrow(CompileError);
+    expect(() => collectReferencedTypeImports(sf, contracts)).toThrow(/import type/);
+  });
+
   it("rejects partially resolved types when some imports are present", () => {
     const sf = parseSource(`
       import type { Order } from "./types.js";
