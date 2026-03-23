@@ -18,5 +18,5 @@ export type { WebSocketTransportOptions } from "./transports/websocket.js";
 export { workerTransport } from "./transports/worker.js";
 export type { WorkerTransportOptions } from "./transports/worker.js";
 export { runStdioAgent } from "./stdio-agent.js";
-export { runAgentHandler } from "./agent-handler.js";
-export type { AgentHandlerIO } from "./agent-handler.js";
+export { createProtocolServer } from "./protocol-server.js";
+export type { AgentServerTransport, ProtocolServer } from "./protocol-server.js";
