@@ -9,4 +9,6 @@ export type {
   AgentImplementation,
   ImplementationHandlers,
   Invocation,
+  ArgsOf,
+  ResultOf,
 } from "./types.js";

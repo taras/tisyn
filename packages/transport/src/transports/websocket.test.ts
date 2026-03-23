@@ -6,9 +6,9 @@ import { resource, useScope, withResolvers, createQueue, scoped, spawn } from "e
 import { WebSocketServer } from "ws";
 import type { HostMessage } from "@tisyn/protocol";
 import { parseHostMessage } from "@tisyn/protocol";
-import { agent, operation, invoke } from "@tisyn/agent";
+import { agent, operation, invoke, implementAgent } from "@tisyn/agent";
 import { installRemoteAgent } from "../install-remote.js";
-import { runAgentHandler } from "../agent-handler.js";
+import { createProtocolServer } from "../protocol-server.js";
 import { transportComplianceSuite } from "../transport-compliance.js";
 import type { TransportFactoryBuilder } from "../transport-compliance.js";
 import { websocketTransport } from "./websocket.js";
@@ -40,9 +40,14 @@ const websocketBuilder: TransportFactoryBuilder = (declaration, handlers) => {
         });
         rawWs.on("close", () => queue.close());
 
+        const impl = implementAgent(declaration, handlers);
+        const server = createProtocolServer(impl);
+
         scope.run(function* () {
-          yield* runAgentHandler(declaration, handlers, {
-            receive: queue,
+          yield* server.use({
+            *receive() {
+              return queue;
+            },
             *send(msg) {
               rawWs.send(JSON.stringify(msg));
             },
