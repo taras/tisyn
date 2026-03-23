@@ -59,7 +59,7 @@ Tisyn is easiest to understand as layers:
 import { Add, Q } from "@tisyn/ir";
 import { execute } from "@tisyn/runtime";
 
-const ir = Add({ left: Q(20), right: Q(22) });
+const ir = Add(Q(20), Q(22));
 const { result } = yield * execute({ ir });
 ```
 
