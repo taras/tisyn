@@ -112,6 +112,7 @@ const BUILTIN_TYPES = new Set([
   // Well-known utility types
   "Record",
   "Array",
+  "ReadonlyArray",
   "Promise",
   "Partial",
   "Required",

@@ -262,6 +262,20 @@ describe("collectReferencedTypeImports", () => {
     expect(imports).toHaveLength(0);
   });
 
+  it("accepts ReadonlyArray as a built-in type without import", () => {
+    const sf = parseSource(`
+      import type { Order } from "./types.js";
+      declare function OrderService(): {
+        list(seed: string): Workflow<ReadonlyArray<Order>>;
+      };
+    `);
+    const contracts = discoverContracts(sf);
+    const imports = collectReferencedTypeImports(sf, contracts);
+    expect(imports).toHaveLength(1);
+    expect(imports[0]).toContain("Order");
+    expect(imports[0]).not.toContain("ReadonlyArray");
+  });
+
   it("extracts type identifiers from composite types like Record<string, Order>", () => {
     const sf = parseSource(`
       import type { Order } from "./types.js";
