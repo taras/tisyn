@@ -77,7 +77,7 @@ export function createProtocolServer<Ops extends Record<string, OperationSpec>>(
             try {
               // Single-arg convention: extract args[0] as the operation payload.
               const val = yield* (impl as AgentImplementation<Record<string, OperationSpec>>)
-                .execute(opName, args[0] as Val);
+                .call(opName, args[0] as Val);
               inflight.delete(id);
               yield* transport.send(executeSuccess(id, val as Val));
             } catch (error) {

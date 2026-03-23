@@ -42,7 +42,7 @@ describe("@tisyn/agent", () => {
     }
   });
 
-  it("executes a named operation directly via execute()", function* () {
+  it("calls a bound operation directly via call()", function* () {
     const math = agent("math", {
       double: operation<{ value: number }, number>(),
     });
@@ -53,7 +53,7 @@ describe("@tisyn/agent", () => {
       },
     });
 
-    const result = yield* impl.execute("double", { value: 21 });
+    const result = yield* impl.call("double", { value: 21 });
     expect(result).toBe(42);
   });
 
