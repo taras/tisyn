@@ -112,8 +112,6 @@ const BUILTIN_TYPES = new Set([
   // Well-known utility types
   "Record",
   "Array",
-  "Map",
-  "Set",
   "Promise",
   "Partial",
   "Required",
