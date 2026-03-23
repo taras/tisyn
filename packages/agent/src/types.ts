@@ -48,8 +48,8 @@ export interface AgentImplementation<Ops extends Record<string, OperationSpec>> 
   readonly handlers: ImplementationHandlers<Ops>;
   /** Install this agent's dispatch middleware into the current scope. */
   install(): Operation<void>;
-  /** Execute a named operation directly with typed args and result. */
-  execute<K extends keyof Ops & string>(
+  /** Call a bound operation directly with typed args and result. */
+  call<K extends keyof Ops & string>(
     name: K,
     args: ArgsOf<Ops[K]>,
   ): Operation<ResultOf<Ops[K]>>;
