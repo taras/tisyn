@@ -173,4 +173,61 @@ describe("sse-post transport specific", () => {
       }
     });
   });
+
+  it("surfaces POST non-200 as transport error", function* () {
+    const math = agent("math-post-fail", {
+      double: operation<{ value: number }, number>(),
+    });
+
+    yield* scoped(function* () {
+      const connections = new Set<import("node:net").Socket>();
+      const httpServer = createServer();
+      httpServer.on("connection", (socket) => {
+        connections.add(socket);
+        socket.on("close", () => connections.delete(socket));
+      });
+
+      const listening = withResolvers<number>();
+      httpServer.listen(0, () => {
+        const addr = httpServer.address() as AddressInfo;
+        listening.resolve(addr.port);
+      });
+      const port = yield* listening.operation;
+
+      httpServer.on("request", (req, res) => {
+        if (req.method === "GET") {
+          res.writeHead(200, {
+            "Content-Type": "text/event-stream",
+            "Cache-Control": "no-cache",
+            Connection: "keep-alive",
+          });
+          res.flushHeaders();
+        } else if (req.method === "POST") {
+          // Drain body then reject with 503
+          req.on("data", () => {});
+          req.on("end", () => {
+            res.writeHead(503, { "Content-Type": "application/json" });
+            res.end(JSON.stringify({ error: "unavailable" }));
+          });
+        }
+      });
+
+      const factory = ssePostTransport({ url: `http://localhost:${port}` });
+
+      try {
+        yield* installRemoteAgent(math, factory);
+        expect.unreachable("should have thrown on initialize POST");
+      } catch (error) {
+        expect(error).toBeInstanceOf(Error);
+        expect((error as Error).message).toMatch(/503/);
+      } finally {
+        for (const socket of connections) {
+          socket.destroy();
+        }
+        const closed = withResolvers<void>();
+        httpServer.close(() => closed.resolve());
+        yield* closed.operation;
+      }
+    });
+  });
 });
