@@ -44,7 +44,6 @@ export function createSsePostAgentTransport(): SsePostAgentTransport {
       res.on("close", () => {
         sseResponse = null;
         disconnected = true;
-        inboundQueue.close();
       });
     } else if (req.method === "POST") {
       // Enqueue inbound message
