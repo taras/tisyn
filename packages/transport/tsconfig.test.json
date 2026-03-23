@@ -1,0 +1,13 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "paths": {
+      "@tisyn/ir": ["../ir/src/index.ts"],
+      "@tisyn/kernel": ["../kernel/src/index.ts"],
+      "@tisyn/agent": ["../agent/src/index.ts"],
+      "@tisyn/protocol": ["../protocol/src/index.ts"],
+      "@tisyn/validate": ["../validate/src/index.ts"]
+    }
+  },
+  "include": ["src", "test"]
+}
