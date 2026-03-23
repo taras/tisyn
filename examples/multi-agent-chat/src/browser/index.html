@@ -1,0 +1,161 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Multi-Agent Chat Demo</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: system-ui, sans-serif; max-width: 600px; margin: 0 auto; padding: 1rem; }
+    h1 { font-size: 1.2rem; margin-bottom: 0.5rem; }
+    #status { font-size: 0.85rem; margin-bottom: 1rem; padding: 0.25rem 0.5rem; border-radius: 4px; }
+    .connected { background: #d4edda; color: #155724; }
+    .disconnected { background: #f8d7da; color: #721c24; }
+    .pending { background: #fff3cd; color: #856404; }
+    #transcript { border: 1px solid #ddd; border-radius: 4px; padding: 1rem; min-height: 300px; max-height: 500px; overflow-y: auto; margin-bottom: 1rem; }
+    .message { margin-bottom: 0.5rem; padding: 0.5rem; border-radius: 4px; }
+    .user { background: #e3f2fd; text-align: right; }
+    .assistant { background: #f5f5f5; }
+    .system { background: #fff3cd; font-style: italic; font-size: 0.85rem; }
+    #input-area { display: flex; gap: 0.5rem; }
+    #message-input { flex: 1; padding: 0.5rem; border: 1px solid #ddd; border-radius: 4px; font-size: 1rem; }
+    #send-btn { padding: 0.5rem 1rem; background: #007bff; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 1rem; }
+    #send-btn:disabled { background: #6c757d; cursor: not-allowed; }
+  </style>
+</head>
+<body>
+  <h1>Multi-Agent Chat</h1>
+  <div id="status" class="disconnected">Disconnected</div>
+  <div id="transcript"></div>
+  <div id="input-area">
+    <input type="text" id="message-input" placeholder="Type a message..." disabled>
+    <button id="send-btn" disabled>Send</button>
+  </div>
+
+  <script>
+    const statusEl = document.getElementById('status');
+    const transcriptEl = document.getElementById('transcript');
+    const inputEl = document.getElementById('message-input');
+    const sendBtn = document.getElementById('send-btn');
+
+    let ws = null;
+    let pendingResolve = null; // resolve function for current waitForUser
+
+    function setStatus(text, cls) {
+      statusEl.textContent = text;
+      statusEl.className = cls;
+    }
+
+    function addMessage(role, content) {
+      const div = document.createElement('div');
+      div.className = 'message ' + role;
+      div.textContent = (role === 'user' ? 'You: ' : role === 'assistant' ? 'Assistant: ' : '') + content;
+      transcriptEl.appendChild(div);
+      transcriptEl.scrollTop = transcriptEl.scrollHeight;
+    }
+
+    function setInputEnabled(enabled) {
+      inputEl.disabled = !enabled;
+      sendBtn.disabled = !enabled;
+      if (enabled) inputEl.focus();
+    }
+
+    function connect() {
+      ws = new WebSocket('ws://localhost:3000');
+
+      ws.onopen = () => {
+        setStatus('Connected — waiting for host...', 'connected');
+      };
+
+      ws.onclose = () => {
+        setStatus('Disconnected', 'disconnected');
+        setInputEnabled(false);
+        pendingResolve = null;
+      };
+
+      ws.onerror = () => {
+        setStatus('Connection error', 'disconnected');
+      };
+
+      ws.onmessage = (event) => {
+        const msg = JSON.parse(event.data);
+
+        // Handle initialize request from host
+        if (msg.method === 'initialize') {
+          ws.send(JSON.stringify({
+            jsonrpc: '2.0',
+            id: msg.id,
+            result: {
+              protocolVersion: '1.0',
+              sessionId: 'browser-' + Date.now(),
+            },
+          }));
+          return;
+        }
+
+        // Handle execute requests
+        if (msg.method === 'execute') {
+          const { id, params } = msg;
+
+          if (params.operation === 'waitForUser') {
+            // Host is asking for user input
+            const prompt = params.args[0]?.input?.prompt || 'Say something';
+            setStatus(prompt, 'connected');
+            setInputEnabled(true);
+
+            // Store the resolve so send button can respond
+            pendingResolve = (userMessage) => {
+              addMessage('user', userMessage);
+              setStatus('Waiting for assistant...', 'pending');
+              setInputEnabled(false);
+              ws.send(JSON.stringify({
+                jsonrpc: '2.0',
+                id: id,
+                result: { ok: true, value: { message: userMessage } },
+              }));
+              pendingResolve = null;
+            };
+            return;
+          }
+
+          if (params.operation === 'showAssistantMessage') {
+            const message = params.args[0]?.input?.message || '';
+            addMessage('assistant', message);
+
+            // ACK back to host
+            ws.send(JSON.stringify({
+              jsonrpc: '2.0',
+              id: id,
+              result: { ok: true, value: null },
+            }));
+            return;
+          }
+        }
+
+        // Handle shutdown
+        if (msg.method === 'shutdown') {
+          addMessage('system', 'Host shut down');
+          setStatus('Host shut down', 'disconnected');
+          setInputEnabled(false);
+        }
+      };
+    }
+
+    // Send button handler
+    function handleSend() {
+      const text = inputEl.value.trim();
+      if (!text || !pendingResolve) return;
+      inputEl.value = '';
+      pendingResolve(text);
+    }
+
+    sendBtn.addEventListener('click', handleSend);
+    inputEl.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') handleSend();
+    });
+
+    // Auto-connect
+    connect();
+  </script>
+</body>
+</html>
