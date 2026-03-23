@@ -484,6 +484,60 @@ describe("collectReferencedTypeImports", () => {
   });
 });
 
+// ── Type Operator Rejection ──
+
+describe("type operator rejection in contracts", () => {
+  it("rejects typeof in contract return type", () => {
+    expect(() =>
+      generateWorkflowModule(`
+        declare function Svc(): {
+          get(key: string): Workflow<typeof Config>;
+        };
+      `),
+    ).toThrow(/typeof.*not supported/);
+  });
+
+  it("rejects keyof in contract parameter type", () => {
+    expect(() =>
+      generateWorkflowModule(`
+        declare function Svc(): {
+          get(key: keyof Config): Workflow<string>;
+        };
+      `),
+    ).toThrow(/keyof.*not supported/);
+  });
+
+  it("rejects keyof typeof in contract return type", () => {
+    expect(() =>
+      generateWorkflowModule(`
+        declare function Svc(): {
+          get(key: string): Workflow<keyof typeof Config>;
+        };
+      `),
+    ).toThrow(/keyof.*not supported/);
+  });
+
+  it("rejects typeof in contract parameter type", () => {
+    expect(() =>
+      generateWorkflowModule(`
+        declare function Svc(): {
+          get(opts: typeof defaults): Workflow<string>;
+        };
+      `),
+    ).toThrow(/typeof.*not supported/);
+  });
+
+  it("rejects readonly type operator in contract parameter type", () => {
+    expect(() =>
+      generateWorkflowModule(`
+        declare function Svc(): {
+          get(ids: readonly string[]): Workflow<string>;
+        };
+      `),
+    ).toThrow(/readonly.*not supported/);
+  });
+});
+
 // ── generateWorkflowModule ──
 
 describe("generateWorkflowModule", () => {

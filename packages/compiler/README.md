@@ -114,7 +114,7 @@ When a workflow calls a contract method via `yield*`, the compiler lowers it to 
 
 ```typescript
 // Authored
-const order = yield* OrderService().fetchOrder(orderId);
+const order = yield * OrderService().fetchOrder(orderId);
 
 // Compiles to (conceptual IR)
 // ExternalEval("order-service.fetchOrder", Construct({ orderId: Ref("orderId") }))
@@ -125,7 +125,7 @@ const order = yield* OrderService().fetchOrder(orderId);
 **Instance variant**: When the factory is called with an instance string, the agent ID includes it as a suffix:
 
 ```typescript
-yield* OrderService("legacy").fetchOrder(orderId);
+yield * OrderService("legacy").fetchOrder(orderId);
 // Agent ID: "order-service:legacy"
 // Effect ID: "order-service:legacy.fetchOrder"
 ```
@@ -133,7 +133,7 @@ yield* OrderService("legacy").fetchOrder(orderId);
 Without an instance argument, the base agent ID is used:
 
 ```typescript
-yield* OrderService().fetchOrder(orderId);
+yield * OrderService().fetchOrder(orderId);
 // Agent ID: "order-service"
 // Effect ID: "order-service.fetchOrder"
 ```
@@ -161,7 +161,7 @@ export const processOrder = {
   params: ["orderId"],
   body: {
     // ... compiled IR tree
-  }
+  },
 } as const;
 
 export const agents = { OrderService };
@@ -182,11 +182,11 @@ Contracts and workflows are sorted alphabetically in the output for deterministi
 
 Contract names are converted from PascalCase to kebab-case for agent IDs:
 
-| Contract Name   | Agent ID          |
-|-----------------|-------------------|
-| `OrderService`  | `order-service`   |
-| `PlayerA`       | `player-a`        |
-| `FraudDetector` | `fraud-detector`  |
+| Contract Name   | Agent ID         |
+| --------------- | ---------------- |
+| `OrderService`  | `order-service`  |
+| `PlayerA`       | `player-a`       |
+| `FraudDetector` | `fraud-detector` |
 
 With an instance parameter, the instance is appended after a colon:
 
@@ -234,7 +234,7 @@ Here, only `Order` needs an `import type` — the inline object type's property 
 
 **Supported type shapes**: Type references (`Foo`), namespace-qualified types (`T.Foo`), generic types (`Array<Foo>`), union and intersection types, tuple types, array shorthand (`Foo[]`), and inline object literals.
 
-**Unsupported type operators**: `typeof`, `keyof`, conditional types (`T extends U ? X : Y`), and mapped types are not currently handled. Contracts using these forms may produce incorrect output. Limit contract signatures to the supported shapes listed above.
+**Unsupported type operators**: `typeof`, `keyof`, `readonly` (operator form), and `unique` are rejected with a `CompileError` (v1 restriction). Conditional types (`T extends U ? X : Y`) and mapped types are not currently detected and may produce incorrect output. Limit contract signatures to the supported shapes listed above.
 
 ## Restrictions and Error Catalog
 
@@ -242,33 +242,33 @@ The compiler enforces a deterministic, side-effect-free subset of TypeScript. Vi
 
 ### Language Restrictions
 
-| Code | Restriction |
-|------|-------------|
-| E001 | Use `const` instead of `let` |
-| E002 | Use `const` instead of `var` |
-| E003 | Reassignment is not allowed |
-| E004 | Property mutation is not allowed |
-| E005 | Computed property access is not allowed |
+| Code | Restriction                                       |
+| ---- | ------------------------------------------------- |
+| E001 | Use `const` instead of `let`                      |
+| E002 | Use `const` instead of `var`                      |
+| E003 | Reassignment is not allowed                       |
+| E004 | Property mutation is not allowed                  |
+| E005 | Computed property access is not allowed           |
 | E006 | `Math.random()` is not allowed (nondeterministic) |
-| E007 | `Date.now()` is not allowed (nondeterministic) |
-| E008 | `Map`/`Set` constructors are not allowed |
-| E009 | `async`/`await` is not allowed |
-| E010 | `yield*` must appear in statement position only |
-| E011 | Ambiguous `+` operator |
-| E013 | `for...in`/`for...of` is not allowed |
-| E014 | `eval()`/`new Function()` is not allowed |
-| E015 | `try`/`catch` is not allowed |
-| E016 | `class`/`this` is not allowed |
-| E017 | `yield` without `*` is not allowed |
-| E018 | Cannot call arrow function directly |
-| E019 | `typeof`/`instanceof` is not allowed |
-| E020 | `break`/`continue` is not allowed |
-| E021 | `Promise` is not allowed |
-| E023 | Only `throw new Error(...)` is allowed |
-| E024 | Arrow functions must have expression bodies |
-| E028 | Variable names must not start with `__` |
-| E029 | `delete` operator is not allowed |
-| E030 | `Symbol` is not allowed |
+| E007 | `Date.now()` is not allowed (nondeterministic)    |
+| E008 | `Map`/`Set` constructors are not allowed          |
+| E009 | `async`/`await` is not allowed                    |
+| E010 | `yield*` must appear in statement position only   |
+| E011 | Ambiguous `+` operator                            |
+| E013 | `for...in`/`for...of` is not allowed              |
+| E014 | `eval()`/`new Function()` is not allowed          |
+| E015 | `try`/`catch` is not allowed                      |
+| E016 | `class`/`this` is not allowed                     |
+| E017 | `yield` without `*` is not allowed                |
+| E018 | Cannot call arrow function directly               |
+| E019 | `typeof`/`instanceof` is not allowed              |
+| E020 | `break`/`continue` is not allowed                 |
+| E021 | `Promise` is not allowed                          |
+| E023 | Only `throw new Error(...)` is allowed            |
+| E024 | Arrow functions must have expression bodies       |
+| E028 | Variable names must not start with `__`           |
+| E029 | `delete` operator is not allowed                  |
+| E030 | `Symbol` is not allowed                           |
 
 ### Contract Errors
 
@@ -286,6 +286,7 @@ Contract validation errors use code `E999`:
 - Factory parameter is not optional or not typed as `string`
 - Contract references a source-local type (must use `import type`)
 - Contract references an unresolved type (no matching `import type` found)
+- Contract uses `typeof`, `keyof`, `readonly`, or `unique` type operators (v1 restriction)
 
 ### Validation Errors
 
@@ -299,14 +300,14 @@ Primary API. Discovers contracts, compiles workflows, and generates a TypeScript
 
 ```typescript
 interface GenerateOptions {
-  filename?: string;   // Source filename for error messages. Default: "input.ts"
-  validate?: boolean;  // Run IR validation. Default: true
+  filename?: string; // Source filename for error messages. Default: "input.ts"
+  validate?: boolean; // Run IR validation. Default: true
 }
 
 interface GenerateResult {
-  source: string;                        // Generated TypeScript module source
-  contracts: DiscoveredContract[];       // Discovered ambient contracts
-  workflows: Record<string, Expr>;       // Compiled workflow IR by name
+  source: string; // Generated TypeScript module source
+  contracts: DiscoveredContract[]; // Discovered ambient contracts
+  workflows: Record<string, Expr>; // Compiled workflow IR by name
 }
 ```
 
@@ -318,12 +319,12 @@ Lower-level API. Compiles generator functions to IR without contract discovery o
 
 ```typescript
 interface CompileOptions {
-  validate?: boolean;  // Default: true
-  filename?: string;   // Default: "input.ts"
+  validate?: boolean; // Default: true
+  filename?: string; // Default: "input.ts"
 }
 
 interface CompileResult {
-  functions: Record<string, Expr>;  // Compiled IR by function name
+  functions: Record<string, Expr>; // Compiled IR by function name
 }
 ```
 
@@ -341,7 +342,7 @@ Error class with structured fields:
 
 ```typescript
 class CompileError extends Error {
-  code: string;    // e.g. "E001", "E999", "V001"
+  code: string; // e.g. "E001", "E999", "V001"
   line: number;
   column: number;
   // message format: "E001 at 3:5: Use 'const' instead of 'let'"
@@ -352,16 +353,16 @@ class CompileError extends Error {
 
 ```typescript
 interface DiscoveredContract {
-  name: string;           // e.g. "OrderService"
-  baseAgentId: string;    // e.g. "order-service"
-  hasInstance: boolean;    // true if factory accepts instance?: string
+  name: string; // e.g. "OrderService"
+  baseAgentId: string; // e.g. "order-service"
+  hasInstance: boolean; // true if factory accepts instance?: string
   methods: ContractMethod[];
 }
 
 interface ContractMethod {
-  name: string;                               // e.g. "fetchOrder"
+  name: string; // e.g. "fetchOrder"
   params: Array<{ name: string; type: string }>;
-  resultType: string;                         // e.g. "Order"
+  resultType: string; // e.g. "Order"
 }
 ```
 
@@ -377,10 +378,12 @@ The generated module is used by a host application to execute workflows:
 import { processOrder } from "./orders.generated.js";
 import { execute } from "@tisyn/runtime";
 
-const { result, journal } = yield* execute({
-  ir: processOrder,
-  env: { orderId: "abc-123" },
-});
+const { result, journal } =
+  yield *
+  execute({
+    ir: processOrder,
+    env: { orderId: "abc-123" },
+  });
 
 if (result.status === "ok") {
   console.log("Order:", result.value);
@@ -391,12 +394,12 @@ if (result.status === "ok") {
 
 `execute` accepts an options object:
 
-| Field          | Type                   | Description                                      |
-|----------------|------------------------|--------------------------------------------------|
-| `ir`           | `Expr`                 | The compiled workflow IR                         |
-| `env`          | `Record<string, Val>`  | Initial environment bindings (workflow parameters)|
-| `stream`       | `DurableStream`        | Durable stream for journaling (default: in-memory)|
-| `coroutineId`  | `string`               | Root task ID (default: `"root"`)                 |
+| Field         | Type                  | Description                                        |
+| ------------- | --------------------- | -------------------------------------------------- |
+| `ir`          | `Expr`                | The compiled workflow IR                           |
+| `env`         | `Record<string, Val>` | Initial environment bindings (workflow parameters) |
+| `stream`      | `DurableStream`       | Durable stream for journaling (default: in-memory) |
+| `coroutineId` | `string`              | Root task ID (default: `"root"`)                   |
 
 Returns `{ result: EventResult, journal: DurableEvent[] }`.
 
@@ -418,7 +421,7 @@ const orderAgent = implementAgent(OrderService(), {
 });
 
 // Install the agent's dispatch middleware
-yield* orderAgent.install();
+yield * orderAgent.install();
 ```
 
 Each handler is an Effection generator function that receives the typed payload and returns the typed result. The `install()` method registers the agent's handlers as dispatch middleware — when a workflow executes an `ExternalEval` for this agent, the corresponding handler runs.
@@ -527,9 +530,11 @@ export function OrderService(instance?: string) {
 }
 
 export const fulfillOrder = {
-  "type": "fn",
-  "params": ["orderId"],
-  "body": { /* ... compiled IR ... */ }
+  type: "fn",
+  params: ["orderId"],
+  body: {
+    /* ... compiled IR ... */
+  },
 } as const;
 
 export const agents = { BillingService, OrderService };
@@ -542,10 +547,12 @@ export const workflows = { fulfillOrder };
 import { fulfillOrder } from "./orders.generated.js";
 import { execute } from "@tisyn/runtime";
 
-const { result, journal } = yield* execute({
-  ir: fulfillOrder,
-  env: { orderId: "order-42" },
-});
+const { result, journal } =
+  yield *
+  execute({
+    ir: fulfillOrder,
+    env: { orderId: "order-42" },
+  });
 
 if (result.status === "ok") {
   console.log("Receipt:", result.value);
@@ -570,6 +577,6 @@ const billingAgent = implementAgent(BillingService(), {
   },
 });
 
-yield* orderAgent.install();
-yield* billingAgent.install();
+yield * orderAgent.install();
+yield * billingAgent.install();
 ```
