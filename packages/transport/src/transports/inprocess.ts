@@ -36,7 +36,9 @@ export function inprocessTransport<Ops extends Record<string, OperationSpec>>(
     // Spawn agent-side processing loop
     yield* spawn(function* () {
       yield* server.use({
-        receive: hostSub,
+        *receive() {
+          return hostSub;
+        },
         *send(msg) {
           yield* agentToHost.send(msg);
         },

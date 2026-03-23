@@ -45,7 +45,9 @@ const websocketBuilder: TransportFactoryBuilder = (declaration, handlers) => {
 
         scope.run(function* () {
           yield* server.use({
-            receive: queue,
+            *receive() {
+              return queue;
+            },
             *send(msg) {
               rawWs.send(JSON.stringify(msg));
             },
