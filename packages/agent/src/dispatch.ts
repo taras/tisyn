@@ -18,9 +18,7 @@ import type { Val } from "@tisyn/ir";
 // ---------------------------------------------------------------------------
 
 type Around<A> = {
-  [K in keyof Operations<A>]: A[K] extends (
-    ...args: infer TArgs
-  ) => infer TReturn
+  [K in keyof Operations<A>]: A[K] extends (...args: infer TArgs) => infer TReturn
     ? Middleware<TArgs, TReturn>
     : Middleware<[], A[K]>;
 };
@@ -46,45 +44,39 @@ type Operations<T> = {
 function createApi<A extends {}>(name: string, handler: A): Api<A> {
   const fields = Object.keys(handler) as (keyof A)[];
 
-  const defaultMiddleware: Around<A> = fields.reduce(
-    (sum, field) => {
-      return Object.assign(sum, {
-        // biome-ignore lint/suspicious/noExplicitAny: Dynamic middleware composition
-        [field]: (args: any, next: any) => next(...args),
-      });
-    },
-    {} as Around<A>,
-  );
+  const defaultMiddleware: Around<A> = fields.reduce((sum, field) => {
+    return Object.assign(sum, {
+      // biome-ignore lint/suspicious/noExplicitAny: Dynamic middleware composition
+      [field]: (args: any, next: any) => next(...args),
+    });
+  }, {} as Around<A>);
 
   const context = createContext<Around<A>>(`$api:${name}`, defaultMiddleware);
 
-  const operations = fields.reduce(
-    (api, field) => {
-      const handle = handler[field];
-      if (typeof handle === "function") {
-        return Object.assign(api, {
-          // biome-ignore lint/suspicious/noExplicitAny: Dynamic field types
-          [field]: function* (...args: any[]) {
-            const around = yield* context.expect();
-            // biome-ignore lint/complexity/noBannedTypes: Dynamic middleware call
-            const mw = around[field] as Function;
-            return yield* mw(args, handle);
-          },
-        });
-      }
+  const operations = fields.reduce((api, field) => {
+    const handle = handler[field];
+    if (typeof handle === "function") {
       return Object.assign(api, {
-        [field]: {
-          *[Symbol.iterator]() {
-            const around = yield* context.expect();
-            // biome-ignore lint/complexity/noBannedTypes: Dynamic middleware call
-            const mw = around[field] as Function;
-            return yield* mw([], () => handle);
-          },
+        // biome-ignore lint/suspicious/noExplicitAny: Dynamic field types
+        [field]: function* (...args: any[]) {
+          const around = yield* context.expect();
+          // biome-ignore lint/complexity/noBannedTypes: Dynamic middleware call
+          const mw = around[field] as Function;
+          return yield* mw(args, handle);
         },
       });
-    },
-    {} as Operations<A>,
-  );
+    }
+    return Object.assign(api, {
+      [field]: {
+        *[Symbol.iterator]() {
+          const around = yield* context.expect();
+          // biome-ignore lint/complexity/noBannedTypes: Dynamic middleware call
+          const mw = around[field] as Function;
+          return yield* mw([], () => handle);
+        },
+      },
+    });
+  }, {} as Operations<A>);
 
   function* around(middlewares: Partial<Around<A>>): Operation<void> {
     const current = yield* context.expect();
@@ -97,8 +89,7 @@ function createApi<A extends {}>(name: string, handler: A): Api<A> {
           const mw = middlewares[field] as Middleware<any[], any>;
           return Object.assign(sum, {
             // biome-ignore lint/suspicious/noExplicitAny: Dynamic middleware composition
-            [field]: (args: any, next: any) =>
-              mw(args, (...args) => prior(args, next)),
+            [field]: (args: any, next: any) => mw(args, (...args) => prior(args, next)),
           });
         },
         Object.assign({}, current),
