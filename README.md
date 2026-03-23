@@ -1,109 +1,80 @@
-# (T)ypeScript (I)nterpreter (Syn)tax
+# Tisyn
 
-Tisyn (pronounced like the Chicken) is a minimal set of interfaces and
-constructors to represent an abstract syntax tree that can be
-interpreted.
+Tisyn is a TypeScript-first runtime stack for representing, validating, executing, and transporting replayable programs and typed agent calls.
 
-Tisyn expressions do not come with any semantics whatsoever, they
-purely express how to compose values by ensuring that the types line
-up. This allows language designers to skip the development of their
-own syntax while they are figuring out how execution should work.
+The repository is split into small packages with clear boundaries. The root README explains how they fit together; package-level READMEs cover the concrete APIs.
 
-## Agent Model
+## Package relationships
 
-Tisyn uses a declaration-based agent model where shared declarations
-define the contract between hosts and agents.
+Tisyn is easiest to understand as layers:
 
-### Declarations
+1. Syntax and validation
+   - [`@tisyn/ir`](./packages/ir/README.md): the Tisyn expression/value model
+   - [`@tisyn/validate`](./packages/validate/README.md): boundary validation for untrusted or external IR
 
-An `agent()` declaration defines typed operations. The declaration is
-shared between host and agent — it is the single source of truth for
-the operation contract.
+2. Core semantics
+   - [`@tisyn/kernel`](./packages/kernel/README.md): evaluation, environments, core errors, and durable event shapes
+
+3. Execution
+   - [`@tisyn/durable-streams`](./packages/durable-streams/README.md): append-only replay/journal primitives
+   - [`@tisyn/runtime`](./packages/runtime/README.md): durable execution and remote IR execution
+
+4. Agents and remoting
+   - [`@tisyn/agent`](./packages/agent/README.md): typed agent declarations, implementations, dispatch, and invocation helpers
+   - [`@tisyn/protocol`](./packages/protocol/README.md): wire-level host/agent messages
+   - [`@tisyn/transport`](./packages/transport/README.md): sessions and concrete transports
+
+5. Tooling and verification
+   - [`@tisyn/compiler`](./packages/compiler/README.md): compile generator-shaped TypeScript into Tisyn IR
+   - [`@tisyn/conformance`](./packages/conformance/README.md): fixture harness for validating runtime behavior
+
+## Recommended reading order
+
+- Start with [`@tisyn/ir`](./packages/ir/README.md) to see what a Tisyn program looks like.
+- Read [`@tisyn/validate`](./packages/validate/README.md) and [`@tisyn/kernel`](./packages/kernel/README.md) for correctness and semantics.
+- Read [`@tisyn/runtime`](./packages/runtime/README.md) for actual execution.
+- Read [`@tisyn/agent`](./packages/agent/README.md), [`@tisyn/protocol`](./packages/protocol/README.md), and [`@tisyn/transport`](./packages/transport/README.md) for host/agent integration.
+- Read [`@tisyn/compiler`](./packages/compiler/README.md) if you want to generate IR from TypeScript source instead of building IR by hand.
+
+## Package guide
+
+| Package | Purpose |
+| --- | --- |
+| [`@tisyn/ir`](./packages/ir/README.md) | AST types, constructors, walkers, printers, and value types |
+| [`@tisyn/validate`](./packages/validate/README.md) | IR validation and `MalformedIR` errors |
+| [`@tisyn/kernel`](./packages/kernel/README.md) | Core evaluation, environments, and runtime error/event types |
+| [`@tisyn/durable-streams`](./packages/durable-streams/README.md) | Durable append-only stream abstractions used by runtime replay |
+| [`@tisyn/runtime`](./packages/runtime/README.md) | Durable execution of IR plus remote IR execution |
+| [`@tisyn/agent`](./packages/agent/README.md) | Typed agents, implementations, dispatch, and invocation helpers |
+| [`@tisyn/protocol`](./packages/protocol/README.md) | Parsed/constructed protocol messages for host-agent communication |
+| [`@tisyn/transport`](./packages/transport/README.md) | Protocol sessions and transports like `stdio`, `websocket`, `worker`, and `sse-post` |
+| [`@tisyn/compiler`](./packages/compiler/README.md) | Compile TypeScript generator functions into Tisyn IR |
+| [`@tisyn/conformance`](./packages/conformance/README.md) | Execute fixtures against the runtime to verify behavior |
+
+## Typical flows
+
+### Build and run IR directly
 
 ```ts
-import { agent, operation } from "@tisyn/agent";
+import { Add, Q } from "@tisyn/ir";
+import { execute } from "@tisyn/runtime";
 
-const shopify = agent("shopify", {
-  createOrder: operation<
-    { customerId: string; lineItems: Array<{ sku: string; quantity: number }> },
-    { orderId: string; status: string }
-  >(),
+const ir = Add({ left: Q(20), right: Q(22) });
+const { result } = yield* execute({ ir });
+```
+
+### Define an agent and install a remote transport
+
+```ts
+import { agent, operation, invoke } from "@tisyn/agent";
+import { installRemoteAgent, websocketTransport } from "@tisyn/transport";
+
+const math = agent("math", {
+  double: operation<{ value: number }, number>(),
 });
+
+yield* installRemoteAgent(math, websocketTransport({ url: "ws://localhost:8080" }));
+const result = yield* invoke(math.double({ value: 21 }));
 ```
 
-### Host-side invocation
-
-Host-side call methods construct invocation data. They do not execute
-the operation — they produce a plain object describing what to call.
-
-```ts
-const invocation = shopify.createOrder({
-  customerId: "123",
-  lineItems: [{ sku: "ABC", quantity: 2 }],
-});
-// → { effectId: "shopify.createOrder", data: { customerId: "123", ... } }
-```
-
-### Agent-side implementation
-
-Implementations bind handlers to a declaration and install them as
-dispatch middleware in the current effection scope.
-
-```ts
-import { implementAgent } from "@tisyn/agent";
-
-const shopifyImpl = implementAgent(shopify, {
-  *createOrder(input) {
-    // server-side logic — e.g. call a GraphQL API
-    return { orderId: "order-1", status: "created" };
-  },
-});
-
-yield * shopifyImpl.install();
-```
-
-### Dispatching invocations with `invoke()`
-
-`invoke()` bridges an invocation (plain data) to a `dispatch()` call
-(effection Operation). Use it on the server to dispatch received
-invocations, or inside agent implementations to call other agents.
-
-```ts
-import { invoke } from "@tisyn/agent";
-
-// Dispatch a received invocation
-const result = yield * invoke(shopify.createOrder(input));
-
-// Call another agent from within an implementation
-const shopifyImpl = implementAgent(shopify, {
-  *createOrder(input) {
-    return yield* invoke(
-      graphql.execute({
-        document: CREATE_ORDER_MUTATION,
-        variables: { input },
-      }),
-    );
-  },
-});
-```
-
-### Remote Tisyn execution
-
-For power-user scenarios, a server can receive and execute Tisyn IR
-programs with `executeRemote()`. The program runs against whatever
-dispatch middleware is installed in the current scope.
-
-```ts
-import { executeRemote } from "@tisyn/runtime";
-
-const result =
-  yield *
-  executeRemote({
-    program: receivedIR,
-    env: { customerId: "123" },
-  });
-```
-
-`executeRemote()` returns the result value on success or throws on
-error. The thrown Error includes `cause` set to the full
-`EventResult` for structured error inspection.
+For the detailed agent model and API examples, see [`@tisyn/agent`](./packages/agent/README.md).
