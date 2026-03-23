@@ -28,7 +28,9 @@ workerMain<HostMessage, void, void, void, AgentMessage, void>(function* ({ messa
   });
 
   yield* server.use({
-    receive: queue,
+    *receive() {
+      return queue;
+    },
     *send(agentMsg) {
       yield* send(agentMsg);
     },

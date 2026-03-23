@@ -1,42 +1,28 @@
-import type { Operation } from "effection";
 import process from "node:process";
 import { fromReadable } from "@effectionx/node/stream";
 import { lines, map } from "@effectionx/stream-helpers";
 import { pipe } from "remeda";
-import type { OperationSpec, AgentDeclaration, ImplementationHandlers } from "@tisyn/agent";
-import { implementAgent } from "@tisyn/agent";
 import { parseHostMessage } from "@tisyn/protocol";
-import { createProtocolServer } from "./protocol-server.js";
+import type { AgentServerTransport } from "./protocol-server.js";
 
 /**
- * Run an agent over stdio using NDJSON framing. This is the agent-side
- * entry point — call it from a subprocess that will be spawned by
- * `stdioTransport()` on the host side.
- *
- * Reads HostMessages as NDJSON from process.stdin.
- * Writes AgentMessages as NDJSON to process.stdout.
+ * Create an agent-side transport that reads NDJSON from stdin and
+ * writes NDJSON to stdout. Use with `createProtocolServer(impl).use()`
+ * to serve an agent over stdio.
  */
-export function* runStdioAgent<Ops extends Record<string, OperationSpec>>(
-  declaration: AgentDeclaration<Ops>,
-  handlers: ImplementationHandlers<Ops>,
-): Operation<void> {
-  const messageStream = pipe(
-    fromReadable(process.stdin),
-    lines(),
-    map(function* (line: string) {
-      return parseHostMessage(JSON.parse(line));
-    }),
-  );
-
-  const sub = yield* messageStream;
-
-  const impl = implementAgent(declaration, handlers);
-  const server = createProtocolServer(impl);
-
-  yield* server.use({
-    receive: sub,
+export function createStdioAgentTransport(): AgentServerTransport {
+  return {
+    *receive() {
+      return yield* pipe(
+        fromReadable(process.stdin),
+        lines(),
+        map(function* (line: string) {
+          return parseHostMessage(JSON.parse(line));
+        }),
+      );
+    },
     *send(msg) {
       process.stdout.write(JSON.stringify(msg) + "\n");
     },
-  });
+  };
 }

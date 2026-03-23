@@ -41,7 +41,9 @@ const workerBuilder: TransportFactoryBuilder = (declaration, handlers) => {
 
       scope.run(function* () {
         yield* server.use({
-          receive: agentQueue,
+          *receive() {
+            return agentQueue;
+          },
           *send(msg) {
             port2.postMessage(JSON.stringify(msg));
           },

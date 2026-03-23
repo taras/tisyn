@@ -17,7 +17,7 @@ import {
  * HostMessages and produces typed AgentMessages.
  */
 export interface AgentServerTransport {
-  receive: Subscription<HostMessage, unknown>;
+  receive(): Operation<Subscription<HostMessage, unknown>>;
   send(msg: AgentMessage): Operation<void>;
 }
 
@@ -46,9 +46,10 @@ export function createProtocolServer<Ops extends Record<string, OperationSpec>>(
   return {
     *use(transport) {
       const inflight = new Map<string, Task<void>>();
+      const sub = yield* transport.receive();
 
       for (;;) {
-        const { value: msg, done } = yield* transport.receive.next();
+        const { value: msg, done } = yield* sub.next();
         if (done) break;
 
         if (msg.method === "initialize") {
