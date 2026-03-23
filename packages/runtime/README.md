@@ -16,7 +16,7 @@ import { Add, Q } from "@tisyn/ir";
 import { execute } from "@tisyn/runtime";
 
 const ir = Add({ left: Q(20), right: Q(22) });
-const { result, journal } = yield* execute({ ir });
+const { result, journal } = yield * execute({ ir });
 ```
 
 `execute()` validates the IR, reads the durable stream, replays prior events, dispatches live effects, and appends yield/close events.
@@ -26,10 +26,12 @@ const { result, journal } = yield* execute({ ir });
 ```ts
 import { executeRemote } from "@tisyn/runtime";
 
-const result = yield* executeRemote({
-  program: receivedIr,
-  env: { customerId: "123" },
-});
+const result =
+  yield *
+  executeRemote({
+    program: receivedIr,
+    env: { customerId: "123" },
+  });
 ```
 
 ## Relationship to the rest of Tisyn
