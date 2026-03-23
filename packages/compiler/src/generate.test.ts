@@ -194,7 +194,7 @@ describe("collectReferencedTypeImports", () => {
     expect(imports[0]).not.toContain("Receipt");
   });
 
-  it("does not forward value imports", () => {
+  it("rejects types only available as value imports", () => {
     const sf = parseSource(`
       import { Order } from "./types.js";
       declare function OrderService(): {
@@ -202,8 +202,10 @@ describe("collectReferencedTypeImports", () => {
       };
     `);
     const contracts = discoverContracts(sf);
-    const imports = collectReferencedTypeImports(sf, contracts);
-    expect(imports).toHaveLength(0);
+    expect(() => collectReferencedTypeImports(sf, contracts)).toThrow(CompileError);
+    expect(() => collectReferencedTypeImports(sf, contracts)).toThrow(
+      /Contract references type 'Order'.*import type/,
+    );
   });
 
   it("collects type-only specifiers from mixed imports", () => {
@@ -315,16 +317,30 @@ describe("collectReferencedTypeImports", () => {
     expect(imports[0]).toBe('import type Order from "./types.js";');
   });
 
-  it("allows ambient types not found in imports or local declarations", () => {
+  it("rejects unresolved type references with no import", () => {
     const sf = parseSource(`
       declare function OrderService(): {
         fetchOrder(orderId: string): Workflow<Order>;
       };
     `);
     const contracts = discoverContracts(sf);
-    // Order is neither imported nor locally defined — assumed ambient
-    const imports = collectReferencedTypeImports(sf, contracts);
-    expect(imports).toHaveLength(0);
+    expect(() => collectReferencedTypeImports(sf, contracts)).toThrow(CompileError);
+    expect(() => collectReferencedTypeImports(sf, contracts)).toThrow(
+      /Contract references type 'Order'.*import type/,
+    );
+  });
+
+  it("rejects partially resolved types when some imports are present", () => {
+    const sf = parseSource(`
+      import type { Order } from "./types.js";
+      declare function OrderService(): {
+        fetchOrder(orderId: string): Workflow<Record<string, Order>>;
+        chargeCard(payment: Payment): Workflow<Receipt>;
+      };
+    `);
+    const contracts = discoverContracts(sf);
+    expect(() => collectReferencedTypeImports(sf, contracts)).toThrow(CompileError);
+    expect(() => collectReferencedTypeImports(sf, contracts)).toThrow(/import type/);
   });
 
   it("forwards namespace imports for qualified types like T.Order", () => {
@@ -388,6 +404,7 @@ describe("generateWorkflowModule", () => {
   describe("instance handling", () => {
     it("compiles default factory call (no instance) with base agent ID", () => {
       const source = `
+        import type { Order } from "./types.js";
         declare function OrderService(instance?: string): {
           fetchOrder(orderId: string): Workflow<Order>;
         };
@@ -408,6 +425,7 @@ describe("generateWorkflowModule", () => {
 
     it("compiles instance factory call with suffixed agent ID", () => {
       const source = `
+        import type { Order } from "./types.js";
         declare function OrderService(instance?: string): {
           fetchOrder(orderId: string): Workflow<Order>;
         };
@@ -427,6 +445,7 @@ describe("generateWorkflowModule", () => {
 
     it("rejects variable instance argument", () => {
       const source = `
+        import type { Order } from "./types.js";
         declare function OrderService(instance?: string): {
           fetchOrder(orderId: string): Workflow<Order>;
         };
@@ -442,6 +461,7 @@ describe("generateWorkflowModule", () => {
 
     it("rejects multiple factory arguments", () => {
       const source = `
+        import type { Order } from "./types.js";
         declare function OrderService(instance?: string): {
           fetchOrder(orderId: string): Workflow<Order>;
         };
@@ -460,6 +480,7 @@ describe("generateWorkflowModule", () => {
   describe("normalization", () => {
     it("normalizes single positional arg to named payload Construct", () => {
       const source = `
+        import type { Order } from "./types.js";
         declare function OrderService(): {
           fetchOrder(orderId: string): Workflow<Order>;
         };
@@ -487,6 +508,7 @@ describe("generateWorkflowModule", () => {
 
     it("normalizes multi-arg to named payload Construct", () => {
       const source = `
+        import type { Order } from "./types.js";
         declare function OrderService(): {
           fetchOrder(orderId: string, includeLines: boolean): Workflow<Order>;
         };
@@ -512,6 +534,7 @@ describe("generateWorkflowModule", () => {
   describe("validation errors", () => {
     it("rejects unknown contract symbol", () => {
       const source = `
+        import type { Order } from "./types.js";
         declare function OrderService(): {
           fetchOrder(orderId: string): Workflow<Order>;
         };
@@ -527,6 +550,7 @@ describe("generateWorkflowModule", () => {
 
     it("rejects unknown method on known contract", () => {
       const source = `
+        import type { Order } from "./types.js";
         declare function OrderService(): {
           fetchOrder(orderId: string): Workflow<Order>;
         };
@@ -542,6 +566,7 @@ describe("generateWorkflowModule", () => {
 
     it("rejects wrong arity", () => {
       const source = `
+        import type { Order } from "./types.js";
         declare function OrderService(): {
           fetchOrder(orderId: string, includeLines: boolean): Workflow<Order>;
         };
@@ -557,6 +582,7 @@ describe("generateWorkflowModule", () => {
 
     it("rejects workflow name that collides with contract name", () => {
       const source = `
+        import type { Order } from "./types.js";
         declare function OrderService(): {
           fetchOrder(orderId: string): Workflow<Order>;
         };
@@ -574,6 +600,7 @@ describe("generateWorkflowModule", () => {
 
   describe("codegen output", () => {
     const source = `
+      import type { Order, Payment, Receipt } from "./types.js";
       declare function OrderService(instance?: string): {
         fetchOrder(orderId: string, includeLines: boolean): Workflow<Order>;
       };
@@ -820,6 +847,7 @@ describe("generateWorkflowModule", () => {
   describe("result metadata", () => {
     it("returns discovered contracts", () => {
       const source = `
+        import type { Order } from "./types.js";
         declare function OrderService(): {
           fetchOrder(orderId: string): Workflow<Order>;
         };
@@ -835,6 +863,7 @@ describe("generateWorkflowModule", () => {
 
     it("returns compiled workflows", () => {
       const source = `
+        import type { Order } from "./types.js";
         declare function OrderService(): {
           fetchOrder(orderId: string): Workflow<Order>;
         };

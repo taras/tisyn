@@ -149,16 +149,22 @@ function extractTypeIdentifiers(typeText: string): Set<string> {
  * Extract namespace qualifiers from type text (the X in X.Y patterns).
  * E.g., "Record<string, T.Order>" → Set(["T"])
  */
-function extractNamespaceQualifiers(typeText: string): Set<string> {
+function extractNamespaceQualifiedParts(typeText: string): {
+  qualifiers: Set<string>;
+  members: Set<string>;
+} {
   const qualifiers = new Set<string>();
-  const matches = typeText.matchAll(/([A-Za-z_$][A-Za-z0-9_$]*)\.[A-Za-z_$]/g);
+  const members = new Set<string>();
+  const matches = typeText.matchAll(/([A-Za-z_$][A-Za-z0-9_$]*)\.([A-Za-z_$][A-Za-z0-9_$]*)/g);
   for (const m of matches) {
     const qualifier = m[1]!;
+    const member = m[2]!;
     if (!BUILTIN_TYPES.has(qualifier)) {
       qualifiers.add(qualifier);
+      members.add(member);
     }
   }
-  return qualifiers;
+  return { qualifiers, members };
 }
 
 /**
@@ -207,11 +213,16 @@ export function collectReferencedTypeImports(
         for (const id of extractTypeIdentifiers(typeText)) {
           referencedIds.add(id);
         }
-        for (const q of extractNamespaceQualifiers(typeText)) {
+        const nsParts = extractNamespaceQualifiedParts(typeText);
+        for (const q of nsParts.qualifiers) {
           nsQualifiers.add(q);
           // Remove namespace qualifiers from bare identifiers
           // (T in T.Order is a qualifier, not a standalone type)
           referencedIds.delete(q);
+        }
+        // Remove namespace-qualified members (Order in T.Order is resolved via namespace, not bare)
+        for (const m of nsParts.members) {
+          referencedIds.delete(m);
         }
       }
     }
@@ -234,6 +245,7 @@ export function collectReferencedTypeImports(
 
   // Collect matching type-only imports
   const imports: string[] = [];
+  const resolvedIds = new Set<string>();
   const resolvedNsQualifiers = new Set<string>();
 
   for (const stmt of sourceFile.statements) {
@@ -249,6 +261,7 @@ export function collectReferencedTypeImports(
       // Default import: import type Foo from "..."
       if (clause.name && referencedIds.has(clause.name.text)) {
         imports.push(`import type ${clause.name.text} from "${moduleSpecifier}";`);
+        resolvedIds.add(clause.name.text);
       }
 
       // Namespace import: import type * as T from "..."
@@ -273,6 +286,7 @@ export function collectReferencedTypeImports(
             )
             .join(", ");
           imports.push(`import type { ${names} } from "${moduleSpecifier}";`);
+          for (const el of matchingSpecifiers) resolvedIds.add(el.name.text);
         }
       }
       continue;
@@ -290,6 +304,7 @@ export function collectReferencedTypeImports(
           )
           .join(", ");
         imports.push(`import type { ${names} } from "${moduleSpecifier}";`);
+        for (const el of typeSpecifiers) resolvedIds.add(el.name.text);
       }
     }
   }
@@ -300,6 +315,18 @@ export function collectReferencedTypeImports(
       throw new CompileError(
         "E999",
         `Contract references namespace-qualified type '${q}.*' but no 'import type * as ${q}' was found in source`,
+        1,
+        1,
+      );
+    }
+  }
+
+  // Reject unresolved type references
+  for (const id of referencedIds) {
+    if (!resolvedIds.has(id)) {
+      throw new CompileError(
+        "E999",
+        `Contract references type '${id}' which has no 'import type' declaration in source. Add 'import type { ${id} } from "..."' to the workflow source file.`,
         1,
         1,
       );
