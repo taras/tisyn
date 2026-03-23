@@ -43,11 +43,11 @@
     "@effectionx/vitest": "^0.3.1",
     "@types/node": "^25.5.0",
     "@types/ws": "^8",
-    "effection": "4.1.0-alpha.7",
+    "effection": "4.0.2",
     "vitest": "^4",
     "ws": "^8"
   },
   "peerDependencies": {
-    "effection": "4.1.0-alpha.7"
+    "effection": "^3 || ^4"
   }
 }

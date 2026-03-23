@@ -35,10 +35,10 @@
   },
   "devDependencies": {
     "@effectionx/vitest": "^0.3.0",
-    "effection": "4.1.0-alpha.7",
+    "effection": "4.0.2",
     "vitest": "^4"
   },
   "peerDependencies": {
-    "effection": "4.1.0-alpha.7"
+    "effection": "^3 || ^4"
   }
 }
