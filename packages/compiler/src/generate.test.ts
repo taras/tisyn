@@ -25,7 +25,7 @@ describe("discoverContracts", () => {
         fetchOrder(orderId: string, includeLines: boolean): Workflow<Order>;
       };
     `);
-    const contracts = discoverContracts(sf);
+    const { contracts } = discoverContracts(sf);
     expect(contracts).toHaveLength(1);
     expect(contracts[0]).toMatchObject({
       name: "OrderService",
@@ -50,7 +50,7 @@ describe("discoverContracts", () => {
         getConfig(key: string): Workflow<Config>;
       };
     `);
-    const contracts = discoverContracts(sf);
+    const { contracts } = discoverContracts(sf);
     expect(contracts).toHaveLength(1);
     expect(contracts[0]).toMatchObject({
       name: "ConfigService",
@@ -68,7 +68,7 @@ describe("discoverContracts", () => {
         chargeCard(payment: Payment): Workflow<Receipt>;
       };
     `);
-    const contracts = discoverContracts(sf);
+    const { contracts } = discoverContracts(sf);
     expect(contracts).toHaveLength(2);
     expect(contracts.map((c) => c.name)).toEqual(["OrderService", "PaymentService"]);
   });
@@ -80,7 +80,7 @@ describe("discoverContracts", () => {
         updateOrder(orderId: string, data: OrderUpdate): Workflow<Order>;
       };
     `);
-    const contracts = discoverContracts(sf);
+    const { contracts } = discoverContracts(sf);
     expect(contracts[0]!.methods).toHaveLength(2);
     expect(contracts[0]!.methods[0]!.name).toBe("fetchOrder");
     expect(contracts[0]!.methods[1]!.name).toBe("updateOrder");
@@ -96,7 +96,7 @@ describe("discoverContracts", () => {
         return orderId;
       }
     `);
-    const contracts = discoverContracts(sf);
+    const { contracts } = discoverContracts(sf);
     expect(contracts).toHaveLength(1);
     expect(contracts[0]!.name).toBe("OrderService");
   });
@@ -206,8 +206,8 @@ describe("collectReferencedTypeImports", () => {
         fetchOrder(orderId: string): Workflow<Order>;
       };
     `);
-    const contracts = discoverContracts(sf);
-    const imports = collectReferencedTypeImports(sf, contracts);
+    const { contractTypeNodes } = discoverContracts(sf);
+    const imports = collectReferencedTypeImports(sf, contractTypeNodes);
     expect(imports).toHaveLength(1);
     expect(imports[0]).toContain("Order");
     expect(imports[0]).not.toContain("Unused");
@@ -221,9 +221,9 @@ describe("collectReferencedTypeImports", () => {
         fetchOrder(orderId: string): Workflow<Order>;
       };
     `);
-    const contracts = discoverContracts(sf);
-    expect(() => collectReferencedTypeImports(sf, contracts)).toThrow(CompileError);
-    expect(() => collectReferencedTypeImports(sf, contracts)).toThrow(
+    const { contractTypeNodes } = discoverContracts(sf);
+    expect(() => collectReferencedTypeImports(sf, contractTypeNodes)).toThrow(CompileError);
+    expect(() => collectReferencedTypeImports(sf, contractTypeNodes)).toThrow(
       /Contract references type 'Order'.*import type/,
     );
   });
@@ -235,8 +235,8 @@ describe("collectReferencedTypeImports", () => {
         fetchOrder(orderId: string): Workflow<Order>;
       };
     `);
-    const contracts = discoverContracts(sf);
-    const imports = collectReferencedTypeImports(sf, contracts);
+    const { contractTypeNodes } = discoverContracts(sf);
+    const imports = collectReferencedTypeImports(sf, contractTypeNodes);
     expect(imports).toHaveLength(1);
     expect(imports[0]).toContain("Order");
     expect(imports[0]).not.toContain("doSomething");
@@ -249,8 +249,8 @@ describe("collectReferencedTypeImports", () => {
         fetchOrder(orderId: string): Workflow<string>;
       };
     `);
-    const contracts = discoverContracts(sf);
-    const imports = collectReferencedTypeImports(sf, contracts);
+    const { contractTypeNodes } = discoverContracts(sf);
+    const imports = collectReferencedTypeImports(sf, contractTypeNodes);
     expect(imports).toHaveLength(0);
   });
 
@@ -269,11 +269,37 @@ describe("collectReferencedTypeImports", () => {
         list(seed: string): Workflow<ReadonlyArray<Order>>;
       };
     `);
-    const contracts = discoverContracts(sf);
-    const imports = collectReferencedTypeImports(sf, contracts);
+    const { contractTypeNodes } = discoverContracts(sf);
+    const imports = collectReferencedTypeImports(sf, contractTypeNodes);
     expect(imports).toHaveLength(1);
     expect(imports[0]).toContain("Order");
     expect(imports[0]).not.toContain("ReadonlyArray");
+  });
+
+  it("accepts inline object types without treating property names as type references", () => {
+    const sf = parseSource(`
+      import type { Result } from "./types.js";
+      declare function OrderService(): {
+        process(payload: { orderId: string; nested: { ok: boolean } }): Workflow<Result>;
+      };
+    `);
+    const { contractTypeNodes } = discoverContracts(sf);
+    const imports = collectReferencedTypeImports(sf, contractTypeNodes);
+    expect(imports).toHaveLength(1);
+    expect(imports[0]).toContain("Result");
+  });
+
+  it("handles array shorthand syntax in contract types", () => {
+    const sf = parseSource(`
+      import type { Order } from "./types.js";
+      declare function OrderService(): {
+        list(seed: string): Workflow<Order[]>;
+      };
+    `);
+    const { contractTypeNodes } = discoverContracts(sf);
+    const imports = collectReferencedTypeImports(sf, contractTypeNodes);
+    expect(imports).toHaveLength(1);
+    expect(imports[0]).toContain("Order");
   });
 
   it("extracts type identifiers from composite types like Record<string, Order>", () => {
@@ -283,8 +309,8 @@ describe("collectReferencedTypeImports", () => {
         fetchOrder(orderId: string): Workflow<Record<string, Order>>;
       };
     `);
-    const contracts = discoverContracts(sf);
-    const imports = collectReferencedTypeImports(sf, contracts);
+    const { contractTypeNodes } = discoverContracts(sf);
+    const imports = collectReferencedTypeImports(sf, contractTypeNodes);
     expect(imports).toHaveLength(1);
     expect(imports[0]).toContain("Order");
   });
@@ -296,9 +322,11 @@ describe("collectReferencedTypeImports", () => {
         fetchOrder(orderId: string): Workflow<Order>;
       };
     `);
-    const contracts = discoverContracts(sf);
-    expect(() => collectReferencedTypeImports(sf, contracts)).toThrow(CompileError);
-    expect(() => collectReferencedTypeImports(sf, contracts)).toThrow(/source-local type 'Order'/);
+    const { contractTypeNodes } = discoverContracts(sf);
+    expect(() => collectReferencedTypeImports(sf, contractTypeNodes)).toThrow(CompileError);
+    expect(() => collectReferencedTypeImports(sf, contractTypeNodes)).toThrow(
+      /source-local type 'Order'/,
+    );
   });
 
   it("rejects source-local type alias types with clear error", () => {
@@ -308,8 +336,8 @@ describe("collectReferencedTypeImports", () => {
         charge(amount: number): Workflow<Receipt>;
       };
     `);
-    const contracts = discoverContracts(sf);
-    expect(() => collectReferencedTypeImports(sf, contracts)).toThrow(
+    const { contractTypeNodes } = discoverContracts(sf);
+    expect(() => collectReferencedTypeImports(sf, contractTypeNodes)).toThrow(
       /source-local type 'Receipt'/,
     );
   });
@@ -321,9 +349,11 @@ describe("collectReferencedTypeImports", () => {
         fetchOrder(orderId: string): Workflow<Order>;
       };
     `);
-    const contracts = discoverContracts(sf);
-    expect(() => collectReferencedTypeImports(sf, contracts)).toThrow(CompileError);
-    expect(() => collectReferencedTypeImports(sf, contracts)).toThrow(/source-local type 'Order'/);
+    const { contractTypeNodes } = discoverContracts(sf);
+    expect(() => collectReferencedTypeImports(sf, contractTypeNodes)).toThrow(CompileError);
+    expect(() => collectReferencedTypeImports(sf, contractTypeNodes)).toThrow(
+      /source-local type 'Order'/,
+    );
   });
 
   it("rejects source-local enum used in contract type", () => {
@@ -333,9 +363,11 @@ describe("collectReferencedTypeImports", () => {
         getStatus(orderId: string): Workflow<Status>;
       };
     `);
-    const contracts = discoverContracts(sf);
-    expect(() => collectReferencedTypeImports(sf, contracts)).toThrow(CompileError);
-    expect(() => collectReferencedTypeImports(sf, contracts)).toThrow(/source-local type 'Status'/);
+    const { contractTypeNodes } = discoverContracts(sf);
+    expect(() => collectReferencedTypeImports(sf, contractTypeNodes)).toThrow(CompileError);
+    expect(() => collectReferencedTypeImports(sf, contractTypeNodes)).toThrow(
+      /source-local type 'Status'/,
+    );
   });
 
   it("forwards default type imports", () => {
@@ -345,8 +377,8 @@ describe("collectReferencedTypeImports", () => {
         fetchOrder(orderId: string): Workflow<Order>;
       };
     `);
-    const contracts = discoverContracts(sf);
-    const imports = collectReferencedTypeImports(sf, contracts);
+    const { contractTypeNodes } = discoverContracts(sf);
+    const imports = collectReferencedTypeImports(sf, contractTypeNodes);
     expect(imports).toHaveLength(1);
     expect(imports[0]).toBe('import type Order from "./types.js";');
   });
@@ -357,9 +389,9 @@ describe("collectReferencedTypeImports", () => {
         fetchOrder(orderId: string): Workflow<Order>;
       };
     `);
-    const contracts = discoverContracts(sf);
-    expect(() => collectReferencedTypeImports(sf, contracts)).toThrow(CompileError);
-    expect(() => collectReferencedTypeImports(sf, contracts)).toThrow(
+    const { contractTypeNodes } = discoverContracts(sf);
+    expect(() => collectReferencedTypeImports(sf, contractTypeNodes)).toThrow(CompileError);
+    expect(() => collectReferencedTypeImports(sf, contractTypeNodes)).toThrow(
       /Contract references type 'Order'.*import type/,
     );
   });
@@ -370,9 +402,9 @@ describe("collectReferencedTypeImports", () => {
         getCreatedAt(orderId: string): Workflow<Date>;
       };
     `);
-    const contracts = discoverContracts(sf);
-    expect(() => collectReferencedTypeImports(sf, contracts)).toThrow(CompileError);
-    expect(() => collectReferencedTypeImports(sf, contracts)).toThrow(/import type/);
+    const { contractTypeNodes } = discoverContracts(sf);
+    expect(() => collectReferencedTypeImports(sf, contractTypeNodes)).toThrow(CompileError);
+    expect(() => collectReferencedTypeImports(sf, contractTypeNodes)).toThrow(/import type/);
   });
 
   it("rejects global type Uint8Array without explicit import", () => {
@@ -381,9 +413,9 @@ describe("collectReferencedTypeImports", () => {
         getData(orderId: string): Workflow<Uint8Array>;
       };
     `);
-    const contracts = discoverContracts(sf);
-    expect(() => collectReferencedTypeImports(sf, contracts)).toThrow(CompileError);
-    expect(() => collectReferencedTypeImports(sf, contracts)).toThrow(/import type/);
+    const { contractTypeNodes } = discoverContracts(sf);
+    expect(() => collectReferencedTypeImports(sf, contractTypeNodes)).toThrow(CompileError);
+    expect(() => collectReferencedTypeImports(sf, contractTypeNodes)).toThrow(/import type/);
   });
 
   it("rejects partially resolved types when some imports are present", () => {
@@ -394,9 +426,9 @@ describe("collectReferencedTypeImports", () => {
         chargeCard(payment: Payment): Workflow<Receipt>;
       };
     `);
-    const contracts = discoverContracts(sf);
-    expect(() => collectReferencedTypeImports(sf, contracts)).toThrow(CompileError);
-    expect(() => collectReferencedTypeImports(sf, contracts)).toThrow(/import type/);
+    const { contractTypeNodes } = discoverContracts(sf);
+    expect(() => collectReferencedTypeImports(sf, contractTypeNodes)).toThrow(CompileError);
+    expect(() => collectReferencedTypeImports(sf, contractTypeNodes)).toThrow(/import type/);
   });
 
   it("forwards namespace imports for qualified types like T.Order", () => {
@@ -406,8 +438,8 @@ describe("collectReferencedTypeImports", () => {
         fetchOrder(orderId: string): Workflow<T.Order>;
       };
     `);
-    const contracts = discoverContracts(sf);
-    const imports = collectReferencedTypeImports(sf, contracts);
+    const { contractTypeNodes } = discoverContracts(sf);
+    const imports = collectReferencedTypeImports(sf, contractTypeNodes);
     expect(imports).toHaveLength(1);
     expect(imports[0]).toBe('import type * as T from "./types.js";');
   });
@@ -419,8 +451,8 @@ describe("collectReferencedTypeImports", () => {
         fetchOrder(orderId: string): Workflow<Record<string, T.Order>>;
       };
     `);
-    const contracts = discoverContracts(sf);
-    const imports = collectReferencedTypeImports(sf, contracts);
+    const { contractTypeNodes } = discoverContracts(sf);
+    const imports = collectReferencedTypeImports(sf, contractTypeNodes);
     expect(imports).toHaveLength(1);
     expect(imports[0]).toContain("* as T");
   });
@@ -431,9 +463,9 @@ describe("collectReferencedTypeImports", () => {
         fetchOrder(orderId: string): Workflow<T.Order>;
       };
     `);
-    const contracts = discoverContracts(sf);
-    expect(() => collectReferencedTypeImports(sf, contracts)).toThrow(CompileError);
-    expect(() => collectReferencedTypeImports(sf, contracts)).toThrow(
+    const { contractTypeNodes } = discoverContracts(sf);
+    expect(() => collectReferencedTypeImports(sf, contractTypeNodes)).toThrow(CompileError);
+    expect(() => collectReferencedTypeImports(sf, contractTypeNodes)).toThrow(
       /namespace-qualified type 'T\.\*'.*import type \* as T/,
     );
   });
@@ -445,8 +477,8 @@ describe("collectReferencedTypeImports", () => {
         fetchOrder(orderId: string): Workflow<Aliased>;
       };
     `);
-    const contracts = discoverContracts(sf);
-    const imports = collectReferencedTypeImports(sf, contracts);
+    const { contractTypeNodes } = discoverContracts(sf);
+    const imports = collectReferencedTypeImports(sf, contractTypeNodes);
     expect(imports).toHaveLength(1);
     expect(imports[0]).toBe('import type { Original as Aliased } from "./types.js";');
   });

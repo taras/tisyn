@@ -62,7 +62,7 @@ export function generateWorkflowModule(
   );
 
   // Discover ambient factory contracts
-  const contracts = discoverContracts(sourceFile);
+  const { contracts, contractTypeNodes } = discoverContracts(sourceFile);
 
   // Build contracts map for emit context
   const contractsMap = new Map<string, DiscoveredContract>();
@@ -125,7 +125,7 @@ export function generateWorkflowModule(
   }
 
   // Collect referenced type imports
-  const typeImports = collectReferencedTypeImports(sourceFile, contracts);
+  const typeImports = collectReferencedTypeImports(sourceFile, contractTypeNodes);
 
   // Generate TypeScript module source
   const generatedSource = generateCode(contracts, workflows, typeImports);

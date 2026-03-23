@@ -25,6 +25,12 @@ export interface DiscoveredContract {
   methods: ContractMethod[];
 }
 
+export interface DiscoveryResult {
+  contracts: DiscoveredContract[];
+  /** AST type nodes from contract signatures, for import resolution. */
+  contractTypeNodes: ts.TypeNode[];
+}
+
 // ── Discovery ──
 
 /**
@@ -33,8 +39,9 @@ export interface DiscoveredContract {
  * Looks for top-level `declare function Name(instance?: string): { ... }` declarations
  * where methods return `Workflow<T>`.
  */
-export function discoverContracts(sourceFile: ts.SourceFile): DiscoveredContract[] {
+export function discoverContracts(sourceFile: ts.SourceFile): DiscoveryResult {
   const contracts: DiscoveredContract[] = [];
+  const allTypeNodes: ts.TypeNode[] = [];
   const seen = new Set<string>();
 
   for (const stmt of sourceFile.statements) {
@@ -81,7 +88,8 @@ export function discoverContracts(sourceFile: ts.SourceFile): DiscoveredContract
     }
 
     // Extract methods from the type literal
-    const methods = extractMethods(name, returnType, sourceFile);
+    const { methods, typeNodes } = extractMethods(name, returnType, sourceFile);
+    allTypeNodes.push(...typeNodes);
 
     contracts.push({
       name,
@@ -91,7 +99,7 @@ export function discoverContracts(sourceFile: ts.SourceFile): DiscoveredContract
     });
   }
 
-  return contracts;
+  return { contracts, contractTypeNodes: allTypeNodes };
 }
 
 // ── Type import collection ──
@@ -128,42 +136,43 @@ const BUILTIN_TYPES = new Set([
 ]);
 
 /**
- * Extract non-builtin type identifiers from a type text string.
- * E.g., "Record<string, Order>" → Set(["Order"])
+ * Walk AST type nodes to collect type reference identifiers and namespace qualifiers.
+ * Handles all type node shapes (arrays, unions, intersections, tuples, mapped types, etc.)
+ * via ts.forEachChild recursion. Only extracts identifiers from TypeReferenceNode.typeName,
+ * so property names in type literals are naturally skipped.
  */
-function extractTypeIdentifiers(typeText: string): Set<string> {
+function collectTypeReferences(typeNodes: ts.TypeNode[]): {
+  identifiers: Set<string>;
+  nsQualifiers: Set<string>;
+  nsMembers: Set<string>;
+} {
   const identifiers = new Set<string>();
-  const matches = typeText.match(/[A-Za-z_$][A-Za-z0-9_$]*/g);
-  if (matches) {
-    for (const m of matches) {
-      if (!BUILTIN_TYPES.has(m)) {
-        identifiers.add(m);
+  const nsQualifiers = new Set<string>();
+  const nsMembers = new Set<string>();
+
+  function visit(node: ts.Node) {
+    if (ts.isTypeReferenceNode(node)) {
+      if (ts.isIdentifier(node.typeName)) {
+        const name = node.typeName.text;
+        if (!BUILTIN_TYPES.has(name)) {
+          identifiers.add(name);
+        }
+      } else if (ts.isQualifiedName(node.typeName)) {
+        const left = node.typeName.left;
+        const right = node.typeName.right;
+        if (ts.isIdentifier(left) && !BUILTIN_TYPES.has(left.text)) {
+          nsQualifiers.add(left.text);
+          nsMembers.add(right.text);
+        }
       }
     }
+    ts.forEachChild(node, visit);
   }
-  return identifiers;
-}
 
-/**
- * Extract namespace qualifiers from type text (the X in X.Y patterns).
- * E.g., "Record<string, T.Order>" → Set(["T"])
- */
-function extractNamespaceQualifiedParts(typeText: string): {
-  qualifiers: Set<string>;
-  members: Set<string>;
-} {
-  const qualifiers = new Set<string>();
-  const members = new Set<string>();
-  const matches = typeText.matchAll(/([A-Za-z_$][A-Za-z0-9_$]*)\.([A-Za-z_$][A-Za-z0-9_$]*)/g);
-  for (const m of matches) {
-    const qualifier = m[1]!;
-    const member = m[2]!;
-    if (!BUILTIN_TYPES.has(qualifier)) {
-      qualifiers.add(qualifier);
-      members.add(member);
-    }
+  for (const typeNode of typeNodes) {
+    visit(typeNode);
   }
-  return { qualifiers, members };
+  return { identifiers, nsQualifiers, nsMembers };
 }
 
 /**
@@ -191,8 +200,7 @@ function collectLocalTypeNames(sourceFile: ts.SourceFile): Set<string> {
 /**
  * Collect type-only imports from source that are referenced by contract signatures.
  *
- * Extracts individual type identifiers from composite type expressions
- * (e.g., `Record<string, Order>` → `Order`), then forwards matching
+ * Walks AST type nodes to find type reference identifiers, then forwards matching
  * `import type` declarations. Value imports are never forwarded.
  *
  * Rejects source-local types (interface/type alias in the same file) with
@@ -200,31 +208,15 @@ function collectLocalTypeNames(sourceFile: ts.SourceFile): Set<string> {
  */
 export function collectReferencedTypeImports(
   sourceFile: ts.SourceFile,
-  contracts: DiscoveredContract[],
+  contractTypeNodes: ts.TypeNode[],
 ): string[] {
-  // Build set of referenced non-builtin type identifiers and namespace qualifiers
-  const referencedIds = new Set<string>();
-  const nsQualifiers = new Set<string>();
-  for (const contract of contracts) {
-    for (const method of contract.methods) {
-      const typeTexts = [...method.params.map((p) => p.type), method.resultType];
-      for (const typeText of typeTexts) {
-        for (const id of extractTypeIdentifiers(typeText)) {
-          referencedIds.add(id);
-        }
-        const nsParts = extractNamespaceQualifiedParts(typeText);
-        for (const q of nsParts.qualifiers) {
-          nsQualifiers.add(q);
-          // Remove namespace qualifiers from bare identifiers
-          // (T in T.Order is a qualifier, not a standalone type)
-          referencedIds.delete(q);
-        }
-        // Remove namespace-qualified members (Order in T.Order is resolved via namespace, not bare)
-        for (const m of nsParts.members) {
-          referencedIds.delete(m);
-        }
-      }
-    }
+  // Walk AST type nodes to collect referenced type identifiers
+  const refs = collectTypeReferences(contractTypeNodes);
+  const referencedIds = refs.identifiers;
+  const nsQualifiers = refs.nsQualifiers;
+  // Remove namespace-qualified members (Order in T.Order is resolved via namespace, not bare)
+  for (const m of refs.nsMembers) {
+    referencedIds.delete(m);
   }
 
   if (referencedIds.size === 0 && nsQualifiers.size === 0) return [];
@@ -394,8 +386,9 @@ function extractMethods(
   contractName: string,
   typeLiteral: ts.TypeLiteralNode,
   sourceFile: ts.SourceFile,
-): ContractMethod[] {
+): { methods: ContractMethod[]; typeNodes: ts.TypeNode[] } {
   const methods: ContractMethod[] = [];
+  const typeNodes: ts.TypeNode[] = [];
 
   for (const member of typeLiteral.members) {
     // Must be a method signature
@@ -422,7 +415,12 @@ function extractMethods(
     const methodName = member.name.text;
 
     // Extract return type — must be Workflow<T>
-    const resultType = extractWorkflowReturnType(contractName, methodName, member, sourceFile);
+    const { resultType, typeArg } = extractWorkflowReturnType(
+      contractName,
+      methodName,
+      member,
+      sourceFile,
+    );
 
     // Extract parameters — must have at least one (v1 restriction)
     const params = extractMethodParams(contractName, methodName, member, sourceFile);
@@ -437,10 +435,16 @@ function extractMethods(
       );
     }
 
+    // Collect AST type nodes for import resolution
+    for (const p of member.parameters) {
+      if (p.type) typeNodes.push(p.type);
+    }
+    typeNodes.push(typeArg);
+
     methods.push({ name: methodName, params, resultType });
   }
 
-  return methods;
+  return { methods, typeNodes };
 }
 
 function extractWorkflowReturnType(
@@ -448,7 +452,7 @@ function extractWorkflowReturnType(
   methodName: string,
   member: ts.MethodSignature,
   sourceFile: ts.SourceFile,
-): string {
+): { resultType: string; typeArg: ts.TypeNode } {
   const returnType = member.type;
 
   if (!returnType) {
@@ -488,7 +492,7 @@ function extractWorkflowReturnType(
 
   // Extract T as source text
   const typeArg = returnType.typeArguments[0]!;
-  return typeArg.getText(sourceFile);
+  return { resultType: typeArg.getText(sourceFile), typeArg };
 }
 
 function extractMethodParams(
