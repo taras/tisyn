@@ -29,9 +29,7 @@ export function generateCode(
   lines.push("");
 
   // Sort contracts by name for deterministic output
-  const sortedContracts = [...contracts].sort((a, b) =>
-    a.name.localeCompare(b.name),
-  );
+  const sortedContracts = [...contracts].sort((a, b) => a.name.localeCompare(b.name));
 
   // Generate factory-shaped agent declarations
   for (const contract of sortedContracts) {
@@ -76,9 +74,7 @@ function generateFactory(contract: DiscoveredContract): string {
 
   if (hasInstance) {
     lines.push(`export function ${name}(instance?: string) {`);
-    lines.push(
-      `  const id = instance ? \`${baseAgentId}:\${instance}\` : "${baseAgentId}";`,
-    );
+    lines.push(`  const id = instance ? \`${baseAgentId}:\${instance}\` : "${baseAgentId}";`);
   } else {
     lines.push(`export function ${name}() {`);
     lines.push(`  const id = "${baseAgentId}";`);
@@ -88,9 +84,7 @@ function generateFactory(contract: DiscoveredContract): string {
 
   for (let i = 0; i < methods.length; i++) {
     const method = methods[i]!;
-    const payloadFields = method.params
-      .map((p) => `${p.name}: ${p.type}`)
-      .join("; ");
+    const payloadFields = method.params.map((p) => `${p.name}: ${p.type}`).join("; ");
     const trailing = i < methods.length - 1 ? "," : ",";
     lines.push(
       `    ${method.name}: operation<{ ${payloadFields} }, ${method.resultType}>()${trailing}`,

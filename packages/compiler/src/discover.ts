@@ -42,9 +42,7 @@ export function discoverContracts(sourceFile: ts.SourceFile): DiscoveredContract
     if (!stmt.name) continue;
 
     // Must have DeclareKeyword modifier
-    const isDeclare = stmt.modifiers?.some(
-      (m) => m.kind === ts.SyntaxKind.DeclareKeyword,
-    );
+    const isDeclare = stmt.modifiers?.some((m) => m.kind === ts.SyntaxKind.DeclareKeyword);
     if (!isDeclare) continue;
 
     // Must not have a body (ambient declarations don't)
@@ -155,15 +153,13 @@ export function collectReferencedTypeImports(
     if (clause.isTypeOnly) {
       // `import type { A, B } from "..."` — filter to referenced names
       if (clause.namedBindings && ts.isNamedImports(clause.namedBindings)) {
-        const matchingSpecifiers = clause.namedBindings.elements.filter(
-          (el) => referencedTypes.has(el.name.text),
+        const matchingSpecifiers = clause.namedBindings.elements.filter((el) =>
+          referencedTypes.has(el.name.text),
         );
         if (matchingSpecifiers.length > 0) {
           const names = matchingSpecifiers
             .map((el) =>
-              el.propertyName
-                ? `${el.propertyName.text} as ${el.name.text}`
-                : el.name.text,
+              el.propertyName ? `${el.propertyName.text} as ${el.name.text}` : el.name.text,
             )
             .join(", ");
           imports.push(`import type { ${names} } from "${moduleSpecifier}";`);
@@ -180,9 +176,7 @@ export function collectReferencedTypeImports(
       if (typeSpecifiers.length > 0) {
         const names = typeSpecifiers
           .map((el) =>
-            el.propertyName
-              ? `${el.propertyName.text} as ${el.name.text}`
-              : el.name.text,
+            el.propertyName ? `${el.propertyName.text} as ${el.name.text}` : el.name.text,
           )
           .join(", ");
         imports.push(`import type { ${names} } from "${moduleSpecifier}";`);
@@ -195,10 +189,7 @@ export function collectReferencedTypeImports(
 
 // ── Internal helpers ──
 
-function validateFactoryParams(
-  decl: ts.FunctionDeclaration,
-  sourceFile: ts.SourceFile,
-): boolean {
+function validateFactoryParams(decl: ts.FunctionDeclaration, sourceFile: ts.SourceFile): boolean {
   const params = decl.parameters;
 
   if (params.length === 0) return false;
@@ -280,12 +271,7 @@ function extractMethods(
     const methodName = member.name.text;
 
     // Extract return type — must be Workflow<T>
-    const resultType = extractWorkflowReturnType(
-      contractName,
-      methodName,
-      member,
-      sourceFile,
-    );
+    const resultType = extractWorkflowReturnType(contractName, methodName, member, sourceFile);
 
     // Extract parameters — must have at least one (v1 restriction)
     const params = extractMethodParams(contractName, methodName, member, sourceFile);

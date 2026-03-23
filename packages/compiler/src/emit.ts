@@ -604,13 +604,23 @@ function emitAgentEffect(
     let agentId = baseAgentId;
 
     if (factoryArgs.length > 1) {
-      throw error("E999", `Contract factory '${agentFactory.text}' accepts at most one argument (instance)`, receiver, ctx);
+      throw error(
+        "E999",
+        `Contract factory '${agentFactory.text}' accepts at most one argument (instance)`,
+        receiver,
+        ctx,
+      );
     }
 
     if (factoryArgs.length === 1) {
       const instanceArg = factoryArgs[0]!;
       if (!ts.isStringLiteral(instanceArg)) {
-        throw error("E999", `Contract factory instance argument must be a string literal (dynamic instance routing is not supported in v1)`, instanceArg, ctx);
+        throw error(
+          "E999",
+          `Contract factory instance argument must be a string literal (dynamic instance routing is not supported in v1)`,
+          instanceArg,
+          ctx,
+        );
       }
       agentId = `${baseAgentId}:${instanceArg.text}`;
     }
@@ -618,7 +628,12 @@ function emitAgentEffect(
     // Validate method exists
     const method = contract.methods.find((m) => m.name === methodName);
     if (!method) {
-      throw error("E999", `Unknown method '${methodName}' on contract '${agentFactory.text}'`, propAccess.name, ctx);
+      throw error(
+        "E999",
+        `Unknown method '${methodName}' on contract '${agentFactory.text}'`,
+        propAccess.name,
+        ctx,
+      );
     }
 
     // Validate arity
