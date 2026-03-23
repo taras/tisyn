@@ -1,6 +1,13 @@
-# Tisyn
+# (T)ypeScript (I)nterpreter (Syn)tax
 
-Tisyn is a TypeScript-first runtime stack for representing, validating, executing, and transporting replayable programs and typed agent calls.
+Tisyn (pronounced like the Chicken) is a minimal set of interfaces and
+constructors to represent an abstract syntax tree that can be
+interpreted.
+
+Tisyn expressions do not come with any semantics whatsoever, they
+purely express how to compose values by ensuring that the types line
+up. This allows language designers to skip the development of their
+own syntax while they are figuring out how execution should work.
 
 The repository is split into small packages with clear boundaries. The root README explains how they fit together; package-level READMEs cover the concrete APIs.
 
