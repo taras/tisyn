@@ -16,10 +16,7 @@ Use this package when you want to construct or inspect Tisyn programs directly.
 ```ts
 import { Add, Q } from "@tisyn/ir";
 
-const ir = Add({
-  left: Q(20),
-  right: Q(22),
-});
+const ir = Add(Q(20), Q(22));
 ```
 
 ## Relationship to the rest of Tisyn
