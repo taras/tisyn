@@ -73,9 +73,7 @@ export function generateWorkflowModule(
   // Parse workflow generator functions (filter to exported)
   const allFunctions = parseSource(source, filename);
   const exportedFunctions = allFunctions.filter((fn) => {
-    return fn.node.modifiers?.some(
-      (m) => m.kind === ts.SyntaxKind.ExportKeyword,
-    );
+    return fn.node.modifiers?.some((m) => m.kind === ts.SyntaxKind.ExportKeyword);
   });
 
   if (exportedFunctions.length === 0 && contracts.length === 0) {

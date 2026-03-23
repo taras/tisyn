@@ -13,13 +13,7 @@ import { discoverContracts, collectReferencedTypeImports } from "./discover.js";
 // ── Helpers ──
 
 function parseSource(source: string): ts.SourceFile {
-  return ts.createSourceFile(
-    "test.ts",
-    source,
-    ts.ScriptTarget.Latest,
-    true,
-    ts.ScriptKind.TS,
-  );
+  return ts.createSourceFile("test.ts", source, ts.ScriptTarget.Latest, true, ts.ScriptKind.TS);
 }
 
 // ── Contract Discovery ──
@@ -76,10 +70,7 @@ describe("discoverContracts", () => {
     `);
     const contracts = discoverContracts(sf);
     expect(contracts).toHaveLength(2);
-    expect(contracts.map((c) => c.name)).toEqual([
-      "OrderService",
-      "PaymentService",
-    ]);
+    expect(contracts.map((c) => c.name)).toEqual(["OrderService", "PaymentService"]);
   });
 
   it("extracts multiple methods from a contract", () => {
@@ -296,12 +287,8 @@ describe("generateWorkflowModule", () => {
           return order;
         }
       `;
-      expect(() => generateWorkflowModule(source, { validate: false })).toThrow(
-        CompileError,
-      );
-      expect(() =>
-        generateWorkflowModule(source, { validate: false }),
-      ).toThrow(/string literal/);
+      expect(() => generateWorkflowModule(source, { validate: false })).toThrow(CompileError);
+      expect(() => generateWorkflowModule(source, { validate: false })).toThrow(/string literal/);
     });
 
     it("rejects multiple factory arguments", () => {
@@ -314,12 +301,8 @@ describe("generateWorkflowModule", () => {
           return order;
         }
       `;
-      expect(() => generateWorkflowModule(source, { validate: false })).toThrow(
-        CompileError,
-      );
-      expect(() =>
-        generateWorkflowModule(source, { validate: false }),
-      ).toThrow(/at most one/);
+      expect(() => generateWorkflowModule(source, { validate: false })).toThrow(CompileError);
+      expect(() => generateWorkflowModule(source, { validate: false })).toThrow(/at most one/);
     });
   });
 
@@ -442,18 +425,14 @@ describe("generateWorkflowModule", () => {
 
     it("generates valid TypeScript with factory exports", () => {
       const result = generateWorkflowModule(source, { validate: false });
-      expect(result.source).toContain(
-        'import { agent, operation } from "@tisyn/agent"',
-      );
+      expect(result.source).toContain('import { agent, operation } from "@tisyn/agent"');
       expect(result.source).toContain("export function OrderService(instance?: string)");
       expect(result.source).toContain("export function PaymentService()");
     });
 
     it("generates instance-aware factory for contracts with hasInstance", () => {
       const result = generateWorkflowModule(source, { validate: false });
-      expect(result.source).toContain(
-        "`order-service:${instance}`",
-      );
+      expect(result.source).toContain("`order-service:${instance}`");
     });
 
     it("generates static ID for contracts without instance", () => {
@@ -466,9 +445,7 @@ describe("generateWorkflowModule", () => {
       expect(result.source).toContain(
         "operation<{ orderId: string; includeLines: boolean }, Order>()",
       );
-      expect(result.source).toContain(
-        "operation<{ payment: Payment }, Receipt>()",
-      );
+      expect(result.source).toContain("operation<{ payment: Payment }, Receipt>()");
     });
 
     it("generates named workflow IR export", () => {
@@ -478,12 +455,8 @@ describe("generateWorkflowModule", () => {
 
     it("generates grouped agents and workflows exports", () => {
       const result = generateWorkflowModule(source, { validate: false });
-      expect(result.source).toContain(
-        "export const agents = { OrderService, PaymentService }",
-      );
-      expect(result.source).toContain(
-        "export const workflows = { processOrder }",
-      );
+      expect(result.source).toContain("export const agents = { OrderService, PaymentService }");
+      expect(result.source).toContain("export const workflows = { processOrder }");
     });
 
     it("produces deterministic output", () => {

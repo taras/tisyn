@@ -1,9 +1,5 @@
 export { compile, compileOne, type CompileOptions, type CompileResult } from "./compile.js";
-export {
-  generateWorkflowModule,
-  type GenerateOptions,
-  type GenerateResult,
-} from "./generate.js";
+export { generateWorkflowModule, type GenerateOptions, type GenerateResult } from "./generate.js";
 export type { DiscoveredContract, ContractMethod } from "./discover.js";
 export { toAgentId } from "./agent-id.js";
 export { Counter } from "./counter.js";
