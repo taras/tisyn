@@ -513,6 +513,26 @@ function extractMethodParams(
 
     const paramName = param.name.text;
 
+    if (param.questionToken) {
+      const loc = getLocation(param, sourceFile);
+      throw new CompileError(
+        "E999",
+        `Ambient contract method '${contractName}.${methodName}' parameter '${paramName}' must not be optional (v1 restriction)`,
+        loc.line,
+        loc.column,
+      );
+    }
+
+    if (param.dotDotDotToken) {
+      const loc = getLocation(param, sourceFile);
+      throw new CompileError(
+        "E999",
+        `Ambient contract method '${contractName}.${methodName}' parameter '${paramName}' must not be a rest parameter (v1 restriction)`,
+        loc.line,
+        loc.column,
+      );
+    }
+
     if (!param.type) {
       const loc = getLocation(param, sourceFile);
       throw new CompileError(
