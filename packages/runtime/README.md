@@ -26,12 +26,10 @@ const { result, journal } = yield* execute({ ir });
 ```ts
 import { executeRemote } from "@tisyn/runtime";
 
-const result =
-  yield*
-  executeRemote({
-    program: receivedIr,
-    env: { customerId: "123" },
-  });
+const result = yield* executeRemote({
+  program: receivedIr,
+  env: { customerId: "123" },
+});
 ```
 
 ## Relationship to the rest of Tisyn

@@ -56,14 +56,12 @@ yield* shopifyImpl.install();
 ```ts
 import { invoke } from "@tisyn/agent";
 
-const result =
-  yield*
-  invoke(
-    shopify.createOrder({
-      customerId: "123",
-      lineItems: [{ sku: "ABC", quantity: 2 }],
-    }),
-  );
+const result = yield* invoke(
+  shopify.createOrder({
+    customerId: "123",
+    lineItems: [{ sku: "ABC", quantity: 2 }],
+  }),
+);
 ```
 
 This is useful:

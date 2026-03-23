@@ -393,8 +393,7 @@ Arrow functions unwrapped. Bodies placed in `exprs`:
 Generator functions compiled as inline expression trees:
 
 ```typescript
-yield*
-  all([
+yield* all([
     function* () {
       const order = yield* OrderService().fetchOrder("123");
       return yield* Processor().process(order);
