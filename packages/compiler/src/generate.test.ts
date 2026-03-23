@@ -278,6 +278,43 @@ describe("collectReferencedTypeImports", () => {
     );
   });
 
+  it("rejects source-local class used in contract type", () => {
+    const sf = parseSource(`
+      class Order { id!: string; }
+      declare function OrderService(): {
+        fetchOrder(orderId: string): Workflow<Order>;
+      };
+    `);
+    const contracts = discoverContracts(sf);
+    expect(() => collectReferencedTypeImports(sf, contracts)).toThrow(CompileError);
+    expect(() => collectReferencedTypeImports(sf, contracts)).toThrow(/source-local type 'Order'/);
+  });
+
+  it("rejects source-local enum used in contract type", () => {
+    const sf = parseSource(`
+      enum Status { Pending, Complete }
+      declare function OrderService(): {
+        getStatus(orderId: string): Workflow<Status>;
+      };
+    `);
+    const contracts = discoverContracts(sf);
+    expect(() => collectReferencedTypeImports(sf, contracts)).toThrow(CompileError);
+    expect(() => collectReferencedTypeImports(sf, contracts)).toThrow(/source-local type 'Status'/);
+  });
+
+  it("forwards default type imports", () => {
+    const sf = parseSource(`
+      import type Order from "./types.js";
+      declare function OrderService(): {
+        fetchOrder(orderId: string): Workflow<Order>;
+      };
+    `);
+    const contracts = discoverContracts(sf);
+    const imports = collectReferencedTypeImports(sf, contracts);
+    expect(imports).toHaveLength(1);
+    expect(imports[0]).toBe('import type Order from "./types.js";');
+  });
+
   it("allows ambient types not found in imports or local declarations", () => {
     const sf = parseSource(`
       declare function OrderService(): {
@@ -645,6 +682,136 @@ describe("generateWorkflowModule", () => {
       const result = generateWorkflowModule(source, { validate: false });
       expect(result.source).toContain("Order");
       expect(result.source).not.toContain("Unused");
+    });
+
+    it("forwards default type imports to generated output", () => {
+      const source = `
+        import type Order from "./types.js";
+        declare function OrderService(): {
+          fetchOrder(orderId: string): Workflow<Order>;
+        };
+        export function* processOrder(orderId: string) {
+          const order = yield* OrderService().fetchOrder(orderId);
+          return order;
+        }
+      `;
+      const result = generateWorkflowModule(source, { validate: false });
+      expect(result.source).toContain('import type Order from "./types.js"');
+    });
+  });
+
+  // ── Semantic type-check validation ──
+
+  describe("semantic type-check", () => {
+    /** Create an in-memory TS program and return semantic diagnostics for the generated file. */
+    function getSemanticDiagnostics(generatedSource: string, extraFiles?: Record<string, string>) {
+      const files: Record<string, string> = {
+        "/generated.ts": generatedSource,
+        // Minimal @tisyn/agent stub
+        "/node_modules/@tisyn/agent/package.json": JSON.stringify({
+          name: "@tisyn/agent",
+          types: "./index.d.ts",
+          exports: { ".": { types: "./index.d.ts" } },
+        }),
+        "/node_modules/@tisyn/agent/index.d.ts": `
+          export declare function agent<T>(id: string, ops: T): T;
+          export declare function operation<Args = void, Result = void>(): any;
+        `,
+        ...extraFiles,
+      };
+
+      const compilerOptions: ts.CompilerOptions = {
+        target: ts.ScriptTarget.Latest,
+        module: ts.ModuleKind.NodeNext,
+        moduleResolution: ts.ModuleResolutionKind.NodeNext,
+        strict: false,
+        noEmit: true,
+        skipLibCheck: true,
+      };
+
+      const host = ts.createCompilerHost(compilerOptions);
+      const originalGetSourceFile = host.getSourceFile.bind(host);
+      const originalFileExists = host.fileExists.bind(host);
+      const originalReadFile = host.readFile.bind(host);
+      const originalDirectoryExists = host.directoryExists?.bind(host);
+      host.getSourceFile = (fileName, languageVersion) => {
+        const content = files[fileName];
+        if (content !== undefined) {
+          return ts.createSourceFile(fileName, content, languageVersion);
+        }
+        return originalGetSourceFile(fileName, languageVersion);
+      };
+      host.fileExists = (fileName) => fileName in files || originalFileExists(fileName);
+      host.readFile = (fileName) =>
+        fileName in files ? files[fileName] : originalReadFile(fileName);
+      host.directoryExists = (dirName) => {
+        // Check if any virtual file starts with this directory
+        const prefix = dirName.endsWith("/") ? dirName : dirName + "/";
+        for (const key of Object.keys(files)) {
+          if (key.startsWith(prefix)) return true;
+        }
+        return originalDirectoryExists?.(dirName) ?? false;
+      };
+
+      const program = ts.createProgram(["/generated.ts"], compilerOptions, host);
+      return program.getSemanticDiagnostics(program.getSourceFile("/generated.ts"));
+    }
+
+    it("generated module with named type import has zero semantic errors", () => {
+      const source = `
+        import type { Order } from "./types.js";
+        declare function OrderService(): {
+          fetchOrder(orderId: string): Workflow<Order>;
+        };
+        export function* processOrder(orderId: string) {
+          const order = yield* OrderService().fetchOrder(orderId);
+          return order;
+        }
+      `;
+      const result = generateWorkflowModule(source, { validate: false });
+      const diagnostics = getSemanticDiagnostics(result.source, {
+        "/types.d.ts": "export interface Order { id: string; }",
+      });
+      const errors = diagnostics.filter((d) => d.category === ts.DiagnosticCategory.Error);
+      expect(errors).toHaveLength(0);
+    });
+
+    it("generated module with namespace type import has zero semantic errors", () => {
+      const source = `
+        import type * as T from "./types.js";
+        declare function OrderService(): {
+          fetchOrder(orderId: string): Workflow<T.Order>;
+        };
+        export function* processOrder(orderId: string) {
+          const order = yield* OrderService().fetchOrder(orderId);
+          return order;
+        }
+      `;
+      const result = generateWorkflowModule(source, { validate: false });
+      const diagnostics = getSemanticDiagnostics(result.source, {
+        "/types.d.ts": "export interface Order { id: string; }",
+      });
+      const errors = diagnostics.filter((d) => d.category === ts.DiagnosticCategory.Error);
+      expect(errors).toHaveLength(0);
+    });
+
+    it("generated module with default type import has zero semantic errors", () => {
+      const source = `
+        import type Order from "./types.js";
+        declare function OrderService(): {
+          fetchOrder(orderId: string): Workflow<Order>;
+        };
+        export function* processOrder(orderId: string) {
+          const order = yield* OrderService().fetchOrder(orderId);
+          return order;
+        }
+      `;
+      const result = generateWorkflowModule(source, { validate: false });
+      const diagnostics = getSemanticDiagnostics(result.source, {
+        "/types.d.ts": "export default interface Order { id: string; }",
+      });
+      const errors = diagnostics.filter((d) => d.category === ts.DiagnosticCategory.Error);
+      expect(errors).toHaveLength(0);
     });
   });
 
