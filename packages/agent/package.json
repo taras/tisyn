@@ -4,7 +4,7 @@
   "license": "UNLICENSED",
   "repository": {
     "type": "git",
-    "url": "https://github.com/cowboyd/tisyn.git",
+    "url": "https://github.com/taras/tisyn.git",
     "directory": "packages/agent"
   },
   "files": ["dist"],
