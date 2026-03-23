@@ -140,8 +140,13 @@ const BUILTIN_TYPES = new Set([
  * Handles all type node shapes (arrays, unions, intersections, tuples, mapped types, etc.)
  * via ts.forEachChild recursion. Only extracts identifiers from TypeReferenceNode.typeName,
  * so property names in type literals are naturally skipped.
+ *
+ * Rejects unsupported type operators (typeof, keyof, readonly, unique) with a CompileError.
  */
-function collectTypeReferences(typeNodes: ts.TypeNode[]): {
+function collectTypeReferences(
+  typeNodes: ts.TypeNode[],
+  sourceFile: ts.SourceFile,
+): {
   identifiers: Set<string>;
   nsQualifiers: Set<string>;
   nsMembers: Set<string>;
@@ -166,6 +171,37 @@ function collectTypeReferences(typeNodes: ts.TypeNode[]): {
         }
       }
     }
+
+    // Reject typeof (TypeQueryNode) — v1 restriction
+    if (ts.isTypeQueryNode(node)) {
+      const loc = getLocation(node, sourceFile);
+      throw new CompileError(
+        "E999",
+        `Type operator 'typeof' is not supported in contract signatures (v1 restriction)`,
+        loc.line,
+        loc.column,
+      );
+    }
+
+    // Reject keyof, unique, readonly type operators (TypeOperatorNode) — v1 restriction
+    if (ts.isTypeOperatorNode(node)) {
+      const operatorText =
+        node.operator === ts.SyntaxKind.KeyOfKeyword
+          ? "keyof"
+          : node.operator === ts.SyntaxKind.ReadonlyKeyword
+            ? "readonly"
+            : node.operator === ts.SyntaxKind.UniqueKeyword
+              ? "unique"
+              : "type operator";
+      const loc = getLocation(node, sourceFile);
+      throw new CompileError(
+        "E999",
+        `Type operator '${operatorText}' is not supported in contract signatures (v1 restriction)`,
+        loc.line,
+        loc.column,
+      );
+    }
+
     ts.forEachChild(node, visit);
   }
 
@@ -211,7 +247,7 @@ export function collectReferencedTypeImports(
   contractTypeNodes: ts.TypeNode[],
 ): string[] {
   // Walk AST type nodes to collect referenced type identifiers
-  const refs = collectTypeReferences(contractTypeNodes);
+  const refs = collectTypeReferences(contractTypeNodes, sourceFile);
   const referencedIds = refs.identifiers;
   const nsQualifiers = refs.nsQualifiers;
   // Remove namespace-qualified members (Order in T.Order is resolved via namespace, not bare)
