@@ -40,7 +40,7 @@ export function implementAgent<Ops extends Record<string, OperationSpec>>(
       });
     },
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    *execute(name: string, args: any): Operation<any> {
+    *call(name: string, args: any): Operation<any> {
       const handler = (handlers as Record<string, (args: Val) => Operation<Val>>)[name];
       if (!handler) {
         throw new Error(`Agent "${id}" has no handler for operation: ${name}`);
