@@ -38,18 +38,18 @@ Tisyn is easiest to understand as layers:
 
 ## Package guide
 
-| Package | Purpose |
-| --- | --- |
-| [`@tisyn/ir`](./packages/ir/README.md) | AST types, constructors, walkers, printers, and value types |
-| [`@tisyn/validate`](./packages/validate/README.md) | IR validation and `MalformedIR` errors |
-| [`@tisyn/kernel`](./packages/kernel/README.md) | Core evaluation, environments, and runtime error/event types |
-| [`@tisyn/durable-streams`](./packages/durable-streams/README.md) | Durable append-only stream abstractions used by runtime replay |
-| [`@tisyn/runtime`](./packages/runtime/README.md) | Durable execution of IR plus remote IR execution |
-| [`@tisyn/agent`](./packages/agent/README.md) | Typed agents, implementations, dispatch, and invocation helpers |
-| [`@tisyn/protocol`](./packages/protocol/README.md) | Parsed/constructed protocol messages for host-agent communication |
-| [`@tisyn/transport`](./packages/transport/README.md) | Protocol sessions and transports like `stdio`, `websocket`, `worker`, and `sse-post` |
-| [`@tisyn/compiler`](./packages/compiler/README.md) | Compile TypeScript generator functions into Tisyn IR |
-| [`@tisyn/conformance`](./packages/conformance/README.md) | Execute fixtures against the runtime to verify behavior |
+| Package                                                          | Purpose                                                                              |
+| ---------------------------------------------------------------- | ------------------------------------------------------------------------------------ |
+| [`@tisyn/ir`](./packages/ir/README.md)                           | AST types, constructors, walkers, printers, and value types                          |
+| [`@tisyn/validate`](./packages/validate/README.md)               | IR validation and `MalformedIR` errors                                               |
+| [`@tisyn/kernel`](./packages/kernel/README.md)                   | Core evaluation, environments, and runtime error/event types                         |
+| [`@tisyn/durable-streams`](./packages/durable-streams/README.md) | Durable append-only stream abstractions used by runtime replay                       |
+| [`@tisyn/runtime`](./packages/runtime/README.md)                 | Durable execution of IR plus remote IR execution                                     |
+| [`@tisyn/agent`](./packages/agent/README.md)                     | Typed agents, implementations, dispatch, and invocation helpers                      |
+| [`@tisyn/protocol`](./packages/protocol/README.md)               | Parsed/constructed protocol messages for host-agent communication                    |
+| [`@tisyn/transport`](./packages/transport/README.md)             | Protocol sessions and transports like `stdio`, `websocket`, `worker`, and `sse-post` |
+| [`@tisyn/compiler`](./packages/compiler/README.md)               | Compile TypeScript generator functions into Tisyn IR                                 |
+| [`@tisyn/conformance`](./packages/conformance/README.md)         | Execute fixtures against the runtime to verify behavior                              |
 
 ## Typical flows
 
@@ -60,7 +60,7 @@ import { Add, Q } from "@tisyn/ir";
 import { execute } from "@tisyn/runtime";
 
 const ir = Add({ left: Q(20), right: Q(22) });
-const { result } = yield* execute({ ir });
+const { result } = yield * execute({ ir });
 ```
 
 ### Define an agent and install a remote transport
@@ -73,8 +73,8 @@ const math = agent("math", {
   double: operation<{ value: number }, number>(),
 });
 
-yield* installRemoteAgent(math, websocketTransport({ url: "ws://localhost:8080" }));
-const result = yield* invoke(math.double({ value: 21 }));
+yield * installRemoteAgent(math, websocketTransport({ url: "ws://localhost:8080" }));
+const result = yield * invoke(math.double({ value: 21 }));
 ```
 
 For the detailed agent model and API examples, see [`@tisyn/agent`](./packages/agent/README.md).
