@@ -78,3 +78,15 @@ const result = yield* invoke(math.double({ value: 21 }));
 ```
 
 For the detailed agent model and API examples, see [`@tisyn/agent`](./packages/agent/README.md).
+
+## Specifications
+
+| Document | Scope |
+| -------- | ----- |
+| [Tisyn Specification 1.0](./specs/tisyn-specification-1.0.md) | Core language: values, expressions, and evaluation rules |
+| [Kernel Specification](./specs/tisyn-kernel-specification.md) | Kernel semantics, environments, and effect dispatch |
+| [Agent Specification 1.1.0](./specs/tisyn-agent-specification-1.1.0.md) | Typed agent declarations, implementations, and invocation |
+| [Compiler Specification 1.1.0](./specs/tisyn-compiler-specification-1.1.0.md) | TypeScript-to-IR compilation rules and restrictions |
+| [Compound Concurrency Spec](./specs/tisyn-compound-concurrency-spec.md) | `all` and `race` orchestration semantics |
+| [Authoring Layer Spec](./specs/tisyn-authoring-layer-spec.md) | Generator-based authoring format and contract declarations |
+| [Architecture](./specs/tisyn-architecture.md) | System architecture and package relationships |
