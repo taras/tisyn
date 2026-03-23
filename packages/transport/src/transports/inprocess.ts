@@ -1,13 +1,14 @@
 import type { Operation } from "effection";
 import { createChannel, spawn } from "effection";
 import type { OperationSpec, AgentDeclaration, ImplementationHandlers } from "@tisyn/agent";
+import { implementAgent } from "@tisyn/agent";
 import type {
   AgentTransport,
   AgentTransportFactory,
   HostMessage,
   AgentMessage,
 } from "../transport.js";
-import { runAgentHandler } from "../agent-handler.js";
+import { createProtocolServer } from "../protocol-server.js";
 
 /**
  * Create a transport factory for an in-process agent. The agent-side
@@ -29,10 +30,15 @@ export function inprocessTransport<Ops extends Record<string, OperationSpec>>(
     // Subscribe BEFORE spawning so the subscription exists when sends arrive
     const hostSub = yield* hostToAgent;
 
+    const impl = implementAgent(declaration, handlers);
+    const server = createProtocolServer(impl);
+
     // Spawn agent-side processing loop
     yield* spawn(function* () {
-      yield* runAgentHandler(declaration, handlers, {
-        receive: hostSub,
+      yield* server.use({
+        *receive() {
+          return hostSub;
+        },
         *send(msg) {
           yield* agentToHost.send(msg);
         },

@@ -34,10 +34,20 @@ export type ImplementationHandlers<Ops extends Record<string, OperationSpec>> = 
     : never;
 };
 
-/** An implemented agent, ready for middleware installation. */
+/** Extract the Args type from an OperationSpec. */
+export type ArgsOf<S extends OperationSpec> =
+  S extends OperationSpec<infer Args, any> ? Args : never;
+
+/** Extract the Result type from an OperationSpec. */
+export type ResultOf<S extends OperationSpec> =
+  S extends OperationSpec<any, infer Result> ? Result : never;
+
+/** An implemented agent, ready for middleware installation or direct execution. */
 export interface AgentImplementation<Ops extends Record<string, OperationSpec>> {
   readonly id: string;
   readonly handlers: ImplementationHandlers<Ops>;
   /** Install this agent's dispatch middleware into the current scope. */
   install(): Operation<void>;
+  /** Call a bound operation directly with typed args and result. */
+  call<K extends keyof Ops & string>(name: K, args: ArgsOf<Ops[K]>): Operation<ResultOf<Ops[K]>>;
 }
