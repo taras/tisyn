@@ -4,9 +4,9 @@ import { expect } from "vitest";
 import { resource, useScope, createQueue, createChannel, spawn } from "effection";
 import type { HostMessage } from "@tisyn/protocol";
 import { parseHostMessage, parseAgentMessage } from "@tisyn/protocol";
-import { agent, operation, invoke } from "@tisyn/agent";
+import { agent, operation, invoke, implementAgent } from "@tisyn/agent";
 import { installRemoteAgent } from "../install-remote.js";
-import { runAgentHandler } from "../agent-handler.js";
+import { createProtocolServer } from "../protocol-server.js";
 import { transportComplianceSuite } from "../transport-compliance.js";
 import type { TransportFactoryBuilder } from "../transport-compliance.js";
 import { workerTransport } from "./worker.js";
@@ -26,7 +26,7 @@ const workerBuilder: TransportFactoryBuilder = (declaration, handlers) => {
       const scope = yield* useScope();
       const { port1, port2 } = new MessageChannel();
 
-      // Agent side: buffer messages from port into a queue for runAgentHandler
+      // Agent side: buffer messages from port into a queue for the protocol server
       // (which expects a Subscription, not a Stream).
       // JSON roundtrip ensures TypeBox sees plain objects identical to
       // what a real transport (websocket/stdio) produces after JSON.parse.
@@ -36,8 +36,11 @@ const workerBuilder: TransportFactoryBuilder = (declaration, handlers) => {
       });
       port2.on("close", () => agentQueue.close());
 
+      const impl = implementAgent(declaration, handlers);
+      const server = createProtocolServer(impl);
+
       scope.run(function* () {
-        yield* runAgentHandler(declaration, handlers, {
+        yield* server.use({
           receive: agentQueue,
           *send(msg) {
             port2.postMessage(JSON.stringify(msg));
