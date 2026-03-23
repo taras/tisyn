@@ -173,6 +173,26 @@ describe("discoverContracts", () => {
     expect(() => discoverContracts(sf)).toThrow(CompileError);
     expect(() => discoverContracts(sf)).toThrow(/type annotation/);
   });
+
+  it("rejects optional method parameter", () => {
+    const sf = parseSource(`
+      declare function OrderService(): {
+        fetchOrder(orderId?: string): Workflow<Order>;
+      };
+    `);
+    expect(() => discoverContracts(sf)).toThrow(CompileError);
+    expect(() => discoverContracts(sf)).toThrow(/must not be optional/);
+  });
+
+  it("rejects rest method parameter", () => {
+    const sf = parseSource(`
+      declare function OrderService(): {
+        fetchOrder(...ids: string[]): Workflow<Order>;
+      };
+    `);
+    expect(() => discoverContracts(sf)).toThrow(CompileError);
+    expect(() => discoverContracts(sf)).toThrow(/must not be a rest parameter/);
+  });
 });
 
 // ── Type Import Collection ──
