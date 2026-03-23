@@ -378,9 +378,7 @@ The generated module is used by a host application to execute workflows:
 import { processOrder } from "./orders.generated.js";
 import { execute } from "@tisyn/runtime";
 
-const { result, journal } =
-  yield*
-  execute({
+const { result, journal } = yield* execute({
     ir: processOrder,
     env: { orderId: "abc-123" },
   });
@@ -547,9 +545,7 @@ export const workflows = { fulfillOrder };
 import { fulfillOrder } from "./orders.generated.js";
 import { execute } from "@tisyn/runtime";
 
-const { result, journal } =
-  yield*
-  execute({
+const { result, journal } = yield* execute({
     ir: fulfillOrder,
     env: { orderId: "order-42" },
   });
