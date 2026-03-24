@@ -415,6 +415,25 @@ describe("Control flow", () => {
     expect(fn_contains_while(ir.body)).toBe(true);
   });
 
+  it("Case A while preserves per-iteration bindings", () => {
+    const ir = compileOne(`
+      function* f(): Workflow<null> {
+        while (true) {
+          const x = yield* Agent().getValue();
+          yield* Agent().useValue(x);
+        }
+      }
+    `) as any;
+    const whileNode = findWhileNode(ir.body);
+    expect(whileNode).toBeDefined();
+    const exprs = whileNode!.data.expr.exprs;
+    expect(exprs).toHaveLength(1);
+    // The single body expression should be a Let binding preserving "x"
+    expect(exprs[0].tisyn).toBe("eval");
+    expect(exprs[0].id).toBe("let");
+    expect(exprs[0].data.expr.name).toBe("x");
+  });
+
   it("compiles early return transform", () => {
     const ir = compileOne(`
       function* f(x: number): Workflow<string> {
@@ -567,6 +586,23 @@ describe("Validation", () => {
 });
 
 // ── Helpers ──
+
+function findWhileNode(node: unknown): Record<string, any> | undefined {
+  if (typeof node !== "object" || node === null) return undefined;
+  const obj = node as Record<string, unknown>;
+  if (obj["tisyn"] === "eval" && obj["id"] === "while") return obj as Record<string, any>;
+  for (const value of Object.values(obj)) {
+    const found = findWhileNode(value);
+    if (found) return found;
+    if (Array.isArray(value)) {
+      for (const item of value) {
+        const found = findWhileNode(item);
+        if (found) return found;
+      }
+    }
+  }
+  return undefined;
+}
 
 function fn_contains_while(node: unknown): boolean {
   if (typeof node !== "object" || node === null) return false;
