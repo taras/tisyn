@@ -25,8 +25,39 @@ describe("print", () => {
     expect(print(Let("x", 1, 2) as TisynExpr)).toBe('Let("x", 1, 2)');
   });
 
-  it("print Eval", () => {
+  it("print Eval with empty array", () => {
     expect(print(Eval("a.b", []) as TisynExpr)).toBe('Eval("a.b", [])');
+  });
+
+  it("print Eval with array data", () => {
+    expect(print(Eval("a.b", [Ref("x")]) as TisynExpr)).toBe('Eval("a.b", [Ref("x")])');
+  });
+
+  it("print Eval with non-array data wraps in array", () => {
+    // Simulates compiler-generated IR: ExternalEval("id", Construct({...}))
+    const compilerIR: TisynExpr = {
+      tisyn: "eval",
+      id: "browser.waitForUser",
+      data: { tisyn: "eval", id: "construct", data: { tisyn: "quote", expr: { prompt: "hello" } } },
+    };
+    expect(print(compilerIR)).toBe('Eval("browser.waitForUser", [Construct({ prompt: "hello" })])');
+  });
+
+  it("print nested workflow-shaped expression", () => {
+    const expr = Fn(["x"], Let("y", Eval("svc.op", [Ref("x")]), Ref("y"))) as TisynExpr;
+    const result = print(expr);
+    expect(result).toContain("Fn(");
+    expect(result).toContain("Let(");
+    expect(result).toContain('Eval("svc.op", [Ref("x")])');
+    expect(result).toContain('Ref("y")');
+  });
+
+  it("print Eval multiline with compact: false", () => {
+    const expr = Eval("svc.op", [Ref("x"), Ref("y")]) as TisynExpr;
+    const result = print(expr, { compact: false });
+    expect(result).toContain('Eval("svc.op", [');
+    expect(result).toContain('Ref("x")');
+    expect(result).toContain('Ref("y")');
   });
 });
 
