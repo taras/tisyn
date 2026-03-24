@@ -11,13 +11,8 @@ declare function LLM(): {
 };
 
 declare function State(): {
-  getHistory(input: { placeholder: string }): Workflow<
-    Array<{ role: string; content: string }>
-  >;
-  recordTurn(input: {
-    userMessage: string;
-    assistantMessage: string;
-  }): Workflow<void>;
+  getHistory(input: { placeholder: string }): Workflow<Array<{ role: string; content: string }>>;
+  recordTurn(input: { userMessage: string; assistantMessage: string }): Workflow<void>;
 };
 
 // The `if (false) { return; }` triggers the compiler's Case B (recursive Fn)

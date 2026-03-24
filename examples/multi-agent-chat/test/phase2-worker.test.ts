@@ -15,10 +15,7 @@ import { chat } from "../src/workflow.generated.js";
 // Agent declarations
 const browser = agent("browser", {
   waitForUser: operation<{ input: { prompt: string } }, { message: string }>(),
-  showAssistantMessage: operation<
-    { input: { message: string } },
-    void
-  >(),
+  showAssistantMessage: operation<{ input: { message: string } }, void>(),
 });
 
 const llm = agent("l-l-m", {
@@ -38,10 +35,7 @@ const state = agent("state", {
     { input: { placeholder: string } },
     Array<{ role: string; content: string }>
   >(),
-  recordTurn: operation<
-    { input: { userMessage: string; assistantMessage: string } },
-    void
-  >(),
+  recordTurn: operation<{ input: { userMessage: string; assistantMessage: string } }, void>(),
 });
 
 describe("Phase 2: LLM agent via Worker transport", () => {
@@ -89,7 +83,7 @@ describe("Phase 2: LLM agent via Worker transport", () => {
 
     // Run the compiled workflow
     yield* spawn(function* () {
-      yield* execute({ ir: Call(chat as never) });
+      yield* execute({ ir: Call(chat) });
     });
 
     yield* done.operation;
