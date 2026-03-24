@@ -1061,7 +1061,10 @@ describe("generateWorkflowModule", () => {
               return order;
             }
           `;
-          const result = generateWorkflowModule(source, { validate: false, workflowFormat: format });
+          const result = generateWorkflowModule(source, {
+            validate: false,
+            workflowFormat: format,
+          });
           const diagnostics = getSemanticDiagnostics(result.source, {
             "/types.d.ts": "export interface Order { id: string; }",
           });
@@ -1080,7 +1083,10 @@ describe("generateWorkflowModule", () => {
               return order;
             }
           `;
-          const result = generateWorkflowModule(source, { validate: false, workflowFormat: format });
+          const result = generateWorkflowModule(source, {
+            validate: false,
+            workflowFormat: format,
+          });
           const diagnostics = getSemanticDiagnostics(result.source, {
             "/types.d.ts": "export interface Order { id: string; }",
           });
@@ -1099,7 +1105,10 @@ describe("generateWorkflowModule", () => {
               return order;
             }
           `;
-          const result = generateWorkflowModule(source, { validate: false, workflowFormat: format });
+          const result = generateWorkflowModule(source, {
+            validate: false,
+            workflowFormat: format,
+          });
           const diagnostics = getSemanticDiagnostics(result.source, {
             "/types.d.ts": "export default interface Order { id: string; }",
           });
@@ -1117,7 +1126,10 @@ describe("generateWorkflowModule", () => {
               return order;
             }
           `;
-          const result = generateWorkflowModule(source, { validate: false, workflowFormat: format });
+          const result = generateWorkflowModule(source, {
+            validate: false,
+            workflowFormat: format,
+          });
           const diagnostics = getSemanticDiagnostics(
             result.source,
             {},
@@ -1137,7 +1149,10 @@ describe("generateWorkflowModule", () => {
               return "hello";
             }
           `;
-          const result = generateWorkflowModule(source, { validate: false, workflowFormat: format });
+          const result = generateWorkflowModule(source, {
+            validate: false,
+            workflowFormat: format,
+          });
           const consumer = `
             import { greet } from "./generated.js";
             import { Call } from "@tisyn/ir";

@@ -52,7 +52,11 @@ export function generateWorkflowModule(
   source: string,
   options: GenerateOptions = {},
 ): GenerateResult {
-  const { validate: shouldValidate = true, filename = "input.ts", workflowFormat = "printed" } = options;
+  const {
+    validate: shouldValidate = true,
+    filename = "input.ts",
+    workflowFormat = "printed",
+  } = options;
 
   // Parse source file
   const sourceFile = ts.createSourceFile(
