@@ -3,7 +3,10 @@ import { agent, operation } from "@tisyn/agent";
 import type { DeclaredAgent, OperationSpec } from "@tisyn/agent";
 import type { TisynFn } from "@tisyn/ir";
 
-export function Browser(): DeclaredAgent<{ waitForUser: OperationSpec<{ input: { prompt: string } }, { message: string }>; showAssistantMessage: OperationSpec<{ input: { message: string } }, void> }> {
+export function Browser(): DeclaredAgent<{
+  waitForUser: OperationSpec<{ input: { prompt: string } }, { message: string }>;
+  showAssistantMessage: OperationSpec<{ input: { message: string } }, void>;
+}> {
   const id = "browser";
   return agent(id, {
     waitForUser: operation<{ input: { prompt: string } }, { message: string }>(),
@@ -11,306 +14,276 @@ export function Browser(): DeclaredAgent<{ waitForUser: OperationSpec<{ input: {
   });
 }
 
-export function LLM(): DeclaredAgent<{ sample: OperationSpec<{ input: {
-    history: Array<{ role: string; content: string }>;
-    message: string;
-  } }, { message: string }> }> {
+export function LLM(): DeclaredAgent<{
+  sample: OperationSpec<
+    {
+      input: {
+        history: Array<{ role: string; content: string }>;
+        message: string;
+      };
+    },
+    { message: string }
+  >;
+}> {
   const id = "l-l-m";
   return agent(id, {
-    sample: operation<{ input: {
-    history: Array<{ role: string; content: string }>;
-    message: string;
-  } }, { message: string }>(),
+    sample: operation<
+      {
+        input: {
+          history: Array<{ role: string; content: string }>;
+          message: string;
+        };
+      },
+      { message: string }
+    >(),
   });
 }
 
-export function State(): DeclaredAgent<{ getHistory: OperationSpec<{ input: { placeholder: string } }, Array<{ role: string; content: string }>>; recordTurn: OperationSpec<{ input: { userMessage: string; assistantMessage: string } }, void> }> {
+export function State(): DeclaredAgent<{
+  getHistory: OperationSpec<
+    { input: { placeholder: string } },
+    Array<{ role: string; content: string }>
+  >;
+  recordTurn: OperationSpec<{ input: { userMessage: string; assistantMessage: string } }, void>;
+}> {
   const id = "state";
   return agent(id, {
-    getHistory: operation<{ input: { placeholder: string } }, Array<{ role: string; content: string }>>(),
+    getHistory: operation<
+      { input: { placeholder: string } },
+      Array<{ role: string; content: string }>
+    >(),
     recordTurn: operation<{ input: { userMessage: string; assistantMessage: string } }, void>(),
   });
 }
 
 export const chat: TisynFn<[], unknown> = {
-    "tisyn": "fn",
-    "params": [],
-    "body": {
-      "tisyn": "eval",
-      "id": "let",
-      "data": {
-        "tisyn": "quote",
-        "expr": {
-          "name": "__loop_0",
-          "value": {
-            "tisyn": "fn",
-            "params": [],
-            "body": {
-              "tisyn": "eval",
-              "id": "let",
-              "data": {
-                "tisyn": "quote",
-                "expr": {
-                  "name": "user",
-                  "value": {
-                    "tisyn": "eval",
-                    "id": "browser.waitForUser",
-                    "data": {
-                      "tisyn": "eval",
-                      "id": "construct",
-                      "data": {
-                        "tisyn": "quote",
-                        "expr": {
-                          "input": {
-                            "tisyn": "eval",
-                            "id": "construct",
-                            "data": {
-                              "tisyn": "quote",
-                              "expr": {
-                                "prompt": "Say something"
-                              }
-                            }
-                          }
-                        }
-                      }
-                    }
-                  },
-                  "body": {
-                    "tisyn": "eval",
-                    "id": "let",
-                    "data": {
-                      "tisyn": "quote",
-                      "expr": {
-                        "name": "history",
-                        "value": {
-                          "tisyn": "eval",
-                          "id": "state.getHistory",
-                          "data": {
-                            "tisyn": "eval",
-                            "id": "construct",
-                            "data": {
-                              "tisyn": "quote",
-                              "expr": {
-                                "input": {
-                                  "tisyn": "eval",
-                                  "id": "construct",
-                                  "data": {
-                                    "tisyn": "quote",
-                                    "expr": {
-                                      "placeholder": ""
-                                    }
-                                  }
-                                }
-                              }
-                            }
-                          }
+  tisyn: "fn",
+  params: [],
+  body: {
+    tisyn: "eval",
+    id: "while",
+    data: {
+      tisyn: "quote",
+      expr: {
+        condition: true,
+        exprs: [
+          {
+            tisyn: "eval",
+            id: "let",
+            data: {
+              tisyn: "quote",
+              expr: {
+                name: "user",
+                value: {
+                  tisyn: "eval",
+                  id: "browser.waitForUser",
+                  data: {
+                    tisyn: "eval",
+                    id: "construct",
+                    data: {
+                      tisyn: "quote",
+                      expr: {
+                        input: {
+                          tisyn: "eval",
+                          id: "construct",
+                          data: {
+                            tisyn: "quote",
+                            expr: {
+                              prompt: "Say something",
+                            },
+                          },
                         },
-                        "body": {
-                          "tisyn": "eval",
-                          "id": "let",
-                          "data": {
-                            "tisyn": "quote",
-                            "expr": {
-                              "name": "assistant",
-                              "value": {
-                                "tisyn": "eval",
-                                "id": "l-l-m.sample",
-                                "data": {
-                                  "tisyn": "eval",
-                                  "id": "construct",
-                                  "data": {
-                                    "tisyn": "quote",
-                                    "expr": {
-                                      "input": {
-                                        "tisyn": "eval",
-                                        "id": "construct",
-                                        "data": {
-                                          "tisyn": "quote",
-                                          "expr": {
-                                            "history": {
-                                              "tisyn": "ref",
-                                              "name": "history"
-                                            },
-                                            "message": {
-                                              "tisyn": "eval",
-                                              "id": "get",
-                                              "data": {
-                                                "tisyn": "quote",
-                                                "expr": {
-                                                  "obj": {
-                                                    "tisyn": "ref",
-                                                    "name": "user"
-                                                  },
-                                                  "key": "message"
-                                                }
-                                              }
-                                            }
-                                          }
-                                        }
-                                      }
-                                    }
-                                  }
-                                }
-                              },
-                              "body": {
-                                "tisyn": "eval",
-                                "id": "let",
-                                "data": {
-                                  "tisyn": "quote",
-                                  "expr": {
-                                    "name": "__discard_0",
-                                    "value": {
-                                      "tisyn": "eval",
-                                      "id": "state.recordTurn",
-                                      "data": {
-                                        "tisyn": "eval",
-                                        "id": "construct",
-                                        "data": {
-                                          "tisyn": "quote",
-                                          "expr": {
-                                            "input": {
-                                              "tisyn": "eval",
-                                              "id": "construct",
-                                              "data": {
-                                                "tisyn": "quote",
-                                                "expr": {
-                                                  "userMessage": {
-                                                    "tisyn": "eval",
-                                                    "id": "get",
-                                                    "data": {
-                                                      "tisyn": "quote",
-                                                      "expr": {
-                                                        "obj": {
-                                                          "tisyn": "ref",
-                                                          "name": "user"
-                                                        },
-                                                        "key": "message"
-                                                      }
-                                                    }
-                                                  },
-                                                  "assistantMessage": {
-                                                    "tisyn": "eval",
-                                                    "id": "get",
-                                                    "data": {
-                                                      "tisyn": "quote",
-                                                      "expr": {
-                                                        "obj": {
-                                                          "tisyn": "ref",
-                                                          "name": "assistant"
-                                                        },
-                                                        "key": "message"
-                                                      }
-                                                    }
-                                                  }
-                                                }
-                                              }
-                                            }
-                                          }
-                                        }
-                                      }
-                                    },
-                                    "body": {
-                                      "tisyn": "eval",
-                                      "id": "let",
-                                      "data": {
-                                        "tisyn": "quote",
-                                        "expr": {
-                                          "name": "__discard_1",
-                                          "value": {
-                                            "tisyn": "eval",
-                                            "id": "browser.showAssistantMessage",
-                                            "data": {
-                                              "tisyn": "eval",
-                                              "id": "construct",
-                                              "data": {
-                                                "tisyn": "quote",
-                                                "expr": {
-                                                  "input": {
-                                                    "tisyn": "eval",
-                                                    "id": "construct",
-                                                    "data": {
-                                                      "tisyn": "quote",
-                                                      "expr": {
-                                                        "message": {
-                                                          "tisyn": "eval",
-                                                          "id": "get",
-                                                          "data": {
-                                                            "tisyn": "quote",
-                                                            "expr": {
-                                                              "obj": {
-                                                                "tisyn": "ref",
-                                                                "name": "assistant"
-                                                              },
-                                                              "key": "message"
-                                                            }
-                                                          }
-                                                        }
-                                                      }
-                                                    }
-                                                  }
-                                                }
-                                              }
-                                            }
-                                          },
-                                          "body": {
-                                            "tisyn": "eval",
-                                            "id": "if",
-                                            "data": {
-                                              "tisyn": "quote",
-                                              "expr": {
-                                                "condition": false,
-                                                "then": null,
-                                                "else": {
-                                                  "tisyn": "eval",
-                                                  "id": "call",
-                                                  "data": {
-                                                    "tisyn": "quote",
-                                                    "expr": {
-                                                      "fn": {
-                                                        "tisyn": "ref",
-                                                        "name": "__loop_0"
-                                                      },
-                                                      "args": []
-                                                    }
-                                                  }
-                                                }
-                                              }
-                                            }
-                                          }
-                                        }
-                                      }
-                                    }
-                                  }
-                                }
-                              }
-                            }
-                          }
-                        }
-                      }
-                    }
-                  }
-                }
-              }
-            }
-          },
-          "body": {
-            "tisyn": "eval",
-            "id": "call",
-            "data": {
-              "tisyn": "quote",
-              "expr": {
-                "fn": {
-                  "tisyn": "ref",
-                  "name": "__loop_0"
+                      },
+                    },
+                  },
                 },
-                "args": []
-              }
-            }
-          }
-        }
-      }
-    }
-  } as const;
+                body: {
+                  tisyn: "eval",
+                  id: "let",
+                  data: {
+                    tisyn: "quote",
+                    expr: {
+                      name: "history",
+                      value: {
+                        tisyn: "eval",
+                        id: "state.getHistory",
+                        data: {
+                          tisyn: "eval",
+                          id: "construct",
+                          data: {
+                            tisyn: "quote",
+                            expr: {
+                              input: {
+                                tisyn: "eval",
+                                id: "construct",
+                                data: {
+                                  tisyn: "quote",
+                                  expr: {
+                                    placeholder: "",
+                                  },
+                                },
+                              },
+                            },
+                          },
+                        },
+                      },
+                      body: {
+                        tisyn: "eval",
+                        id: "let",
+                        data: {
+                          tisyn: "quote",
+                          expr: {
+                            name: "assistant",
+                            value: {
+                              tisyn: "eval",
+                              id: "l-l-m.sample",
+                              data: {
+                                tisyn: "eval",
+                                id: "construct",
+                                data: {
+                                  tisyn: "quote",
+                                  expr: {
+                                    input: {
+                                      tisyn: "eval",
+                                      id: "construct",
+                                      data: {
+                                        tisyn: "quote",
+                                        expr: {
+                                          history: {
+                                            tisyn: "ref",
+                                            name: "history",
+                                          },
+                                          message: {
+                                            tisyn: "eval",
+                                            id: "get",
+                                            data: {
+                                              tisyn: "quote",
+                                              expr: {
+                                                obj: {
+                                                  tisyn: "ref",
+                                                  name: "user",
+                                                },
+                                                key: "message",
+                                              },
+                                            },
+                                          },
+                                        },
+                                      },
+                                    },
+                                  },
+                                },
+                              },
+                            },
+                            body: {
+                              tisyn: "eval",
+                              id: "let",
+                              data: {
+                                tisyn: "quote",
+                                expr: {
+                                  name: "__discard_0",
+                                  value: {
+                                    tisyn: "eval",
+                                    id: "state.recordTurn",
+                                    data: {
+                                      tisyn: "eval",
+                                      id: "construct",
+                                      data: {
+                                        tisyn: "quote",
+                                        expr: {
+                                          input: {
+                                            tisyn: "eval",
+                                            id: "construct",
+                                            data: {
+                                              tisyn: "quote",
+                                              expr: {
+                                                userMessage: {
+                                                  tisyn: "eval",
+                                                  id: "get",
+                                                  data: {
+                                                    tisyn: "quote",
+                                                    expr: {
+                                                      obj: {
+                                                        tisyn: "ref",
+                                                        name: "user",
+                                                      },
+                                                      key: "message",
+                                                    },
+                                                  },
+                                                },
+                                                assistantMessage: {
+                                                  tisyn: "eval",
+                                                  id: "get",
+                                                  data: {
+                                                    tisyn: "quote",
+                                                    expr: {
+                                                      obj: {
+                                                        tisyn: "ref",
+                                                        name: "assistant",
+                                                      },
+                                                      key: "message",
+                                                    },
+                                                  },
+                                                },
+                                              },
+                                            },
+                                          },
+                                        },
+                                      },
+                                    },
+                                  },
+                                  body: {
+                                    tisyn: "eval",
+                                    id: "browser.showAssistantMessage",
+                                    data: {
+                                      tisyn: "eval",
+                                      id: "construct",
+                                      data: {
+                                        tisyn: "quote",
+                                        expr: {
+                                          input: {
+                                            tisyn: "eval",
+                                            id: "construct",
+                                            data: {
+                                              tisyn: "quote",
+                                              expr: {
+                                                message: {
+                                                  tisyn: "eval",
+                                                  id: "get",
+                                                  data: {
+                                                    tisyn: "quote",
+                                                    expr: {
+                                                      obj: {
+                                                        tisyn: "ref",
+                                                        name: "assistant",
+                                                      },
+                                                      key: "message",
+                                                    },
+                                                  },
+                                                },
+                                              },
+                                            },
+                                          },
+                                        },
+                                      },
+                                    },
+                                  },
+                                },
+                              },
+                            },
+                          },
+                        },
+                      },
+                    },
+                  },
+                },
+              },
+            },
+          },
+        ],
+      },
+    },
+  },
+} as const;
 
 export const agents = { Browser, LLM, State };
 export const workflows = { chat };

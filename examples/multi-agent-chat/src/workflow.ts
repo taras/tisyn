@@ -15,9 +15,6 @@ declare function State(): {
   recordTurn(input: { userMessage: string; assistantMessage: string }): Workflow<void>;
 };
 
-// The `if (false) { return; }` triggers the compiler's Case B (recursive Fn)
-// which creates proper Let bindings for variable declarations across the loop.
-// Without it, While Case A discards variable names and refs would be unbound.
 export function* chat() {
   while (true) {
     const user = yield* Browser().waitForUser({ prompt: "Say something" });
@@ -31,8 +28,5 @@ export function* chat() {
       assistantMessage: assistant.message,
     });
     yield* Browser().showAssistantMessage({ message: assistant.message });
-    if (false) {
-      return;
-    }
   }
 }
