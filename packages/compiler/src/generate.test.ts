@@ -964,7 +964,16 @@ describe("generateWorkflowModule", () => {
       };
 
       const program = ts.createProgram(["/generated.ts"], compilerOptions, host);
-      return program.getSemanticDiagnostics(program.getSourceFile("/generated.ts"));
+      const semanticDiagnostics = program.getSemanticDiagnostics(program.getSourceFile("/generated.ts"));
+
+      // When declaration emit is enabled, also run emit to catch TS2742-style errors
+      if (compilerOptions.declaration) {
+        host.writeFile = () => {};  // no-op — we only care about diagnostics
+        const emitResult = program.emit(program.getSourceFile("/generated.ts"));
+        return [...semanticDiagnostics, ...emitResult.diagnostics];
+      }
+
+      return semanticDiagnostics;
     }
 
     it("generated module with named type import has zero semantic errors", () => {
