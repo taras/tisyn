@@ -42,10 +42,7 @@ const state = agent("state", {
     { input: { placeholder: string } },
     Array<{ role: string; content: string }>
   >(),
-  recordTurn: operation<
-    { input: { userMessage: string; assistantMessage: string } },
-    void
-  >(),
+  recordTurn: operation<{ input: { userMessage: string; assistantMessage: string } }, void>(),
 });
 
 await main(function* () {
@@ -102,5 +99,5 @@ await main(function* () {
 
   // 5. Execute the compiled chat workflow
   console.log("Starting chat workflow...");
-  yield* execute({ ir: Call(chat as never) });
+  yield* execute({ ir: Call(chat) });
 });

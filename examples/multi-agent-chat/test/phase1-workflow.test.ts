@@ -14,10 +14,7 @@ import { chat } from "../src/workflow.generated.js";
 // Agent declarations matching the generated module's agent IDs
 const browser = agent("browser", {
   waitForUser: operation<{ input: { prompt: string } }, { message: string }>(),
-  showAssistantMessage: operation<
-    { input: { message: string } },
-    void
-  >(),
+  showAssistantMessage: operation<{ input: { message: string } }, void>(),
 });
 
 const llm = agent("l-l-m", {
@@ -37,10 +34,7 @@ const state = agent("state", {
     { input: { placeholder: string } },
     Array<{ role: string; content: string }>
   >(),
-  recordTurn: operation<
-    { input: { userMessage: string; assistantMessage: string } },
-    void
-  >(),
+  recordTurn: operation<{ input: { userMessage: string; assistantMessage: string } }, void>(),
 });
 
 describe("Phase 1: Compiled workflow with local agents", () => {
@@ -110,7 +104,7 @@ describe("Phase 1: Compiled workflow with local agents", () => {
 
     // Run the compiled workflow in a spawned task so we can cancel it
     const task = yield* spawn(function* () {
-      yield* execute({ ir: Call(chat as never) });
+      yield* execute({ ir: Call(chat) });
     });
 
     // Wait for the loop to complete (agent throws after canned messages)

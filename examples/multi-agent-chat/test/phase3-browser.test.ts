@@ -20,10 +20,7 @@ import { serverWebSocketTransport } from "../src/browser-transport.js";
 // Browser agent declaration (matching compiler-generated agent ID)
 const browser = agent("browser", {
   waitForUser: operation<{ input: { prompt: string } }, { message: string }>(),
-  showAssistantMessage: operation<
-    { input: { message: string } },
-    void
-  >(),
+  showAssistantMessage: operation<{ input: { message: string } }, void>(),
 });
 
 describe("Phase 3: Browser agent via WebSocket transport", () => {
@@ -99,15 +96,12 @@ describe("Phase 3: Browser agent via WebSocket transport", () => {
     yield* installRemoteAgent(browser, serverWebSocketTransport(serverWs));
 
     // Host invokes browser agent operations
-    const userResult = yield* invoke(
-      browser.waitForUser({ input: { prompt: "Say something" } }),
-    );
+    const userResult = yield* invoke(browser.waitForUser({ input: { prompt: "Say something" } }));
     expect(userResult).toEqual({ message: "hello from browser" });
 
     // Verify the client received an execute request for waitForUser
     const waitForUserMsgs = clientMessages.filter(
-      (m: any) =>
-        m.method === "execute" && m.params.operation === "waitForUser",
+      (m: any) => m.method === "execute" && m.params.operation === "waitForUser",
     );
     expect(waitForUserMsgs).toHaveLength(1);
 
@@ -119,14 +113,10 @@ describe("Phase 3: Browser agent via WebSocket transport", () => {
 
     // Verify the client received the showAssistantMessage request
     const showMsgs = clientMessages.filter(
-      (m: any) =>
-        m.method === "execute" &&
-        m.params.operation === "showAssistantMessage",
+      (m: any) => m.method === "execute" && m.params.operation === "showAssistantMessage",
     );
     expect(showMsgs).toHaveLength(1);
-    expect((showMsgs[0] as any).params.args[0].input.message).toBe(
-      "Echo: hello",
-    );
+    expect((showMsgs[0] as any).params.args[0].input.message).toBe("Echo: hello");
 
     // Cleanup
     clientWs.close();

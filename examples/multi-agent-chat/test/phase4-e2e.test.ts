@@ -17,8 +17,21 @@ import { execute } from "@tisyn/runtime";
 import { installRemoteAgent, workerTransport } from "@tisyn/transport";
 import { Call } from "@tisyn/ir";
 import type { ExecuteRequest } from "@tisyn/protocol";
+import type { Val } from "@tisyn/ir";
 import { chat } from "../src/workflow.generated.js";
 import { serverWebSocketTransport } from "../src/browser-transport.js";
+
+function extractMessage(args: Val[]): string {
+  const arg = args[0];
+  if (arg != null && typeof arg === "object" && !Array.isArray(arg)) {
+    const input = arg["input"];
+    if (input != null && typeof input === "object" && !Array.isArray(input)) {
+      const message = input["message"];
+      if (typeof message === "string") return message;
+    }
+  }
+  throw new Error(`unexpected showAssistantMessage payload: ${JSON.stringify(args)}`);
+}
 
 // Agent declarations
 const browser = agent("browser", {
@@ -43,10 +56,7 @@ const state = agent("state", {
     { input: { placeholder: string } },
     Array<{ role: string; content: string }>
   >(),
-  recordTurn: operation<
-    { input: { userMessage: string; assistantMessage: string } },
-    void
-  >(),
+  recordTurn: operation<{ input: { userMessage: string; assistantMessage: string } }, void>(),
 });
 
 describe("Phase 4: Full end-to-end", () => {
@@ -128,7 +138,7 @@ describe("Phase 4: Full end-to-end", () => {
         }
 
         if (req.params.operation === "showAssistantMessage") {
-          assistantMessages.push(req.params.args[0]?.input?.message ?? "");
+          assistantMessages.push(extractMessage(req.params.args));
           clientWs.send(
             JSON.stringify({
               jsonrpc: "2.0",
@@ -175,7 +185,7 @@ describe("Phase 4: Full end-to-end", () => {
 
     yield* spawn(function* () {
       try {
-        yield* execute({ ir: Call(chat as never) });
+        yield* execute({ ir: Call(chat) });
       } catch {
         // Expected: workflow errors when browser rejects waitForUser
       }
