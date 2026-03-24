@@ -22,7 +22,7 @@ import {
   collectReferencedTypeImports,
   type DiscoveredContract,
 } from "./discover.js";
-import { generateCode } from "./codegen.js";
+import { generateCode, type WorkflowInfo } from "./codegen.js";
 
 export interface GenerateOptions {
   /** Source filename for error messages. */
@@ -99,6 +99,7 @@ export function generateWorkflowModule(
 
   // Compile each workflow with contract-aware emit context
   const workflows: Record<string, Expr> = {};
+  const workflowInfos: Record<string, WorkflowInfo> = {};
 
   for (const fn of exportedFunctions) {
     const ctx = createContext(sourceFile, contractsMap);
@@ -122,13 +123,18 @@ export function generateWorkflowModule(
     }
 
     workflows[fn.name] = irFn;
+    workflowInfos[fn.name] = {
+      ir: irFn,
+      paramTypes: fn.paramTypes,
+      returnType: fn.returnType,
+    };
   }
 
   // Collect referenced type imports
   const typeImports = collectReferencedTypeImports(sourceFile, contractTypeNodes);
 
   // Generate TypeScript module source
-  const generatedSource = generateCode(contracts, workflows, typeImports);
+  const generatedSource = generateCode(contracts, workflowInfos, typeImports);
 
   return {
     source: generatedSource,

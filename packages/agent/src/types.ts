@@ -27,6 +27,10 @@ export type AgentCalls<D extends AgentDeclaration<Record<string, OperationSpec>>
   [K in keyof D["operations"]]: OperationCall<D["operations"][K]>;
 };
 
+/** The public return type of agent() — declaration merged with host-side call constructors. */
+export type DeclaredAgent<Ops extends Record<string, OperationSpec>> = AgentDeclaration<Ops> &
+  AgentCalls<AgentDeclaration<Ops>>;
+
 /** Implementation handlers mapped from a declaration's operations. */
 export type ImplementationHandlers<Ops extends Record<string, OperationSpec>> = {
   [K in keyof Ops]: Ops[K] extends OperationSpec<infer Args, infer Result>

@@ -782,7 +782,7 @@ describe("generateWorkflowModule", () => {
 
     it("generates named workflow IR export", () => {
       const result = generateWorkflowModule(source, { validate: false });
-      expect(result.source).toContain("export const processOrder =");
+      expect(result.source).toContain("export const processOrder: TisynFn<");
     });
 
     it("generates grouped agents and workflows exports", () => {
@@ -873,7 +873,11 @@ describe("generateWorkflowModule", () => {
 
   describe("semantic type-check", () => {
     /** Create an in-memory TS program and return semantic diagnostics for the generated file. */
-    function getSemanticDiagnostics(generatedSource: string, extraFiles?: Record<string, string>) {
+    function getSemanticDiagnostics(
+      generatedSource: string,
+      extraFiles?: Record<string, string>,
+      extraCompilerOptions?: ts.CompilerOptions,
+    ) {
       const files: Record<string, string> = {
         "/generated.ts": generatedSource,
         // Minimal @tisyn/agent stub
@@ -883,8 +887,48 @@ describe("generateWorkflowModule", () => {
           exports: { ".": { types: "./index.d.ts" } },
         }),
         "/node_modules/@tisyn/agent/index.d.ts": `
-          export declare function agent<T>(id: string, ops: T): T;
-          export declare function operation<Args = void, Result = void>(): any;
+          export interface OperationSpec<Args = unknown, Result = unknown> {
+            readonly __args?: Args;
+            readonly __result?: Result;
+          }
+          export interface AgentDeclaration<Ops extends Record<string, OperationSpec>> {
+            readonly id: string;
+            readonly operations: Ops;
+          }
+          export type AgentCalls<D extends AgentDeclaration<Record<string, OperationSpec>>> = {
+            [K in keyof D["operations"]]: any;
+          };
+          export type DeclaredAgent<Ops extends Record<string, OperationSpec>> =
+            AgentDeclaration<Ops> & AgentCalls<AgentDeclaration<Ops>>;
+          export declare function agent<const Ops extends Record<string, OperationSpec<any, any>>>(
+            id: string, ops: Ops
+          ): DeclaredAgent<Ops>;
+          export declare function operation<Args = void, Result = void>(): OperationSpec<Args, Result>;
+        `,
+        // Minimal @tisyn/ir stub
+        "/node_modules/@tisyn/ir/package.json": JSON.stringify({
+          name: "@tisyn/ir",
+          types: "./index.d.ts",
+          exports: { ".": { types: "./index.d.ts" } },
+        }),
+        "/node_modules/@tisyn/ir/index.d.ts": `
+          export type Expr<T> = T | Eval<T> | TisynFn<any[], T>;
+          export interface Eval<T, TData = unknown> {
+            readonly tisyn: "eval";
+            readonly id: string;
+            readonly data: TData;
+            readonly T?: T;
+          }
+          export interface TisynFn<A extends unknown[], R> {
+            readonly tisyn: "fn";
+            readonly params: readonly string[];
+            readonly body: Expr<R>;
+            readonly T?: (...args: A) => R;
+          }
+          export declare function Call<A extends unknown[], R>(
+            fn: Expr<(...args: A) => R> | TisynFn<A, R>,
+            ...args: { [K in keyof A]: Expr<A[K]> }
+          ): Eval<R>;
         `,
         ...extraFiles,
       };
@@ -896,6 +940,7 @@ describe("generateWorkflowModule", () => {
         strict: false,
         noEmit: true,
         skipLibCheck: true,
+        ...extraCompilerOptions,
       };
 
       const host = ts.createCompilerHost(compilerOptions);
@@ -923,7 +968,18 @@ describe("generateWorkflowModule", () => {
       };
 
       const program = ts.createProgram(["/generated.ts"], compilerOptions, host);
-      return program.getSemanticDiagnostics(program.getSourceFile("/generated.ts"));
+      const semanticDiagnostics = program.getSemanticDiagnostics(
+        program.getSourceFile("/generated.ts"),
+      );
+
+      // When declaration emit is enabled, also run emit to catch TS2742-style errors
+      if (compilerOptions.declaration) {
+        host.writeFile = () => {}; // no-op — we only care about diagnostics
+        const emitResult = program.emit(program.getSourceFile("/generated.ts"));
+        return [...semanticDiagnostics, ...emitResult.diagnostics];
+      }
+
+      return semanticDiagnostics;
     }
 
     it("generated module with named type import has zero semantic errors", () => {
@@ -978,6 +1034,49 @@ describe("generateWorkflowModule", () => {
       const result = generateWorkflowModule(source, { validate: false });
       const diagnostics = getSemanticDiagnostics(result.source, {
         "/types.d.ts": "export default interface Order { id: string; }",
+      });
+      const errors = diagnostics.filter((d) => d.category === ts.DiagnosticCategory.Error);
+      expect(errors).toHaveLength(0);
+    });
+
+    it("generated module emits declarations without TS2742", () => {
+      const source = `
+        declare function OrderService(): {
+          fetchOrder(orderId: string): Workflow<{ id: string }>;
+        };
+        export function* processOrder(orderId: string) {
+          const order = yield* OrderService().fetchOrder(orderId);
+          return order;
+        }
+      `;
+      const result = generateWorkflowModule(source, { validate: false });
+      const diagnostics = getSemanticDiagnostics(
+        result.source,
+        {},
+        {
+          noEmit: false,
+          declaration: true,
+          emitDeclarationOnly: true,
+        },
+      );
+      const errors = diagnostics.filter((d) => d.category === ts.DiagnosticCategory.Error);
+      expect(errors).toHaveLength(0);
+    });
+
+    it("Call(workflow) type-checks without cast", () => {
+      const source = `
+        export function* greet() {
+          return "hello";
+        }
+      `;
+      const result = generateWorkflowModule(source, { validate: false });
+      const consumer = `
+        import { greet } from "./generated.js";
+        import { Call } from "@tisyn/ir";
+        const expr = Call(greet);
+      `;
+      const diagnostics = getSemanticDiagnostics(consumer, {
+        "/generated.ts": result.source,
       });
       const errors = diagnostics.filter((d) => d.category === ts.DiagnosticCategory.Error);
       expect(errors).toHaveLength(0);

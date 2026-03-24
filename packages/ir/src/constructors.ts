@@ -68,7 +68,7 @@ export function While<T>(condition: Expr<boolean>, exprs: [...Expr<unknown>[], E
 }
 
 export function Call<A extends unknown[], R>(
-  fn: Expr<(...args: A) => R>,
+  fn: Expr<(...args: A) => R> | TisynFn<A, R>,
   ...args: { [K in keyof A]: Expr<A[K]> }
 ): EvalT<R> {
   return {

@@ -9,7 +9,7 @@
 
 import type { Operation } from "effection";
 import { spawn, ensure, scoped, withResolvers } from "effection";
-import type { TisynExpr as Expr, Val, Json } from "@tisyn/ir";
+import type { TisynExpr as Expr, Val, Json, IrInput } from "@tisyn/ir";
 import {
   type DurableEvent,
   type YieldEvent,
@@ -27,7 +27,7 @@ import { dispatch } from "@tisyn/agent";
 
 export interface ExecuteOptions {
   /** The IR tree to evaluate. */
-  ir: Expr;
+  ir: IrInput;
   /** Initial environment bindings. */
   env?: Record<string, Val>;
   /** The durable stream for journaling. */
@@ -61,8 +61,9 @@ export function* execute(options: ExecuteOptions): Operation<ExecuteResult> {
   const { ir, env: envRecord = {}, stream = new InMemoryStream(), coroutineId = "root" } = options;
 
   // Phase 1: Validate IR before evaluation
+  let validatedIr: Expr;
   try {
-    assertValidIr(ir);
+    validatedIr = assertValidIr(ir);
   } catch (error) {
     if (error instanceof Error && error.name === "MalformedIR") {
       // MalformedIR produces NO journal events (Conformance §4.1)
@@ -89,7 +90,7 @@ export function* execute(options: ExecuteOptions): Operation<ExecuteResult> {
   const env: Env = envFromRecord(envRecord);
 
   // Phase 3: Create kernel generator and drive it
-  const kernel = evaluate(ir, env);
+  const kernel = evaluate(validatedIr, env);
   const ctx: DriveContext = { replayIndex, stream, journal };
 
   let result: EventResult;
