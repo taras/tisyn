@@ -79,22 +79,13 @@ function printEval(
     return printCompoundExternal(id, data, depth, opts);
   }
 
-  // Standard external — always wrap data in [...] to match Eval() constructor signature
+  // Standard external — render data as single payload expression
   const name = `Eval(${JSON.stringify(id)}`;
-  if (Array.isArray(data)) {
-    const args = (data as unknown[]).map((a) => printNode(a as TisynExpr, depth + 1, opts));
-    const inline = `${name}, [${args.join(", ")}])`;
-    if (opts.compact && inline.length <= opts.maxWidth) return inline;
-    const pad = " ".repeat((depth + 1) * opts.indent);
-    return `${name}, [\n${args.map((a) => `${pad}${a}`).join(",\n")}\n${" ".repeat(depth * opts.indent)}])`;
-  }
-
-  // Non-array data (compiler-generated IR) — wrap in array
   const inner = printNode(data, depth + 1, opts);
-  const inline = `${name}, [${inner}])`;
+  const inline = `${name}, ${inner})`;
   if (opts.compact && inline.length <= opts.maxWidth) return inline;
   const pad = " ".repeat((depth + 1) * opts.indent);
-  return `${name}, [\n${pad}${inner}\n${" ".repeat(depth * opts.indent)}])`;
+  return `${name},\n${pad}${inner})`;
 }
 
 function printStructural(

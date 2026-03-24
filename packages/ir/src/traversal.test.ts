@@ -43,7 +43,7 @@ describe("walk", () => {
 
   it("enters external Eval data", () => {
     const visited: TisynExpr[] = [];
-    walk(Eval("a.b", [Ref("x")]) as TisynExpr, {
+    walk(Eval("a.b", Ref("x")) as TisynExpr, {
       enter(node) {
         visited.push(node);
       },
@@ -133,7 +133,7 @@ describe("fold", () => {
 
   it("fold does NOT recurse into external Eval data", () => {
     const { alg, calls } = countingAlgebra();
-    fold(Eval("a.b", [Ref("x")]) as TisynExpr, alg);
+    fold(Eval("a.b", Ref("x")) as TisynExpr, alg);
     expect(calls).toContain("eval:a.b");
     expect(calls).not.toContain("ref:x");
   });
@@ -234,14 +234,14 @@ describe("collectRefs", () => {
   });
 
   it("enters external data", () => {
-    const refs = collectRefs(Eval("a", [Ref("y")]) as TisynExpr);
+    const refs = collectRefs(Eval("a", Ref("y")) as TisynExpr);
     expect(refs).toEqual(["y"]);
   });
 });
 
 describe("collectExternalIds", () => {
   it("finds external eval IDs", () => {
-    const ids = collectExternalIds(Let("x", Eval("a.b", []), Eval("c.d", [])) as TisynExpr);
+    const ids = collectExternalIds(Let("x", Eval("a.b", null), Eval("c.d", null)) as TisynExpr);
     expect(ids.sort()).toEqual(["a.b", "c.d"]);
   });
 

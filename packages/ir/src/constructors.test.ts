@@ -166,15 +166,14 @@ describe("structural constructors", () => {
 
 describe("external constructors", () => {
   it("Eval produces unquoted data", () => {
-    const node = Eval("a.b", [1, Ref("x")]);
+    const node = Eval("a.b", Ref("x"));
     expect(node.tisyn).toBe("eval");
     expect(node.id).toBe("a.b");
-    expect(Array.isArray(node.data)).toBe(true);
-    expect(node.data).toEqual([1, { tisyn: "ref", name: "x" }]);
+    expect(node.data).toEqual({ tisyn: "ref", name: "x" });
   });
 
   it("All wraps in Quote with exprs", () => {
-    const node = All(Eval("a.b", []), Eval("c.d", []));
+    const node = All(Eval("a.b", null), Eval("c.d", null));
     expect(node.tisyn).toBe("eval");
     expect(node.id).toBe("all");
     const data = node.data as { tisyn: string; expr: { exprs: unknown[] } };
@@ -183,7 +182,7 @@ describe("external constructors", () => {
   });
 
   it("Race wraps in Quote with exprs", () => {
-    const node = Race(Eval("a.b", []));
+    const node = Race(Eval("a.b", null));
     expect(node.tisyn).toBe("eval");
     expect(node.id).toBe("race");
     const data = node.data as { tisyn: string; expr: { exprs: unknown[] } };
@@ -219,7 +218,7 @@ describe("JSON round-trip safety", () => {
   });
 
   it("Eval phantom absent", () => {
-    const node = Eval("a.b", []);
+    const node = Eval("a.b", null);
     const json = JSON.stringify(node);
     expect(json).not.toContain('"T"');
   });
@@ -233,13 +232,13 @@ describe("JSON round-trip safety", () => {
   it("nested tree round-trips", () => {
     const node = Let(
       "config",
-      Eval("config-service.getRetryConfig", []),
+      Eval("config-service.getRetryConfig", null),
       Let(
         "status",
-        Eval("job-service.checkStatus", [Ref("jobId")]),
+        Eval("job-service.checkStatus", Ref("jobId")),
         If(
           Eq(Get(Ref("status"), "state"), "complete"),
-          Eval("job-service.getResult", [Ref("jobId")]),
+          Eval("job-service.getResult", Ref("jobId")),
           Throw("Job failed"),
         ),
       ),
