@@ -190,7 +190,7 @@ export function Throw(message: Expr<string>): EvalT<never> {
   } as EvalT<never>;
 }
 
-export function Eval<T>(id: string, data: Expr<unknown>[]): EvalT<T> {
+export function Eval<T>(id: string, data: Expr<unknown>): EvalT<T> {
   return {
     tisyn: "eval",
     id,
