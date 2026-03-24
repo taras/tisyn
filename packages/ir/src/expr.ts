@@ -34,7 +34,11 @@ export type AsExpr<T> = TisynExpr & Expr<T>;
 
 /** Typed IR root nodes — the phantom-typed counterparts of TisynExpr tagged nodes. */
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-export type TypedIrNode = Eval<unknown, unknown> | Quote<unknown> | Ref<unknown> | TisynFn<any[], unknown>;
+export type TypedIrNode =
+  | Eval<unknown, unknown>
+  | Quote<unknown>
+  | Ref<unknown>
+  | TisynFn<any[], unknown>;
 
 /** Accepts both untyped TisynExpr and phantom-typed IR nodes as input to execute(). */
 export type IrInput = TisynExpr | TypedIrNode;

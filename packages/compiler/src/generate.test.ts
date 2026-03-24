@@ -873,7 +873,11 @@ describe("generateWorkflowModule", () => {
 
   describe("semantic type-check", () => {
     /** Create an in-memory TS program and return semantic diagnostics for the generated file. */
-    function getSemanticDiagnostics(generatedSource: string, extraFiles?: Record<string, string>, extraCompilerOptions?: ts.CompilerOptions) {
+    function getSemanticDiagnostics(
+      generatedSource: string,
+      extraFiles?: Record<string, string>,
+      extraCompilerOptions?: ts.CompilerOptions,
+    ) {
       const files: Record<string, string> = {
         "/generated.ts": generatedSource,
         // Minimal @tisyn/agent stub
@@ -964,11 +968,13 @@ describe("generateWorkflowModule", () => {
       };
 
       const program = ts.createProgram(["/generated.ts"], compilerOptions, host);
-      const semanticDiagnostics = program.getSemanticDiagnostics(program.getSourceFile("/generated.ts"));
+      const semanticDiagnostics = program.getSemanticDiagnostics(
+        program.getSourceFile("/generated.ts"),
+      );
 
       // When declaration emit is enabled, also run emit to catch TS2742-style errors
       if (compilerOptions.declaration) {
-        host.writeFile = () => {};  // no-op — we only care about diagnostics
+        host.writeFile = () => {}; // no-op — we only care about diagnostics
         const emitResult = program.emit(program.getSourceFile("/generated.ts"));
         return [...semanticDiagnostics, ...emitResult.diagnostics];
       }
@@ -1044,11 +1050,15 @@ describe("generateWorkflowModule", () => {
         }
       `;
       const result = generateWorkflowModule(source, { validate: false });
-      const diagnostics = getSemanticDiagnostics(result.source, {}, {
-        noEmit: false,
-        declaration: true,
-        emitDeclarationOnly: true,
-      });
+      const diagnostics = getSemanticDiagnostics(
+        result.source,
+        {},
+        {
+          noEmit: false,
+          declaration: true,
+          emitDeclarationOnly: true,
+        },
+      );
       const errors = diagnostics.filter((d) => d.category === ts.DiagnosticCategory.Error);
       expect(errors).toHaveLength(0);
     });
