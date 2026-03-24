@@ -1,3 +1,5 @@
+import type { Workflow } from "@tisyn/agent";
+
 declare function Browser(): {
   waitForUser(input: { prompt: string }): Workflow<{ message: string }>;
   showAssistantMessage(input: { message: string }): Workflow<void>;
