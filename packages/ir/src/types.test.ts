@@ -1,6 +1,6 @@
 import { describe, it } from "vitest";
 import { expectTypeOf } from "expect-type";
-import type { Expr, Eval as EvalType, Ref, TisynFn } from "./expr.js";
+import type { Expr, Eval as EvalType, Ref, TisynFn, IrInput } from "./expr.js";
 import {
   Add,
   Sub,
@@ -28,6 +28,7 @@ import {
   Seq,
   While,
   Ref as RefCtor,
+  Q,
 } from "./constructors.js";
 
 describe("positive type tests", () => {
@@ -310,5 +311,41 @@ describe("Fn/Call pressure tests", () => {
   it("Throw in If branch unifies to number", () => {
     const result = If<number>(true, Throw("x"), 42);
     expectTypeOf(result).toEqualTypeOf<EvalType<number>>();
+  });
+});
+
+describe("IrInput positive type tests", () => {
+  it("Eval<T> is assignable to IrInput", () => {
+    expectTypeOf<EvalType<number>>().toMatchTypeOf<IrInput>();
+  });
+
+  it("Quote<T> is assignable to IrInput", () => {
+    expectTypeOf<ReturnType<typeof Q<number>>>().toMatchTypeOf<IrInput>();
+  });
+
+  it("Ref<T> is assignable to IrInput", () => {
+    expectTypeOf<Ref<string>>().toMatchTypeOf<IrInput>();
+  });
+
+  it("TisynFn<A, R> is assignable to IrInput", () => {
+    expectTypeOf<TisynFn<[], void>>().toMatchTypeOf<IrInput>();
+  });
+
+  it("TisynExpr literal (number) is assignable to IrInput", () => {
+    expectTypeOf<number>().toMatchTypeOf<IrInput>();
+  });
+});
+
+describe("IrInput negative type tests", () => {
+  it("function is not assignable to IrInput", () => {
+    expectTypeOf<() => number>().not.toMatchTypeOf<IrInput>();
+  });
+
+  it("symbol is not assignable to IrInput", () => {
+    expectTypeOf<symbol>().not.toMatchTypeOf<IrInput>();
+  });
+
+  it("Date is not assignable to IrInput", () => {
+    expectTypeOf<Date>().not.toMatchTypeOf<IrInput>();
   });
 });
