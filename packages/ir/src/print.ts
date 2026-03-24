@@ -79,18 +79,22 @@ function printEval(
     return printCompoundExternal(id, data, depth, opts);
   }
 
-  // Standard external
-  const shape = data as unknown[];
-  if (Array.isArray(shape)) {
-    const args = shape.map((a) => printNode(a as TisynExpr, depth + 1, opts));
-    const name = id.includes(".") ? `Eval(${JSON.stringify(id)}` : `Eval(${JSON.stringify(id)}`;
+  // Standard external — always wrap data in [...] to match Eval() constructor signature
+  const name = `Eval(${JSON.stringify(id)}`;
+  if (Array.isArray(data)) {
+    const args = (data as unknown[]).map((a) => printNode(a as TisynExpr, depth + 1, opts));
     const inline = `${name}, [${args.join(", ")}])`;
     if (opts.compact && inline.length <= opts.maxWidth) return inline;
     const pad = " ".repeat((depth + 1) * opts.indent);
     return `${name}, [\n${args.map((a) => `${pad}${a}`).join(",\n")}\n${" ".repeat(depth * opts.indent)}])`;
   }
 
-  return `Eval(${JSON.stringify(id)}, ${printNode(data, depth + 1, opts)})`;
+  // Non-array data (compiler-generated IR) — wrap in array
+  const inner = printNode(data, depth + 1, opts);
+  const inline = `${name}, [${inner}])`;
+  if (opts.compact && inline.length <= opts.maxWidth) return inline;
+  const pad = " ".repeat((depth + 1) * opts.indent);
+  return `${name}, [\n${pad}${inner}\n${" ".repeat(depth * opts.indent)}])`;
 }
 
 function printStructural(

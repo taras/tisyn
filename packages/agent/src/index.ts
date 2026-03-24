@@ -13,4 +13,5 @@ export type {
   Invocation,
   ArgsOf,
   ResultOf,
+  Workflow,
 } from "./types.js";
