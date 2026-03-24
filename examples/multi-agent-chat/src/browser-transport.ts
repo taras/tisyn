@@ -7,33 +7,31 @@ import {
   Operation,
   resource,
   spawn,
-  useScope,
   withResolvers,
   each,
 } from "effection";
 import { on } from "@effectionx/node";
-import { createServer } from "node:http";
+import { createServer, IncomingMessage } from "node:http";
 import type { AddressInfo } from "node:net";
-import { WebSocket, WebSocketServer } from "ws";
+import { Server, WebSocket, WebSocketServer } from "ws";
 
 export function serverWebSocketTransport(
   rawWs: WebSocket
 ): AgentTransportFactory {
   return () =>
     resource(function* (provide) {
-      const scope = yield* useScope();
       const channel = createChannel<AgentMessage, void>();
 
       yield* spawn(function* () {
-        for (const message of yield* each(on(rawWs, "message"))) {
-          channel.send(parseAgentMessage(JSON.parse(message.toString())));
+        for (const [event] of yield* each(on<[MessageEvent<string>]>(rawWs, "message"))) {
+          yield* channel.send(parseAgentMessage(JSON.parse(event.data.toString())));
           yield* each.next();
         }
       });
 
       yield* spawn(function* () {
-        yield* on(rawWs, 'on');
-        channel.close();
+        yield* once(rawWs, 'close');
+        yield* channel.close();
       })
 
       try {
@@ -55,14 +53,20 @@ export function useWebSocketServer(): Operation<WebSocket> {
     const httpServer = createServer();
     const wss = new WebSocketServer({ server: httpServer });
 
+    const connected = withResolvers<WebSocket>();
+    yield* spawn(function*() {
+      const [browserWs] = yield* once<[WebSocket]>(wss, "connection");
+      connected.resolve(browserWs);
+    });
+
     const listening = withResolvers<void>();
     httpServer.listen(3000, listening.resolve);
 
     const addr = httpServer.address() as AddressInfo;
     console.log(`WebSocket server listening on ws://localhost:${addr.port}`);
 
-    console.log("Waiting for browser connection...");
-    const [browserWs] = yield* once<[WebSocket]>(wss, "connection");
+    const browserWs = yield* connected.operation;
+    console.log("Browser connected");
 
     try {
       yield* provide(browserWs);
