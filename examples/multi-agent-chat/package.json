@@ -10,7 +10,8 @@
     "test": "vitest run",
     "predev": "tsx src/build-workflow.ts",
     "dev": "tsx src/host.ts",
-    "dev:browser": "npx serve src/browser -l 4173"
+    "dev:browser": "vite",
+    "build:browser": "vite build"
   },
   "dependencies": {
     "@effectionx/worker": "^0.5.2",
@@ -27,10 +28,17 @@
   },
   "devDependencies": {
     "@effectionx/vitest": "^0.3.1",
+    "@effectionx/websocket": "^2.3.3",
     "@types/node": "^25.5.0",
+    "@types/react": "^19",
+    "@types/react-dom": "^19",
     "@types/ws": "^8",
+    "@vitejs/plugin-react": "^4",
+    "react": "^19",
+    "react-dom": "^19",
     "tsx": "^4.21.0",
     "typescript": "~5.8.0",
+    "vite": "^6",
     "vitest": "^4"
   }
 }
