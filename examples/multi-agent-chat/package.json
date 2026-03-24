@@ -9,7 +9,8 @@
     "pretest": "tsx src/build-workflow.ts",
     "test": "vitest run",
     "predev": "tsx src/build-workflow.ts",
-    "dev": "tsx src/host.ts"
+    "dev": "tsx src/host.ts",
+    "dev:browser": "npx serve src/browser -l 4173"
   },
   "dependencies": {
     "@effectionx/worker": "^0.5.2",

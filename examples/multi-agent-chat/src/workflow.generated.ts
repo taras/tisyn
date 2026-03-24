@@ -112,7 +112,7 @@ export const chat: TisynFn<[], unknown> = {
                               "name": "assistant",
                               "value": {
                                 "tisyn": "eval",
-                                "id": "l-l-m.sample",
+                                "id": "llm.sample",
                                 "data": {
                                   "tisyn": "eval",
                                   "id": "construct",
