@@ -5,7 +5,7 @@ declare function Browser(): {
   showAssistantMessage(input: { message: string }): Workflow<void>;
 };
 
-declare function LLM(): {
+declare function Llm(): {
   sample(input: {
     history: Array<{ role: string; content: string }>;
     message: string;
@@ -21,7 +21,7 @@ export function* chat() {
   while (true) {
     const user = yield* Browser().waitForUser({ prompt: "Say something" });
     const history = yield* State().getHistory({ placeholder: "" });
-    const assistant = yield* LLM().sample({
+    const assistant = yield* Llm().sample({
       history: history,
       message: user.message,
     });

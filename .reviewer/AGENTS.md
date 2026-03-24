@@ -69,6 +69,8 @@ Current caution:
 - [transport-future-phases.md](/Users/tarasmankovski/Repositories/cowboyd/tisyn/.reviewer/transport-future-phases.md)
 - [ui-embedded-agent-topic.md](/Users/tarasmankovski/Repositories/cowboyd/tisyn/.reviewer/ui-embedded-agent-topic.md)
 - [sse-post-transport-topic.md](/Users/tarasmankovski/Repositories/cowboyd/tisyn/.reviewer/sse-post-transport-topic.md)
+- [compiler-while-case-a-bindings-topic.md](/Users/tarasmankovski/Repositories/cowboyd/tisyn/.reviewer/compiler-while-case-a-bindings-topic.md)
+- [multi-agent-chat-spec-alignment-topic.md](/Users/tarasmankovski/Repositories/cowboyd/tisyn/.reviewer/multi-agent-chat-spec-alignment-topic.md)
 
 ## Update Rule
 
