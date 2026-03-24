@@ -785,6 +785,41 @@ describe("generateWorkflowModule", () => {
       expect(result.source).toContain("export const processOrder: TisynFn<");
     });
 
+    it("default (printed) mode emits constructor-form workflow export", () => {
+      const result = generateWorkflowModule(source, { validate: false });
+      expect(result.source).toContain("Fn(");
+      expect(result.source).toContain("Let(");
+      expect(result.source).toContain("Eval(");
+      expect(result.source).not.toContain('"tisyn": "fn"');
+    });
+
+    it("default (printed) mode imports only used IR constructors", () => {
+      const result = generateWorkflowModule(source, { validate: false });
+      // Must contain constructors used by the workflow
+      expect(result.source).toContain("import { Fn,");
+      expect(result.source).toContain('from "@tisyn/ir"');
+      // Must not contain constructors not used by this workflow
+      const importLine = result.source
+        .split("\n")
+        .find((l) => l.startsWith("import {") && l.includes("@tisyn/ir"));
+      expect(importLine).toBeDefined();
+      // Simple workflow uses Fn, Ref, Let, Eval, Construct, Get — not Add, Sub, etc.
+      expect(importLine).not.toContain("Add");
+      expect(importLine).not.toContain("Sub");
+      expect(importLine).not.toContain("Seq");
+    });
+
+    it("json mode preserves object-literal IR export", () => {
+      const result = generateWorkflowModule(source, { validate: false, workflowFormat: "json" });
+      expect(result.source).toContain('"tisyn": "fn"');
+      expect(result.source).toContain("as const");
+    });
+
+    it("json mode does not import IR constructors", () => {
+      const result = generateWorkflowModule(source, { validate: false, workflowFormat: "json" });
+      expect(result.source).not.toContain("import { Fn,");
+    });
+
     it("generates grouped agents and workflows exports", () => {
       const result = generateWorkflowModule(source, { validate: false });
       expect(result.source).toContain("export const agents = { OrderService, PaymentService }");
@@ -929,6 +964,37 @@ describe("generateWorkflowModule", () => {
             fn: Expr<(...args: A) => R> | TisynFn<A, R>,
             ...args: { [K in keyof A]: Expr<A[K]> }
           ): Eval<R>;
+          // IR constructors used by printed mode
+          export declare function Fn(...args: any[]): any;
+          export declare function Q(...args: any[]): any;
+          export declare function Ref(...args: any[]): any;
+          export declare function Eval(...args: any[]): any;
+          export declare function Let(...args: any[]): any;
+          export declare function Seq(...args: any[]): any;
+          export declare function If(...args: any[]): any;
+          export declare function While(...args: any[]): any;
+          export declare function Get(...args: any[]): any;
+          export declare function Add(...args: any[]): any;
+          export declare function Sub(...args: any[]): any;
+          export declare function Mul(...args: any[]): any;
+          export declare function Div(...args: any[]): any;
+          export declare function Mod(...args: any[]): any;
+          export declare function Neg(...args: any[]): any;
+          export declare function Gt(...args: any[]): any;
+          export declare function Gte(...args: any[]): any;
+          export declare function Lt(...args: any[]): any;
+          export declare function Lte(...args: any[]): any;
+          export declare function Eq(...args: any[]): any;
+          export declare function Neq(...args: any[]): any;
+          export declare function And(...args: any[]): any;
+          export declare function Or(...args: any[]): any;
+          export declare function Not(...args: any[]): any;
+          export declare function Construct(...args: any[]): any;
+          export declare function Arr(...args: any[]): any;
+          export declare function Concat(...args: any[]): any;
+          export declare function Throw(...args: any[]): any;
+          export declare function All(...args: any[]): any;
+          export declare function Race(...args: any[]): any;
         `,
         ...extraFiles,
       };
@@ -982,105 +1048,109 @@ describe("generateWorkflowModule", () => {
       return semanticDiagnostics;
     }
 
-    it("generated module with named type import has zero semantic errors", () => {
-      const source = `
-        import type { Order } from "./types.js";
-        declare function OrderService(): {
-          fetchOrder(orderId: string): Workflow<Order>;
-        };
-        export function* processOrder(orderId: string) {
-          const order = yield* OrderService().fetchOrder(orderId);
-          return order;
-        }
-      `;
-      const result = generateWorkflowModule(source, { validate: false });
-      const diagnostics = getSemanticDiagnostics(result.source, {
-        "/types.d.ts": "export interface Order { id: string; }",
-      });
-      const errors = diagnostics.filter((d) => d.category === ts.DiagnosticCategory.Error);
-      expect(errors).toHaveLength(0);
-    });
+    for (const format of ["printed", "json"] as const) {
+      describe(`workflowFormat: ${format}`, () => {
+        it("generated module with named type import has zero semantic errors", () => {
+          const source = `
+            import type { Order } from "./types.js";
+            declare function OrderService(): {
+              fetchOrder(orderId: string): Workflow<Order>;
+            };
+            export function* processOrder(orderId: string) {
+              const order = yield* OrderService().fetchOrder(orderId);
+              return order;
+            }
+          `;
+          const result = generateWorkflowModule(source, { validate: false, workflowFormat: format });
+          const diagnostics = getSemanticDiagnostics(result.source, {
+            "/types.d.ts": "export interface Order { id: string; }",
+          });
+          const errors = diagnostics.filter((d) => d.category === ts.DiagnosticCategory.Error);
+          expect(errors).toHaveLength(0);
+        });
 
-    it("generated module with namespace type import has zero semantic errors", () => {
-      const source = `
-        import type * as T from "./types.js";
-        declare function OrderService(): {
-          fetchOrder(orderId: string): Workflow<T.Order>;
-        };
-        export function* processOrder(orderId: string) {
-          const order = yield* OrderService().fetchOrder(orderId);
-          return order;
-        }
-      `;
-      const result = generateWorkflowModule(source, { validate: false });
-      const diagnostics = getSemanticDiagnostics(result.source, {
-        "/types.d.ts": "export interface Order { id: string; }",
-      });
-      const errors = diagnostics.filter((d) => d.category === ts.DiagnosticCategory.Error);
-      expect(errors).toHaveLength(0);
-    });
+        it("generated module with namespace type import has zero semantic errors", () => {
+          const source = `
+            import type * as T from "./types.js";
+            declare function OrderService(): {
+              fetchOrder(orderId: string): Workflow<T.Order>;
+            };
+            export function* processOrder(orderId: string) {
+              const order = yield* OrderService().fetchOrder(orderId);
+              return order;
+            }
+          `;
+          const result = generateWorkflowModule(source, { validate: false, workflowFormat: format });
+          const diagnostics = getSemanticDiagnostics(result.source, {
+            "/types.d.ts": "export interface Order { id: string; }",
+          });
+          const errors = diagnostics.filter((d) => d.category === ts.DiagnosticCategory.Error);
+          expect(errors).toHaveLength(0);
+        });
 
-    it("generated module with default type import has zero semantic errors", () => {
-      const source = `
-        import type Order from "./types.js";
-        declare function OrderService(): {
-          fetchOrder(orderId: string): Workflow<Order>;
-        };
-        export function* processOrder(orderId: string) {
-          const order = yield* OrderService().fetchOrder(orderId);
-          return order;
-        }
-      `;
-      const result = generateWorkflowModule(source, { validate: false });
-      const diagnostics = getSemanticDiagnostics(result.source, {
-        "/types.d.ts": "export default interface Order { id: string; }",
-      });
-      const errors = diagnostics.filter((d) => d.category === ts.DiagnosticCategory.Error);
-      expect(errors).toHaveLength(0);
-    });
+        it("generated module with default type import has zero semantic errors", () => {
+          const source = `
+            import type Order from "./types.js";
+            declare function OrderService(): {
+              fetchOrder(orderId: string): Workflow<Order>;
+            };
+            export function* processOrder(orderId: string) {
+              const order = yield* OrderService().fetchOrder(orderId);
+              return order;
+            }
+          `;
+          const result = generateWorkflowModule(source, { validate: false, workflowFormat: format });
+          const diagnostics = getSemanticDiagnostics(result.source, {
+            "/types.d.ts": "export default interface Order { id: string; }",
+          });
+          const errors = diagnostics.filter((d) => d.category === ts.DiagnosticCategory.Error);
+          expect(errors).toHaveLength(0);
+        });
 
-    it("generated module emits declarations without TS2742", () => {
-      const source = `
-        declare function OrderService(): {
-          fetchOrder(orderId: string): Workflow<{ id: string }>;
-        };
-        export function* processOrder(orderId: string) {
-          const order = yield* OrderService().fetchOrder(orderId);
-          return order;
-        }
-      `;
-      const result = generateWorkflowModule(source, { validate: false });
-      const diagnostics = getSemanticDiagnostics(
-        result.source,
-        {},
-        {
-          noEmit: false,
-          declaration: true,
-          emitDeclarationOnly: true,
-        },
-      );
-      const errors = diagnostics.filter((d) => d.category === ts.DiagnosticCategory.Error);
-      expect(errors).toHaveLength(0);
-    });
+        it("generated module emits declarations without TS2742", () => {
+          const source = `
+            declare function OrderService(): {
+              fetchOrder(orderId: string): Workflow<{ id: string }>;
+            };
+            export function* processOrder(orderId: string) {
+              const order = yield* OrderService().fetchOrder(orderId);
+              return order;
+            }
+          `;
+          const result = generateWorkflowModule(source, { validate: false, workflowFormat: format });
+          const diagnostics = getSemanticDiagnostics(
+            result.source,
+            {},
+            {
+              noEmit: false,
+              declaration: true,
+              emitDeclarationOnly: true,
+            },
+          );
+          const errors = diagnostics.filter((d) => d.category === ts.DiagnosticCategory.Error);
+          expect(errors).toHaveLength(0);
+        });
 
-    it("Call(workflow) type-checks without cast", () => {
-      const source = `
-        export function* greet() {
-          return "hello";
-        }
-      `;
-      const result = generateWorkflowModule(source, { validate: false });
-      const consumer = `
-        import { greet } from "./generated.js";
-        import { Call } from "@tisyn/ir";
-        const expr = Call(greet);
-      `;
-      const diagnostics = getSemanticDiagnostics(consumer, {
-        "/generated.ts": result.source,
+        it("Call(workflow) type-checks without cast", () => {
+          const source = `
+            export function* greet() {
+              return "hello";
+            }
+          `;
+          const result = generateWorkflowModule(source, { validate: false, workflowFormat: format });
+          const consumer = `
+            import { greet } from "./generated.js";
+            import { Call } from "@tisyn/ir";
+            const expr = Call(greet);
+          `;
+          const diagnostics = getSemanticDiagnostics(consumer, {
+            "/generated.ts": result.source,
+          });
+          const errors = diagnostics.filter((d) => d.category === ts.DiagnosticCategory.Error);
+          expect(errors).toHaveLength(0);
+        });
       });
-      const errors = diagnostics.filter((d) => d.category === ts.DiagnosticCategory.Error);
-      expect(errors).toHaveLength(0);
-    });
+    }
   });
 
   // ── Metadata ──
