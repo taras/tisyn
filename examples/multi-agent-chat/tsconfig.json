@@ -9,5 +9,5 @@
     "rewriteRelativeImportExtensions": true
   },
   "include": ["src", "test"],
-  "exclude": ["src/workflow.ts", "src/build-workflow.ts"]
+  "exclude": ["src/build-workflow.ts"]
 }
