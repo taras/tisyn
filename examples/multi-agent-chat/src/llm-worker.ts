@@ -1,23 +1,12 @@
-import { spawn, createQueue } from "effection";
 import { workerMain } from "@effectionx/worker";
-import { agent, operation, implementAgent } from "@tisyn/agent";
+import { implementAgent } from "@tisyn/agent";
+import type { AgentMessage, HostMessage } from "@tisyn/protocol";
 import { parseHostMessage } from "@tisyn/protocol";
-import type { HostMessage, AgentMessage } from "@tisyn/protocol";
 import { createProtocolServer } from "@tisyn/transport";
+import { createQueue, spawn } from "effection";
+import { Llm } from "./workflow.generated.ts";
 
-const llm = agent("l-l-m", {
-  sample: operation<
-    {
-      input: {
-        history: Array<{ role: string; content: string }>;
-        message: string;
-      };
-    },
-    { message: string }
-  >(),
-});
-
-const impl = implementAgent(llm, {
+const impl = implementAgent(Llm(), {
   *sample({ input }) {
     return { message: `Echo: ${input.message}` };
   },
@@ -25,7 +14,10 @@ const impl = implementAgent(llm, {
 
 const server = createProtocolServer(impl);
 
-workerMain<HostMessage, void, void, void, AgentMessage, void>(function* ({ messages, send }) {
+await workerMain<HostMessage, void, void, void, AgentMessage, void>(function* ({
+  messages,
+  send,
+}) {
   const queue = createQueue<HostMessage, void>();
 
   yield* spawn(function* () {

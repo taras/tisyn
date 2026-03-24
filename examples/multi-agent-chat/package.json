@@ -12,6 +12,8 @@
     "dev": "tsx src/host.ts"
   },
   "dependencies": {
+    "@effectionx/worker": "^0.5.2",
+    "@effectionx/node": "^0.2.4",
     "@tisyn/agent": "workspace:*",
     "@tisyn/compiler": "workspace:*",
     "@tisyn/ir": "workspace:*",
@@ -24,7 +26,6 @@
   },
   "devDependencies": {
     "@effectionx/vitest": "^0.3.1",
-    "@effectionx/worker": "^0.5.2",
     "@types/node": "^25.5.0",
     "@types/ws": "^8",
     "tsx": "^4.21.0",

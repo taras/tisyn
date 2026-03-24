@@ -1,41 +1,74 @@
-/**
- * Server-side WebSocket transport for the browser agent.
- *
- * Wraps a raw server-side WebSocket connection into an AgentTransport
- * so the browser agent can be installed via installRemoteAgent().
- * The browser implements the JSON-RPC agent protocol in vanilla JS.
- */
-
-import { resource, useScope, createChannel, spawn } from "effection";
-import type { AgentTransportFactory } from "@tisyn/transport";
-import type { HostMessage, AgentMessage } from "@tisyn/protocol";
+import { once } from "@effectionx/node";
+import type { AgentMessage, HostMessage } from "@tisyn/protocol";
 import { parseAgentMessage } from "@tisyn/protocol";
-import type { WebSocket } from "ws";
+import type { AgentTransportFactory } from "@tisyn/transport";
+import {
+  createChannel,
+  Operation,
+  resource,
+  spawn,
+  useScope,
+  withResolvers,
+  each,
+} from "effection";
+import { on } from "@effectionx/node";
+import { createServer } from "node:http";
+import type { AddressInfo } from "node:net";
+import { WebSocket, WebSocketServer } from "ws";
 
-export function serverWebSocketTransport(rawWs: WebSocket): AgentTransportFactory {
+export function serverWebSocketTransport(
+  rawWs: WebSocket
+): AgentTransportFactory {
   return () =>
     resource(function* (provide) {
       const scope = yield* useScope();
       const channel = createChannel<AgentMessage, void>();
 
-      rawWs.on("message", (data) => {
-        const msg = parseAgentMessage(JSON.parse(data.toString()));
-        scope.run(function* () {
-          yield* channel.send(msg);
-        });
+      yield* spawn(function* () {
+        for (const message of yield* each(on(rawWs, "message"))) {
+          channel.send(parseAgentMessage(JSON.parse(message.toString())));
+          yield* each.next();
+        }
       });
 
-      rawWs.on("close", () => {
-        scope.run(function* () {
-          yield* channel.close();
-        });
-      });
+      yield* spawn(function* () {
+        yield* on(rawWs, 'on');
+        channel.close();
+      })
 
-      yield* provide({
-        *send(msg: HostMessage) {
-          rawWs.send(JSON.stringify(msg));
-        },
-        receive: channel,
-      });
+      try {
+        yield* provide({
+          *send(msg: HostMessage) {
+            rawWs.send(JSON.stringify(msg));
+          },
+          receive: channel,
+        });
+      } finally {
+        yield* channel.close();
+      }
     });
+}
+
+export function useWebSocketServer(): Operation<WebSocket> {
+  return resource(function* (provide) {
+    // 1. Start WebSocket server
+    const httpServer = createServer();
+    const wss = new WebSocketServer({ server: httpServer });
+
+    const listening = withResolvers<void>();
+    httpServer.listen(3000, listening.resolve);
+
+    const addr = httpServer.address() as AddressInfo;
+    console.log(`WebSocket server listening on ws://localhost:${addr.port}`);
+
+    console.log("Waiting for browser connection...");
+    const [browserWs] = yield* once<[WebSocket]>(wss, "connection");
+
+    try {
+      yield* provide(browserWs);
+    } finally {
+      httpServer.close();
+      wss.close();
+    }
+  });
 }
