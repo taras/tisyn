@@ -17,6 +17,10 @@
     ".": {
       "types": "./dist/index.d.ts",
       "import": "./dist/index.js"
+    },
+    "./protocol-server": {
+      "types": "./dist/protocol-server.d.ts",
+      "import": "./dist/protocol-server.js"
     }
   },
   "publishConfig": {
