@@ -257,19 +257,18 @@ function decompileExternalCall(
   depth: number,
   opts: { indent: number; typeAnnotations: boolean },
 ): string {
-  const args = Array.isArray(data)
-    ? data.map((a) => decompileExpr(a as TisynExpr, depth, opts))
-    : [decompileExpr(data, depth, opts)];
+  // Single-payload convention: data is always one expression (the payload)
+  const arg = decompileExpr(data, depth, opts);
 
   if (id.includes(".")) {
     const dotIndex = id.indexOf(".");
     const agentKebab = id.slice(0, dotIndex);
     const method = id.slice(dotIndex + 1);
     const agentPascal = kebabToPascal(agentKebab);
-    return `yield* ${agentPascal}().${method}(${args.join(", ")})`;
+    return `yield* ${agentPascal}().${method}(${arg})`;
   }
 
-  return `yield* ${id}(${args.join(", ")})`;
+  return `yield* ${id}(${arg})`;
 }
 
 function binOp(
