@@ -28,8 +28,8 @@ export type AgentCalls<D extends AgentDeclaration<Record<string, OperationSpec>>
 };
 
 /** The public return type of agent() — declaration merged with host-side call constructors. */
-export type DeclaredAgent<Ops extends Record<string, OperationSpec>> =
-  AgentDeclaration<Ops> & AgentCalls<AgentDeclaration<Ops>>;
+export type DeclaredAgent<Ops extends Record<string, OperationSpec>> = AgentDeclaration<Ops> &
+  AgentCalls<AgentDeclaration<Ops>>;
 
 /** Implementation handlers mapped from a declaration's operations. */
 export type ImplementationHandlers<Ops extends Record<string, OperationSpec>> = {
