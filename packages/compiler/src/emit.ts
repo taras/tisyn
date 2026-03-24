@@ -294,8 +294,9 @@ function emitWhileStatement(
 
   // Case A: no return → While IR node
   const condition = emitExpression(stmt.expression, ctx);
-  const bodyExprs = emitWhileBody(stmt.statement, ctx);
-  const whileExpr = While(condition, bodyExprs);
+  const bodyStmts = getBodyStatements(stmt.statement);
+  const bodyExpr = emitStatementList(bodyStmts, 0, ctx);
+  const whileExpr = While(condition, [bodyExpr]);
 
   if (isLast) return whileExpr;
   const name = ctx.counter.next("while");
@@ -470,35 +471,6 @@ function getBodyStatements(stmt: ts.Statement): ts.Statement[] {
     return Array.from(stmt.statements);
   }
   return [stmt];
-}
-
-function emitWhileBody(stmt: ts.Statement, ctx: EmitContext): Expr[] {
-  const stmts = getBodyStatements(stmt);
-  return stmts.map((s) => {
-    if (ts.isExpressionStatement(s)) {
-      const expr = s.expression;
-      if (ts.isYieldExpression(expr) && expr.asteriskToken && expr.expression) {
-        return emitYieldStar(expr.expression, ctx);
-      }
-      return emitExpression(expr, ctx);
-    }
-    if (ts.isVariableStatement(s)) {
-      // In while body, each statement is independent
-      // Return the expression to be evaluated
-      const decl = s.declarationList.declarations[0]!;
-      if (decl.initializer) {
-        if (
-          ts.isYieldExpression(decl.initializer) &&
-          decl.initializer.asteriskToken &&
-          decl.initializer.expression
-        ) {
-          return emitYieldStar(decl.initializer.expression, ctx);
-        }
-        return emitExpression(decl.initializer, ctx);
-      }
-    }
-    return emitStatementList([s], 0, ctx);
-  });
 }
 
 /** Recursively check if a statement body contains a return. */
