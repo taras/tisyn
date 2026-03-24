@@ -29,6 +29,8 @@ export interface GenerateOptions {
   filename?: string;
   /** Run IR validation on output. Default: true. */
   validate?: boolean;
+  /** Workflow export format. "printed" emits constructor-form IR, "json" emits JSON object literals. Default: "printed". */
+  workflowFormat?: "printed" | "json";
 }
 
 export interface GenerateResult {
@@ -50,7 +52,7 @@ export function generateWorkflowModule(
   source: string,
   options: GenerateOptions = {},
 ): GenerateResult {
-  const { validate: shouldValidate = true, filename = "input.ts" } = options;
+  const { validate: shouldValidate = true, filename = "input.ts", workflowFormat = "printed" } = options;
 
   // Parse source file
   const sourceFile = ts.createSourceFile(
@@ -134,7 +136,7 @@ export function generateWorkflowModule(
   const typeImports = collectReferencedTypeImports(sourceFile, contractTypeNodes);
 
   // Generate TypeScript module source
-  const generatedSource = generateCode(contracts, workflowInfos, typeImports);
+  const generatedSource = generateCode(contracts, workflowInfos, typeImports, workflowFormat);
 
   return {
     source: generatedSource,
