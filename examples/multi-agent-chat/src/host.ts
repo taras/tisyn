@@ -2,31 +2,36 @@
  * Multi-Agent Chat Demo — Server Host
  *
  * The host is the sole orchestrator. It:
- * 1. Starts a WebSocket server for the browser agent
+ * 1. Starts a WebSocket server for the browser
  * 2. Spawns a Worker for the LLM agent
  * 3. Installs a local State agent for history management
- * 4. Executes the compiled chat workflow
+ * 4. Installs a local Browser agent backed by a BrowserSessionManager
+ * 5. Executes the compiled chat workflow
  *
  * Optional: --journal <path> enables file-backed durable journaling.
  * On restart, the runtime replays stored events and the State agent's
  * history is reconstructed from the journal.
  *
- * The host accepts one browser connection at a time. On each connection,
- * the browser transcript is hydrated from current host history. The
- * workflow executes only on the first connection; after it ends (for any
- * reason), subsequent connections receive hydration only (read-only view).
+ * Browser disconnect is non-fatal: the workflow stays blocked on
+ * waitForUser across disconnects and resumes when the same browser
+ * reconnects (identified by clientSessionId from localStorage).
+ *
+ * One workflow per host process, owned by the first clientSessionId
+ * to connect. Non-owner sessions get a read-only transcript view.
  */
 
-import { implementAgent, invoke } from "@tisyn/agent";
+import { implementAgent } from "@tisyn/agent";
 import { execute } from "@tisyn/runtime";
 import { InMemoryStream } from "@tisyn/durable-streams";
 import { installRemoteAgent, workerTransport } from "@tisyn/transport";
 import { Call } from "@tisyn/ir";
 import { Browser, chat, Llm, State } from "./workflow.generated.js";
-import { serverWebSocketTransport, useWebSocketServer } from "./browser-transport.js";
+import { useWebSocketServer } from "./browser-transport.js";
 import { FileJournalStream } from "./file-journal-stream.js";
 import { reconstructHistory } from "./reconstruct-history.js";
-import { main, scoped, each, spawn } from "effection";
+import { BrowserSessionManager } from "./browser-session.js";
+import type { BrowserToHost } from "./browser-session.js";
+import { main, each, spawn, withResolvers } from "effection";
 import { logInfo, logError } from "./logger.js";
 
 // Parse --journal <path> or --journal=<path> from CLI args
@@ -67,7 +72,7 @@ await main(function* () {
     });
   }
 
-  // --- Persistent agents (survive reconnects) ---
+  // --- Persistent agents ---
   const llmTransport = workerTransport({
     url: import.meta.resolve("./llm-worker.ts"),
   });
@@ -96,92 +101,85 @@ await main(function* () {
   yield* stateImpl.install();
   logInfo("host", "state agent installed");
 
-  // --- WebSocket server (persistent) ---
+  // --- Browser session manager ---
+  const session = new BrowserSessionManager(history);
+
+  const browserImpl = implementAgent(Browser(), {
+    *waitForUser({ input }) {
+      return yield* session.waitForUser(input.prompt);
+    },
+    *showAssistantMessage({ input }) {
+      session.showAssistantMessage(input.message);
+    },
+    *hydrateTranscript() {
+      // No-op — hydration is handled by session.attach()
+    },
+    *setReadOnly({ input }) {
+      session.setReadOnly(input.reason);
+    },
+  });
+
+  yield* browserImpl.install();
+  logInfo("host", "browser agent installed (local, reconnectable)");
+
+  // --- WebSocket server ---
   const connections = yield* useWebSocketServer();
 
-  // --- Connection loop (single browser at a time) ---
-  // Mutable across scoped() callbacks — TypeScript can't track mutations
-  // inside generator callbacks, so we type broadly to avoid false narrowing.
-  let sessionStatus = "pending" as "pending" | "executing" | "completed" | "failed";
+  // Connection loop in background: attach/detach sockets
+  yield* spawn(function* () {
+    for (const connection of yield* each(connections)) {
+      yield* spawn(function* () {
+        const ws = yield* connection;
+        logInfo("host", "WebSocket connected, waiting for connect message");
 
-  let task = yield* spawn(function* () {});
-  for (const connection of yield* each(connections)) {
-    yield* task.halt();
-    task = yield* spawn(() =>
-      scoped(function* () {
-        // Yield the connection resource — WebSocket is closed when scope exits
-        const browserWs = yield* connection;
-
-        logInfo("host", "browser connected");
-
-        try {
-          yield* installRemoteAgent(Browser(), serverWebSocketTransport(browserWs));
-          logInfo("host", "browser agent installed");
-
-          // --- Per-connection transcript hydration ---
-          if (history.length > 0) {
-            yield* invoke(Browser().hydrateTranscript({ input: { messages: history } }));
-            logInfo("host", "browser transcript hydrated", {
-              messages: history.length,
-            });
-          }
-
-          if (sessionStatus === "pending") {
-            // Mark that execute() is now active — disconnect from this
-            // point forward permanently ends the session.
-            sessionStatus = "executing";
-            logInfo("host", "starting chat workflow");
-            const { result } = yield* execute({ ir: Call(chat), stream });
-            if (result.status === "ok") {
-              sessionStatus = "completed";
-              logInfo("host", "workflow completed");
-            } else {
-              // Both "err" and "cancelled" are treated as failed
-              sessionStatus = "failed";
-              logError(
-                "host",
-                "workflow failed",
-                result.status === "err" ? result.error : "cancelled",
-              );
-              if (result.status === "err") {
-                try {
-                  // Browser may still be connected (error from journal replay, not transport failure)
-                  yield* invoke(
-                    Browser().setReadOnly({
-                      input: { reason: "Session ended" },
-                    }),
-                  );
-                } catch {
-                  // Browser already disconnected — setReadOnly is moot
-                }
-              }
-            }
-          } else if (sessionStatus === "completed" || sessionStatus === "failed") {
-            logInfo(
-              "host",
-              `workflow already ${sessionStatus} — browser shows read-only transcript`,
-            );
-            yield* invoke(Browser().setReadOnly({ input: { reason: "Session ended" } }));
-          }
-        } catch {
-          if (sessionStatus === "executing") {
-            // Disconnect during active execute() — workflow is permanently ended
-            sessionStatus = "failed";
-            logInfo(
-              "host",
-              "browser disconnected during workflow, session failed — waiting for reconnect",
-            );
-          } else if (sessionStatus === "pending") {
-            // Disconnect before execute() started (during install or hydration)
-            // Session stays pending — next connection can still start the workflow
-            logInfo("host", "browser disconnected before workflow started — waiting for reconnect");
-          } else {
-            // Disconnect during read-only hydration view — no state change
-            logInfo("host", "browser disconnected — waiting for reconnect");
-          }
+        // Wait for the first message (must be a connect)
+        const firstMsg = yield* waitForFirstMessage(ws);
+        if (firstMsg.type === "connect") {
+          session.attach(firstMsg.clientSessionId, ws);
+        } else {
+          logInfo("host", "first message was not connect, closing");
+          ws.close();
+          return;
         }
-      }),
-    );
-    yield* each.next();
-  }
+
+        // Block until socket closes — useConnection resource closes ws on scope exit
+        // detach happens via the close listener set up in attach()
+        const closed = withResolvers<void>();
+        ws.on("close", () => closed.resolve());
+        yield* closed.operation;
+      });
+      yield* each.next();
+    }
+  });
+
+  // --- Wait for owner, then start workflow ---
+  yield* session.waitForOwner();
+  logInfo("host", "owner session connected, starting workflow");
+
+  // Workflow in a spawned task — host stays alive after it ends
+  yield* spawn(function* () {
+    const { result } = yield* execute({ ir: Call(chat), stream });
+    if (result.status === "ok") {
+      session.setReadOnly("Session complete");
+      logInfo("host", "workflow completed");
+    } else {
+      session.setReadOnly("Session ended");
+      logError("host", "workflow failed", result.status === "err" ? result.error : "cancelled");
+    }
+  });
+
+  // Block forever — host exits only on CTRL+C
+  yield* withResolvers<void>().operation;
 });
+
+// --- Helpers ---
+
+function waitForFirstMessage(ws: import("ws").WebSocket): import("effection").Operation<BrowserToHost> {
+  const { operation, resolve } = withResolvers<BrowserToHost>();
+  const handler = (data: import("ws").RawData) => {
+    ws.off("message", handler);
+    resolve(JSON.parse(data.toString()));
+  };
+  ws.on("message", handler);
+  return operation;
+}

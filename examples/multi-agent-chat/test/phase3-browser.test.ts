@@ -1,129 +1,208 @@
 /**
- * Phase 3: Browser agent via WebSocket transport.
+ * Phase 3: BrowserSessionManager — reconnect semantics.
  *
- * The browser agent is installed on the host via installRemoteAgent()
- * using a server-side WebSocket transport wrapper. A test WebSocket client
- * simulates the browser by implementing the JSON-RPC agent protocol.
+ * Tests the session manager directly without running the full workflow.
+ * Verifies: waitForUser suspension, reconnect continuation, identity-safe
+ * detach, non-owner read-only, showAssistantMessage during disconnect.
  */
 
-import { createServer } from "node:http";
-import type { AddressInfo } from "node:net";
 import { describe, it } from "@effectionx/vitest";
 import { expect } from "vitest";
-import { useScope, withResolvers } from "effection";
-import { WebSocketServer, WebSocket } from "ws";
-import { agent, operation, invoke } from "@tisyn/agent";
-import { installRemoteAgent } from "@tisyn/transport";
-import type { ExecuteRequest } from "@tisyn/protocol";
-import { serverWebSocketTransport } from "../src/browser-transport.js";
+import { spawn, withResolvers } from "effection";
+import type { Operation } from "effection";
+import { BrowserSessionManager } from "../src/browser-session.js";
+import { EventEmitter } from "node:events";
 
-// Browser agent declaration (matching compiler-generated agent ID)
-const browser = agent("browser", {
-  waitForUser: operation<{ input: { prompt: string } }, { message: string }>(),
-  showAssistantMessage: operation<{ input: { message: string } }, void>(),
-});
+/** Minimal mock WebSocket for testing. */
+function createMockWs() {
+  const emitter = new EventEmitter();
+  const sent: unknown[] = [];
+  let closed = false;
 
-describe("Phase 3: Browser agent via WebSocket transport", () => {
-  it("waitForUser: host request reaches browser, browser response reaches host", function* () {
-    const scope = yield* useScope();
-
-    // Start HTTP + WebSocket server
-    const httpServer = createServer();
-    const wss = new WebSocketServer({ server: httpServer });
-
-    const listening = withResolvers<number>();
-    httpServer.listen(0, () => {
-      const addr = httpServer.address() as AddressInfo;
-      listening.resolve(addr.port);
-    });
-    const port = yield* listening.operation;
-
-    // Wait for browser (test client) to connect
-    const connected = withResolvers<WebSocket>();
-    wss.on("connection", (ws) => connected.resolve(ws));
-
-    // Connect test client (simulating browser)
-    const clientWs = new WebSocket(`ws://localhost:${port}`);
-    const clientOpen = withResolvers<void>();
-    clientWs.on("open", () => clientOpen.resolve());
-    yield* clientOpen.operation;
-
-    // Track messages the client receives
-    const clientMessages: unknown[] = [];
-
-    // Set up the client message handler BEFORE installRemoteAgent
-    // because installRemoteAgent blocks waiting for initialize response
-    clientWs.on("message", (data) => {
-      const msg = JSON.parse(data.toString());
-      clientMessages.push(msg);
-
-      if (msg.method === "initialize") {
-        clientWs.send(
-          JSON.stringify({
-            jsonrpc: "2.0",
-            id: msg.id,
-            result: {
-              protocolVersion: "1.0",
-              sessionId: "test-session-1",
-            },
-          }),
-        );
-      } else if (msg.method === "execute") {
-        const req = msg as ExecuteRequest;
-        if (req.params.operation === "waitForUser") {
-          clientWs.send(
-            JSON.stringify({
-              jsonrpc: "2.0",
-              id: req.id,
-              result: { ok: true, value: { message: "hello from browser" } },
-            }),
-          );
-        } else if (req.params.operation === "showAssistantMessage") {
-          clientWs.send(
-            JSON.stringify({
-              jsonrpc: "2.0",
-              id: req.id,
-              result: { ok: true, value: null },
-            }),
-          );
-        }
+  return {
+    send(data: string) {
+      sent.push(JSON.parse(data));
+    },
+    close() {
+      if (!closed) {
+        closed = true;
+        emitter.emit("close");
       }
+    },
+    on(event: string, listener: (...args: unknown[]) => void) {
+      emitter.on(event, listener);
+    },
+    off(event: string, listener: (...args: unknown[]) => void) {
+      emitter.off(event, listener);
+    },
+    injectMessage(msg: unknown) {
+      emitter.emit("message", Buffer.from(JSON.stringify(msg)));
+    },
+    get sent() {
+      return sent;
+    },
+    get closed() {
+      return closed;
+    },
+  };
+}
+
+/** Yield a microtask to let withResolvers callbacks propagate. */
+function nextTick(): Operation<void> {
+  const { operation, resolve } = withResolvers<void>();
+  queueMicrotask(() => resolve());
+  return operation;
+}
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+type AnyWs = any;
+
+describe("Phase 3: BrowserSessionManager", () => {
+  it("waitForUser suspends until userMessage arrives", function* () {
+    const history: Array<{ role: string; content: string }> = [];
+    const session = new BrowserSessionManager(history);
+    const ws = createMockWs();
+
+    session.attach("session-1", ws as AnyWs);
+    yield* session.waitForOwner();
+
+    let result: { message: string } | undefined;
+    yield* spawn(function* () {
+      result = yield* session.waitForUser("Say something");
     });
 
-    const serverWs = yield* connected.operation;
+    // Let the spawn start
+    yield* nextTick();
 
-    // Install browser as a remote agent via the server-side transport
-    yield* installRemoteAgent(browser, serverWebSocketTransport(serverWs));
+    // Should have sent waitForUser to the browser
+    const waitMsg = ws.sent.find((m: any) => m.type === "waitForUser");
+    expect(waitMsg).toEqual({ type: "waitForUser", prompt: "Say something" });
 
-    // Host invokes browser agent operations
-    const userResult = yield* invoke(browser.waitForUser({ input: { prompt: "Say something" } }));
-    expect(userResult).toEqual({ message: "hello from browser" });
+    // Not yet resolved
+    expect(result).toBeUndefined();
 
-    // Verify the client received an execute request for waitForUser
-    const waitForUserMsgs = clientMessages.filter(
-      (m: any) => m.method === "execute" && m.params.operation === "waitForUser",
-    );
-    expect(waitForUserMsgs).toHaveLength(1);
+    // Simulate user input
+    ws.injectMessage({ type: "userMessage", message: "hello" });
+    yield* nextTick();
 
-    // Host sends assistant message through the browser agent
-    const showResult = yield* invoke(
-      browser.showAssistantMessage({ input: { message: "Echo: hello" } }),
-    );
-    expect(showResult).toBeNull();
+    expect(result).toEqual({ message: "hello" });
+  });
 
-    // Verify the client received the showAssistantMessage request
-    const showMsgs = clientMessages.filter(
-      (m: any) => m.method === "execute" && m.params.operation === "showAssistantMessage",
-    );
-    expect(showMsgs).toHaveLength(1);
-    expect((showMsgs[0] as any).params.args[0].input.message).toBe("Echo: hello");
+  it("waitForUser survives disconnect and resumes on reconnect", function* () {
+    const history: Array<{ role: string; content: string }> = [];
+    const session = new BrowserSessionManager(history);
+    const ws1 = createMockWs();
 
-    // Cleanup
-    clientWs.close();
-    wss.clients.forEach((c) => c.close());
-    wss.close();
-    const closed = withResolvers<void>();
-    httpServer.close(() => closed.resolve());
-    yield* closed.operation;
+    session.attach("session-1", ws1 as AnyWs);
+    yield* session.waitForOwner();
+
+    let result: { message: string } | undefined;
+    yield* spawn(function* () {
+      result = yield* session.waitForUser("Say something");
+    });
+    yield* nextTick();
+
+    // Disconnect
+    session.detach(ws1 as AnyWs);
+    expect(result).toBeUndefined();
+
+    // Reconnect with same session ID
+    const ws2 = createMockWs();
+    session.attach("session-1", ws2 as AnyWs);
+
+    const hydrate = ws2.sent.find((m: any) => m.type === "hydrateTranscript");
+    expect(hydrate).toBeDefined();
+    const reSentPrompt = ws2.sent.find((m: any) => m.type === "waitForUser");
+    expect(reSentPrompt).toEqual({ type: "waitForUser", prompt: "Say something" });
+
+    // Submit on new socket
+    ws2.injectMessage({ type: "userMessage", message: "world" });
+    yield* nextTick();
+
+    expect(result).toEqual({ message: "world" });
+  });
+
+  it("showAssistantMessage during disconnect does not fail", function* () {
+    const history: Array<{ role: string; content: string }> = [];
+    const session = new BrowserSessionManager(history);
+    const ws = createMockWs();
+
+    session.attach("session-1", ws as AnyWs);
+    yield* session.waitForOwner();
+
+    session.detach(ws as AnyWs);
+
+    // Should not throw
+    session.showAssistantMessage("Echo: hello");
+  });
+
+  it("second connect with same ID replaces old socket (identity-safe)", function* () {
+    const history: Array<{ role: string; content: string }> = [];
+    const session = new BrowserSessionManager(history);
+    const ws1 = createMockWs();
+    const ws2 = createMockWs();
+
+    session.attach("session-1", ws1 as AnyWs);
+    yield* session.waitForOwner();
+
+    session.attach("session-1", ws2 as AnyWs);
+
+    expect(ws1.closed).toBe(true);
+
+    const hydrate = ws2.sent.find((m: any) => m.type === "hydrateTranscript");
+    expect(hydrate).toBeDefined();
+  });
+
+  it("non-owner gets read-only view", function* () {
+    const history = [
+      { role: "user", content: "hello" },
+      { role: "assistant", content: "Echo: hello" },
+    ];
+    const session = new BrowserSessionManager(history);
+
+    const ownerWs = createMockWs();
+    session.attach("owner-1", ownerWs as AnyWs);
+    yield* session.waitForOwner();
+
+    const nonOwnerWs = createMockWs();
+    session.attach("other-2", nonOwnerWs as AnyWs);
+
+    expect(nonOwnerWs.sent.find((m: any) => m.type === "hydrateTranscript")).toEqual({
+      type: "hydrateTranscript",
+      messages: history,
+    });
+
+    expect(nonOwnerWs.sent.find((m: any) => m.type === "setReadOnly")).toEqual({
+      type: "setReadOnly",
+      reason: "Session owned by another browser",
+    });
+  });
+
+  it("stale close from old socket does not clear new socket", function* () {
+    const history: Array<{ role: string; content: string }> = [];
+    const session = new BrowserSessionManager(history);
+    const ws1 = createMockWs();
+
+    session.attach("session-1", ws1 as AnyWs);
+    yield* session.waitForOwner();
+
+    let result: { message: string } | undefined;
+    yield* spawn(function* () {
+      result = yield* session.waitForUser("Prompt");
+    });
+    yield* nextTick();
+
+    const ws2 = createMockWs();
+    session.attach("session-1", ws2 as AnyWs);
+
+    // ws1 was closed by attach — its close listener called detach(ws1),
+    // which is a no-op because this.socket is now ws2
+
+    const reSent = ws2.sent.find((m: any) => m.type === "waitForUser");
+    expect(reSent).toEqual({ type: "waitForUser", prompt: "Prompt" });
+
+    ws2.injectMessage({ type: "userMessage", message: "answer" });
+    yield* nextTick();
+    expect(result).toEqual({ message: "answer" });
   });
 });
