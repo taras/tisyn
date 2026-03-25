@@ -38,6 +38,9 @@ importers:
       '@tisyn/compiler':
         specifier: workspace:*
         version: link:../../packages/compiler
+      '@tisyn/durable-streams':
+        specifier: workspace:*
+        version: link:../../packages/durable-streams
       '@tisyn/ir':
         specifier: workspace:*
         version: link:../../packages/ir

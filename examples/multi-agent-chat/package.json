@@ -18,6 +18,7 @@
     "@effectionx/node": "^0.2.4",
     "@tisyn/agent": "workspace:*",
     "@tisyn/compiler": "workspace:*",
+    "@tisyn/durable-streams": "workspace:*",
     "@tisyn/ir": "workspace:*",
     "@tisyn/kernel": "workspace:*",
     "@tisyn/protocol": "workspace:*",

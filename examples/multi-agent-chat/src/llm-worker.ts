@@ -5,10 +5,17 @@ import { parseHostMessage } from "@tisyn/protocol";
 import { createProtocolServer } from "@tisyn/transport";
 import { createQueue, spawn } from "effection";
 import { Llm } from "./workflow.generated.ts";
+import { logInfo } from "./logger.ts";
 
 const impl = implementAgent(Llm(), {
   *sample({ input }) {
-    return { message: `Echo: ${input.message}` };
+    logInfo("llm", "sample request", {
+      message: input.message,
+      historyLength: input.history.length,
+    });
+    const result = { message: `Echo: ${input.message}` };
+    logInfo("llm", "sample response", { message: result.message });
+    return result;
   },
 });
 
