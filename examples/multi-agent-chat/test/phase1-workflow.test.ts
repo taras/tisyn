@@ -17,7 +17,7 @@ const browser = agent("browser", {
   showAssistantMessage: operation<{ input: { message: string } }, void>(),
 });
 
-const llm = agent("l-l-m", {
+const llm = agent("llm", {
   sample: operation<
     {
       input: {

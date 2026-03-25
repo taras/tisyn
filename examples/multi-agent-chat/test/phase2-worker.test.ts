@@ -18,7 +18,7 @@ const browser = agent("browser", {
   showAssistantMessage: operation<{ input: { message: string } }, void>(),
 });
 
-const llm = agent("l-l-m", {
+const llm = agent("llm", {
   sample: operation<
     {
       input: {
@@ -77,7 +77,7 @@ describe("Phase 2: LLM agent via Worker transport", () => {
 
     // Install LLM agent via Worker transport
     const factory = workerTransport({
-      url: import.meta.resolve("../src/llm-worker.ts"),
+      url: new URL("../src/llm-worker.ts", import.meta.url).href,
     });
     yield* installRemoteAgent(llm, factory);
 
