@@ -29,6 +29,7 @@ export function MessageInput({
         ref={inputRef}
         className="message-input"
         type="text"
+        aria-label="Message"
         placeholder="Type a message..."
         disabled={!enabled}
         value={text}

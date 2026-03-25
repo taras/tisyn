@@ -11,7 +11,10 @@
     "predev": "tsx src/build-workflow.ts",
     "dev": "tsx src/host.ts",
     "dev:browser": "vite",
-    "build:browser": "vite build"
+    "build:browser": "vite build",
+    "build:test-workflows": "tsx test/browser/build-test-workflows.ts",
+    "pretest:browser": "pnpm run build:browser && pnpm run build:test-workflows",
+    "test:browser": "vitest run --config vitest.browser.config.ts"
   },
   "dependencies": {
     "@effectionx/node": "^0.2.4",
@@ -28,13 +31,18 @@
     "ws": "^8"
   },
   "devDependencies": {
+    "@effectionx/converge": "^0.1.4",
+    "@effectionx/process": "^0.7.4",
+    "@effectionx/stream-helpers": "^0.8.2",
     "@effectionx/vitest": "^0.3.1",
     "@effectionx/websocket": "^2.3.3",
+    "@playwright/test": "^1",
     "@types/node": "^25.5.0",
     "@types/react": "^19",
     "@types/react-dom": "^19",
     "@types/ws": "^8",
     "@vitejs/plugin-react": "^4",
+    "playwright": "^1",
     "react": "^19",
     "react-dom": "^19",
     "tsx": "^4.21.0",
