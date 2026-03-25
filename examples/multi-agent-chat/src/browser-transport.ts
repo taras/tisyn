@@ -2,8 +2,10 @@ import { once } from "@effectionx/node";
 import type { AgentMessage, HostMessage } from "@tisyn/protocol";
 import { parseAgentMessage } from "@tisyn/protocol";
 import type { AgentTransportFactory } from "@tisyn/transport";
+import type { Stream } from "effection";
 import {
   createChannel,
+  createSignal,
   Operation,
   resource,
   spawn,
@@ -84,7 +86,7 @@ export function serverWebSocketTransport(
 
       yield* spawn(function* () {
         yield* once(rawWs, 'close');
-        logInfo("browser", "disconnected");
+        logInfo("browser", "disconnected — pending operations will fail (reconnect does not resume workflow)");
         yield* channel.close();
       })
 
@@ -102,29 +104,41 @@ export function serverWebSocketTransport(
     });
 }
 
-export function useWebSocketServer(): Operation<WebSocket> {
+export function useConnection(rawWs: WebSocket): Operation<WebSocket> {
+  return resource(function* (provide) {
+    try {
+      yield* provide(rawWs);
+    } finally {
+      rawWs.close();
+    }
+  });
+}
+
+export function useWebSocketServer(): Operation<Stream<Operation<WebSocket>, never>> {
   return resource(function* (provide) {
     const httpServer = createServer();
     const wss = new WebSocketServer({ server: httpServer });
 
-    const connected = withResolvers<WebSocket>();
-    yield* spawn(function*() {
-      const [browserWs] = yield* once<[WebSocket]>(wss, "connection");
-      connected.resolve(browserWs);
-    });
-
     const listening = withResolvers<void>();
     httpServer.listen(3000, listening.resolve);
+    yield* listening.operation;
 
     const addr = httpServer.address() as AddressInfo;
     logInfo("browser", `WebSocket server listening on ws://localhost:${addr.port}`);
 
-    const browserWs = yield* connected.operation;
-    logInfo("browser", "connected");
+    const signal = createSignal<Operation<WebSocket>, never>();
+
+    yield* spawn(function* () {
+      for (const [rawWs] of yield* each(on<[WebSocket]>(wss, "connection"))) {
+        signal.send(useConnection(rawWs));
+        yield* each.next();
+      }
+    });
 
     try {
-      yield* provide(browserWs);
+      yield* provide(signal);
     } finally {
+      httpServer.closeAllConnections();
       httpServer.close();
       wss.close();
     }

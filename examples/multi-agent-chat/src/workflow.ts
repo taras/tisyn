@@ -3,6 +3,8 @@ import type { Workflow } from "@tisyn/agent";
 declare function Browser(): {
   waitForUser(input: { prompt: string }): Workflow<{ message: string }>;
   showAssistantMessage(input: { message: string }): Workflow<void>;
+  hydrateTranscript(input: { messages: Array<{ role: string; content: string }> }): Workflow<void>;
+  setReadOnly(input: { reason: string }): Workflow<void>;
 };
 
 declare function Llm(): {
