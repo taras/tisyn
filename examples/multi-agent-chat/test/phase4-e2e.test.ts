@@ -1,44 +1,26 @@
 /**
  * Phase 4: Full end-to-end test.
  *
- * Wires together: browser agent (WebSocket transport) + LLM agent (Worker) +
- * State agent (local) + compiled chat workflow. A test WebSocket client
- * simulates the browser.
+ * Wires together: local Browser agent (BrowserSessionManager) + LLM agent
+ * (Worker) + State agent (local) + compiled chat workflow. A test WebSocket
+ * client simulates the browser using the simple message protocol.
  */
 
 import { createServer } from "node:http";
 import type { AddressInfo } from "node:net";
 import { describe, it } from "@effectionx/vitest";
 import { expect } from "vitest";
-import { spawn, withResolvers, useScope } from "effection";
+import { spawn, withResolvers } from "effection";
 import { WebSocketServer, WebSocket } from "ws";
 import { agent, operation, implementAgent } from "@tisyn/agent";
 import { execute } from "@tisyn/runtime";
 import { installRemoteAgent, workerTransport } from "@tisyn/transport";
 import { Call } from "@tisyn/ir";
-import type { ExecuteRequest } from "@tisyn/protocol";
-import type { Val } from "@tisyn/ir";
 import { chat } from "../src/workflow.generated.js";
-import { serverWebSocketTransport } from "../src/browser-transport.js";
-
-function extractMessage(args: Val[]): string {
-  const arg = args[0];
-  if (arg != null && typeof arg === "object" && !Array.isArray(arg)) {
-    const input = arg["input"];
-    if (input != null && typeof input === "object" && !Array.isArray(input)) {
-      const message = input["message"];
-      if (typeof message === "string") return message;
-    }
-  }
-  throw new Error(`unexpected showAssistantMessage payload: ${JSON.stringify(args)}`);
-}
+import { BrowserSessionManager } from "../src/browser-session.js";
+import type { HostToBrowser } from "../src/browser-session.js";
 
 // Agent declarations
-const browser = agent("browser", {
-  waitForUser: operation<{ input: { prompt: string } }, { message: string }>(),
-  showAssistantMessage: operation<{ input: { message: string } }, void>(),
-});
-
 const llm = agent("llm", {
   sample: operation<
     {
@@ -59,11 +41,19 @@ const state = agent("state", {
   recordTurn: operation<{ input: { userMessage: string; assistantMessage: string } }, void>(),
 });
 
-describe("Phase 4: Full end-to-end", () => {
-  it("multi-turn chat: browser → host → worker → browser, with history", function* () {
-    const scope = yield* useScope();
+const browser = agent("browser", {
+  waitForUser: operation<{ input: { prompt: string } }, { message: string }>(),
+  showAssistantMessage: operation<{ input: { message: string } }, void>(),
+  hydrateTranscript: operation<
+    { input: { messages: Array<{ role: string; content: string }> } },
+    void
+  >(),
+  setReadOnly: operation<{ input: { reason: string } }, void>(),
+});
 
-    // --- Server setup ---
+describe("Phase 4: Full end-to-end", () => {
+  it("multi-turn chat via session manager + worker LLM", function* () {
+    // --- WebSocket server for test ---
     const httpServer = createServer();
     const wss = new WebSocketServer({ server: httpServer });
 
@@ -73,90 +63,65 @@ describe("Phase 4: Full end-to-end", () => {
     });
     const port = yield* listening.operation;
 
-    const connected = withResolvers<import("ws").WebSocket>();
-    wss.on("connection", (ws) => connected.resolve(ws));
+    const serverConnected = withResolvers<import("ws").WebSocket>();
+    wss.on("connection", (ws) => serverConnected.resolve(ws));
 
-    // --- Client setup (simulated browser) ---
+    // --- Simulated browser client ---
     const clientWs = new WebSocket(`ws://localhost:${port}`);
     const clientOpen = withResolvers<void>();
     clientWs.on("open", () => clientOpen.resolve());
     yield* clientOpen.operation;
 
-    // Collect showAssistantMessage payloads for assertions
+    // Collect messages from host and auto-respond to waitForUser
     const assistantMessages: string[] = [];
-    // Track LLM sample calls to verify history
-    const sampleHistory: Array<Array<{ role: string; content: string }>> = [];
-
-    // Simulated user inputs — after these, reject to end the loop
     const userInputs = ["hello", "how are you?"];
     let inputIndex = 0;
 
-    // Client protocol handler
     clientWs.on("message", (data) => {
-      const msg = JSON.parse(data.toString());
+      const msg = JSON.parse(data.toString()) as HostToBrowser;
 
-      if (msg.method === "initialize") {
-        clientWs.send(
-          JSON.stringify({
-            jsonrpc: "2.0",
-            id: msg.id,
-            result: { protocolVersion: "1.0", sessionId: "e2e-session" },
-          }),
-        );
-        return;
+      if (msg.type === "waitForUser") {
+        if (inputIndex < userInputs.length) {
+          clientWs.send(
+            JSON.stringify({ type: "userMessage", message: userInputs[inputIndex++] }),
+          );
+        }
+        // After all inputs exhausted, just don't respond — workflow stays blocked
       }
 
-      if (msg.method === "execute") {
-        const req = msg as ExecuteRequest;
-
-        if (req.params.operation === "waitForUser") {
-          if (inputIndex >= userInputs.length) {
-            // Reject to end the workflow
-            clientWs.send(
-              JSON.stringify({
-                jsonrpc: "2.0",
-                id: req.id,
-                result: {
-                  ok: false,
-                  error: { message: "done", name: "TestDone" },
-                },
-              }),
-            );
-            return;
-          }
-          clientWs.send(
-            JSON.stringify({
-              jsonrpc: "2.0",
-              id: req.id,
-              result: {
-                ok: true,
-                value: { message: userInputs[inputIndex++] },
-              },
-            }),
-          );
-          return;
-        }
-
-        if (req.params.operation === "showAssistantMessage") {
-          assistantMessages.push(extractMessage(req.params.args));
-          clientWs.send(
-            JSON.stringify({
-              jsonrpc: "2.0",
-              id: req.id,
-              result: { ok: true, value: null },
-            }),
-          );
-          return;
-        }
+      if (msg.type === "assistantMessage") {
+        assistantMessages.push(msg.message);
       }
     });
 
-    const serverWs = yield* connected.operation;
+    // Send connect message
+    clientWs.send(JSON.stringify({ type: "connect", clientSessionId: "e2e-test" }));
 
-    // --- Install agents ---
+    const serverWs = yield* serverConnected.operation;
 
-    // Browser agent via WebSocket
-    yield* installRemoteAgent(browser, serverWebSocketTransport(serverWs));
+    // --- Set up agents (same pattern as host.ts) ---
+    const history: Array<{ role: string; content: string }> = [];
+    const sampleHistory: Array<Array<{ role: string; content: string }>> = [];
+
+    const session = new BrowserSessionManager(history);
+    session.attach("e2e-test", serverWs);
+
+    // Browser agent — local, backed by session manager
+    const browserImpl = implementAgent(browser, {
+      *waitForUser({ input }) {
+        return yield* session.waitForUser(input.prompt);
+      },
+      *showAssistantMessage({ input }) {
+        session.showAssistantMessage(input.message);
+      },
+      *hydrateTranscript() {
+        // no-op
+      },
+      *setReadOnly({ input }) {
+        session.setReadOnly(input.reason);
+      },
+    });
+    yield* browserImpl.install();
 
     // LLM agent via Worker
     const llmFactory = workerTransport({
@@ -165,7 +130,6 @@ describe("Phase 4: Full end-to-end", () => {
     yield* installRemoteAgent(llm, llmFactory);
 
     // State agent (local)
-    const history: Array<{ role: string; content: string }> = [];
     const stateImpl = implementAgent(state, {
       *getHistory() {
         sampleHistory.push([...history]);
@@ -184,33 +148,37 @@ describe("Phase 4: Full end-to-end", () => {
     const workflowDone = withResolvers<void>();
 
     yield* spawn(function* () {
-      try {
-        yield* execute({ ir: Call(chat) });
-      } catch {
-        // Expected: workflow errors when browser rejects waitForUser
-      }
+      yield* execute({ ir: Call(chat) });
       workflowDone.resolve();
     });
 
-    yield* workflowDone.operation;
+    // Wait for 2 turns to complete (2 assistantMessages)
+    const allTurnsDone = withResolvers<void>();
+    const checkDone = () => {
+      if (assistantMessages.length >= 2) {
+        allTurnsDone.resolve();
+      }
+    };
+
+    // Poll via the existing message listener — add a second listener
+    clientWs.on("message", () => checkDone());
+    // Also check now in case messages already arrived
+    checkDone();
+
+    yield* allTurnsDone.operation;
 
     // --- Assertions ---
-
-    // Two assistant messages were displayed
     expect(assistantMessages).toHaveLength(2);
     expect(assistantMessages[0]).toBe("Echo: hello");
     expect(assistantMessages[1]).toBe("Echo: how are you?");
 
     // History accumulated across turns
-    // Turn 1: getHistory returned empty
     expect(sampleHistory[0]).toEqual([]);
-    // Turn 2: getHistory returned entries from turn 1
     expect(sampleHistory[1]).toEqual([
       { role: "user", content: "hello" },
       { role: "assistant", content: "Echo: hello" },
     ]);
 
-    // Final history has all entries
     expect(history).toEqual([
       { role: "user", content: "hello" },
       { role: "assistant", content: "Echo: hello" },

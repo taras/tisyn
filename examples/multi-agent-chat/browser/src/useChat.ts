@@ -1,12 +1,6 @@
 import { useEffect, useRef, useState } from "react";
-import type { Queue } from "effection";
-import { createQueue, each, run, spawn } from "effection";
+import { each, run } from "effection";
 import { useWebSocket } from "@effectionx/websocket";
-import { implementAgent } from "@tisyn/agent";
-import type { AgentMessage, HostMessage } from "@tisyn/protocol";
-import { parseHostMessage } from "@tisyn/protocol";
-import { createProtocolServer } from "@tisyn/transport/protocol-server";
-import { Browser } from "../../src/workflow.generated.ts";
 
 export interface Status {
   text: string;
@@ -18,109 +12,85 @@ export interface Message {
   content: string;
 }
 
+function getClientSessionId(): string {
+  let id = localStorage.getItem("chatSessionId");
+  if (!id) {
+    id = crypto.randomUUID();
+    localStorage.setItem("chatSessionId", id);
+  }
+  return id;
+}
+
 export function useChat(url = "ws://localhost:3000") {
   const [status, setStatus] = useState<Status>({ text: "Disconnected", level: "disconnected" });
   const [messages, setMessages] = useState<Message[]>([]);
   const [inputEnabled, setInputEnabled] = useState(false);
-  const userInputQueueRef = useRef<Queue<string, void> | null>(null);
-  const readOnlyRef = useRef(false);
+  const wsRef = useRef<{ send: (data: string) => void } | null>(null);
 
   useEffect(() => {
-    const task = run(function* () {
-      const userInputQueue = createQueue<string, void>();
-      userInputQueueRef.current = userInputQueue;
+    const clientSessionId = getClientSessionId();
 
+    const task = run(function* () {
       const ws = yield* useWebSocket<string>(url);
-      readOnlyRef.current = false;
+      wsRef.current = ws;
 
       setStatus({ text: "Connected — waiting for host...", level: "connected" });
 
-      // Parse incoming WebSocket frames into HostMessages
-      const hostMessageQueue = createQueue<HostMessage, void>();
+      // Identify this browser to the host
+      ws.send(JSON.stringify({ type: "connect", clientSessionId }));
 
-      yield* spawn(function* () {
-        for (const event of yield* each(ws)) {
-          const parsed = parseHostMessage(JSON.parse(event.data));
-          hostMessageQueue.add(parsed);
-          yield* each.next();
+      // Listen for host messages
+      for (const event of yield* each(ws)) {
+        const msg = JSON.parse(event.data);
+
+        switch (msg.type) {
+          case "hydrateTranscript":
+            setMessages(
+              msg.messages.map((m: { role: string; content: string }) => ({
+                role: m.role as "user" | "assistant",
+                content: m.content,
+              })),
+            );
+            setStatus({ text: "Transcript restored", level: "connected" });
+            break;
+
+          case "waitForUser":
+            setStatus({ text: msg.prompt || "Say something", level: "connected" });
+            setInputEnabled(true);
+            break;
+
+          case "assistantMessage":
+            setMessages((prev) => [...prev, { role: "assistant", content: msg.message }]);
+            setStatus({ text: "Waiting for assistant...", level: "pending" });
+            break;
+
+          case "setReadOnly":
+            setStatus({ text: msg.reason, level: "disconnected" });
+            setInputEnabled(false);
+            break;
         }
-        hostMessageQueue.close();
-      });
 
-      // Build the agent implementation with React-bridging handlers
-      const impl = implementAgent(Browser(), {
-        *waitForUser({ input }) {
-          const prompt = input.prompt || "Say something";
-          setStatus({ text: prompt, level: "connected" });
-          setInputEnabled(true);
-
-          // Block until React's sendMessage pushes to the queue
-          const next = yield* userInputQueue.next();
-          if (next.done) {
-            throw new Error("User input queue closed");
-          }
-          const message = next.value;
-
-          setMessages((prev) => [...prev, { role: "user", content: message }]);
-          setStatus({ text: "Waiting for assistant...", level: "pending" });
-          setInputEnabled(false);
-
-          return { message };
-        },
-
-        *showAssistantMessage({ input }) {
-          setMessages((prev) => [...prev, { role: "assistant", content: input.message }]);
-          // Protocol requires null (not undefined) for void results
-          return null as unknown as void;
-        },
-
-        *hydrateTranscript({ input }) {
-          setMessages(
-            input.messages.map((m: { role: string; content: string }) => ({
-              role: m.role as "user" | "assistant",
-              content: m.content,
-            })),
-          );
-          setStatus({ text: "Transcript restored", level: "connected" });
-          return null as unknown as void;
-        },
-
-        *setReadOnly({ input }) {
-          setStatus({ text: input.reason, level: "disconnected" });
-          setInputEnabled(false);
-          readOnlyRef.current = true;
-          return null as unknown as void;
-        },
-      });
-
-      const server = createProtocolServer(impl);
-
-      yield* server.use({
-        *receive() {
-          return hostMessageQueue;
-        },
-        *send(msg: AgentMessage) {
-          ws.send(JSON.stringify(msg));
-        },
-      });
-
-      if (!readOnlyRef.current) {
-        // Unexpected session end — host shut down or protocol error
-        setMessages((prev) => [...prev, { role: "system", content: "Host shut down" }]);
-        setStatus({ text: "Host shut down", level: "disconnected" });
-        setInputEnabled(false);
+        yield* each.next();
       }
+
+      // WebSocket closed
+      setStatus({ text: "Disconnected", level: "disconnected" });
+      setInputEnabled(false);
     });
 
     return () => {
-      userInputQueueRef.current = null;
-      readOnlyRef.current = false;
+      wsRef.current = null;
       task.halt();
     };
   }, [url]);
 
   const sendMessage = (text: string) => {
-    userInputQueueRef.current?.add(text);
+    if (wsRef.current) {
+      setMessages((prev) => [...prev, { role: "user", content: text }]);
+      setInputEnabled(false);
+      setStatus({ text: "Waiting for assistant...", level: "pending" });
+      wsRef.current.send(JSON.stringify({ type: "userMessage", message: text }));
+    }
   };
 
   return { status, messages, inputEnabled, sendMessage };
