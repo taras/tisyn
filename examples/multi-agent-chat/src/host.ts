@@ -23,14 +23,10 @@ import { InMemoryStream } from "@tisyn/durable-streams";
 import { installRemoteAgent, workerTransport } from "@tisyn/transport";
 import { Call } from "@tisyn/ir";
 import { Browser, chat, Llm, State } from "./workflow.generated.js";
-import {
-  serverWebSocketTransport,
-  useWebSocketServer,
-} from "./browser-transport.js";
+import { serverWebSocketTransport, useWebSocketServer } from "./browser-transport.js";
 import { FileJournalStream } from "./file-journal-stream.js";
 import { reconstructHistory } from "./reconstruct-history.js";
 import { main, scoped, each, spawn } from "effection";
-import type { WebSocket } from "ws";
 import { logInfo, logError } from "./logger.js";
 
 // Parse --journal <path> or --journal=<path> from CLI args
@@ -56,9 +52,7 @@ for (let i = 0; i < process.argv.length; i++) {
 }
 
 await main(function* () {
-  const stream = journalPath
-    ? new FileJournalStream(journalPath)
-    : new InMemoryStream();
+  const stream = journalPath ? new FileJournalStream(journalPath) : new InMemoryStream();
 
   // --- Startup history reconstruction (once, no browser) ---
   const history: Array<{ role: string; content: string }> = [];
@@ -93,7 +87,7 @@ await main(function* () {
       });
       history.push(
         { role: "user", content: input.userMessage },
-        { role: "assistant", content: input.assistantMessage }
+        { role: "assistant", content: input.assistantMessage },
       );
       logInfo("state", "history updated", { length: history.length });
     },
@@ -108,11 +102,7 @@ await main(function* () {
   // --- Connection loop (single browser at a time) ---
   // Mutable across scoped() callbacks — TypeScript can't track mutations
   // inside generator callbacks, so we type broadly to avoid false narrowing.
-  let sessionStatus = "pending" as
-    | "pending"
-    | "executing"
-    | "completed"
-    | "failed";
+  let sessionStatus = "pending" as "pending" | "executing" | "completed" | "failed";
 
   let task = yield* spawn(function* () {});
   for (const connection of yield* each(connections)) {
@@ -125,17 +115,12 @@ await main(function* () {
         logInfo("host", "browser connected");
 
         try {
-          yield* installRemoteAgent(
-            Browser(),
-            serverWebSocketTransport(browserWs)
-          );
+          yield* installRemoteAgent(Browser(), serverWebSocketTransport(browserWs));
           logInfo("host", "browser agent installed");
 
           // --- Per-connection transcript hydration ---
           if (history.length > 0) {
-            yield* invoke(
-              Browser().hydrateTranscript({ input: { messages: history } })
-            );
+            yield* invoke(Browser().hydrateTranscript({ input: { messages: history } }));
             logInfo("host", "browser transcript hydrated", {
               messages: history.length,
             });
@@ -156,7 +141,7 @@ await main(function* () {
               logError(
                 "host",
                 "workflow failed",
-                result.status === "err" ? result.error : "cancelled"
+                result.status === "err" ? result.error : "cancelled",
               );
               if (result.status === "err") {
                 try {
@@ -164,46 +149,38 @@ await main(function* () {
                   yield* invoke(
                     Browser().setReadOnly({
                       input: { reason: "Session ended" },
-                    })
+                    }),
                   );
                 } catch {
                   // Browser already disconnected — setReadOnly is moot
                 }
               }
             }
-          } else if (
-            sessionStatus === "completed" ||
-            sessionStatus === "failed"
-          ) {
+          } else if (sessionStatus === "completed" || sessionStatus === "failed") {
             logInfo(
               "host",
-              `workflow already ${sessionStatus} — browser shows read-only transcript`
+              `workflow already ${sessionStatus} — browser shows read-only transcript`,
             );
-            yield* invoke(
-              Browser().setReadOnly({ input: { reason: "Session ended" } })
-            );
+            yield* invoke(Browser().setReadOnly({ input: { reason: "Session ended" } }));
           }
-        } catch (e) {
+        } catch {
           if (sessionStatus === "executing") {
             // Disconnect during active execute() — workflow is permanently ended
             sessionStatus = "failed";
             logInfo(
               "host",
-              "browser disconnected during workflow, session failed — waiting for reconnect"
+              "browser disconnected during workflow, session failed — waiting for reconnect",
             );
           } else if (sessionStatus === "pending") {
             // Disconnect before execute() started (during install or hydration)
             // Session stays pending — next connection can still start the workflow
-            logInfo(
-              "host",
-              "browser disconnected before workflow started — waiting for reconnect"
-            );
+            logInfo("host", "browser disconnected before workflow started — waiting for reconnect");
           } else {
             // Disconnect during read-only hydration view — no state change
             logInfo("host", "browser disconnected — waiting for reconnect");
           }
         }
-      })
+      }),
     );
     yield* each.next();
   }

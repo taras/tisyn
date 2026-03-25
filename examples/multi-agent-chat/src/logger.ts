@@ -10,10 +10,7 @@ export function logInfo(scope: string, message: string, data?: Record<string, un
 }
 
 export function logError(scope: string, message: string, error?: unknown): void {
-  console.error(
-    `[${scope}] ${message}`,
-    error instanceof Error ? error.message : (error ?? ""),
-  );
+  console.error(`[${scope}] ${message}`, error instanceof Error ? error.message : (error ?? ""));
 }
 
 export function logDebug(scope: string, message: string, data?: Record<string, unknown>): void {

@@ -14,8 +14,8 @@
     "build:browser": "vite build"
   },
   "dependencies": {
-    "@effectionx/worker": "^0.5.2",
     "@effectionx/node": "^0.2.4",
+    "@effectionx/worker": "^0.5.2",
     "@tisyn/agent": "workspace:*",
     "@tisyn/compiler": "workspace:*",
     "@tisyn/durable-streams": "workspace:*",

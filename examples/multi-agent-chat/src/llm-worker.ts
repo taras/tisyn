@@ -21,10 +21,7 @@ const impl = implementAgent(Llm(), {
 
 const server = createProtocolServer(impl);
 
-await workerMain<HostMessage, void, void, void, AgentMessage, void>(function* ({
-  messages,
-  send,
-}) {
+await workerMain<HostMessage, void, void, void, AgentMessage, void>(function* ({ messages, send }) {
   const queue = createQueue<HostMessage, void>();
 
   yield* spawn(function* () {
