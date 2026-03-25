@@ -1,43 +1,17 @@
 /**
- * Phase 1: Compile the chat workflow and test with local agent implementations.
- * No transports — all agents are local.
+ * Compiled workflow with local agents — no transports.
  */
 
 import { describe, it } from "@effectionx/vitest";
 import { expect } from "vitest";
 import { spawn, withResolvers } from "effection";
-import { agent, operation, implementAgent } from "@tisyn/agent";
+import { implementAgent } from "@tisyn/agent";
 import { execute } from "@tisyn/runtime";
 import { Call } from "@tisyn/ir";
 import { chat } from "../src/workflow.generated.js";
+import { browser, llm, state } from "./helpers/agents.js";
 
-// Agent declarations matching the generated module's agent IDs
-const browser = agent("browser", {
-  waitForUser: operation<{ input: { prompt: string } }, { message: string }>(),
-  showAssistantMessage: operation<{ input: { message: string } }, void>(),
-});
-
-const llm = agent("llm", {
-  sample: operation<
-    {
-      input: {
-        history: Array<{ role: string; content: string }>;
-        message: string;
-      };
-    },
-    { message: string }
-  >(),
-});
-
-const state = agent("state", {
-  getHistory: operation<
-    { input: { placeholder: string } },
-    Array<{ role: string; content: string }>
-  >(),
-  recordTurn: operation<{ input: { userMessage: string; assistantMessage: string } }, void>(),
-});
-
-describe("Phase 1: Compiled workflow with local agents", () => {
+describe("Compiled workflow", () => {
   it("runs the chat loop: elicit → sample → display, with history accumulation", function* () {
     // Track agent interactions
     const waitForUserCalls: Array<{ input: { prompt: string } }> = [];
@@ -75,6 +49,8 @@ describe("Phase 1: Compiled workflow with local agents", () => {
       *showAssistantMessage(args) {
         showCalls.push(args);
       },
+      *hydrateTranscript() {},
+      *setReadOnly() {},
     });
     yield* browserImpl.install();
 

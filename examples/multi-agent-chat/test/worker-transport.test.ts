@@ -1,44 +1,18 @@
 /**
- * Phase 2: LLM agent via Worker transport.
- * Browser and State agents remain local. LLM routes through a real worker.
+ * LLM agent via Worker transport. Browser and State agents remain local.
  */
 
 import { describe, it } from "@effectionx/vitest";
 import { expect } from "vitest";
 import { spawn, withResolvers } from "effection";
-import { agent, operation, implementAgent } from "@tisyn/agent";
+import { implementAgent } from "@tisyn/agent";
 import { execute } from "@tisyn/runtime";
 import { installRemoteAgent, workerTransport } from "@tisyn/transport";
 import { Call } from "@tisyn/ir";
 import { chat } from "../src/workflow.generated.js";
+import { browser, llm, state } from "./helpers/agents.js";
 
-// Agent declarations
-const browser = agent("browser", {
-  waitForUser: operation<{ input: { prompt: string } }, { message: string }>(),
-  showAssistantMessage: operation<{ input: { message: string } }, void>(),
-});
-
-const llm = agent("llm", {
-  sample: operation<
-    {
-      input: {
-        history: Array<{ role: string; content: string }>;
-        message: string;
-      };
-    },
-    { message: string }
-  >(),
-});
-
-const state = agent("state", {
-  getHistory: operation<
-    { input: { placeholder: string } },
-    Array<{ role: string; content: string }>
-  >(),
-  recordTurn: operation<{ input: { userMessage: string; assistantMessage: string } }, void>(),
-});
-
-describe("Phase 2: LLM agent via Worker transport", () => {
+describe("Worker transport", () => {
   it("routes LLM.sample through a real worker thread", function* () {
     const showCalls: Array<{ input: { message: string } }> = [];
     const history: Array<{ role: string; content: string }> = [];
@@ -58,6 +32,8 @@ describe("Phase 2: LLM agent via Worker transport", () => {
       *showAssistantMessage(args) {
         showCalls.push(args);
       },
+      *hydrateTranscript() {},
+      *setReadOnly() {},
     });
     yield* browserImpl.install();
 
