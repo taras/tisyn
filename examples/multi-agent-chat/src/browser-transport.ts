@@ -67,9 +67,7 @@ function summarizeValue(value: unknown): unknown {
   return value;
 }
 
-export function serverWebSocketTransport(
-  rawWs: WebSocket
-): AgentTransportFactory {
+export function serverWebSocketTransport(rawWs: WebSocket): AgentTransportFactory {
   return () =>
     resource(function* (provide) {
       const channel = createChannel<AgentMessage, void>();
@@ -85,10 +83,13 @@ export function serverWebSocketTransport(
       });
 
       yield* spawn(function* () {
-        yield* once(rawWs, 'close');
-        logInfo("browser", "disconnected — pending operations will fail (reconnect does not resume workflow)");
+        yield* once(rawWs, "close");
+        logInfo(
+          "browser",
+          "disconnected — pending operations will fail (reconnect does not resume workflow)",
+        );
         yield* channel.close();
-      })
+      });
 
       try {
         yield* provide({

@@ -75,10 +75,12 @@ export function useChat(url = "ws://localhost:3000") {
         },
 
         *hydrateTranscript({ input }) {
-          setMessages(input.messages.map((m: { role: string; content: string }) => ({
-            role: m.role as "user" | "assistant",
-            content: m.content,
-          })));
+          setMessages(
+            input.messages.map((m: { role: string; content: string }) => ({
+              role: m.role as "user" | "assistant",
+              content: m.content,
+            })),
+          );
           setStatus({ text: "Transcript restored", level: "connected" });
           return null as unknown as void;
         },

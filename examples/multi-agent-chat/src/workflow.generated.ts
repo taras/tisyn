@@ -4,97 +4,128 @@ import type { DeclaredAgent, OperationSpec } from "@tisyn/agent";
 import type { TisynFn } from "@tisyn/ir";
 import { Fn, Ref, Eval, Let, While, Get, Construct } from "@tisyn/ir";
 
-export function Browser(): DeclaredAgent<{ waitForUser: OperationSpec<{ input: { prompt: string } }, { message: string }>; showAssistantMessage: OperationSpec<{ input: { message: string } }, void>; hydrateTranscript: OperationSpec<{ input: { messages: Array<{ role: string; content: string }> } }, void>; setReadOnly: OperationSpec<{ input: { reason: string } }, void> }> {
+export function Browser(): DeclaredAgent<{
+  waitForUser: OperationSpec<{ input: { prompt: string } }, { message: string }>;
+  showAssistantMessage: OperationSpec<{ input: { message: string } }, void>;
+  hydrateTranscript: OperationSpec<
+    { input: { messages: Array<{ role: string; content: string }> } },
+    void
+  >;
+  setReadOnly: OperationSpec<{ input: { reason: string } }, void>;
+}> {
   const id = "browser";
   return agent(id, {
     waitForUser: operation<{ input: { prompt: string } }, { message: string }>(),
     showAssistantMessage: operation<{ input: { message: string } }, void>(),
-    hydrateTranscript: operation<{ input: { messages: Array<{ role: string; content: string }> } }, void>(),
+    hydrateTranscript: operation<
+      { input: { messages: Array<{ role: string; content: string }> } },
+      void
+    >(),
     setReadOnly: operation<{ input: { reason: string } }, void>(),
   });
 }
 
-export function Llm(): DeclaredAgent<{ sample: OperationSpec<{ input: {
-    history: Array<{ role: string; content: string }>;
-    message: string;
-  } }, { message: string }> }> {
+export function Llm(): DeclaredAgent<{
+  sample: OperationSpec<
+    {
+      input: {
+        history: Array<{ role: string; content: string }>;
+        message: string;
+      };
+    },
+    { message: string }
+  >;
+}> {
   const id = "llm";
   return agent(id, {
-    sample: operation<{ input: {
-    history: Array<{ role: string; content: string }>;
-    message: string;
-  } }, { message: string }>(),
+    sample: operation<
+      {
+        input: {
+          history: Array<{ role: string; content: string }>;
+          message: string;
+        };
+      },
+      { message: string }
+    >(),
   });
 }
 
-export function State(): DeclaredAgent<{ getHistory: OperationSpec<{ input: { placeholder: string } }, Array<{ role: string; content: string }>>; recordTurn: OperationSpec<{ input: { userMessage: string; assistantMessage: string } }, void> }> {
+export function State(): DeclaredAgent<{
+  getHistory: OperationSpec<
+    { input: { placeholder: string } },
+    Array<{ role: string; content: string }>
+  >;
+  recordTurn: OperationSpec<{ input: { userMessage: string; assistantMessage: string } }, void>;
+}> {
   const id = "state";
   return agent(id, {
-    getHistory: operation<{ input: { placeholder: string } }, Array<{ role: string; content: string }>>(),
+    getHistory: operation<
+      { input: { placeholder: string } },
+      Array<{ role: string; content: string }>
+    >(),
     recordTurn: operation<{ input: { userMessage: string; assistantMessage: string } }, void>(),
   });
 }
 
-export const chat: TisynFn<[], unknown> =
-  Fn([],
-    While(true, [
+export const chat: TisynFn<[], unknown> = Fn(
+  [],
+  While(true, [
+    Let(
+      "user",
+      Eval(
+        "browser.waitForUser",
+        Construct({
+          input: Construct({
+            prompt: "Say something",
+          }),
+        }),
+      ),
       Let(
-        "user",
-        Eval("browser.waitForUser",
+        "history",
+        Eval(
+          "state.getHistory",
           Construct({
             input: Construct({
-                prompt: "Say something"
-              })
-          })),
+              placeholder: "",
+            }),
+          }),
+        ),
         Let(
-          "history",
-          Eval("state.getHistory",
+          "assistant",
+          Eval(
+            "llm.sample",
             Construct({
               input: Construct({
-                  placeholder: ""
-                })
-            })),
+                history: Ref("history"),
+                message: Get(Ref("user"), "message"),
+              }),
+            }),
+          ),
           Let(
-            "assistant",
-            Eval("llm.sample",
+            "__discard_0",
+            Eval(
+              "state.recordTurn",
               Construct({
                 input: Construct({
-                    history: Ref("history"),
-                    message: Get(
-                        Ref("user"),
-                        "message"
-                      )
-                  })
-              })),
-            Let(
-              "__discard_0",
-              Eval("state.recordTurn",
-                Construct({
-                  input: Construct({
-                      userMessage: Get(
-                          Ref("user"),
-                          "message"
-                        ),
-                      assistantMessage: Get(
-                          Ref("assistant"),
-                          "message"
-                        )
-                    })
-                })),
-              Eval("browser.showAssistantMessage",
-                Construct({
-                  input: Construct({
-                      message: Get(
-                          Ref("assistant"),
-                          "message"
-                        )
-                    })
-                }))
-            )
-          )
-        )
-      )
-    ]));
+                  userMessage: Get(Ref("user"), "message"),
+                  assistantMessage: Get(Ref("assistant"), "message"),
+                }),
+              }),
+            ),
+            Eval(
+              "browser.showAssistantMessage",
+              Construct({
+                input: Construct({
+                  message: Get(Ref("assistant"), "message"),
+                }),
+              }),
+            ),
+          ),
+        ),
+      ),
+    ),
+  ]),
+);
 
 export const agents = { Browser, Llm, State };
 export const workflows = { chat };
