@@ -19,7 +19,13 @@ export class FileJournalStream implements DurableStream {
     return content
       .split("\n")
       .filter((line) => line.trim() !== "")
-      .map((line) => JSON.parse(line) as DurableEvent)
+      .map((line, i) => {
+        try {
+          return JSON.parse(line) as DurableEvent;
+        } catch (e) {
+          throw new Error(`Malformed NDJSON at ${this.path}:${i + 1}: ${(e as Error).message}`);
+        }
+      })
       .filter((event) => event.type !== "close");
   }
 

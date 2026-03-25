@@ -23,6 +23,7 @@ export function useChat(url = "ws://localhost:3000") {
   const [messages, setMessages] = useState<Message[]>([]);
   const [inputEnabled, setInputEnabled] = useState(false);
   const userInputQueueRef = useRef<Queue<string, void> | null>(null);
+  const readOnlyRef = useRef(false);
 
   useEffect(() => {
     const task = run(function* () {
@@ -30,6 +31,7 @@ export function useChat(url = "ws://localhost:3000") {
       userInputQueueRef.current = userInputQueue;
 
       const ws = yield* useWebSocket<string>(url);
+      readOnlyRef.current = false;
 
       setStatus({ text: "Connected — waiting for host...", level: "connected" });
 
@@ -71,6 +73,22 @@ export function useChat(url = "ws://localhost:3000") {
           // Protocol requires null (not undefined) for void results
           return null as unknown as void;
         },
+
+        *hydrateTranscript({ input }) {
+          setMessages(input.messages.map((m: { role: string; content: string }) => ({
+            role: m.role as "user" | "assistant",
+            content: m.content,
+          })));
+          setStatus({ text: "Transcript restored", level: "connected" });
+          return null as unknown as void;
+        },
+
+        *setReadOnly({ input }) {
+          setStatus({ text: input.reason, level: "disconnected" });
+          setInputEnabled(false);
+          readOnlyRef.current = true;
+          return null as unknown as void;
+        },
       });
 
       const server = createProtocolServer(impl);
@@ -84,14 +102,17 @@ export function useChat(url = "ws://localhost:3000") {
         },
       });
 
-      // Protocol server returned — host shut down
-      setMessages((prev) => [...prev, { role: "system", content: "Host shut down" }]);
-      setStatus({ text: "Host shut down", level: "disconnected" });
-      setInputEnabled(false);
+      if (!readOnlyRef.current) {
+        // Unexpected session end — host shut down or protocol error
+        setMessages((prev) => [...prev, { role: "system", content: "Host shut down" }]);
+        setStatus({ text: "Host shut down", level: "disconnected" });
+        setInputEnabled(false);
+      }
     });
 
     return () => {
       userInputQueueRef.current = null;
+      readOnlyRef.current = false;
       task.halt();
     };
   }, [url]);
