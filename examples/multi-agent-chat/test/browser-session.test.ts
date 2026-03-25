@@ -1,5 +1,5 @@
 /**
- * Phase 3: BrowserSessionManager — reconnect semantics.
+ * BrowserSessionManager — reconnect semantics.
  *
  * Tests the session manager directly without running the full workflow.
  * Verifies: waitForUser suspension, reconnect continuation, identity-safe
@@ -57,7 +57,7 @@ function nextTick(): Operation<void> {
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type AnyWs = any;
 
-describe("Phase 3: BrowserSessionManager", () => {
+describe("Browser session manager", () => {
   it("waitForUser suspends until userMessage arrives", function* () {
     const history: Array<{ role: string; content: string }> = [];
     const session = new BrowserSessionManager(history);

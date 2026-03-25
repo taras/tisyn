@@ -1,9 +1,6 @@
 /**
- * Phase 4: Full end-to-end test.
- *
- * Wires together: local Browser agent (BrowserSessionManager) + LLM agent
- * (Worker) + State agent (local) + compiled chat workflow. A test WebSocket
- * client simulates the browser using the simple message protocol.
+ * End-to-end: session manager + worker LLM + compiled workflow.
+ * A test WebSocket client simulates the browser.
  */
 
 import { createServer } from "node:http";
@@ -12,46 +9,16 @@ import { describe, it } from "@effectionx/vitest";
 import { expect } from "vitest";
 import { spawn, withResolvers } from "effection";
 import { WebSocketServer, WebSocket } from "ws";
-import { agent, operation, implementAgent } from "@tisyn/agent";
+import { implementAgent } from "@tisyn/agent";
 import { execute } from "@tisyn/runtime";
 import { installRemoteAgent, workerTransport } from "@tisyn/transport";
 import { Call } from "@tisyn/ir";
 import { chat } from "../src/workflow.generated.js";
 import { BrowserSessionManager } from "../src/browser-session.js";
 import type { HostToBrowser } from "../src/browser-session.js";
+import { browser, llm, state } from "./helpers/agents.js";
 
-// Agent declarations
-const llm = agent("llm", {
-  sample: operation<
-    {
-      input: {
-        history: Array<{ role: string; content: string }>;
-        message: string;
-      };
-    },
-    { message: string }
-  >(),
-});
-
-const state = agent("state", {
-  getHistory: operation<
-    { input: { placeholder: string } },
-    Array<{ role: string; content: string }>
-  >(),
-  recordTurn: operation<{ input: { userMessage: string; assistantMessage: string } }, void>(),
-});
-
-const browser = agent("browser", {
-  waitForUser: operation<{ input: { prompt: string } }, { message: string }>(),
-  showAssistantMessage: operation<{ input: { message: string } }, void>(),
-  hydrateTranscript: operation<
-    { input: { messages: Array<{ role: string; content: string }> } },
-    void
-  >(),
-  setReadOnly: operation<{ input: { reason: string } }, void>(),
-});
-
-describe("Phase 4: Full end-to-end", () => {
+describe("End-to-end chat", () => {
   it("multi-turn chat via session manager + worker LLM", function* () {
     // --- WebSocket server for test ---
     const httpServer = createServer();
@@ -82,9 +49,7 @@ describe("Phase 4: Full end-to-end", () => {
 
       if (msg.type === "waitForUser") {
         if (inputIndex < userInputs.length) {
-          clientWs.send(
-            JSON.stringify({ type: "userMessage", message: userInputs[inputIndex++] }),
-          );
+          clientWs.send(JSON.stringify({ type: "userMessage", message: userInputs[inputIndex++] }));
         }
         // After all inputs exhausted, just don't respond — workflow stays blocked
       }
