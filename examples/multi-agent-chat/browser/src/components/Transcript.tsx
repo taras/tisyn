@@ -17,7 +17,7 @@ export function Transcript({ messages }: { messages: Message[] }) {
   }, [messages]);
 
   return (
-    <div className="transcript" ref={ref}>
+    <div className="transcript" role="log" ref={ref}>
       {messages.map((msg, i) => (
         <div key={i} className={`message ${msg.role}`}>
           {formatMessage(msg)}

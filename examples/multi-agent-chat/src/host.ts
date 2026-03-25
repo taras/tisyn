@@ -34,8 +34,9 @@ import type { BrowserToHost } from "./browser-session.js";
 import { main, each, spawn, withResolvers } from "effection";
 import { logInfo, logError } from "./logger.js";
 
-// Parse --journal <path> or --journal=<path> from CLI args
+// Parse CLI args: --journal <path>, --port <number>
 let journalPath: string | undefined;
+let port = 3000;
 for (let i = 0; i < process.argv.length; i++) {
   const arg = process.argv[i]!;
   if (arg === "--journal") {
@@ -44,15 +45,26 @@ for (let i = 0; i < process.argv.length; i++) {
       console.error("--journal requires a file path");
       process.exit(1);
     }
-    break;
-  }
-  if (arg.startsWith("--journal=")) {
+  } else if (arg.startsWith("--journal=")) {
     journalPath = arg.slice("--journal=".length);
     if (!journalPath) {
       console.error("--journal requires a file path");
       process.exit(1);
     }
-    break;
+  } else if (arg === "--port") {
+    const val = process.argv[i + 1];
+    if (!val || isNaN(Number(val))) {
+      console.error("--port requires a number");
+      process.exit(1);
+    }
+    port = Number(val);
+  } else if (arg.startsWith("--port=")) {
+    const val = arg.slice("--port=".length);
+    if (!val || isNaN(Number(val))) {
+      console.error("--port requires a number");
+      process.exit(1);
+    }
+    port = Number(val);
   }
 }
 
@@ -123,7 +135,7 @@ await main(function* () {
   logInfo("host", "browser agent installed (local, reconnectable)");
 
   // --- WebSocket server ---
-  const connections = yield* useWebSocketServer();
+  const connections = yield* useWebSocketServer(port);
 
   // Connection loop in background: attach/detach sockets
   yield* spawn(function* () {

@@ -21,7 +21,7 @@ function getClientSessionId(): string {
   return id;
 }
 
-export function useChat(url = "ws://localhost:3000") {
+export function useChat(url = `ws://${window.location.host}`) {
   const [status, setStatus] = useState<Status>({ text: "Disconnected", level: "disconnected" });
   const [messages, setMessages] = useState<Message[]>([]);
   const [inputEnabled, setInputEnabled] = useState(false);

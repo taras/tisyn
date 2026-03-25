@@ -16,16 +16,17 @@ export function useConnection(rawWs: WebSocket): Operation<WebSocket> {
   });
 }
 
-export function useWebSocketServer(): Operation<Stream<Operation<WebSocket>, never>> {
+export function useWebSocketServer(port = 3000): Operation<Stream<Operation<WebSocket>, never>> {
   return resource(function* (provide) {
     const httpServer = createServer();
     const wss = new WebSocketServer({ server: httpServer });
 
     const listening = withResolvers<void>();
-    httpServer.listen(3000, listening.resolve);
+    httpServer.listen(port, listening.resolve);
     yield* listening.operation;
 
     const addr = httpServer.address() as AddressInfo;
+    console.log(`TISYN_HOST_READY port=${addr.port}`);
     logInfo("host", `WebSocket server listening on ws://localhost:${addr.port}`);
 
     const signal = createSignal<Operation<WebSocket>, never>();
