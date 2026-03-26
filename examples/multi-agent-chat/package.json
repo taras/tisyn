@@ -14,7 +14,8 @@
     "dev:browser": "vite",
     "build:browser": "vite build",
     "build:test-workflows": "node --experimental-strip-types src/build-test-workflows.ts",
-    "pretest:browser": "pnpm run build && pnpm run build:browser && pnpm run build:test-workflows",
+    "build:test-executor": "vite build --config test/browser/vite.executor.config.ts",
+    "pretest:browser": "pnpm run build && pnpm run build:browser && pnpm run build:test-workflows && pnpm run build:test-executor",
     "test:browser": "vitest run --config vitest.browser.config.ts"
   },
   "dependencies": {
@@ -38,6 +39,7 @@
     "@effectionx/vitest": "^0.3.1",
     "@effectionx/websocket": "^2.3.3",
     "@playwright/test": "^1",
+    "@testing-library/dom": "^10.4.1",
     "@types/node": "^25.5.0",
     "@types/react": "^19",
     "@types/react-dom": "^19",

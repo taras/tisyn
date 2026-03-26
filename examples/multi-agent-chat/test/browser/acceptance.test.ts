@@ -6,7 +6,7 @@ import {
   transcriptRestoresAfterReload,
   hostRestartPreservesState,
   secondBrowserIsReadOnly,
-} from "./workflows.generated.js";
+} from "./host-workflows.generated.js";
 
 describe("Browser acceptance", () => {
   beforeAll(function* () {

@@ -1,17 +1,6 @@
 import type { Workflow } from "@tisyn/agent";
 
-export declare function TestHost(): {
-  stop(input: Record<string, never>): Workflow<void>;
-  restart(input: { journalPath?: string }): Workflow<void>;
-};
-
-export declare function TestBrowser(): {
-  open(input: Record<string, never>): Workflow<void>;
-  reload(input: Record<string, never>): Workflow<void>;
-  close(input: Record<string, never>): Workflow<void>;
-  openSession(input: { sessionId: string }): Workflow<void>;
-  switchSession(input: { sessionId: string }): Workflow<void>;
-  closeSession(input: { sessionId: string }): Workflow<void>;
+export declare function Dom(): {
   fill(input: { name: string; value: string }): Workflow<void>;
   click(input: { role: string; name: string }): Workflow<void>;
   pressKey(input: { key: string }): Workflow<void>;

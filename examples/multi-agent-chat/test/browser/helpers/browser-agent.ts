@@ -1,8 +1,12 @@
 import { call } from "effection";
-import { expect } from "@playwright/test";
 import type { ImplementationHandlers } from "@tisyn/agent";
 import type { Browser, BrowserContext, Page } from "playwright";
-import { TestBrowser } from "../workflows.generated.js";
+import { Browser as BrowserDecl } from "../host-workflows.generated.js";
+
+const EXECUTOR_BUNDLE_PATH = new URL(
+  "../dist-executor/tisyn-test-executor.iife.js",
+  import.meta.url,
+).pathname;
 
 export interface BrowserAgentState {
   browser: Browser;
@@ -17,26 +21,41 @@ function activePage(state: BrowserAgentState): Page {
   return session.page;
 }
 
-type BrowserHandlers = ImplementationHandlers<ReturnType<typeof TestBrowser>["operations"]>;
+async function injectExecutor(page: Page): Promise<void> {
+  await page.addScriptTag({ path: EXECUTOR_BUNDLE_PATH });
+  await page.waitForFunction(
+    () => typeof (window as any).__tisyn_execute === "function",
+  );
+}
 
-export function createBrowserAgentHandlers(state: BrowserAgentState): BrowserHandlers {
+type BrowserHandlers = ImplementationHandlers<
+  ReturnType<typeof BrowserDecl>["operations"]
+>;
+
+export function createBrowserAgentHandlers(
+  state: BrowserAgentState,
+): BrowserHandlers {
   return {
     *open() {
-      yield* call(() => activePage(state).goto(state.appUrl));
-    },
-    *reload() {
-      yield* call(() => activePage(state).reload());
+      const page = activePage(state);
+      yield* call(() => page.goto(state.appUrl));
+      yield* call(() => injectExecutor(page));
     },
     *close() {
       yield* call(() => activePage(state).close());
     },
-
+    *reload() {
+      const page = activePage(state);
+      yield* call(() => page.reload());
+      yield* call(() => injectExecutor(page));
+    },
     *openSession({ input }) {
       const context = yield* call(() => state.browser.newContext());
       const page = yield* call(() => context.newPage());
       state.sessions.set(input.sessionId, { context, page });
       state.activeSessionId = input.sessionId;
       yield* call(() => page.goto(state.appUrl));
+      yield* call(() => injectExecutor(page));
     },
     *switchSession({ input }) {
       if (!state.sessions.has(input.sessionId)) {
@@ -52,51 +71,17 @@ export function createBrowserAgentHandlers(state: BrowserAgentState): BrowserHan
         state.sessions.delete(input.sessionId);
       }
     },
-
-    *fill({ input }) {
-      yield* call(() =>
-        activePage(state).getByRole("textbox", { name: input.name }).fill(input.value),
-      );
-    },
-    *click({ input }) {
-      yield* call(() =>
-        activePage(state).getByRole(input.role as any, { name: input.name }).click(),
-      );
-    },
-    *pressKey({ input }) {
-      yield* call(() => activePage(state).keyboard.press(input.key));
-    },
-
-    *expectVisible({ input }) {
-      yield* call(() => expect(activePage(state).getByText(input.text)).toBeVisible());
-    },
-    *expectNotVisible({ input }) {
-      yield* call(() => expect(activePage(state).getByText(input.text)).not.toBeVisible());
-    },
-    *expectDisabled({ input }) {
-      yield* call(() =>
-        expect(activePage(state).getByRole(input.role as any, { name: input.name })).toBeDisabled(),
-      );
-    },
-    *expectEnabled({ input }) {
-      yield* call(() =>
-        expect(activePage(state).getByRole(input.role as any, { name: input.name })).toBeEnabled(),
-      );
-    },
-    *expectStatusText({ input }) {
-      yield* call(() => expect(activePage(state).getByRole("status")).toHaveText(input.text));
-    },
-    *expectTranscript({ input }) {
+    *execute({ input }) {
       const page = activePage(state);
-      const log = page.getByRole("log");
-      const items = log.locator(".message");
-
-      yield* call(async () => {
-        await expect(items).toHaveCount(input.messages.length);
-        for (let i = 0; i < input.messages.length; i++) {
-          await expect(items.nth(i)).toHaveText(input.messages[i]!);
-        }
-      });
+      const result: any = yield* call(() =>
+        page.evaluate(
+          (ir) => (window as any).__tisyn_execute(ir),
+          input.workflow,
+        ),
+      );
+      if (result.status === "err") {
+        throw new Error(result.error?.message ?? "Browser workflow failed");
+      }
     },
   };
 }

@@ -1,14 +1,7 @@
-import { TestBrowser } from "./declarations.ts";
+import { basicSendReceiveDom } from "../dom-workflows.generated.ts";
+import { Browser } from "./host-declarations.ts";
 
 export function* basicSendReceive() {
-  yield* TestBrowser().open({});
-  yield* TestBrowser().expectStatusText({ text: "Say something" });
-
-  yield* TestBrowser().fill({ name: "Message", value: "hello" });
-  yield* TestBrowser().click({ role: "button", name: "Send" });
-
-  yield* TestBrowser().expectVisible({ text: "Echo: hello" });
-  yield* TestBrowser().expectTranscript({
-    messages: ["You: hello", "Assistant: Echo: hello"],
-  });
+  yield* Browser().open({});
+  yield* Browser().execute({ workflow: basicSendReceiveDom });
 }

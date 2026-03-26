@@ -1,26 +1,12 @@
-import { TestBrowser } from "./declarations.ts";
+import {
+  sendTwoMessagesDom,
+  verifyTranscriptAfterReloadDom,
+} from "../dom-workflows.generated.ts";
+import { Browser } from "./host-declarations.ts";
 
 export function* transcriptRestoresAfterReload() {
-  yield* TestBrowser().open({});
-  yield* TestBrowser().expectStatusText({ text: "Say something" });
-
-  yield* TestBrowser().fill({ name: "Message", value: "hello" });
-  yield* TestBrowser().click({ role: "button", name: "Send" });
-  yield* TestBrowser().expectVisible({ text: "Echo: hello" });
-
-  yield* TestBrowser().fill({ name: "Message", value: "world" });
-  yield* TestBrowser().click({ role: "button", name: "Send" });
-  yield* TestBrowser().expectVisible({ text: "Echo: world" });
-
-  yield* TestBrowser().reload({});
-
-  yield* TestBrowser().expectTranscript({
-    messages: [
-      "You: hello",
-      "Assistant: Echo: hello",
-      "You: world",
-      "Assistant: Echo: world",
-    ],
-  });
-  yield* TestBrowser().expectStatusText({ text: "Say something" });
+  yield* Browser().open({});
+  yield* Browser().execute({ workflow: sendTwoMessagesDom });
+  yield* Browser().reload({});
+  yield* Browser().execute({ workflow: verifyTranscriptAfterReloadDom });
 }

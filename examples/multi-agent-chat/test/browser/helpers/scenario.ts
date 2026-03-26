@@ -8,14 +8,22 @@ import { implementAgent } from "@tisyn/agent";
 import { execute } from "@tisyn/runtime";
 import { InMemoryStream } from "@tisyn/durable-streams";
 import { Call } from "@tisyn/ir";
-import type { TisynFn } from "@tisyn/ir";
+import type { TisynFn, Val } from "@tisyn/ir";
 import { chromium } from "playwright";
 
-import { TestHost, TestBrowser } from "../workflows.generated.js";
+import { Host, Browser } from "../host-workflows.generated.js";
+import { workflows as domWorkflows } from "../dom-workflows.generated.js";
 import { useProxy } from "./proxy.js";
 import { whenReady } from "./when-ready.js";
-import { startHost, createHostAgentHandlers, type HostAgentState } from "./host-agent.js";
-import { createBrowserAgentHandlers, type BrowserAgentState } from "./browser-agent.js";
+import {
+  startHost,
+  createHostAgentHandlers,
+  type HostAgentState,
+} from "./host-agent.js";
+import {
+  createBrowserAgentHandlers,
+  type BrowserAgentState,
+} from "./browser-agent.js";
 
 const PROJECT_ROOT = fileURLToPath(new URL("../../..", import.meta.url));
 const BROWSER_DIST = join(PROJECT_ROOT, "browser", "dist");
@@ -25,7 +33,9 @@ export function runScenario(
 ): Operation<void> {
   return resource(function* (provide) {
     // 1. Temp dir for journal
-    const tempDir = yield* call(() => mkdtemp(join(tmpdir(), "tisyn-test-")));
+    const tempDir = yield* call(() =>
+      mkdtemp(join(tmpdir(), "tisyn-test-")),
+    );
     const journalPath = join(tempDir, "journal.ndjson");
 
     try {
@@ -62,15 +72,25 @@ export function runScenario(
         };
 
         // 7. Install agents
-        const hostImpl = implementAgent(TestHost(), createHostAgentHandlers(hostAgentState));
+        const hostImpl = implementAgent(
+          Host(),
+          createHostAgentHandlers(hostAgentState),
+        );
         yield* hostImpl.install();
 
-        const browserImpl = implementAgent(TestBrowser(), createBrowserAgentHandlers(browserAgentState));
+        const browserImpl = implementAgent(
+          Browser(),
+          createBrowserAgentHandlers(browserAgentState),
+        );
         yield* browserImpl.install();
 
-        // 8. Execute test workflow
+        // 8. Execute test workflow with dom workflow IR in env
         const stream = new InMemoryStream();
-        const { result } = yield* execute({ ir: Call(workflow), stream });
+        const { result } = yield* execute({
+          ir: Call(workflow),
+          env: domWorkflows as unknown as Record<string, Val>,
+          stream,
+        });
 
         if (result.status === "err") {
           throw result.error;
