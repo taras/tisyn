@@ -8,7 +8,7 @@ import { spawn, withResolvers } from "effection";
 import { implementAgent } from "@tisyn/agent";
 import { execute } from "@tisyn/runtime";
 import { Call } from "@tisyn/ir";
-import { Browser, Llm, State, chat } from "../src/workflow.generated.js";
+import { App, Llm, State, chat } from "../src/workflow.generated.js";
 
 describe("Compiled workflow", () => {
   it("runs the chat loop: elicit → sample → display, with history accumulation", function* () {
@@ -35,7 +35,7 @@ describe("Compiled workflow", () => {
     const done = withResolvers<void>();
 
     // Install local Browser agent
-    const browserImpl = implementAgent(Browser(), {
+    const browserImpl = implementAgent(App(), {
       *waitForUser(args) {
         waitForUserCalls.push(args);
         if (userMessageIndex >= userMessages.length) {

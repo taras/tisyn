@@ -1,6 +1,6 @@
 import type { Workflow } from "@tisyn/agent";
 
-declare function Browser(): {
+declare function App(): {
   waitForUser(input: { prompt: string }): Workflow<{ message: string }>;
   showAssistantMessage(input: { message: string }): Workflow<void>;
   hydrateTranscript(input: { messages: Array<{ role: string; content: string }> }): Workflow<void>;
@@ -21,7 +21,7 @@ declare function State(): {
 
 export function* chat() {
   while (true) {
-    const user = yield* Browser().waitForUser({ prompt: "Say something" });
+    const user = yield* App().waitForUser({ prompt: "Say something" });
     const history = yield* State().getHistory({ placeholder: "" });
     const assistant = yield* Llm().sample({
       history: history,
@@ -31,6 +31,6 @@ export function* chat() {
       userMessage: user.message,
       assistantMessage: assistant.message,
     });
-    yield* Browser().showAssistantMessage({ message: assistant.message });
+    yield* App().showAssistantMessage({ message: assistant.message });
   }
 }

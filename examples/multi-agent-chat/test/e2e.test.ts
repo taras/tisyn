@@ -13,7 +13,7 @@ import { implementAgent } from "@tisyn/agent";
 import { execute } from "@tisyn/runtime";
 import { installRemoteAgent, workerTransport } from "@tisyn/transport";
 import { Call } from "@tisyn/ir";
-import { Browser, Llm, State, chat } from "../src/workflow.generated.js";
+import { App, Llm, State, chat } from "../src/workflow.generated.js";
 import { BrowserSessionManager } from "../src/browser-session.js";
 import type { HostToBrowser } from "../src/browser-session.js";
 
@@ -71,7 +71,7 @@ describe("End-to-end chat", () => {
     session.attach("e2e-test", serverWs);
 
     // Browser agent — local, backed by session manager
-    const browserImpl = implementAgent(Browser(), {
+    const browserImpl = implementAgent(App(), {
       *waitForUser({ input }) {
         return yield* session.waitForUser(input.prompt);
       },

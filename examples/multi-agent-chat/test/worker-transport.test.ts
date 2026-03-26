@@ -9,7 +9,7 @@ import { implementAgent } from "@tisyn/agent";
 import { execute } from "@tisyn/runtime";
 import { installRemoteAgent, workerTransport } from "@tisyn/transport";
 import { Call } from "@tisyn/ir";
-import { Browser, Llm, State, chat } from "../src/workflow.generated.js";
+import { App, Llm, State, chat } from "../src/workflow.generated.js";
 
 describe("Worker transport", () => {
   it("routes LLM.sample through a real worker thread", function* () {
@@ -20,7 +20,7 @@ describe("Worker transport", () => {
     const done = withResolvers<void>();
 
     // Install local Browser agent
-    const browserImpl = implementAgent(Browser(), {
+    const browserImpl = implementAgent(App(), {
       *waitForUser(args) {
         if (userMessageIndex >= userMessages.length) {
           done.resolve();

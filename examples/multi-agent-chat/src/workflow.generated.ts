@@ -4,8 +4,8 @@ import type { DeclaredAgent, OperationSpec } from "@tisyn/agent";
 import type { TisynFn } from "@tisyn/ir";
 import { Fn, Ref, Eval, Let, While, Get, Construct } from "@tisyn/ir";
 
-export function Browser(): DeclaredAgent<{ waitForUser: OperationSpec<{ input: { prompt: string } }, { message: string }>; showAssistantMessage: OperationSpec<{ input: { message: string } }, void>; hydrateTranscript: OperationSpec<{ input: { messages: Array<{ role: string; content: string }> } }, void>; setReadOnly: OperationSpec<{ input: { reason: string } }, void> }> {
-  const id = "browser";
+export function App(): DeclaredAgent<{ waitForUser: OperationSpec<{ input: { prompt: string } }, { message: string }>; showAssistantMessage: OperationSpec<{ input: { message: string } }, void>; hydrateTranscript: OperationSpec<{ input: { messages: Array<{ role: string; content: string }> } }, void>; setReadOnly: OperationSpec<{ input: { reason: string } }, void> }> {
+  const id = "app";
   return agent(id, {
     waitForUser: operation<{ input: { prompt: string } }, { message: string }>(),
     showAssistantMessage: operation<{ input: { message: string } }, void>(),
@@ -40,7 +40,7 @@ export const chat: TisynFn<[], unknown> =
     While(true, [
       Let(
         "user",
-        Eval("browser.waitForUser",
+        Eval("app.waitForUser",
           Construct({
             input: Construct({
                 prompt: "Say something"
@@ -81,7 +81,7 @@ export const chat: TisynFn<[], unknown> =
                         )
                     })
                 })),
-              Eval("browser.showAssistantMessage",
+              Eval("app.showAssistantMessage",
                 Construct({
                   input: Construct({
                       message: Get(
@@ -96,5 +96,5 @@ export const chat: TisynFn<[], unknown> =
       )
     ]));
 
-export const agents = { Browser, Llm, State };
+export const agents = { App, Llm, State };
 export const workflows = { chat };

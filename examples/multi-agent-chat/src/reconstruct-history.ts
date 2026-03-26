@@ -1,7 +1,7 @@
 /**
  * Reconstruct chat history from durable journal events.
  *
- * Scans yield events for browser.waitForUser (user message) and
+ * Scans yield events for app.waitForUser (user message) and
  * llm.sample (assistant message) pairs. Only complete pairs are
  * included; trailing unmatched events are ignored.
  */
@@ -21,7 +21,7 @@ export function reconstructHistory(
     const { type, name } = event.description;
     const value = event.result.value as Record<string, unknown> | null;
 
-    if (type === "browser" && name === "waitForUser" && value) {
+    if (type === "app" && name === "waitForUser" && value) {
       pendingUserMessage = value.message as string;
     } else if (type === "llm" && name === "sample" && value && pendingUserMessage !== null) {
       history.push(
