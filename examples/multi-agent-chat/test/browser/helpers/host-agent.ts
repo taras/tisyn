@@ -34,7 +34,7 @@ export function* startHost(cwd: string, journalPath: string): Operation<HostHand
       arguments: ["dist/host.js", "--port", "0", "--journal", journalPath],
       cwd,
       env: {
-        ...process.env as Record<string, string>,
+        ...(process.env as Record<string, string>),
         NODE_NO_WARNINGS: "1",
       },
     });
@@ -74,15 +74,11 @@ export function* startHost(cwd: string, journalPath: string): Operation<HostHand
         }
         next = yield* subscription.next();
       }
-      throw new Error(
-        `Host stdout closed before TISYN_HOST_READY${formatDiagnostics()}`,
-      );
+      throw new Error(`Host stdout closed before TISYN_HOST_READY${formatDiagnostics()}`);
     })(),
     (function* (): Operation<string> {
       yield* sleep(15000);
-      throw new Error(
-        `Host did not print TISYN_HOST_READY within 15s${formatDiagnostics()}`,
-      );
+      throw new Error(`Host did not print TISYN_HOST_READY within 15s${formatDiagnostics()}`);
     })(),
   ]);
 

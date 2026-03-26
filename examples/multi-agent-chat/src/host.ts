@@ -186,7 +186,9 @@ await main(function* () {
 
 // --- Helpers ---
 
-function waitForFirstMessage(ws: import("ws").WebSocket): import("effection").Operation<BrowserToHost> {
+function waitForFirstMessage(
+  ws: import("ws").WebSocket,
+): import("effection").Operation<BrowserToHost> {
   const { operation, resolve } = withResolvers<BrowserToHost>();
   const handler = (data: import("ws").RawData) => {
     ws.off("message", handler);

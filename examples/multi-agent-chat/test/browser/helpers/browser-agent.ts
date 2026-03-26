@@ -23,18 +23,12 @@ function activePage(state: BrowserAgentState): Page {
 
 async function injectExecutor(page: Page): Promise<void> {
   await page.addScriptTag({ path: EXECUTOR_BUNDLE_PATH });
-  await page.waitForFunction(
-    () => typeof (window as any).__tisyn_execute === "function",
-  );
+  await page.waitForFunction(() => typeof (window as any).__tisyn_execute === "function");
 }
 
-type BrowserHandlers = ImplementationHandlers<
-  ReturnType<typeof BrowserDecl>["operations"]
->;
+type BrowserHandlers = ImplementationHandlers<ReturnType<typeof BrowserDecl>["operations"]>;
 
-export function createBrowserAgentHandlers(
-  state: BrowserAgentState,
-): BrowserHandlers {
+export function createBrowserAgentHandlers(state: BrowserAgentState): BrowserHandlers {
   return {
     *open() {
       const page = activePage(state);
@@ -74,10 +68,7 @@ export function createBrowserAgentHandlers(
     *execute({ input }) {
       const page = activePage(state);
       const result: any = yield* call(() =>
-        page.evaluate(
-          (ir) => (window as any).__tisyn_execute(ir),
-          input.workflow as unknown,
-        ),
+        page.evaluate((ir) => (window as any).__tisyn_execute(ir), input.workflow as unknown),
       );
       if (result.status === "err") {
         throw new Error(result.error?.message ?? "Browser workflow failed");

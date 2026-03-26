@@ -3,7 +3,17 @@ import { agent, operation } from "@tisyn/agent";
 import type { DeclaredAgent, OperationSpec } from "@tisyn/agent";
 import type { TisynFn } from "@tisyn/ir";
 
-export function Dom(): DeclaredAgent<{ fill: OperationSpec<{ input: { name: string; value: string } }, void>; click: OperationSpec<{ input: { role: string; name: string } }, void>; pressKey: OperationSpec<{ input: { key: string } }, void>; expectVisible: OperationSpec<{ input: { text: string } }, void>; expectNotVisible: OperationSpec<{ input: { text: string } }, void>; expectDisabled: OperationSpec<{ input: { role: string; name: string } }, void>; expectEnabled: OperationSpec<{ input: { role: string; name: string } }, void>; expectTranscript: OperationSpec<{ input: { messages: string[] } }, void>; expectStatusText: OperationSpec<{ input: { text: string } }, void> }> {
+export function Dom(): DeclaredAgent<{
+  fill: OperationSpec<{ input: { name: string; value: string } }, void>;
+  click: OperationSpec<{ input: { role: string; name: string } }, void>;
+  pressKey: OperationSpec<{ input: { key: string } }, void>;
+  expectVisible: OperationSpec<{ input: { text: string } }, void>;
+  expectNotVisible: OperationSpec<{ input: { text: string } }, void>;
+  expectDisabled: OperationSpec<{ input: { role: string; name: string } }, void>;
+  expectEnabled: OperationSpec<{ input: { role: string; name: string } }, void>;
+  expectTranscript: OperationSpec<{ input: { messages: string[] } }, void>;
+  expectStatusText: OperationSpec<{ input: { text: string } }, void>;
+}> {
   const id = "dom";
   return agent(id, {
     fill: operation<{ input: { name: string; value: string } }, void>(),
@@ -71,178 +81,175 @@ export function Dom(): DeclaredAgent<{ fill: OperationSpec<{ input: { name: stri
  *   ))
  */
 export const basicSendReceiveDom: TisynFn<[], unknown> = {
-    "tisyn": "fn",
-    "params": [],
-    "body": {
-      "tisyn": "eval",
-      "id": "let",
-      "data": {
-        "tisyn": "quote",
-        "expr": {
-          "name": "__discard_0",
-          "value": {
-            "tisyn": "eval",
-            "id": "dom.expectStatusText",
-            "data": {
-              "tisyn": "eval",
-              "id": "construct",
-              "data": {
-                "tisyn": "quote",
-                "expr": {
-                  "input": {
-                    "tisyn": "eval",
-                    "id": "construct",
-                    "data": {
-                      "tisyn": "quote",
-                      "expr": {
-                        "text": "Say something"
-                      }
-                    }
-                  }
-                }
-              }
-            }
-          },
-          "body": {
-            "tisyn": "eval",
-            "id": "let",
-            "data": {
-              "tisyn": "quote",
-              "expr": {
-                "name": "__discard_1",
-                "value": {
-                  "tisyn": "eval",
-                  "id": "dom.fill",
-                  "data": {
-                    "tisyn": "eval",
-                    "id": "construct",
-                    "data": {
-                      "tisyn": "quote",
-                      "expr": {
-                        "input": {
-                          "tisyn": "eval",
-                          "id": "construct",
-                          "data": {
-                            "tisyn": "quote",
-                            "expr": {
-                              "name": "Message",
-                              "value": "hello"
-                            }
-                          }
-                        }
-                      }
-                    }
-                  }
+  tisyn: "fn",
+  params: [],
+  body: {
+    tisyn: "eval",
+    id: "let",
+    data: {
+      tisyn: "quote",
+      expr: {
+        name: "__discard_0",
+        value: {
+          tisyn: "eval",
+          id: "dom.expectStatusText",
+          data: {
+            tisyn: "eval",
+            id: "construct",
+            data: {
+              tisyn: "quote",
+              expr: {
+                input: {
+                  tisyn: "eval",
+                  id: "construct",
+                  data: {
+                    tisyn: "quote",
+                    expr: {
+                      text: "Say something",
+                    },
+                  },
                 },
-                "body": {
-                  "tisyn": "eval",
-                  "id": "let",
-                  "data": {
-                    "tisyn": "quote",
-                    "expr": {
-                      "name": "__discard_2",
-                      "value": {
-                        "tisyn": "eval",
-                        "id": "dom.click",
-                        "data": {
-                          "tisyn": "eval",
-                          "id": "construct",
-                          "data": {
-                            "tisyn": "quote",
-                            "expr": {
-                              "input": {
-                                "tisyn": "eval",
-                                "id": "construct",
-                                "data": {
-                                  "tisyn": "quote",
-                                  "expr": {
-                                    "role": "button",
-                                    "name": "Send"
-                                  }
-                                }
-                              }
-                            }
-                          }
-                        }
+              },
+            },
+          },
+        },
+        body: {
+          tisyn: "eval",
+          id: "let",
+          data: {
+            tisyn: "quote",
+            expr: {
+              name: "__discard_1",
+              value: {
+                tisyn: "eval",
+                id: "dom.fill",
+                data: {
+                  tisyn: "eval",
+                  id: "construct",
+                  data: {
+                    tisyn: "quote",
+                    expr: {
+                      input: {
+                        tisyn: "eval",
+                        id: "construct",
+                        data: {
+                          tisyn: "quote",
+                          expr: {
+                            name: "Message",
+                            value: "hello",
+                          },
+                        },
                       },
-                      "body": {
-                        "tisyn": "eval",
-                        "id": "let",
-                        "data": {
-                          "tisyn": "quote",
-                          "expr": {
-                            "name": "__discard_3",
-                            "value": {
-                              "tisyn": "eval",
-                              "id": "dom.expectVisible",
-                              "data": {
-                                "tisyn": "eval",
-                                "id": "construct",
-                                "data": {
-                                  "tisyn": "quote",
-                                  "expr": {
-                                    "input": {
-                                      "tisyn": "eval",
-                                      "id": "construct",
-                                      "data": {
-                                        "tisyn": "quote",
-                                        "expr": {
-                                          "text": "Assistant: Echo: hello"
-                                        }
-                                      }
-                                    }
-                                  }
-                                }
-                              }
+                    },
+                  },
+                },
+              },
+              body: {
+                tisyn: "eval",
+                id: "let",
+                data: {
+                  tisyn: "quote",
+                  expr: {
+                    name: "__discard_2",
+                    value: {
+                      tisyn: "eval",
+                      id: "dom.click",
+                      data: {
+                        tisyn: "eval",
+                        id: "construct",
+                        data: {
+                          tisyn: "quote",
+                          expr: {
+                            input: {
+                              tisyn: "eval",
+                              id: "construct",
+                              data: {
+                                tisyn: "quote",
+                                expr: {
+                                  role: "button",
+                                  name: "Send",
+                                },
+                              },
                             },
-                            "body": {
-                              "tisyn": "eval",
-                              "id": "dom.expectTranscript",
-                              "data": {
-                                "tisyn": "eval",
-                                "id": "construct",
-                                "data": {
-                                  "tisyn": "quote",
-                                  "expr": {
-                                    "input": {
-                                      "tisyn": "eval",
-                                      "id": "construct",
-                                      "data": {
-                                        "tisyn": "quote",
-                                        "expr": {
-                                          "messages": {
-                                            "tisyn": "eval",
-                                            "id": "array",
-                                            "data": {
-                                              "tisyn": "quote",
-                                              "expr": {
-                                                "items": [
-                                                  "You: hello",
-                                                  "Assistant: Echo: hello"
-                                                ]
-                                              }
-                                            }
-                                          }
-                                        }
-                                      }
-                                    }
-                                  }
-                                }
-                              }
-                            }
-                          }
-                        }
-                      }
-                    }
-                  }
-                }
-              }
-            }
-          }
-        }
-      }
-    }
-  } as const;
+                          },
+                        },
+                      },
+                    },
+                    body: {
+                      tisyn: "eval",
+                      id: "let",
+                      data: {
+                        tisyn: "quote",
+                        expr: {
+                          name: "__discard_3",
+                          value: {
+                            tisyn: "eval",
+                            id: "dom.expectVisible",
+                            data: {
+                              tisyn: "eval",
+                              id: "construct",
+                              data: {
+                                tisyn: "quote",
+                                expr: {
+                                  input: {
+                                    tisyn: "eval",
+                                    id: "construct",
+                                    data: {
+                                      tisyn: "quote",
+                                      expr: {
+                                        text: "Assistant: Echo: hello",
+                                      },
+                                    },
+                                  },
+                                },
+                              },
+                            },
+                          },
+                          body: {
+                            tisyn: "eval",
+                            id: "dom.expectTranscript",
+                            data: {
+                              tisyn: "eval",
+                              id: "construct",
+                              data: {
+                                tisyn: "quote",
+                                expr: {
+                                  input: {
+                                    tisyn: "eval",
+                                    id: "construct",
+                                    data: {
+                                      tisyn: "quote",
+                                      expr: {
+                                        messages: {
+                                          tisyn: "eval",
+                                          id: "array",
+                                          data: {
+                                            tisyn: "quote",
+                                            expr: {
+                                              items: ["You: hello", "Assistant: Echo: hello"],
+                                            },
+                                          },
+                                        },
+                                      },
+                                    },
+                                  },
+                                },
+                              },
+                            },
+                          },
+                        },
+                      },
+                    },
+                  },
+                },
+              },
+            },
+          },
+        },
+      },
+    },
+  },
+} as const;
 
 /**
  * Printed Tisyn IR:
@@ -256,32 +263,32 @@ export const basicSendReceiveDom: TisynFn<[], unknown> = {
  *     })))
  */
 export const expectDisconnectedDom: TisynFn<[], unknown> = {
-    "tisyn": "fn",
-    "params": [],
-    "body": {
-      "tisyn": "eval",
-      "id": "dom.expectStatusText",
-      "data": {
-        "tisyn": "eval",
-        "id": "construct",
-        "data": {
-          "tisyn": "quote",
-          "expr": {
-            "input": {
-              "tisyn": "eval",
-              "id": "construct",
-              "data": {
-                "tisyn": "quote",
-                "expr": {
-                  "text": "Disconnected"
-                }
-              }
-            }
-          }
-        }
-      }
-    }
-  } as const;
+  tisyn: "fn",
+  params: [],
+  body: {
+    tisyn: "eval",
+    id: "dom.expectStatusText",
+    data: {
+      tisyn: "eval",
+      id: "construct",
+      data: {
+        tisyn: "quote",
+        expr: {
+          input: {
+            tisyn: "eval",
+            id: "construct",
+            data: {
+              tisyn: "quote",
+              expr: {
+                text: "Disconnected",
+              },
+            },
+          },
+        },
+      },
+    },
+  },
+} as const;
 
 /**
  * Printed Tisyn IR:
@@ -324,133 +331,133 @@ export const expectDisconnectedDom: TisynFn<[], unknown> = {
  *   ))
  */
 export const sendBeforeRestartDom: TisynFn<[], unknown> = {
-    "tisyn": "fn",
-    "params": [],
-    "body": {
-      "tisyn": "eval",
-      "id": "let",
-      "data": {
-        "tisyn": "quote",
-        "expr": {
-          "name": "__discard_0",
-          "value": {
-            "tisyn": "eval",
-            "id": "dom.expectStatusText",
-            "data": {
-              "tisyn": "eval",
-              "id": "construct",
-              "data": {
-                "tisyn": "quote",
-                "expr": {
-                  "input": {
-                    "tisyn": "eval",
-                    "id": "construct",
-                    "data": {
-                      "tisyn": "quote",
-                      "expr": {
-                        "text": "Say something"
-                      }
-                    }
-                  }
-                }
-              }
-            }
-          },
-          "body": {
-            "tisyn": "eval",
-            "id": "let",
-            "data": {
-              "tisyn": "quote",
-              "expr": {
-                "name": "__discard_1",
-                "value": {
-                  "tisyn": "eval",
-                  "id": "dom.fill",
-                  "data": {
-                    "tisyn": "eval",
-                    "id": "construct",
-                    "data": {
-                      "tisyn": "quote",
-                      "expr": {
-                        "input": {
-                          "tisyn": "eval",
-                          "id": "construct",
-                          "data": {
-                            "tisyn": "quote",
-                            "expr": {
-                              "name": "Message",
-                              "value": "before restart"
-                            }
-                          }
-                        }
-                      }
-                    }
-                  }
+  tisyn: "fn",
+  params: [],
+  body: {
+    tisyn: "eval",
+    id: "let",
+    data: {
+      tisyn: "quote",
+      expr: {
+        name: "__discard_0",
+        value: {
+          tisyn: "eval",
+          id: "dom.expectStatusText",
+          data: {
+            tisyn: "eval",
+            id: "construct",
+            data: {
+              tisyn: "quote",
+              expr: {
+                input: {
+                  tisyn: "eval",
+                  id: "construct",
+                  data: {
+                    tisyn: "quote",
+                    expr: {
+                      text: "Say something",
+                    },
+                  },
                 },
-                "body": {
-                  "tisyn": "eval",
-                  "id": "let",
-                  "data": {
-                    "tisyn": "quote",
-                    "expr": {
-                      "name": "__discard_2",
-                      "value": {
-                        "tisyn": "eval",
-                        "id": "dom.click",
-                        "data": {
-                          "tisyn": "eval",
-                          "id": "construct",
-                          "data": {
-                            "tisyn": "quote",
-                            "expr": {
-                              "input": {
-                                "tisyn": "eval",
-                                "id": "construct",
-                                "data": {
-                                  "tisyn": "quote",
-                                  "expr": {
-                                    "role": "button",
-                                    "name": "Send"
-                                  }
-                                }
-                              }
-                            }
-                          }
-                        }
+              },
+            },
+          },
+        },
+        body: {
+          tisyn: "eval",
+          id: "let",
+          data: {
+            tisyn: "quote",
+            expr: {
+              name: "__discard_1",
+              value: {
+                tisyn: "eval",
+                id: "dom.fill",
+                data: {
+                  tisyn: "eval",
+                  id: "construct",
+                  data: {
+                    tisyn: "quote",
+                    expr: {
+                      input: {
+                        tisyn: "eval",
+                        id: "construct",
+                        data: {
+                          tisyn: "quote",
+                          expr: {
+                            name: "Message",
+                            value: "before restart",
+                          },
+                        },
                       },
-                      "body": {
-                        "tisyn": "eval",
-                        "id": "dom.expectVisible",
-                        "data": {
-                          "tisyn": "eval",
-                          "id": "construct",
-                          "data": {
-                            "tisyn": "quote",
-                            "expr": {
-                              "input": {
-                                "tisyn": "eval",
-                                "id": "construct",
-                                "data": {
-                                  "tisyn": "quote",
-                                  "expr": {
-                                    "text": "Assistant: Echo: before restart"
-                                  }
-                                }
-                              }
-                            }
-                          }
-                        }
-                      }
-                    }
-                  }
-                }
-              }
-            }
-          }
-        }
-      }
-    }
-  } as const;
+                    },
+                  },
+                },
+              },
+              body: {
+                tisyn: "eval",
+                id: "let",
+                data: {
+                  tisyn: "quote",
+                  expr: {
+                    name: "__discard_2",
+                    value: {
+                      tisyn: "eval",
+                      id: "dom.click",
+                      data: {
+                        tisyn: "eval",
+                        id: "construct",
+                        data: {
+                          tisyn: "quote",
+                          expr: {
+                            input: {
+                              tisyn: "eval",
+                              id: "construct",
+                              data: {
+                                tisyn: "quote",
+                                expr: {
+                                  role: "button",
+                                  name: "Send",
+                                },
+                              },
+                            },
+                          },
+                        },
+                      },
+                    },
+                    body: {
+                      tisyn: "eval",
+                      id: "dom.expectVisible",
+                      data: {
+                        tisyn: "eval",
+                        id: "construct",
+                        data: {
+                          tisyn: "quote",
+                          expr: {
+                            input: {
+                              tisyn: "eval",
+                              id: "construct",
+                              data: {
+                                tisyn: "quote",
+                                expr: {
+                                  text: "Assistant: Echo: before restart",
+                                },
+                              },
+                            },
+                          },
+                        },
+                      },
+                    },
+                  },
+                },
+              },
+            },
+          },
+        },
+      },
+    },
+  },
+} as const;
 
 /**
  * Printed Tisyn IR:
@@ -493,133 +500,133 @@ export const sendBeforeRestartDom: TisynFn<[], unknown> = {
  *   ))
  */
 export const sendFirstMessageDom: TisynFn<[], unknown> = {
-    "tisyn": "fn",
-    "params": [],
-    "body": {
-      "tisyn": "eval",
-      "id": "let",
-      "data": {
-        "tisyn": "quote",
-        "expr": {
-          "name": "__discard_0",
-          "value": {
-            "tisyn": "eval",
-            "id": "dom.expectStatusText",
-            "data": {
-              "tisyn": "eval",
-              "id": "construct",
-              "data": {
-                "tisyn": "quote",
-                "expr": {
-                  "input": {
-                    "tisyn": "eval",
-                    "id": "construct",
-                    "data": {
-                      "tisyn": "quote",
-                      "expr": {
-                        "text": "Say something"
-                      }
-                    }
-                  }
-                }
-              }
-            }
-          },
-          "body": {
-            "tisyn": "eval",
-            "id": "let",
-            "data": {
-              "tisyn": "quote",
-              "expr": {
-                "name": "__discard_1",
-                "value": {
-                  "tisyn": "eval",
-                  "id": "dom.fill",
-                  "data": {
-                    "tisyn": "eval",
-                    "id": "construct",
-                    "data": {
-                      "tisyn": "quote",
-                      "expr": {
-                        "input": {
-                          "tisyn": "eval",
-                          "id": "construct",
-                          "data": {
-                            "tisyn": "quote",
-                            "expr": {
-                              "name": "Message",
-                              "value": "hello"
-                            }
-                          }
-                        }
-                      }
-                    }
-                  }
+  tisyn: "fn",
+  params: [],
+  body: {
+    tisyn: "eval",
+    id: "let",
+    data: {
+      tisyn: "quote",
+      expr: {
+        name: "__discard_0",
+        value: {
+          tisyn: "eval",
+          id: "dom.expectStatusText",
+          data: {
+            tisyn: "eval",
+            id: "construct",
+            data: {
+              tisyn: "quote",
+              expr: {
+                input: {
+                  tisyn: "eval",
+                  id: "construct",
+                  data: {
+                    tisyn: "quote",
+                    expr: {
+                      text: "Say something",
+                    },
+                  },
                 },
-                "body": {
-                  "tisyn": "eval",
-                  "id": "let",
-                  "data": {
-                    "tisyn": "quote",
-                    "expr": {
-                      "name": "__discard_2",
-                      "value": {
-                        "tisyn": "eval",
-                        "id": "dom.click",
-                        "data": {
-                          "tisyn": "eval",
-                          "id": "construct",
-                          "data": {
-                            "tisyn": "quote",
-                            "expr": {
-                              "input": {
-                                "tisyn": "eval",
-                                "id": "construct",
-                                "data": {
-                                  "tisyn": "quote",
-                                  "expr": {
-                                    "role": "button",
-                                    "name": "Send"
-                                  }
-                                }
-                              }
-                            }
-                          }
-                        }
+              },
+            },
+          },
+        },
+        body: {
+          tisyn: "eval",
+          id: "let",
+          data: {
+            tisyn: "quote",
+            expr: {
+              name: "__discard_1",
+              value: {
+                tisyn: "eval",
+                id: "dom.fill",
+                data: {
+                  tisyn: "eval",
+                  id: "construct",
+                  data: {
+                    tisyn: "quote",
+                    expr: {
+                      input: {
+                        tisyn: "eval",
+                        id: "construct",
+                        data: {
+                          tisyn: "quote",
+                          expr: {
+                            name: "Message",
+                            value: "hello",
+                          },
+                        },
                       },
-                      "body": {
-                        "tisyn": "eval",
-                        "id": "dom.expectVisible",
-                        "data": {
-                          "tisyn": "eval",
-                          "id": "construct",
-                          "data": {
-                            "tisyn": "quote",
-                            "expr": {
-                              "input": {
-                                "tisyn": "eval",
-                                "id": "construct",
-                                "data": {
-                                  "tisyn": "quote",
-                                  "expr": {
-                                    "text": "Assistant: Echo: hello"
-                                  }
-                                }
-                              }
-                            }
-                          }
-                        }
-                      }
-                    }
-                  }
-                }
-              }
-            }
-          }
-        }
-      }
-    }
-  } as const;
+                    },
+                  },
+                },
+              },
+              body: {
+                tisyn: "eval",
+                id: "let",
+                data: {
+                  tisyn: "quote",
+                  expr: {
+                    name: "__discard_2",
+                    value: {
+                      tisyn: "eval",
+                      id: "dom.click",
+                      data: {
+                        tisyn: "eval",
+                        id: "construct",
+                        data: {
+                          tisyn: "quote",
+                          expr: {
+                            input: {
+                              tisyn: "eval",
+                              id: "construct",
+                              data: {
+                                tisyn: "quote",
+                                expr: {
+                                  role: "button",
+                                  name: "Send",
+                                },
+                              },
+                            },
+                          },
+                        },
+                      },
+                    },
+                    body: {
+                      tisyn: "eval",
+                      id: "dom.expectVisible",
+                      data: {
+                        tisyn: "eval",
+                        id: "construct",
+                        data: {
+                          tisyn: "quote",
+                          expr: {
+                            input: {
+                              tisyn: "eval",
+                              id: "construct",
+                              data: {
+                                tisyn: "quote",
+                                expr: {
+                                  text: "Assistant: Echo: hello",
+                                },
+                              },
+                            },
+                          },
+                        },
+                      },
+                    },
+                  },
+                },
+              },
+            },
+          },
+        },
+      },
+    },
+  },
+} as const;
 
 /**
  * Printed Tisyn IR:
@@ -691,234 +698,234 @@ export const sendFirstMessageDom: TisynFn<[], unknown> = {
  *   ))
  */
 export const sendTwoMessagesDom: TisynFn<[], unknown> = {
-    "tisyn": "fn",
-    "params": [],
-    "body": {
-      "tisyn": "eval",
-      "id": "let",
-      "data": {
-        "tisyn": "quote",
-        "expr": {
-          "name": "__discard_0",
-          "value": {
-            "tisyn": "eval",
-            "id": "dom.expectStatusText",
-            "data": {
-              "tisyn": "eval",
-              "id": "construct",
-              "data": {
-                "tisyn": "quote",
-                "expr": {
-                  "input": {
-                    "tisyn": "eval",
-                    "id": "construct",
-                    "data": {
-                      "tisyn": "quote",
-                      "expr": {
-                        "text": "Say something"
-                      }
-                    }
-                  }
-                }
-              }
-            }
-          },
-          "body": {
-            "tisyn": "eval",
-            "id": "let",
-            "data": {
-              "tisyn": "quote",
-              "expr": {
-                "name": "__discard_1",
-                "value": {
-                  "tisyn": "eval",
-                  "id": "dom.fill",
-                  "data": {
-                    "tisyn": "eval",
-                    "id": "construct",
-                    "data": {
-                      "tisyn": "quote",
-                      "expr": {
-                        "input": {
-                          "tisyn": "eval",
-                          "id": "construct",
-                          "data": {
-                            "tisyn": "quote",
-                            "expr": {
-                              "name": "Message",
-                              "value": "hello"
-                            }
-                          }
-                        }
-                      }
-                    }
-                  }
+  tisyn: "fn",
+  params: [],
+  body: {
+    tisyn: "eval",
+    id: "let",
+    data: {
+      tisyn: "quote",
+      expr: {
+        name: "__discard_0",
+        value: {
+          tisyn: "eval",
+          id: "dom.expectStatusText",
+          data: {
+            tisyn: "eval",
+            id: "construct",
+            data: {
+              tisyn: "quote",
+              expr: {
+                input: {
+                  tisyn: "eval",
+                  id: "construct",
+                  data: {
+                    tisyn: "quote",
+                    expr: {
+                      text: "Say something",
+                    },
+                  },
                 },
-                "body": {
-                  "tisyn": "eval",
-                  "id": "let",
-                  "data": {
-                    "tisyn": "quote",
-                    "expr": {
-                      "name": "__discard_2",
-                      "value": {
-                        "tisyn": "eval",
-                        "id": "dom.click",
-                        "data": {
-                          "tisyn": "eval",
-                          "id": "construct",
-                          "data": {
-                            "tisyn": "quote",
-                            "expr": {
-                              "input": {
-                                "tisyn": "eval",
-                                "id": "construct",
-                                "data": {
-                                  "tisyn": "quote",
-                                  "expr": {
-                                    "role": "button",
-                                    "name": "Send"
-                                  }
-                                }
-                              }
-                            }
-                          }
-                        }
+              },
+            },
+          },
+        },
+        body: {
+          tisyn: "eval",
+          id: "let",
+          data: {
+            tisyn: "quote",
+            expr: {
+              name: "__discard_1",
+              value: {
+                tisyn: "eval",
+                id: "dom.fill",
+                data: {
+                  tisyn: "eval",
+                  id: "construct",
+                  data: {
+                    tisyn: "quote",
+                    expr: {
+                      input: {
+                        tisyn: "eval",
+                        id: "construct",
+                        data: {
+                          tisyn: "quote",
+                          expr: {
+                            name: "Message",
+                            value: "hello",
+                          },
+                        },
                       },
-                      "body": {
-                        "tisyn": "eval",
-                        "id": "let",
-                        "data": {
-                          "tisyn": "quote",
-                          "expr": {
-                            "name": "__discard_3",
-                            "value": {
-                              "tisyn": "eval",
-                              "id": "dom.expectVisible",
-                              "data": {
-                                "tisyn": "eval",
-                                "id": "construct",
-                                "data": {
-                                  "tisyn": "quote",
-                                  "expr": {
-                                    "input": {
-                                      "tisyn": "eval",
-                                      "id": "construct",
-                                      "data": {
-                                        "tisyn": "quote",
-                                        "expr": {
-                                          "text": "Assistant: Echo: hello"
-                                        }
-                                      }
-                                    }
-                                  }
-                                }
-                              }
+                    },
+                  },
+                },
+              },
+              body: {
+                tisyn: "eval",
+                id: "let",
+                data: {
+                  tisyn: "quote",
+                  expr: {
+                    name: "__discard_2",
+                    value: {
+                      tisyn: "eval",
+                      id: "dom.click",
+                      data: {
+                        tisyn: "eval",
+                        id: "construct",
+                        data: {
+                          tisyn: "quote",
+                          expr: {
+                            input: {
+                              tisyn: "eval",
+                              id: "construct",
+                              data: {
+                                tisyn: "quote",
+                                expr: {
+                                  role: "button",
+                                  name: "Send",
+                                },
+                              },
                             },
-                            "body": {
-                              "tisyn": "eval",
-                              "id": "let",
-                              "data": {
-                                "tisyn": "quote",
-                                "expr": {
-                                  "name": "__discard_4",
-                                  "value": {
-                                    "tisyn": "eval",
-                                    "id": "dom.fill",
-                                    "data": {
-                                      "tisyn": "eval",
-                                      "id": "construct",
-                                      "data": {
-                                        "tisyn": "quote",
-                                        "expr": {
-                                          "input": {
-                                            "tisyn": "eval",
-                                            "id": "construct",
-                                            "data": {
-                                              "tisyn": "quote",
-                                              "expr": {
-                                                "name": "Message",
-                                                "value": "world"
-                                              }
-                                            }
-                                          }
-                                        }
-                                      }
-                                    }
+                          },
+                        },
+                      },
+                    },
+                    body: {
+                      tisyn: "eval",
+                      id: "let",
+                      data: {
+                        tisyn: "quote",
+                        expr: {
+                          name: "__discard_3",
+                          value: {
+                            tisyn: "eval",
+                            id: "dom.expectVisible",
+                            data: {
+                              tisyn: "eval",
+                              id: "construct",
+                              data: {
+                                tisyn: "quote",
+                                expr: {
+                                  input: {
+                                    tisyn: "eval",
+                                    id: "construct",
+                                    data: {
+                                      tisyn: "quote",
+                                      expr: {
+                                        text: "Assistant: Echo: hello",
+                                      },
+                                    },
                                   },
-                                  "body": {
-                                    "tisyn": "eval",
-                                    "id": "let",
-                                    "data": {
-                                      "tisyn": "quote",
-                                      "expr": {
-                                        "name": "__discard_5",
-                                        "value": {
-                                          "tisyn": "eval",
-                                          "id": "dom.click",
-                                          "data": {
-                                            "tisyn": "eval",
-                                            "id": "construct",
-                                            "data": {
-                                              "tisyn": "quote",
-                                              "expr": {
-                                                "input": {
-                                                  "tisyn": "eval",
-                                                  "id": "construct",
-                                                  "data": {
-                                                    "tisyn": "quote",
-                                                    "expr": {
-                                                      "role": "button",
-                                                      "name": "Send"
-                                                    }
-                                                  }
-                                                }
-                                              }
-                                            }
-                                          }
+                                },
+                              },
+                            },
+                          },
+                          body: {
+                            tisyn: "eval",
+                            id: "let",
+                            data: {
+                              tisyn: "quote",
+                              expr: {
+                                name: "__discard_4",
+                                value: {
+                                  tisyn: "eval",
+                                  id: "dom.fill",
+                                  data: {
+                                    tisyn: "eval",
+                                    id: "construct",
+                                    data: {
+                                      tisyn: "quote",
+                                      expr: {
+                                        input: {
+                                          tisyn: "eval",
+                                          id: "construct",
+                                          data: {
+                                            tisyn: "quote",
+                                            expr: {
+                                              name: "Message",
+                                              value: "world",
+                                            },
+                                          },
                                         },
-                                        "body": {
-                                          "tisyn": "eval",
-                                          "id": "dom.expectVisible",
-                                          "data": {
-                                            "tisyn": "eval",
-                                            "id": "construct",
-                                            "data": {
-                                              "tisyn": "quote",
-                                              "expr": {
-                                                "input": {
-                                                  "tisyn": "eval",
-                                                  "id": "construct",
-                                                  "data": {
-                                                    "tisyn": "quote",
-                                                    "expr": {
-                                                      "text": "Assistant: Echo: world"
-                                                    }
-                                                  }
-                                                }
-                                              }
-                                            }
-                                          }
-                                        }
-                                      }
-                                    }
-                                  }
-                                }
-                              }
-                            }
-                          }
-                        }
-                      }
-                    }
-                  }
-                }
-              }
-            }
-          }
-        }
-      }
-    }
-  } as const;
+                                      },
+                                    },
+                                  },
+                                },
+                                body: {
+                                  tisyn: "eval",
+                                  id: "let",
+                                  data: {
+                                    tisyn: "quote",
+                                    expr: {
+                                      name: "__discard_5",
+                                      value: {
+                                        tisyn: "eval",
+                                        id: "dom.click",
+                                        data: {
+                                          tisyn: "eval",
+                                          id: "construct",
+                                          data: {
+                                            tisyn: "quote",
+                                            expr: {
+                                              input: {
+                                                tisyn: "eval",
+                                                id: "construct",
+                                                data: {
+                                                  tisyn: "quote",
+                                                  expr: {
+                                                    role: "button",
+                                                    name: "Send",
+                                                  },
+                                                },
+                                              },
+                                            },
+                                          },
+                                        },
+                                      },
+                                      body: {
+                                        tisyn: "eval",
+                                        id: "dom.expectVisible",
+                                        data: {
+                                          tisyn: "eval",
+                                          id: "construct",
+                                          data: {
+                                            tisyn: "quote",
+                                            expr: {
+                                              input: {
+                                                tisyn: "eval",
+                                                id: "construct",
+                                                data: {
+                                                  tisyn: "quote",
+                                                  expr: {
+                                                    text: "Assistant: Echo: world",
+                                                  },
+                                                },
+                                              },
+                                            },
+                                          },
+                                        },
+                                      },
+                                    },
+                                  },
+                                },
+                              },
+                            },
+                          },
+                        },
+                      },
+                    },
+                  },
+                },
+              },
+            },
+          },
+        },
+      },
+    },
+  },
+} as const;
 
 /**
  * Printed Tisyn IR:
@@ -933,33 +940,33 @@ export const sendTwoMessagesDom: TisynFn<[], unknown> = {
  *     })))
  */
 export const verifyDefaultSessionEnabledDom: TisynFn<[], unknown> = {
-    "tisyn": "fn",
-    "params": [],
-    "body": {
-      "tisyn": "eval",
-      "id": "dom.expectEnabled",
-      "data": {
-        "tisyn": "eval",
-        "id": "construct",
-        "data": {
-          "tisyn": "quote",
-          "expr": {
-            "input": {
-              "tisyn": "eval",
-              "id": "construct",
-              "data": {
-                "tisyn": "quote",
-                "expr": {
-                  "role": "textbox",
-                  "name": "Message"
-                }
-              }
-            }
-          }
-        }
-      }
-    }
-  } as const;
+  tisyn: "fn",
+  params: [],
+  body: {
+    tisyn: "eval",
+    id: "dom.expectEnabled",
+    data: {
+      tisyn: "eval",
+      id: "construct",
+      data: {
+        tisyn: "quote",
+        expr: {
+          input: {
+            tisyn: "eval",
+            id: "construct",
+            data: {
+              tisyn: "quote",
+              expr: {
+                role: "textbox",
+                name: "Message",
+              },
+            },
+          },
+        },
+      },
+    },
+  },
+} as const;
 
 /**
  * Printed Tisyn IR:
@@ -1014,178 +1021,175 @@ export const verifyDefaultSessionEnabledDom: TisynFn<[], unknown> = {
  *   ))
  */
 export const verifyRestoredAndSendAfterRestartDom: TisynFn<[], unknown> = {
-    "tisyn": "fn",
-    "params": [],
-    "body": {
-      "tisyn": "eval",
-      "id": "let",
-      "data": {
-        "tisyn": "quote",
-        "expr": {
-          "name": "__discard_0",
-          "value": {
-            "tisyn": "eval",
-            "id": "dom.expectTranscript",
-            "data": {
-              "tisyn": "eval",
-              "id": "construct",
-              "data": {
-                "tisyn": "quote",
-                "expr": {
-                  "input": {
-                    "tisyn": "eval",
-                    "id": "construct",
-                    "data": {
-                      "tisyn": "quote",
-                      "expr": {
-                        "messages": {
-                          "tisyn": "eval",
-                          "id": "array",
-                          "data": {
-                            "tisyn": "quote",
-                            "expr": {
-                              "items": [
-                                "You: before restart",
-                                "Assistant: Echo: before restart"
-                              ]
-                            }
-                          }
-                        }
-                      }
-                    }
-                  }
-                }
-              }
-            }
-          },
-          "body": {
-            "tisyn": "eval",
-            "id": "let",
-            "data": {
-              "tisyn": "quote",
-              "expr": {
-                "name": "__discard_1",
-                "value": {
-                  "tisyn": "eval",
-                  "id": "dom.expectStatusText",
-                  "data": {
-                    "tisyn": "eval",
-                    "id": "construct",
-                    "data": {
-                      "tisyn": "quote",
-                      "expr": {
-                        "input": {
-                          "tisyn": "eval",
-                          "id": "construct",
-                          "data": {
-                            "tisyn": "quote",
-                            "expr": {
-                              "text": "Say something"
-                            }
-                          }
-                        }
-                      }
-                    }
-                  }
-                },
-                "body": {
-                  "tisyn": "eval",
-                  "id": "let",
-                  "data": {
-                    "tisyn": "quote",
-                    "expr": {
-                      "name": "__discard_2",
-                      "value": {
-                        "tisyn": "eval",
-                        "id": "dom.fill",
-                        "data": {
-                          "tisyn": "eval",
-                          "id": "construct",
-                          "data": {
-                            "tisyn": "quote",
-                            "expr": {
-                              "input": {
-                                "tisyn": "eval",
-                                "id": "construct",
-                                "data": {
-                                  "tisyn": "quote",
-                                  "expr": {
-                                    "name": "Message",
-                                    "value": "after restart"
-                                  }
-                                }
-                              }
-                            }
-                          }
-                        }
+  tisyn: "fn",
+  params: [],
+  body: {
+    tisyn: "eval",
+    id: "let",
+    data: {
+      tisyn: "quote",
+      expr: {
+        name: "__discard_0",
+        value: {
+          tisyn: "eval",
+          id: "dom.expectTranscript",
+          data: {
+            tisyn: "eval",
+            id: "construct",
+            data: {
+              tisyn: "quote",
+              expr: {
+                input: {
+                  tisyn: "eval",
+                  id: "construct",
+                  data: {
+                    tisyn: "quote",
+                    expr: {
+                      messages: {
+                        tisyn: "eval",
+                        id: "array",
+                        data: {
+                          tisyn: "quote",
+                          expr: {
+                            items: ["You: before restart", "Assistant: Echo: before restart"],
+                          },
+                        },
                       },
-                      "body": {
-                        "tisyn": "eval",
-                        "id": "let",
-                        "data": {
-                          "tisyn": "quote",
-                          "expr": {
-                            "name": "__discard_3",
-                            "value": {
-                              "tisyn": "eval",
-                              "id": "dom.click",
-                              "data": {
-                                "tisyn": "eval",
-                                "id": "construct",
-                                "data": {
-                                  "tisyn": "quote",
-                                  "expr": {
-                                    "input": {
-                                      "tisyn": "eval",
-                                      "id": "construct",
-                                      "data": {
-                                        "tisyn": "quote",
-                                        "expr": {
-                                          "role": "button",
-                                          "name": "Send"
-                                        }
-                                      }
-                                    }
-                                  }
-                                }
-                              }
+                    },
+                  },
+                },
+              },
+            },
+          },
+        },
+        body: {
+          tisyn: "eval",
+          id: "let",
+          data: {
+            tisyn: "quote",
+            expr: {
+              name: "__discard_1",
+              value: {
+                tisyn: "eval",
+                id: "dom.expectStatusText",
+                data: {
+                  tisyn: "eval",
+                  id: "construct",
+                  data: {
+                    tisyn: "quote",
+                    expr: {
+                      input: {
+                        tisyn: "eval",
+                        id: "construct",
+                        data: {
+                          tisyn: "quote",
+                          expr: {
+                            text: "Say something",
+                          },
+                        },
+                      },
+                    },
+                  },
+                },
+              },
+              body: {
+                tisyn: "eval",
+                id: "let",
+                data: {
+                  tisyn: "quote",
+                  expr: {
+                    name: "__discard_2",
+                    value: {
+                      tisyn: "eval",
+                      id: "dom.fill",
+                      data: {
+                        tisyn: "eval",
+                        id: "construct",
+                        data: {
+                          tisyn: "quote",
+                          expr: {
+                            input: {
+                              tisyn: "eval",
+                              id: "construct",
+                              data: {
+                                tisyn: "quote",
+                                expr: {
+                                  name: "Message",
+                                  value: "after restart",
+                                },
+                              },
                             },
-                            "body": {
-                              "tisyn": "eval",
-                              "id": "dom.expectVisible",
-                              "data": {
-                                "tisyn": "eval",
-                                "id": "construct",
-                                "data": {
-                                  "tisyn": "quote",
-                                  "expr": {
-                                    "input": {
-                                      "tisyn": "eval",
-                                      "id": "construct",
-                                      "data": {
-                                        "tisyn": "quote",
-                                        "expr": {
-                                          "text": "Assistant: Echo: after restart"
-                                        }
-                                      }
-                                    }
-                                  }
-                                }
-                              }
-                            }
-                          }
-                        }
-                      }
-                    }
-                  }
-                }
-              }
-            }
-          }
-        }
-      }
-    }
-  } as const;
+                          },
+                        },
+                      },
+                    },
+                    body: {
+                      tisyn: "eval",
+                      id: "let",
+                      data: {
+                        tisyn: "quote",
+                        expr: {
+                          name: "__discard_3",
+                          value: {
+                            tisyn: "eval",
+                            id: "dom.click",
+                            data: {
+                              tisyn: "eval",
+                              id: "construct",
+                              data: {
+                                tisyn: "quote",
+                                expr: {
+                                  input: {
+                                    tisyn: "eval",
+                                    id: "construct",
+                                    data: {
+                                      tisyn: "quote",
+                                      expr: {
+                                        role: "button",
+                                        name: "Send",
+                                      },
+                                    },
+                                  },
+                                },
+                              },
+                            },
+                          },
+                          body: {
+                            tisyn: "eval",
+                            id: "dom.expectVisible",
+                            data: {
+                              tisyn: "eval",
+                              id: "construct",
+                              data: {
+                                tisyn: "quote",
+                                expr: {
+                                  input: {
+                                    tisyn: "eval",
+                                    id: "construct",
+                                    data: {
+                                      tisyn: "quote",
+                                      expr: {
+                                        text: "Assistant: Echo: after restart",
+                                      },
+                                    },
+                                  },
+                                },
+                              },
+                            },
+                          },
+                        },
+                      },
+                    },
+                  },
+                },
+              },
+            },
+          },
+        },
+      },
+    },
+  },
+} as const;
 
 /**
  * Printed Tisyn IR:
@@ -1231,145 +1235,142 @@ export const verifyRestoredAndSendAfterRestartDom: TisynFn<[], unknown> = {
  *   ))
  */
 export const verifySecondBrowserReadOnlyDom: TisynFn<[], unknown> = {
-    "tisyn": "fn",
-    "params": [],
-    "body": {
-      "tisyn": "eval",
-      "id": "let",
-      "data": {
-        "tisyn": "quote",
-        "expr": {
-          "name": "__discard_0",
-          "value": {
-            "tisyn": "eval",
-            "id": "dom.expectStatusText",
-            "data": {
-              "tisyn": "eval",
-              "id": "construct",
-              "data": {
-                "tisyn": "quote",
-                "expr": {
-                  "input": {
-                    "tisyn": "eval",
-                    "id": "construct",
-                    "data": {
-                      "tisyn": "quote",
-                      "expr": {
-                        "text": "Session owned by another browser"
-                      }
-                    }
-                  }
-                }
-              }
-            }
-          },
-          "body": {
-            "tisyn": "eval",
-            "id": "let",
-            "data": {
-              "tisyn": "quote",
-              "expr": {
-                "name": "__discard_1",
-                "value": {
-                  "tisyn": "eval",
-                  "id": "dom.expectDisabled",
-                  "data": {
-                    "tisyn": "eval",
-                    "id": "construct",
-                    "data": {
-                      "tisyn": "quote",
-                      "expr": {
-                        "input": {
-                          "tisyn": "eval",
-                          "id": "construct",
-                          "data": {
-                            "tisyn": "quote",
-                            "expr": {
-                              "role": "textbox",
-                              "name": "Message"
-                            }
-                          }
-                        }
-                      }
-                    }
-                  }
+  tisyn: "fn",
+  params: [],
+  body: {
+    tisyn: "eval",
+    id: "let",
+    data: {
+      tisyn: "quote",
+      expr: {
+        name: "__discard_0",
+        value: {
+          tisyn: "eval",
+          id: "dom.expectStatusText",
+          data: {
+            tisyn: "eval",
+            id: "construct",
+            data: {
+              tisyn: "quote",
+              expr: {
+                input: {
+                  tisyn: "eval",
+                  id: "construct",
+                  data: {
+                    tisyn: "quote",
+                    expr: {
+                      text: "Session owned by another browser",
+                    },
+                  },
                 },
-                "body": {
-                  "tisyn": "eval",
-                  "id": "let",
-                  "data": {
-                    "tisyn": "quote",
-                    "expr": {
-                      "name": "__discard_2",
-                      "value": {
-                        "tisyn": "eval",
-                        "id": "dom.expectDisabled",
-                        "data": {
-                          "tisyn": "eval",
-                          "id": "construct",
-                          "data": {
-                            "tisyn": "quote",
-                            "expr": {
-                              "input": {
-                                "tisyn": "eval",
-                                "id": "construct",
-                                "data": {
-                                  "tisyn": "quote",
-                                  "expr": {
-                                    "role": "button",
-                                    "name": "Send"
-                                  }
-                                }
-                              }
-                            }
-                          }
-                        }
+              },
+            },
+          },
+        },
+        body: {
+          tisyn: "eval",
+          id: "let",
+          data: {
+            tisyn: "quote",
+            expr: {
+              name: "__discard_1",
+              value: {
+                tisyn: "eval",
+                id: "dom.expectDisabled",
+                data: {
+                  tisyn: "eval",
+                  id: "construct",
+                  data: {
+                    tisyn: "quote",
+                    expr: {
+                      input: {
+                        tisyn: "eval",
+                        id: "construct",
+                        data: {
+                          tisyn: "quote",
+                          expr: {
+                            role: "textbox",
+                            name: "Message",
+                          },
+                        },
                       },
-                      "body": {
-                        "tisyn": "eval",
-                        "id": "dom.expectTranscript",
-                        "data": {
-                          "tisyn": "eval",
-                          "id": "construct",
-                          "data": {
-                            "tisyn": "quote",
-                            "expr": {
-                              "input": {
-                                "tisyn": "eval",
-                                "id": "construct",
-                                "data": {
-                                  "tisyn": "quote",
-                                  "expr": {
-                                    "messages": {
-                                      "tisyn": "eval",
-                                      "id": "array",
-                                      "data": {
-                                        "tisyn": "quote",
-                                        "expr": {
-                                          "items": [
-                                            "You: hello",
-                                            "Assistant: Echo: hello"
-                                          ]
-                                        }
-                                      }
-                                    }
-                                  }
-                                }
-                              }
-                            }
-                          }
-                        }
-                      }
-                    }
-                  }
-                }
-              }
-            }
-          }
-        }
-      }
-    }
-  } as const;
+                    },
+                  },
+                },
+              },
+              body: {
+                tisyn: "eval",
+                id: "let",
+                data: {
+                  tisyn: "quote",
+                  expr: {
+                    name: "__discard_2",
+                    value: {
+                      tisyn: "eval",
+                      id: "dom.expectDisabled",
+                      data: {
+                        tisyn: "eval",
+                        id: "construct",
+                        data: {
+                          tisyn: "quote",
+                          expr: {
+                            input: {
+                              tisyn: "eval",
+                              id: "construct",
+                              data: {
+                                tisyn: "quote",
+                                expr: {
+                                  role: "button",
+                                  name: "Send",
+                                },
+                              },
+                            },
+                          },
+                        },
+                      },
+                    },
+                    body: {
+                      tisyn: "eval",
+                      id: "dom.expectTranscript",
+                      data: {
+                        tisyn: "eval",
+                        id: "construct",
+                        data: {
+                          tisyn: "quote",
+                          expr: {
+                            input: {
+                              tisyn: "eval",
+                              id: "construct",
+                              data: {
+                                tisyn: "quote",
+                                expr: {
+                                  messages: {
+                                    tisyn: "eval",
+                                    id: "array",
+                                    data: {
+                                      tisyn: "quote",
+                                      expr: {
+                                        items: ["You: hello", "Assistant: Echo: hello"],
+                                      },
+                                    },
+                                  },
+                                },
+                              },
+                            },
+                          },
+                        },
+                      },
+                    },
+                  },
+                },
+              },
+            },
+          },
+        },
+      },
+    },
+  },
+} as const;
 
 /**
  * Printed Tisyn IR:
@@ -1397,79 +1398,89 @@ export const verifySecondBrowserReadOnlyDom: TisynFn<[], unknown> = {
  *   ))
  */
 export const verifyTranscriptAfterReloadDom: TisynFn<[], unknown> = {
-    "tisyn": "fn",
-    "params": [],
-    "body": {
-      "tisyn": "eval",
-      "id": "let",
-      "data": {
-        "tisyn": "quote",
-        "expr": {
-          "name": "__discard_0",
-          "value": {
-            "tisyn": "eval",
-            "id": "dom.expectTranscript",
-            "data": {
-              "tisyn": "eval",
-              "id": "construct",
-              "data": {
-                "tisyn": "quote",
-                "expr": {
-                  "input": {
-                    "tisyn": "eval",
-                    "id": "construct",
-                    "data": {
-                      "tisyn": "quote",
-                      "expr": {
-                        "messages": {
-                          "tisyn": "eval",
-                          "id": "array",
-                          "data": {
-                            "tisyn": "quote",
-                            "expr": {
-                              "items": [
-                                "You: hello",
-                                "Assistant: Echo: hello",
-                                "You: world",
-                                "Assistant: Echo: world"
-                              ]
-                            }
-                          }
-                        }
-                      }
-                    }
-                  }
-                }
-              }
-            }
+  tisyn: "fn",
+  params: [],
+  body: {
+    tisyn: "eval",
+    id: "let",
+    data: {
+      tisyn: "quote",
+      expr: {
+        name: "__discard_0",
+        value: {
+          tisyn: "eval",
+          id: "dom.expectTranscript",
+          data: {
+            tisyn: "eval",
+            id: "construct",
+            data: {
+              tisyn: "quote",
+              expr: {
+                input: {
+                  tisyn: "eval",
+                  id: "construct",
+                  data: {
+                    tisyn: "quote",
+                    expr: {
+                      messages: {
+                        tisyn: "eval",
+                        id: "array",
+                        data: {
+                          tisyn: "quote",
+                          expr: {
+                            items: [
+                              "You: hello",
+                              "Assistant: Echo: hello",
+                              "You: world",
+                              "Assistant: Echo: world",
+                            ],
+                          },
+                        },
+                      },
+                    },
+                  },
+                },
+              },
+            },
           },
-          "body": {
-            "tisyn": "eval",
-            "id": "dom.expectStatusText",
-            "data": {
-              "tisyn": "eval",
-              "id": "construct",
-              "data": {
-                "tisyn": "quote",
-                "expr": {
-                  "input": {
-                    "tisyn": "eval",
-                    "id": "construct",
-                    "data": {
-                      "tisyn": "quote",
-                      "expr": {
-                        "text": "Say something"
-                      }
-                    }
-                  }
-                }
-              }
-            }
-          }
-        }
-      }
-    }
-  } as const;
+        },
+        body: {
+          tisyn: "eval",
+          id: "dom.expectStatusText",
+          data: {
+            tisyn: "eval",
+            id: "construct",
+            data: {
+              tisyn: "quote",
+              expr: {
+                input: {
+                  tisyn: "eval",
+                  id: "construct",
+                  data: {
+                    tisyn: "quote",
+                    expr: {
+                      text: "Say something",
+                    },
+                  },
+                },
+              },
+            },
+          },
+        },
+      },
+    },
+  },
+} as const;
 
 export const agents = { Dom };
-export const workflows = { basicSendReceiveDom, expectDisconnectedDom, sendBeforeRestartDom, sendFirstMessageDom, sendTwoMessagesDom, verifyDefaultSessionEnabledDom, verifyRestoredAndSendAfterRestartDom, verifySecondBrowserReadOnlyDom, verifyTranscriptAfterReloadDom };
+export const workflows = {
+  basicSendReceiveDom,
+  expectDisconnectedDom,
+  sendBeforeRestartDom,
+  sendFirstMessageDom,
+  sendTwoMessagesDom,
+  verifyDefaultSessionEnabledDom,
+  verifyRestoredAndSendAfterRestartDom,
+  verifySecondBrowserReadOnlyDom,
+  verifyTranscriptAfterReloadDom,
+};

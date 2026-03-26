@@ -26,7 +26,7 @@ export function useProxy(distDir: string, initialWsUrl: string): Operation<Proxy
     let wsTarget = new URL(initialWsUrl);
 
     const server = createServer(async (req: IncomingMessage, res: ServerResponse) => {
-      const pathname = req.url === "/" ? "/index.html" : req.url ?? "/index.html";
+      const pathname = req.url === "/" ? "/index.html" : (req.url ?? "/index.html");
       const filePath = join(distDir, pathname);
 
       try {
@@ -50,27 +50,25 @@ export function useProxy(distDir: string, initialWsUrl: string): Operation<Proxy
 
     // WebSocket upgrade: pipe to host
     server.on("upgrade", (req: IncomingMessage, socket: Socket, head: Buffer) => {
-      const targetReq = require("node:http").request(
-        {
-          hostname: wsTarget.hostname,
-          port: wsTarget.port,
-          path: req.url,
-          method: "GET",
-          headers: {
-            ...req.headers,
-            host: `${wsTarget.hostname}:${wsTarget.port}`,
-          },
+      const targetReq = require("node:http").request({
+        hostname: wsTarget.hostname,
+        port: wsTarget.port,
+        path: req.url,
+        method: "GET",
+        headers: {
+          ...req.headers,
+          host: `${wsTarget.hostname}:${wsTarget.port}`,
         },
-      );
+      });
 
       targetReq.on("upgrade", (_res: IncomingMessage, targetSocket: Socket, targetHead: Buffer) => {
         // Send the 101 back to the client
         socket.write(
           "HTTP/1.1 101 Switching Protocols\r\n" +
-          `Upgrade: ${_res.headers.upgrade}\r\n` +
-          `Connection: ${_res.headers.connection}\r\n` +
-          `Sec-WebSocket-Accept: ${_res.headers["sec-websocket-accept"]}\r\n` +
-          "\r\n",
+            `Upgrade: ${_res.headers.upgrade}\r\n` +
+            `Connection: ${_res.headers.connection}\r\n` +
+            `Sec-WebSocket-Accept: ${_res.headers["sec-websocket-accept"]}\r\n` +
+            "\r\n",
         );
         if (targetHead.length) socket.write(targetHead);
         socket.on("error", () => socket.destroy());

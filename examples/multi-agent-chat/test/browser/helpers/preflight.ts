@@ -11,8 +11,8 @@ export function assertLocalListenSupported(): Operation<void> {
       new Error(
         `Browser acceptance tests require local listening sockets, ` +
           `but this environment denied listen() on 0.0.0.0:0.\n\n` +
-          `Original error: ${err.message} (${err.code})`
-      )
+          `Original error: ${err.message} (${err.code})`,
+      ),
     );
   });
 

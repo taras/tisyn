@@ -21,20 +21,23 @@ export default defineConfig({
             method: "GET",
             headers: { ...req.headers, host: "localhost:3000" },
           });
-          proxyReq.on("upgrade", (_res: IncomingMessage, proxySocket: Socket, proxyHead: Buffer) => {
-            socket.write(
-              "HTTP/1.1 101 Switching Protocols\r\n" +
-              `Upgrade: ${_res.headers.upgrade}\r\n` +
-              `Connection: ${_res.headers.connection}\r\n` +
-              `Sec-WebSocket-Accept: ${_res.headers["sec-websocket-accept"]}\r\n` +
-              "\r\n",
-            );
-            if (proxyHead.length) socket.write(proxyHead);
-            socket.on("error", () => socket.destroy());
-            proxySocket.on("error", () => proxySocket.destroy());
-            socket.pipe(proxySocket);
-            proxySocket.pipe(socket);
-          });
+          proxyReq.on(
+            "upgrade",
+            (_res: IncomingMessage, proxySocket: Socket, proxyHead: Buffer) => {
+              socket.write(
+                "HTTP/1.1 101 Switching Protocols\r\n" +
+                  `Upgrade: ${_res.headers.upgrade}\r\n` +
+                  `Connection: ${_res.headers.connection}\r\n` +
+                  `Sec-WebSocket-Accept: ${_res.headers["sec-websocket-accept"]}\r\n` +
+                  "\r\n",
+              );
+              if (proxyHead.length) socket.write(proxyHead);
+              socket.on("error", () => socket.destroy());
+              proxySocket.on("error", () => proxySocket.destroy());
+              socket.pipe(proxySocket);
+              proxySocket.pipe(socket);
+            },
+          );
           proxyReq.on("error", () => socket.destroy());
           proxyReq.end();
           if (head.length) proxyReq.socket?.write(head);
