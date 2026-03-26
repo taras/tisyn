@@ -1,16 +1,43 @@
 # `@tisyn/validate`
 
-Boundary validation for Tisyn IR, including `MalformedIR` and exported schema values.
+`@tisyn/validate` is the boundary-defense package for Tisyn IR. It checks that incoming trees match the allowed grammar, exposes schema values for integration points, and throws `MalformedIR` when invalid input crosses a trust boundary.
 
-Use this package when IR may come from an external compiler, user input, persisted data, or another process.
+## Where It Fits
 
-## Main exports
+This package sits between untrusted IR and execution.
 
-- `validateGrammar()`
-- `validateIr()`
-- `assertValidIr()`
-- `MalformedIR`
-- schema values like `tisynExprSchema`
+- `@tisyn/compiler` validates generated IR by default.
+- `@tisyn/runtime` validates incoming IR before execution.
+- `@tisyn/kernel` re-exports `MalformedIR`, but validation now lives here.
+
+Use it whenever IR comes from another process, persistent storage, user input, or an external compiler step.
+
+## Core Concepts
+
+- `validateGrammar()`: grammar-level checks
+- `validateIr()`: full validation entrypoint
+- `assertValidIr()`: throws on failure
+- `MalformedIR`: error type for invalid IR
+- exported schema values for integration points
+
+## Main APIs
+
+The public surface from `src/index.ts` is:
+
+- `validateGrammar`: Check that an IR tree follows the allowed grammar rules without throwing.
+- `validateIr`: Perform full validation and return the structured result.
+- `assertValidIr`: Validate IR and throw `MalformedIR` if it is invalid.
+- `MalformedIR`: Represent a validation failure that crossed a trust boundary.
+- `tisynExprSchema`: Export the top-level schema for a full Tisyn expression.
+- `evalSchema`: Export the schema for eval nodes.
+- `quoteSchema`: Export the schema for quote nodes.
+- `refSchema`: Export the schema for ref nodes.
+- `fnSchema`: Export the schema for function-shaped IR nodes.
+
+Useful exported types:
+
+- `ValidationError`: Describe one concrete validation problem found in the IR.
+- `ValidationResult`: Represent the success or failure result returned by validation functions.
 
 ## Example
 
@@ -22,9 +49,19 @@ assertValidIr(maybeExternalIr);
 
 If validation fails, `assertValidIr()` throws `MalformedIR`.
 
-## Relationship to the rest of Tisyn
+## Relationship to the Rest of Tisyn
 
-- [`@tisyn/kernel`](../kernel/README.md) re-exports `MalformedIR` but no longer owns validation.
-- [`@tisyn/runtime`](../runtime/README.md) validates IR before execution.
-- [`@tisyn/compiler`](../compiler/README.md) validates compiled output by default.
-- [`@tisyn/ir`](../ir/README.md) defines the node shapes that validation checks.
+- [`@tisyn/ir`](../ir/README.md) defines the node shapes being validated.
+- [`@tisyn/compiler`](../compiler/README.md) uses validation to catch bad compiled output.
+- [`@tisyn/runtime`](../runtime/README.md) uses validation before execution.
+- [`@tisyn/kernel`](../kernel/README.md) depends on valid input but does not own this validation layer.
+
+## Boundaries
+
+`@tisyn/validate` owns:
+
+- grammar and IR boundary checks
+- malformed-IR error reporting
+- exported schema values for external integrations
+
+It does not own execution semantics or durable replay.
