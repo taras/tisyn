@@ -1,5 +1,5 @@
 import { createServer, type IncomingMessage, type ServerResponse } from "node:http";
-import { readFileSync, existsSync } from "node:fs";
+import { readFile } from "node:fs/promises";
 import { join, extname } from "node:path";
 import type { Socket } from "node:net";
 import type { AddressInfo } from "node:net";
@@ -25,21 +25,23 @@ export function useProxy(distDir: string, initialWsUrl: string): Operation<Proxy
   return resource(function* (provide) {
     let wsTarget = new URL(initialWsUrl);
 
-    const server = createServer((req: IncomingMessage, res: ServerResponse) => {
+    const server = createServer(async (req: IncomingMessage, res: ServerResponse) => {
       const pathname = req.url === "/" ? "/index.html" : req.url ?? "/index.html";
       const filePath = join(distDir, pathname);
 
-      if (existsSync(filePath)) {
+      try {
+        const data = await readFile(filePath);
         const ext = extname(filePath);
         res.writeHead(200, { "Content-Type": MIME_TYPES[ext] ?? "application/octet-stream" });
-        res.end(readFileSync(filePath));
-      } else {
+        res.end(data);
+      } catch {
         // SPA fallback
         const indexPath = join(distDir, "index.html");
-        if (existsSync(indexPath)) {
+        try {
+          const data = await readFile(indexPath);
           res.writeHead(200, { "Content-Type": "text/html" });
-          res.end(readFileSync(indexPath));
-        } else {
+          res.end(data);
+        } catch {
           res.writeHead(404);
           res.end("Not found");
         }

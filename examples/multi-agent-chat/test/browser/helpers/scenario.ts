@@ -1,4 +1,4 @@
-import { mkdtempSync, rmSync } from "node:fs";
+import { mkdtemp, rm } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { fileURLToPath } from "node:url";
@@ -25,7 +25,7 @@ export function runScenario(
 ): Operation<void> {
   return resource(function* (provide) {
     // 1. Temp dir for journal
-    const tempDir = mkdtempSync(join(tmpdir(), "tisyn-test-"));
+    const tempDir = yield* call(() => mkdtemp(join(tmpdir(), "tisyn-test-")));
     const journalPath = join(tempDir, "journal.ndjson");
 
     try {
@@ -86,7 +86,7 @@ export function runScenario(
     } finally {
       // Clean up temp dir
       try {
-        rmSync(tempDir, { recursive: true, force: true });
+        yield* call(() => rm(tempDir, { recursive: true, force: true }));
       } catch {
         // ignore cleanup errors
       }
