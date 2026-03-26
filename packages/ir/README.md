@@ -38,43 +38,46 @@ The surface is intentionally broad, but it groups into a few jobs.
 
 ### Constructors
 
-- `Q`
-- `Ref`
-- `Fn`
-- `Let`
-- `Seq`
-- `If`
-- `While`
-- `Call`
-- `Get`
-- arithmetic and boolean nodes like `Add`, `Eq`, `And`, `Not`
-- data constructors like `Construct`, `Arr`, `Concat`
-- effect/external nodes like `Eval`, `All`, `Race`
+- `Q`: Quote an expression so it is treated as IR data instead of something to evaluate immediately.
+- `Ref`: Reference a named value from the current environment.
+- `Fn`: Build a function-shaped IR value with positional parameters and a body expression.
+- `Let`: Bind an intermediate value to a name and continue evaluation in the extended environment.
+- `Seq`: Evaluate a series of expressions in order and return the last result.
+- `If`: Conditionally choose between two expressions based on a boolean condition.
+- `While`: Represent a loop that keeps evaluating a body while a condition remains true.
+- `Call`: Invoke a function-shaped IR value with zero or more IR arguments.
+- `Get`: Read a named property from an object expression.
+- `Add`, `Sub`, `Mul`, `Div`, `Mod`, `Neg`, `Gt`, `Gte`, `Lt`, `Lte`, `Eq`, `Neq`, `And`, `Or`, `Not`: Build arithmetic, comparison, and boolean operations as IR nodes.
+- `Construct`, `Arr`, `Concat`: Build object, array, and string-concatenation expressions from IR inputs.
+- `Throw`: Represent an expression that raises an error with the given message.
+- `Eval`: Invoke an external operation or structural form by id with a single payload expression.
+- `All`: Evaluate multiple expressions concurrently and collect all of their results.
+- `Race`: Evaluate multiple expressions concurrently and resolve with the first one to complete.
 
 ### Classification and guards
 
-- `classifyNode`
-- `classify`
-- `isStructural`
-- `isExternal`
-- `isCompoundExternal`
-- `isEvalNode`
-- `isFnNode`
+- `classifyNode`: Categorize an unknown value as a literal, IR node, object-shaped IR, or non-IR value.
+- `classify`: Classify an eval id as structural or external.
+- `isStructural`: Check whether an eval id names a structural form handled by the kernel.
+- `isExternal`: Check whether an eval id names a non-structural external operation.
+- `isCompoundExternal`: Check whether an eval id names a compound external form such as `all` or `race`.
+- `isEvalNode`: Narrow an unknown value to an eval node.
+- `isFnNode`: Narrow an unknown value to a function-shaped IR node.
 
 ### Traversal and transformation
 
-- `walk`
-- `fold`
-- `foldWith`
-- `transform`
-- `collectRefs`
-- `collectExternalIds`
-- `collectFreeRefs`
+- `walk`: Visit every node in an IR tree with enter/leave hooks and path information.
+- `fold`: Reduce an IR tree to a single value using an algebra over node shapes.
+- `foldWith`: Run a fold with a partially specified algebra layered on top of defaults.
+- `transform`: Produce a rewritten IR tree by replacing nodes during traversal.
+- `collectRefs`: Gather all referenced names that appear anywhere in an expression.
+- `collectExternalIds`: Gather all external eval ids used in an expression tree.
+- `collectFreeRefs`: Gather referenced names that are not bound locally by `Fn` or `Let`.
 
 ### Developer tooling
 
-- `print`
-- `decompile`
+- `print`: Render IR into a stable constructor-style string for debugging and tests.
+- `decompile`: Render IR back into readable TypeScript-like source for inspection.
 
 ## Example
 
