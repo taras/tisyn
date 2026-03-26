@@ -1,23 +1,59 @@
 # `@tisyn/transport`
 
-Remote agent sessions and concrete transports for the Tisyn host/agent protocol.
+`@tisyn/transport` turns typed agent declarations into remote capabilities. It manages host-side remote installation, protocol sessions, and concrete transport adapters for stdio, WebSocket, worker, HTTP, and in-process execution.
 
-Use this package when an agent call needs to cross an in-process, subprocess, worker, websocket, or HTTP boundary.
+## Where It Fits
 
-## Main exports
+This package is the remoting layer above protocol and below application orchestration.
 
-- `installRemoteAgent()`
-- `createSession()`
-- transports:
-  - `inprocessTransport()`
-  - `stdioTransport()`
-  - `websocketTransport()`
-  - `workerTransport()`
-  - `ssePostTransport()`
-- agent-side adapters:
-  - `createStdioAgentTransport()`
-  - `createSsePostAgentTransport()`
-- `createProtocolServer()`
+- `@tisyn/agent` defines what can be called.
+- `@tisyn/protocol` defines the wire messages.
+- `@tisyn/transport` opens sessions and moves those messages across concrete boundaries.
+
+Use it when a Tisyn effect should execute somewhere other than the current process or scope.
+
+## Core Concepts
+
+- `installRemoteAgent()`: install a declaration so its operations dispatch remotely
+- `createSession()`: host-side protocol session management
+- transport factories like stdio, WebSocket, worker, SSE/POST, and in-process
+- agent-side adapters like `createProtocolServer()` and `createStdioAgentTransport()`
+
+## Main APIs
+
+### Host-side installation and sessions
+
+- `installRemoteAgent`
+- `createSession`
+- `ProtocolSession`
+- `CreateSessionOptions`
+
+### Transport interfaces
+
+- `Transport`
+- `AgentTransport`
+- `AgentTransportFactory`
+
+### Concrete transports
+
+- `inprocessTransport`
+- `stdioTransport`
+- `websocketTransport`
+- `workerTransport`
+- `ssePostTransport`
+
+### Agent-side adapters
+
+- `createStdioAgentTransport`
+- `createSsePostAgentTransport`
+- `createProtocolServer`
+- `AgentServerTransport`
+- `ProtocolServer`
+
+### Verification helpers
+
+- `transportComplianceSuite`
+- `TransportFactoryBuilder`
 
 ## Example
 
@@ -26,23 +62,42 @@ import { agent, operation, invoke } from "@tisyn/agent";
 import { installRemoteAgent, websocketTransport } from "@tisyn/transport";
 
 const math = agent("math", {
-  double: operation<{ value: number }, number>(),
+  double: operation<{ input: { value: number } }, number>(),
 });
 
-yield* installRemoteAgent(math, websocketTransport({ url: "ws://localhost:8080" }));
-const result = yield* invoke(math.double({ value: 21 }));
+yield* installRemoteAgent(
+  math,
+  websocketTransport({ url: "ws://localhost:8080" }),
+);
+
+const result = yield* invoke(math.double({ input: { value: 21 } }));
 ```
 
-## Available transports
+## Choosing a Transport
 
-- `inprocess`: reference transport for same-process communication and compliance tests
-- `stdio`: subprocess transport over stdin/stdout
-- `websocket`: long-lived socket transport for remote agents
-- `worker`: worker-thread transport
-- `sse-post`: asymmetric HTTP transport using POST inbound and SSE outbound
+- `inprocessTransport`: reference transport and compliance baseline
+- `stdioTransport`: subprocess-style remoting over stdin/stdout
+- `websocketTransport`: long-lived remote agent sessions
+- `workerTransport`: worker-thread remoting
+- `ssePostTransport`: asymmetric HTTP transport using POST inbound and SSE outbound
 
-## Relationship to the rest of Tisyn
+## Relationship to the Rest of Tisyn
 
-- [`@tisyn/protocol`](../protocol/README.md) defines the message shapes used by sessions and transports.
-- [`@tisyn/agent`](../agent/README.md) defines the declarations being installed remotely.
-- `createProtocolServer()` adapts a bound `implementAgent()` result into an agent-side protocol server without making `@tisyn/agent` depend on protocol types.
+- [`@tisyn/protocol`](../protocol/README.md) provides the message types and constructors used on the wire.
+- [`@tisyn/agent`](../agent/README.md) provides the declarations being installed remotely.
+- [`@tisyn/runtime`](../runtime/README.md) executes programs that ultimately dispatch through these installed remote agents.
+
+## Boundaries
+
+`@tisyn/transport` owns:
+
+- session management
+- remote installation
+- concrete transport factories
+- agent-side protocol serving
+
+It does not own:
+
+- the protocol schema itself
+- authored workflow compilation
+- kernel evaluation semantics

@@ -1,15 +1,80 @@
 # `@tisyn/ir`
 
-The Tisyn expression model: values, tagged nodes, constructors, walkers, classifiers, and printers.
+`@tisyn/ir` is the shared language of Tisyn. It defines the node shapes, value types, constructors, traversal helpers, and printing/decompilation utilities that every other package relies on.
 
-Use this package when you want to construct or inspect Tisyn programs directly.
+## Where It Fits
 
-## Main exports
+This package is the common representation layer for the whole system.
 
-- expression and value types like `TisynExpr` and `Val`
-- constructors like `Q`, `Ref`, `Fn`, `Let`, `Call`, `Add`, `All`, and `Race`
-- guards and classifiers like `classifyNode()` and `isStructural()`
-- helpers like `walk()`, `transform()`, `print()`, and `decompile()`
+- `@tisyn/compiler` produces IR.
+- `@tisyn/validate` checks IR.
+- `@tisyn/kernel` gives IR evaluation semantics.
+- `@tisyn/runtime` executes IR durably.
+- `@tisyn/protocol` and `@tisyn/transport` carry IR-compatible values across boundaries.
+
+If you need a package that almost every other Tisyn package depends on, this is it.
+
+## Core Concepts
+
+- `TisynExpr`: the broad expression type
+- `Val` / `Json`: runtime values that can flow through environments and protocols
+- `TisynFn`: function-shaped IR value
+- constructor helpers like `Fn`, `Ref`, `Let`, `Call`, `Eval`, `All`, and `Race`
+- traversal helpers like `walk()` and `transform()`
+- inspection helpers like `classifyNode()`, `collectRefs()`, and `print()`
+
+## Main APIs
+
+The surface is intentionally broad, but it groups into a few jobs.
+
+### Types and values
+
+- `Json`
+- `Val`
+- `TisynExpr`
+- `Expr`
+- `TisynFn`
+- `IrInput`
+
+### Constructors
+
+- `Q`
+- `Ref`
+- `Fn`
+- `Let`
+- `Seq`
+- `If`
+- `While`
+- `Call`
+- `Get`
+- arithmetic and boolean nodes like `Add`, `Eq`, `And`, `Not`
+- data constructors like `Construct`, `Arr`, `Concat`
+- effect/external nodes like `Eval`, `All`, `Race`
+
+### Classification and guards
+
+- `classifyNode`
+- `classify`
+- `isStructural`
+- `isExternal`
+- `isCompoundExternal`
+- `isEvalNode`
+- `isFnNode`
+
+### Traversal and transformation
+
+- `walk`
+- `fold`
+- `foldWith`
+- `transform`
+- `collectRefs`
+- `collectExternalIds`
+- `collectFreeRefs`
+
+### Developer tooling
+
+- `print`
+- `decompile`
 
 ## Example
 
@@ -19,9 +84,28 @@ import { Add, Q } from "@tisyn/ir";
 const ir = Add(Q(20), Q(22));
 ```
 
-## Relationship to the rest of Tisyn
+Function-shaped IR is just data too:
 
-- [`@tisyn/validate`](../validate/README.md) validates IR trees before execution or compilation.
-- [`@tisyn/kernel`](../kernel/README.md) gives IR semantics.
-- [`@tisyn/compiler`](../compiler/README.md) produces IR from TypeScript source.
-- [`@tisyn/runtime`](../runtime/README.md) executes IR durably.
+```ts
+import { Fn, Ref, Add } from "@tisyn/ir";
+
+const double = Fn(["x"], Add(Ref("x"), Ref("x")));
+```
+
+## Relationship to the Rest of Tisyn
+
+- [`@tisyn/compiler`](../compiler/README.md) lowers authored workflows into these nodes.
+- [`@tisyn/validate`](../validate/README.md) checks that incoming trees match the allowed grammar.
+- [`@tisyn/kernel`](../kernel/README.md) interprets the nodes.
+- [`@tisyn/runtime`](../runtime/README.md) wraps kernel evaluation with replay and dispatch.
+
+## Boundaries
+
+`@tisyn/ir` is intentionally representation-focused. It does not define:
+
+- validation policy
+- execution semantics
+- durable storage
+- remoting protocol
+
+It gives those packages a common vocabulary.

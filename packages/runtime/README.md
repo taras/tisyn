@@ -1,27 +1,56 @@
 # `@tisyn/runtime`
 
-Durable execution for Tisyn IR, plus remote execution of received IR programs.
+`@tisyn/runtime` is the package that executes Tisyn IR durably. It validates input, replays prior events from a durable stream, dispatches live effects through installed agents, and appends new yield and close events as execution progresses.
 
-Use this package when you want to execute Tisyn programs with journaling, replay, and dispatch through installed agents.
+## Where It Fits
 
-## Main exports
+This is the main execution layer of the system.
 
-- `execute()`
-- `executeRemote()`
+- `@tisyn/compiler` produces IR.
+- `@tisyn/validate` checks it.
+- `@tisyn/kernel` defines the evaluation and event semantics.
+- `@tisyn/durable-streams` stores the resulting event log.
+- `@tisyn/agent` supplies the installed effect handlers.
 
-## Execute IR durably
+If you want to run Tisyn programs rather than just inspect or validate them, this is the package you use.
+
+## Core Concepts
+
+- `execute()`: durable execution entrypoint
+- replay: reuse prior events from a stream
+- dispatch: route live effects to installed agents
+- `executeRemote()`: execute received IR in a remote-execution context
+
+## Main APIs
+
+The public surface from `src/index.ts` is:
+
+- `execute`
+- `ExecuteOptions`
+- `ExecuteResult`
+- `executeRemote`
+- `ExecuteRemoteOptions`
+
+## Execute IR Durably
 
 ```ts
 import { Add, Q } from "@tisyn/ir";
 import { execute } from "@tisyn/runtime";
 
-const ir = Add({ left: Q(20), right: Q(22) });
-const { result, journal } = yield* execute({ ir });
+const ir = Add(Q(20), Q(22));
+const { result } = yield* execute({ ir });
 ```
 
-`execute()` validates the IR, reads the durable stream, replays prior events, dispatches live effects, and appends yield/close events.
+`execute()` is the durable path:
 
-## Execute remote IR
+1. validate the incoming IR
+2. read prior events from the durable stream
+3. rebuild replay state
+4. continue evaluation
+5. dispatch live effects as needed
+6. append yield and close events before resuming
+
+## Execute Received IR
 
 ```ts
 import { executeRemote } from "@tisyn/runtime";
@@ -32,8 +61,26 @@ const result = yield* executeRemote({
 });
 ```
 
-## Relationship to the rest of Tisyn
+`executeRemote()` is useful when a host, transport, or protocol server has already received a program and wants the runtime to execute it under a supplied environment.
 
-- [`@tisyn/kernel`](../kernel/README.md) provides the core evaluation engine and durable event types.
+## Relationship to the Rest of Tisyn
+
+- [`@tisyn/kernel`](../kernel/README.md) provides evaluation and event semantics.
 - [`@tisyn/durable-streams`](../durable-streams/README.md) provides the append-only event stream and replay index.
-- [`@tisyn/agent`](../agent/README.md) provides the dispatchable effect handlers that runtime can call.
+- [`@tisyn/agent`](../agent/README.md) provides the installed handlers for effect dispatch.
+- [`@tisyn/validate`](../validate/README.md) provides the boundary checks performed before execution.
+
+## Boundaries
+
+`@tisyn/runtime` owns:
+
+- durable execution
+- replay
+- effect dispatch during execution
+- remote-execution entrypoints
+
+It does not own:
+
+- authored workflow compilation
+- low-level IR definitions
+- transport sessions or wire protocol
