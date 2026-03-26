@@ -3,9 +3,11 @@ import { resolve, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 import { generateWorkflowModule } from "@tisyn/compiler";
 
-const __dirname = dirname(fileURLToPath(import.meta.url));
-const workflowDir = resolve(__dirname, "workflows");
-const outputPath = resolve(__dirname, "workflows.generated.ts");
+// Resolve paths relative to the project root (one level up from src/ or dist/)
+const scriptDir = dirname(fileURLToPath(import.meta.url));
+const projectRoot = resolve(scriptDir, "..");
+const workflowDir = resolve(projectRoot, "test/browser/workflows");
+const outputPath = resolve(projectRoot, "test/browser/workflows.generated.ts");
 
 // Read shared declarations (imports + declare function blocks)
 const declarations = readFileSync(resolve(workflowDir, "declarations.ts"), "utf-8");

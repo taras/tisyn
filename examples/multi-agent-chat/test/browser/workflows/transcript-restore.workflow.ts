@@ -1,3 +1,5 @@
+import { TestBrowser } from "./declarations.ts";
+
 export function* transcriptRestoresAfterReload() {
   yield* TestBrowser().open({});
   yield* TestBrowser().expectStatusText({ text: "Say something" });

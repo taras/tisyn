@@ -86,7 +86,7 @@ await main(function* () {
 
   // --- Persistent agents ---
   const llmTransport = workerTransport({
-    url: import.meta.resolve("./llm-worker.ts"),
+    url: import.meta.resolve("./llm-worker.js"),
   });
 
   yield* installRemoteAgent(Llm(), llmTransport);

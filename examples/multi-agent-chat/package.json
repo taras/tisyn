@@ -4,16 +4,17 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "build:workflow": "tsx src/build-workflow.ts",
-    "build": "tsx src/build-workflow.ts && tsc --noEmit",
-    "pretest": "tsx src/build-workflow.ts",
+    "build:workflow": "node --experimental-strip-types src/build-workflow.ts",
+    "build:node": "tsc -p tsconfig.build.json",
+    "build": "pnpm run build:workflow && pnpm run build:node",
+    "pretest": "node --experimental-strip-types src/build-workflow.ts",
     "test": "vitest run",
-    "predev": "tsx src/build-workflow.ts",
+    "predev": "node --experimental-strip-types src/build-workflow.ts",
     "dev": "tsx src/host.ts",
     "dev:browser": "vite",
     "build:browser": "vite build",
-    "build:test-workflows": "tsx test/browser/build-test-workflows.ts",
-    "pretest:browser": "pnpm run build:browser && pnpm run build:test-workflows",
+    "build:test-workflows": "node --experimental-strip-types src/build-test-workflows.ts",
+    "pretest:browser": "pnpm run build && pnpm run build:browser && pnpm run build:test-workflows",
     "test:browser": "vitest run --config vitest.browser.config.ts"
   },
   "dependencies": {

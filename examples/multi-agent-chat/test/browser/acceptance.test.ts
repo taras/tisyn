@@ -1,5 +1,6 @@
-import { describe, it } from "@effectionx/vitest";
+import { describe, it, beforeAll } from "@effectionx/vitest";
 import { runScenario } from "./helpers/scenario.js";
+import { assertLocalListenSupported } from "./helpers/preflight.js";
 import {
   basicSendReceive,
   transcriptRestoresAfterReload,
@@ -8,6 +9,10 @@ import {
 } from "./workflows.generated.js";
 
 describe("Browser acceptance", () => {
+  beforeAll(function* () {
+    yield* assertLocalListenSupported();
+  });
+
   it("basic send and receive", function* () {
     yield* runScenario(basicSendReceive);
   });

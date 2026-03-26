@@ -1,3 +1,5 @@
+import { TestBrowser, TestHost } from "./declarations.ts";
+
 export function* hostRestartPreservesState() {
   yield* TestBrowser().open({});
   yield* TestBrowser().expectStatusText({ text: "Say something" });
