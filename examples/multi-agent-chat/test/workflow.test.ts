@@ -8,8 +8,7 @@ import { spawn, withResolvers } from "effection";
 import { implementAgent } from "@tisyn/agent";
 import { execute } from "@tisyn/runtime";
 import { Call } from "@tisyn/ir";
-import { chat } from "../src/workflow.generated.js";
-import { browser, llm, state } from "./helpers/agents.js";
+import { Browser, Llm, State, chat } from "../src/workflow.generated.js";
 
 describe("Compiled workflow", () => {
   it("runs the chat loop: elicit → sample → display, with history accumulation", function* () {
@@ -36,7 +35,7 @@ describe("Compiled workflow", () => {
     const done = withResolvers<void>();
 
     // Install local Browser agent
-    const browserImpl = implementAgent(browser, {
+    const browserImpl = implementAgent(Browser(), {
       *waitForUser(args) {
         waitForUserCalls.push(args);
         if (userMessageIndex >= userMessages.length) {
@@ -55,7 +54,7 @@ describe("Compiled workflow", () => {
     yield* browserImpl.install();
 
     // Install local LLM agent (echo stub)
-    const llmImpl = implementAgent(llm, {
+    const llmImpl = implementAgent(Llm(), {
       *sample(args) {
         sampleCalls.push(args);
         return { message: `Echo: ${args.input.message}` };
@@ -64,7 +63,7 @@ describe("Compiled workflow", () => {
     yield* llmImpl.install();
 
     // Install local State agent (closure over mutable history)
-    const stateImpl = implementAgent(state, {
+    const stateImpl = implementAgent(State(), {
       *getHistory(_args) {
         return [...history];
       },

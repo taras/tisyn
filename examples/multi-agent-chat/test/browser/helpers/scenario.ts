@@ -10,7 +10,7 @@ import { InMemoryStream } from "@tisyn/durable-streams";
 import { Call } from "@tisyn/ir";
 import { chromium } from "playwright";
 
-import { testHost, testBrowser } from "../agents.js";
+import { TestHost, TestBrowser } from "../workflows.generated.js";
 import { useProxy } from "./proxy.js";
 import { whenReady } from "./when-ready.js";
 import { startHost, createHostAgentHandlers, type HostAgentState } from "./host-agent.js";
@@ -61,10 +61,10 @@ export function runScenario(
         };
 
         // 7. Install agents
-        const hostImpl = implementAgent(testHost, createHostAgentHandlers(hostAgentState));
+        const hostImpl = implementAgent(TestHost(), createHostAgentHandlers(hostAgentState));
         yield* hostImpl.install();
 
-        const browserImpl = implementAgent(testBrowser, createBrowserAgentHandlers(browserAgentState));
+        const browserImpl = implementAgent(TestBrowser(), createBrowserAgentHandlers(browserAgentState));
         yield* browserImpl.install();
 
         // 8. Execute test workflow

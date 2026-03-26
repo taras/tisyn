@@ -9,8 +9,7 @@ import { implementAgent } from "@tisyn/agent";
 import { execute } from "@tisyn/runtime";
 import { installRemoteAgent, workerTransport } from "@tisyn/transport";
 import { Call } from "@tisyn/ir";
-import { chat } from "../src/workflow.generated.js";
-import { browser, llm, state } from "./helpers/agents.js";
+import { Browser, Llm, State, chat } from "../src/workflow.generated.js";
 
 describe("Worker transport", () => {
   it("routes LLM.sample through a real worker thread", function* () {
@@ -21,7 +20,7 @@ describe("Worker transport", () => {
     const done = withResolvers<void>();
 
     // Install local Browser agent
-    const browserImpl = implementAgent(browser, {
+    const browserImpl = implementAgent(Browser(), {
       *waitForUser(args) {
         if (userMessageIndex >= userMessages.length) {
           done.resolve();
@@ -38,7 +37,7 @@ describe("Worker transport", () => {
     yield* browserImpl.install();
 
     // Install local State agent
-    const stateImpl = implementAgent(state, {
+    const stateImpl = implementAgent(State(), {
       *getHistory() {
         return [...history];
       },
@@ -55,7 +54,7 @@ describe("Worker transport", () => {
     const factory = workerTransport({
       url: new URL("../src/llm-worker.ts", import.meta.url).href,
     });
-    yield* installRemoteAgent(llm, factory);
+    yield* installRemoteAgent(Llm(), factory);
 
     // Run the compiled workflow
     yield* spawn(function* () {

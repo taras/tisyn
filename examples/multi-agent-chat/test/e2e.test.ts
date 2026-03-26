@@ -13,10 +13,9 @@ import { implementAgent } from "@tisyn/agent";
 import { execute } from "@tisyn/runtime";
 import { installRemoteAgent, workerTransport } from "@tisyn/transport";
 import { Call } from "@tisyn/ir";
-import { chat } from "../src/workflow.generated.js";
+import { Browser, Llm, State, chat } from "../src/workflow.generated.js";
 import { BrowserSessionManager } from "../src/browser-session.js";
 import type { HostToBrowser } from "../src/browser-session.js";
-import { browser, llm, state } from "./helpers/agents.js";
 
 describe("End-to-end chat", () => {
   it("multi-turn chat via session manager + worker LLM", function* () {
@@ -72,7 +71,7 @@ describe("End-to-end chat", () => {
     session.attach("e2e-test", serverWs);
 
     // Browser agent — local, backed by session manager
-    const browserImpl = implementAgent(browser, {
+    const browserImpl = implementAgent(Browser(), {
       *waitForUser({ input }) {
         return yield* session.waitForUser(input.prompt);
       },
@@ -92,10 +91,10 @@ describe("End-to-end chat", () => {
     const llmFactory = workerTransport({
       url: new URL("../src/llm-worker.ts", import.meta.url).href,
     });
-    yield* installRemoteAgent(llm, llmFactory);
+    yield* installRemoteAgent(Llm(), llmFactory);
 
     // State agent (local)
-    const stateImpl = implementAgent(state, {
+    const stateImpl = implementAgent(State(), {
       *getHistory() {
         sampleHistory.push([...history]);
         return [...history];
