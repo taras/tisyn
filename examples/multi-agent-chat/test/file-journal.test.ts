@@ -1,9 +1,10 @@
 import { describe as effDescribe, it as effIt } from "@effectionx/vitest";
 import { describe, it, expect } from "vitest";
+import { call } from "effection";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { randomUUID } from "node:crypto";
-import { unlinkSync, existsSync } from "node:fs";
+import { unlink } from "node:fs/promises";
 import type { DurableEvent, YieldEvent } from "@tisyn/kernel";
 import { FileJournalStream } from "../src/file-journal-stream.js";
 import { reconstructHistory } from "../src/reconstruct-history.js";
@@ -46,7 +47,7 @@ effDescribe("FileJournalStream", () => {
       expect(events).toHaveLength(1);
       expect(events[0]).toEqual(event);
     } finally {
-      if (existsSync(path)) unlinkSync(path);
+      try { yield* call(() => unlink(path)); } catch { /* may not exist */ }
     }
   });
 
@@ -63,7 +64,7 @@ effDescribe("FileJournalStream", () => {
       expect(events[0]).toEqual(e1);
       expect(events[1]).toEqual(e2);
     } finally {
-      if (existsSync(path)) unlinkSync(path);
+      try { yield* call(() => unlink(path)); } catch { /* may not exist */ }
     }
   });
 
@@ -78,7 +79,7 @@ effDescribe("FileJournalStream", () => {
       expect(events).toHaveLength(1);
       expect((events[0] as YieldEvent).description.name).toBe("waitForUser");
     } finally {
-      if (existsSync(path)) unlinkSync(path);
+      try { yield* call(() => unlink(path)); } catch { /* may not exist */ }
     }
   });
 });

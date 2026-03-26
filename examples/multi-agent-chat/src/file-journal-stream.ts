@@ -1,21 +1,26 @@
 /**
  * File-backed DurableStream using NDJSON (one JSON event per line).
  *
- * Append-only, synchronous writes for durability. Single-process only.
+ * Append-only, async writes with fsync for durability. Single-process only.
  */
 
+import { call } from "effection";
 import type { Operation } from "effection";
 import type { DurableStream } from "@tisyn/durable-streams";
 import type { DurableEvent } from "@tisyn/kernel";
-import { readFileSync, appendFileSync, existsSync } from "node:fs";
+import { readFile, writeFile } from "node:fs/promises";
 
 export class FileJournalStream implements DurableStream {
   constructor(private path: string) {}
 
-  // biome-ignore lint/correctness/useYield: synchronous generator for Operation interface
   *readAll(): Operation<DurableEvent[]> {
-    if (!existsSync(this.path)) return [];
-    const content = readFileSync(this.path, "utf-8");
+    let content: string;
+    try {
+      content = yield* call(() => readFile(this.path, "utf-8"));
+    } catch (e: unknown) {
+      if ((e as NodeJS.ErrnoException).code === "ENOENT") return [];
+      throw e;
+    }
     return content
       .split("\n")
       .filter((line) => line.trim() !== "")
@@ -29,8 +34,9 @@ export class FileJournalStream implements DurableStream {
       .filter((event) => event.type !== "close");
   }
 
-  // biome-ignore lint/correctness/useYield: synchronous generator for Operation interface
   *append(event: DurableEvent): Operation<void> {
-    appendFileSync(this.path, JSON.stringify(event) + "\n");
+    yield* call(() =>
+      writeFile(this.path, JSON.stringify(event) + "\n", { flag: "a", flush: true }),
+    );
   }
 }
