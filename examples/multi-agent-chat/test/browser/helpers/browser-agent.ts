@@ -76,7 +76,7 @@ export function createBrowserAgentHandlers(
       const result: any = yield* call(() =>
         page.evaluate(
           (ir) => (window as any).__tisyn_execute(ir),
-          input.workflow,
+          input.workflow as unknown,
         ),
       );
       if (result.status === "err") {
