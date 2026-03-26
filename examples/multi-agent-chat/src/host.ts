@@ -25,7 +25,7 @@ import { execute } from "@tisyn/runtime";
 import { InMemoryStream } from "@tisyn/durable-streams";
 import { installRemoteAgent, workerTransport } from "@tisyn/transport";
 import { Call } from "@tisyn/ir";
-import { Browser, chat, Llm, State } from "./workflow.generated.js";
+import { App, chat, Llm, State } from "./workflow.generated.js";
 import { useWebSocketServer } from "./browser-transport.js";
 import { FileJournalStream } from "./file-journal-stream.js";
 import { reconstructHistory } from "./reconstruct-history.js";
@@ -116,7 +116,7 @@ await main(function* () {
   // --- Browser session manager ---
   const session = new BrowserSessionManager(history);
 
-  const browserImpl = implementAgent(Browser(), {
+  const browserImpl = implementAgent(App(), {
     *waitForUser({ input }) {
       return yield* session.waitForUser(input.prompt);
     },

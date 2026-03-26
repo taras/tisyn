@@ -41,7 +41,7 @@ effDescribe("FileJournalStream", () => {
     const path = tmpJournalPath();
     const stream = new FileJournalStream(path);
     try {
-      const event: DurableEvent = yieldEvent("browser", "waitForUser", { message: "hi" });
+      const event: DurableEvent = yieldEvent("app", "waitForUser", { message: "hi" });
       yield* stream.append(event);
       const events = yield* stream.readAll();
       expect(events).toHaveLength(1);
@@ -55,7 +55,7 @@ effDescribe("FileJournalStream", () => {
     const path = tmpJournalPath();
     const stream = new FileJournalStream(path);
     try {
-      const e1 = yieldEvent("browser", "waitForUser", { message: "first" });
+      const e1 = yieldEvent("app", "waitForUser", { message: "first" });
       const e2 = yieldEvent("llm", "sample", { message: "second" });
       yield* stream.append(e1);
       yield* stream.append(e2);
@@ -72,7 +72,7 @@ effDescribe("FileJournalStream", () => {
     const path = tmpJournalPath();
     try {
       const stream1 = new FileJournalStream(path);
-      yield* stream1.append(yieldEvent("browser", "waitForUser", { message: "hi" }));
+      yield* stream1.append(yieldEvent("app", "waitForUser", { message: "hi" }));
 
       const stream2 = new FileJournalStream(path);
       const events = yield* stream2.readAll();
@@ -91,7 +91,7 @@ describe("reconstructHistory", () => {
 
   it("complete pair produces user + assistant entries", () => {
     const events: DurableEvent[] = [
-      yieldEvent("browser", "waitForUser", { message: "hello" }),
+      yieldEvent("app", "waitForUser", { message: "hello" }),
       yieldEvent("llm", "sample", { message: "hi back" }),
     ];
     expect(reconstructHistory(events)).toEqual([
@@ -102,9 +102,9 @@ describe("reconstructHistory", () => {
 
   it("multiple pairs in order", () => {
     const events: DurableEvent[] = [
-      yieldEvent("browser", "waitForUser", { message: "a" }),
+      yieldEvent("app", "waitForUser", { message: "a" }),
       yieldEvent("llm", "sample", { message: "b" }),
-      yieldEvent("browser", "waitForUser", { message: "c" }),
+      yieldEvent("app", "waitForUser", { message: "c" }),
       yieldEvent("llm", "sample", { message: "d" }),
     ];
     expect(reconstructHistory(events)).toEqual([
@@ -117,9 +117,9 @@ describe("reconstructHistory", () => {
 
   it("trailing unmatched waitForUser is ignored", () => {
     const events: DurableEvent[] = [
-      yieldEvent("browser", "waitForUser", { message: "a" }),
+      yieldEvent("app", "waitForUser", { message: "a" }),
       yieldEvent("llm", "sample", { message: "b" }),
-      yieldEvent("browser", "waitForUser", { message: "orphan" }),
+      yieldEvent("app", "waitForUser", { message: "orphan" }),
     ];
     expect(reconstructHistory(events)).toEqual([
       { role: "user", content: "a" },
@@ -129,8 +129,8 @@ describe("reconstructHistory", () => {
 
   it("non-ok results are ignored", () => {
     const events: DurableEvent[] = [
-      yieldEvent("browser", "waitForUser", "error msg", "err"),
-      yieldEvent("browser", "waitForUser", { message: "real" }),
+      yieldEvent("app", "waitForUser", "error msg", "err"),
+      yieldEvent("app", "waitForUser", { message: "real" }),
       yieldEvent("llm", "sample", { message: "reply" }),
     ];
     expect(reconstructHistory(events)).toEqual([
@@ -141,7 +141,7 @@ describe("reconstructHistory", () => {
 
   it("close events are ignored", () => {
     const events: DurableEvent[] = [
-      yieldEvent("browser", "waitForUser", { message: "a" }),
+      yieldEvent("app", "waitForUser", { message: "a" }),
       { type: "close", coroutineId: "root", result: { status: "ok", value: null } },
       yieldEvent("llm", "sample", { message: "b" }),
     ];
@@ -154,7 +154,7 @@ describe("reconstructHistory", () => {
   it("events with matching name but wrong type are ignored", () => {
     const events: DurableEvent[] = [
       yieldEvent("other", "waitForUser", { message: "wrong agent" }),
-      yieldEvent("browser", "waitForUser", { message: "right" }),
+      yieldEvent("app", "waitForUser", { message: "right" }),
       yieldEvent("other", "sample", { message: "wrong agent" }),
       yieldEvent("llm", "sample", { message: "correct" }),
     ];
@@ -166,7 +166,7 @@ describe("reconstructHistory", () => {
 
   it("interleaved state events do not disrupt pairing", () => {
     const events: DurableEvent[] = [
-      yieldEvent("browser", "waitForUser", { message: "hi" }),
+      yieldEvent("app", "waitForUser", { message: "hi" }),
       yieldEvent("state", "getHistory", []),
       yieldEvent("llm", "sample", { message: "hello" }),
       yieldEvent("state", "recordTurn", null),
