@@ -1,6 +1,8 @@
 import { type Operation, type Task, spawn, race, sleep, withResolvers } from "effection";
 import { daemon, type Daemon } from "@effectionx/process";
 import { lines } from "@effectionx/stream-helpers";
+import type { ImplementationHandlers } from "@tisyn/agent";
+import { TestHost } from "../workflows.generated.js";
 import { whenReady } from "./when-ready.js";
 
 export interface HostHandle {
@@ -87,15 +89,17 @@ export function* startHost(cwd: string, journalPath: string): Operation<HostHand
   return { daemon: proc, task, wsUrl };
 }
 
-export function createHostAgentHandlers(state: HostAgentState) {
+type HostHandlers = ImplementationHandlers<ReturnType<typeof TestHost>["operations"]>;
+
+export function createHostAgentHandlers(state: HostAgentState): HostHandlers {
   return {
-    *stop(): Operation<void> {
+    *stop() {
       if (state.hostHandle) {
         yield* state.hostHandle.task.halt();
         state.hostHandle = null;
       }
     },
-    *restart({ input }: { input: { journalPath?: string } }): Operation<void> {
+    *restart({ input }) {
       // Stop existing
       if (state.hostHandle) {
         yield* state.hostHandle.task.halt();
