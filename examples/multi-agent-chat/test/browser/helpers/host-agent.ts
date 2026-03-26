@@ -24,10 +24,12 @@ export interface HostAgentState {
  */
 export function* startHost(cwd: string, journalPath: string): Operation<HostHandle> {
   const daemonReady = withResolvers<Daemon>();
+  const stderrLines: string[] = [];
+  const stdoutLines: string[] = [];
 
   const task = yield* spawn(function* () {
-    const proc = yield* daemon("npx", {
-      arguments: ["tsx", "src/host.ts", "--port", "0", "--journal", journalPath],
+    const proc = yield* daemon("node", {
+      arguments: ["dist/host.js", "--port", "0", "--journal", journalPath],
       cwd,
       env: {
         ...process.env as Record<string, string>,
@@ -40,23 +42,45 @@ export function* startHost(cwd: string, journalPath: string): Operation<HostHand
 
   const proc = yield* daemonReady.operation;
 
+  // Capture stderr in background for diagnostics
+  yield* spawn(function* () {
+    const sub = yield* lines()(proc.stderr);
+    let next = yield* sub.next();
+    while (!next.done) {
+      stderrLines.push(next.value);
+      next = yield* sub.next();
+    }
+  });
+
+  function formatDiagnostics(): string {
+    const parts: string[] = [];
+    if (stdoutLines.length) parts.push(`stdout:\n${stdoutLines.join("\n")}`);
+    if (stderrLines.length) parts.push(`stderr:\n${stderrLines.join("\n")}`);
+    return parts.length ? "\n" + parts.join("\n") : "";
+  }
+
   // Wait for the ready line on stdout
   const wsUrl = yield* race([
     (function* (): Operation<string> {
       const subscription = yield* lines()(proc.stdout);
       let next = yield* subscription.next();
       while (!next.done) {
+        stdoutLines.push(next.value);
         const match = next.value.match(/TISYN_HOST_READY port=(\d+)/);
         if (match) {
           return `ws://localhost:${match[1]}`;
         }
         next = yield* subscription.next();
       }
-      throw new Error("Host stdout closed before TISYN_HOST_READY");
+      throw new Error(
+        `Host stdout closed before TISYN_HOST_READY${formatDiagnostics()}`,
+      );
     })(),
     (function* (): Operation<string> {
       yield* sleep(15000);
-      throw new Error("Host did not print TISYN_HOST_READY within 15s");
+      throw new Error(
+        `Host did not print TISYN_HOST_READY within 15s${formatDiagnostics()}`,
+      );
     })(),
   ]);
 

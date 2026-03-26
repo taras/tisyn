@@ -1,3 +1,5 @@
+import { TestBrowser } from "./declarations.ts";
+
 export function* basicSendReceive() {
   yield* TestBrowser().open({});
   yield* TestBrowser().expectStatusText({ text: "Say something" });

@@ -1,11 +1,11 @@
 import type { Workflow } from "@tisyn/agent";
 
-declare function TestHost(): {
+export declare function TestHost(): {
   stop(input: Record<string, never>): Workflow<void>;
   restart(input: { journalPath?: string }): Workflow<void>;
 };
 
-declare function TestBrowser(): {
+export declare function TestBrowser(): {
   open(input: Record<string, never>): Workflow<void>;
   reload(input: Record<string, never>): Workflow<void>;
   close(input: Record<string, never>): Workflow<void>;
