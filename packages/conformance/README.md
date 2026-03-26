@@ -1,14 +1,38 @@
 # `@tisyn/conformance`
 
-Fixture harness for verifying Tisyn runtime behavior against expected results and journals.
+`@tisyn/conformance` is the fixture harness for verifying that a Tisyn runtime behaves the way the specs say it should. It is not an application testing package; it is a package for testing runtimes, replay behavior, dispatch behavior, and negative cases against known fixtures.
 
-Use this package when you want to run conformance fixtures in tests or build higher-level spec validation around the runtime.
+## Where It Fits
 
-## Main exports
+This package sits above the runtime and below product-level tests.
 
-- `runFixture()`
-- `Fixture`
-- `FixtureResult`
+- `@tisyn/runtime` is the system under test.
+- `@tisyn/durable-streams` supplies the replayable event stream used by fixtures.
+- `@tisyn/agent` supplies installed handlers for effect fixtures.
+
+Use it when you are implementing or adapting Tisyn execution behavior and want to prove that behavior against stable examples.
+
+## Core Concepts
+
+- `Fixture`: the input definition for a conformance case
+- `runFixture()`: executes the fixture and captures the result
+- `FixtureResult`: the structured outcome used by tests
+
+Fixtures can cover:
+
+- successful evaluation
+- replay behavior
+- effect dispatch
+- validation failures
+- runtime failures
+
+## Main APIs
+
+The public surface from `src/index.ts` is:
+
+- `runFixture`: Execute one conformance fixture and return its structured outcome.
+- `Fixture`: Describe the inputs, expectations, and setup for a conformance scenario.
+- `FixtureResult`: Report whether a fixture passed or failed and why.
 
 ## Example
 
@@ -16,12 +40,24 @@ Use this package when you want to run conformance fixtures in tests or build hig
 import { runFixture } from "@tisyn/conformance";
 
 const result = await runFixture(fixture);
+
+if (result.status !== "passed") {
+  throw new Error(result.message);
+}
 ```
 
-Fixtures cover evaluation, effects, replay, negative validation, and negative runtime behavior.
+## Relationship to the Rest of Tisyn
 
-## Relationship to the rest of Tisyn
+- [`@tisyn/runtime`](../runtime/README.md) is the thing being verified.
+- [`@tisyn/durable-streams`](../durable-streams/README.md) provides the event stream used during replay-oriented cases.
+- [`@tisyn/agent`](../agent/README.md) provides the effect layer that fixtures can install and exercise.
 
-- [`@tisyn/runtime`](../runtime/README.md) is the system under test.
-- [`@tisyn/durable-streams`](../durable-streams/README.md) provides the in-memory replay store used by the harness.
-- [`@tisyn/agent`](../agent/README.md) provides mock dispatch middleware for effect fixtures.
+## Boundaries
+
+`@tisyn/conformance` is not:
+
+- a general-purpose app testing toolkit
+- a transport-specific browser or protocol harness
+- the runtime itself
+
+It is the package for asserting that Tisyn execution semantics remain consistent.

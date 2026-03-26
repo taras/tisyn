@@ -1,6 +1,38 @@
-# @tisyn/compiler
+# `@tisyn/compiler`
 
-Compiles authored TypeScript workflow source into generated TypeScript modules containing agent declarations and portable workflow IR. The authored source combines ambient factory contract declarations (`declare function`) with exported generator functions (`function*`) that express workflow logic. The generated output can be executed by any conforming Tisyn runtime.
+`@tisyn/compiler` turns authored workflow source into portable Tisyn IR plus generated TypeScript helpers. It is the bridge between the human-facing authoring format and the runtime-facing execution format.
+
+## Where It Fits
+
+This package owns the authoring-to-IR boundary.
+
+- Authors write ambient agent contract declarations and exported generator workflows.
+- The compiler discovers those contracts, validates the authored shape, and lowers workflows into IR.
+- The generated module is then consumed by hosts, runtimes, transports, or tests.
+
+If `@tisyn/ir` defines the language of Tisyn, `@tisyn/compiler` is what lets application code target that language from authored TypeScript.
+
+## Core Concepts
+
+- authored workflow source: `declare function` contracts plus exported `function*` workflows
+- contract discovery: convert authored declarations into agent metadata
+- IR lowering: convert workflow syntax into Tisyn IR
+- generated module output: emit declarations, compiled workflows, and grouped maps
+- validation: reject authored shapes the runtime cannot safely support
+
+## Main APIs
+
+The public API from `src/index.ts` is:
+
+- `compile`: Compile authored source into discovered contracts plus compiled workflow IR values.
+- `compileOne`: Compile a single exported workflow from authored source and return just that result.
+- `generateWorkflowModule`: Generate a complete TypeScript module containing declarations and compiled workflows.
+- `DiscoveredContract`: Describe one ambient agent contract discovered from authored source.
+- `ContractMethod`: Describe one discovered method on a contract, including names and types.
+- `CompileError`: Represent a compiler failure with structured location and error-code data.
+- `ErrorCodes`: Export the stable compiler error-code catalog for tooling and tests.
+
+There are also exported IR-builder helpers such as `Q`, `Ref`, `Fn`, `Let`, `Call`, `ExternalEval`, `AllEval`, and `RaceEval`. These are primarily compiler-facing utilities and lower-level tooling helpers rather than the main entrypoint most consumers should start with.
 
 ## Installation
 
