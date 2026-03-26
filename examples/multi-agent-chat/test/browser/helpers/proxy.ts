@@ -73,6 +73,8 @@ export function useProxy(distDir: string, initialWsUrl: string): Operation<Proxy
           "\r\n",
         );
         if (targetHead.length) socket.write(targetHead);
+        socket.on("error", () => socket.destroy());
+        targetSocket.on("error", () => targetSocket.destroy());
         socket.pipe(targetSocket);
         targetSocket.pipe(socket);
       });

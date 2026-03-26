@@ -2,7 +2,7 @@ import { type Operation, type Task, spawn, race, sleep, withResolvers } from "ef
 import { daemon, type Daemon } from "@effectionx/process";
 import { lines } from "@effectionx/stream-helpers";
 import type { ImplementationHandlers } from "@tisyn/agent";
-import { TestHost } from "../workflows.generated.js";
+import { Host as HostDecl } from "../host-workflows.generated.js";
 import { whenReady } from "./when-ready.js";
 
 export interface HostHandle {
@@ -89,7 +89,7 @@ export function* startHost(cwd: string, journalPath: string): Operation<HostHand
   return { daemon: proc, task, wsUrl };
 }
 
-type HostHandlers = ImplementationHandlers<ReturnType<typeof TestHost>["operations"]>;
+type HostHandlers = ImplementationHandlers<ReturnType<typeof HostDecl>["operations"]>;
 
 export function createHostAgentHandlers(state: HostAgentState): HostHandlers {
   return {
