@@ -1,7 +1,8 @@
 import { call } from "effection";
-import type { Operation } from "effection";
 import { expect } from "@playwright/test";
+import type { ImplementationHandlers } from "@tisyn/agent";
 import type { Browser, BrowserContext, Page } from "playwright";
+import { TestBrowser } from "../workflows.generated.js";
 
 export interface BrowserAgentState {
   browser: Browser;
@@ -16,32 +17,34 @@ function activePage(state: BrowserAgentState): Page {
   return session.page;
 }
 
-export function createBrowserAgentHandlers(state: BrowserAgentState) {
+type BrowserHandlers = ImplementationHandlers<ReturnType<typeof TestBrowser>["operations"]>;
+
+export function createBrowserAgentHandlers(state: BrowserAgentState): BrowserHandlers {
   return {
-    *open(): Operation<void> {
+    *open() {
       yield* call(() => activePage(state).goto(state.appUrl));
     },
-    *reload(): Operation<void> {
+    *reload() {
       yield* call(() => activePage(state).reload());
     },
-    *close(): Operation<void> {
+    *close() {
       yield* call(() => activePage(state).close());
     },
 
-    *openSession({ input }: { input: { sessionId: string } }): Operation<void> {
+    *openSession({ input }) {
       const context = yield* call(() => state.browser.newContext());
       const page = yield* call(() => context.newPage());
       state.sessions.set(input.sessionId, { context, page });
       state.activeSessionId = input.sessionId;
       yield* call(() => page.goto(state.appUrl));
     },
-    *switchSession({ input }: { input: { sessionId: string } }): Operation<void> {
+    *switchSession({ input }) {
       if (!state.sessions.has(input.sessionId)) {
         throw new Error(`No session "${input.sessionId}"`);
       }
       state.activeSessionId = input.sessionId;
     },
-    *closeSession({ input }: { input: { sessionId: string } }): Operation<void> {
+    *closeSession({ input }) {
       const session = state.sessions.get(input.sessionId);
       if (session) {
         yield* call(() => session.page.close());
@@ -50,40 +53,40 @@ export function createBrowserAgentHandlers(state: BrowserAgentState) {
       }
     },
 
-    *fill({ input }: { input: { name: string; value: string } }): Operation<void> {
+    *fill({ input }) {
       yield* call(() =>
         activePage(state).getByRole("textbox", { name: input.name }).fill(input.value),
       );
     },
-    *click({ input }: { input: { role: string; name: string } }): Operation<void> {
+    *click({ input }) {
       yield* call(() =>
         activePage(state).getByRole(input.role as any, { name: input.name }).click(),
       );
     },
-    *pressKey({ input }: { input: { key: string } }): Operation<void> {
+    *pressKey({ input }) {
       yield* call(() => activePage(state).keyboard.press(input.key));
     },
 
-    *expectVisible({ input }: { input: { text: string } }): Operation<void> {
+    *expectVisible({ input }) {
       yield* call(() => expect(activePage(state).getByText(input.text)).toBeVisible());
     },
-    *expectNotVisible({ input }: { input: { text: string } }): Operation<void> {
+    *expectNotVisible({ input }) {
       yield* call(() => expect(activePage(state).getByText(input.text)).not.toBeVisible());
     },
-    *expectDisabled({ input }: { input: { role: string; name: string } }): Operation<void> {
+    *expectDisabled({ input }) {
       yield* call(() =>
         expect(activePage(state).getByRole(input.role as any, { name: input.name })).toBeDisabled(),
       );
     },
-    *expectEnabled({ input }: { input: { role: string; name: string } }): Operation<void> {
+    *expectEnabled({ input }) {
       yield* call(() =>
         expect(activePage(state).getByRole(input.role as any, { name: input.name })).toBeEnabled(),
       );
     },
-    *expectStatusText({ input }: { input: { text: string } }): Operation<void> {
+    *expectStatusText({ input }) {
       yield* call(() => expect(activePage(state).getByRole("status")).toHaveText(input.text));
     },
-    *expectTranscript({ input }: { input: { messages: string[] } }): Operation<void> {
+    *expectTranscript({ input }) {
       const page = activePage(state);
       const log = page.getByRole("log");
       const items = log.locator(".message");

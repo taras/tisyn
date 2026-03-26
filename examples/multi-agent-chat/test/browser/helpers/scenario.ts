@@ -8,6 +8,7 @@ import { implementAgent } from "@tisyn/agent";
 import { execute } from "@tisyn/runtime";
 import { InMemoryStream } from "@tisyn/durable-streams";
 import { Call } from "@tisyn/ir";
+import type { TisynFn } from "@tisyn/ir";
 import { chromium } from "playwright";
 
 import { TestHost, TestBrowser } from "../workflows.generated.js";
@@ -20,7 +21,7 @@ const PROJECT_ROOT = fileURLToPath(new URL("../../..", import.meta.url));
 const BROWSER_DIST = join(PROJECT_ROOT, "browser", "dist");
 
 export function runScenario(
-  workflow: (...args: never[]) => Operation<unknown>,
+  workflow: TisynFn<[], unknown>,
 ): Operation<void> {
   return resource(function* (provide) {
     // 1. Temp dir for journal
@@ -69,7 +70,7 @@ export function runScenario(
 
         // 8. Execute test workflow
         const stream = new InMemoryStream();
-        const { result } = yield* execute({ ir: Call(workflow as any), stream });
+        const { result } = yield* execute({ ir: Call(workflow), stream });
 
         if (result.status === "err") {
           throw result.error;
