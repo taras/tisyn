@@ -1,28 +1,30 @@
 import { when } from "@effectionx/converge";
-import { call } from "effection";
+import { call, resource, withResolvers } from "effection";
 import type { Operation } from "effection";
 import { WebSocket } from "ws";
+
+function probeWebSocket(url: string): Operation<void> {
+  return resource(function* (provide) {
+    const ws = new WebSocket(url);
+    const ready = withResolvers<void>();
+
+    ws.on("open", () => ready.resolve());
+    ws.on("error", (err) => ready.reject(err));
+
+    try {
+      yield* ready.operation;
+      yield* provide(undefined);
+    } finally {
+      ws.close();
+    }
+  });
+}
 
 export function* whenReady(wsUrl: string, appUrl: string): Operation<void> {
   yield* when(
     function* () {
-      // Probe WebSocket
-      yield* call(
-        () =>
-          new Promise<void>((resolve, reject) => {
-            const ws = new WebSocket(wsUrl);
-            ws.on("open", () => {
-              ws.close();
-              resolve();
-            });
-            ws.on("error", reject);
-            setTimeout(() => {
-              ws.close();
-              reject(new Error("ws probe timeout"));
-            }, 2000);
-          }),
-      );
-      // Probe HTTP
+      yield* probeWebSocket(wsUrl);
+
       const res = yield* call(() => fetch(appUrl));
       if (res.status !== 200) throw new Error(`App returned ${res.status}`);
     },
