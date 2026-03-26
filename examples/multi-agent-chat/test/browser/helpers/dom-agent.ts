@@ -1,20 +1,5 @@
 import { call } from "effection";
-import { agent, operation } from "@tisyn/agent";
 import { screen, waitFor } from "@testing-library/dom";
-
-export function createDomAgent() {
-  return agent("dom", {
-    fill: operation<{ input: { name: string; value: string } }, void>(),
-    click: operation<{ input: { role: string; name: string } }, void>(),
-    pressKey: operation<{ input: { key: string } }, void>(),
-    expectVisible: operation<{ input: { text: string } }, void>(),
-    expectNotVisible: operation<{ input: { text: string } }, void>(),
-    expectDisabled: operation<{ input: { role: string; name: string } }, void>(),
-    expectEnabled: operation<{ input: { role: string; name: string } }, void>(),
-    expectTranscript: operation<{ input: { messages: string[] } }, void>(),
-    expectStatusText: operation<{ input: { text: string } }, void>(),
-  });
-}
 
 export function createDomAgentHandlers() {
   return {

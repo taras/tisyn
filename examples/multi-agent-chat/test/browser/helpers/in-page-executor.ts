@@ -4,7 +4,8 @@ import { execute } from "@tisyn/runtime";
 import { InMemoryStream } from "@tisyn/durable-streams";
 import { Call } from "@tisyn/ir";
 import type { IrInput } from "@tisyn/ir";
-import { createDomAgent, createDomAgentHandlers } from "./dom-agent.js";
+import { Dom } from "../dom-workflows.generated.js";
+import { createDomAgentHandlers } from "./dom-agent.js";
 
 (window as any).__tisyn_execute = (
   ir: IrInput,
@@ -14,8 +15,7 @@ import { createDomAgent, createDomAgentHandlers } from "./dom-agent.js";
   error?: { message: string };
 }> => {
   return run(function* () {
-    const Dom = createDomAgent();
-    const domImpl = implementAgent(Dom, createDomAgentHandlers());
+    const domImpl = implementAgent(Dom(), createDomAgentHandlers());
     yield* domImpl.install();
 
     const stream = new InMemoryStream();
