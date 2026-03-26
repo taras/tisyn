@@ -15,27 +15,16 @@ import { Host, Browser } from "../host-workflows.generated.js";
 import { workflows as domWorkflows } from "../dom-workflows.generated.js";
 import { useProxy } from "./proxy.js";
 import { whenReady } from "./when-ready.js";
-import {
-  startHost,
-  createHostAgentHandlers,
-  type HostAgentState,
-} from "./host-agent.js";
-import {
-  createBrowserAgentHandlers,
-  type BrowserAgentState,
-} from "./browser-agent.js";
+import { startHost, createHostAgentHandlers, type HostAgentState } from "./host-agent.js";
+import { createBrowserAgentHandlers, type BrowserAgentState } from "./browser-agent.js";
 
 const PROJECT_ROOT = fileURLToPath(new URL("../../..", import.meta.url));
 const BROWSER_DIST = join(PROJECT_ROOT, "browser", "dist");
 
-export function runScenario(
-  workflow: TisynFn<[], unknown>,
-): Operation<void> {
+export function runScenario(workflow: TisynFn<[], unknown>): Operation<void> {
   return resource(function* (provide) {
     // 1. Temp dir for journal
-    const tempDir = yield* call(() =>
-      mkdtemp(join(tmpdir(), "tisyn-test-")),
-    );
+    const tempDir = yield* call(() => mkdtemp(join(tmpdir(), "tisyn-test-")));
     const journalPath = join(tempDir, "journal.ndjson");
 
     try {
@@ -72,10 +61,7 @@ export function runScenario(
         };
 
         // 7. Install agents
-        const hostImpl = implementAgent(
-          Host(),
-          createHostAgentHandlers(hostAgentState),
-        );
+        const hostImpl = implementAgent(Host(), createHostAgentHandlers(hostAgentState));
         yield* hostImpl.install();
 
         const browserImpl = implementAgent(

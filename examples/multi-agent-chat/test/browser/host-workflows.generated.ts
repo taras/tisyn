@@ -5,7 +5,15 @@ import type { TisynFn } from "@tisyn/ir";
 import { Fn, Ref, Eval, Let, Construct } from "@tisyn/ir";
 import type { IrInput } from "@tisyn/ir";
 
-export function Browser(): DeclaredAgent<{ open: OperationSpec<{ input: Record<string, never> }, void>; close: OperationSpec<{ input: Record<string, never> }, void>; reload: OperationSpec<{ input: Record<string, never> }, void>; openSession: OperationSpec<{ input: { sessionId: string } }, void>; switchSession: OperationSpec<{ input: { sessionId: string } }, void>; closeSession: OperationSpec<{ input: { sessionId: string } }, void>; execute: OperationSpec<{ input: { workflow: IrInput } }, void> }> {
+export function Browser(): DeclaredAgent<{
+  open: OperationSpec<{ input: Record<string, never> }, void>;
+  close: OperationSpec<{ input: Record<string, never> }, void>;
+  reload: OperationSpec<{ input: Record<string, never> }, void>;
+  openSession: OperationSpec<{ input: { sessionId: string } }, void>;
+  switchSession: OperationSpec<{ input: { sessionId: string } }, void>;
+  closeSession: OperationSpec<{ input: { sessionId: string } }, void>;
+  execute: OperationSpec<{ input: { workflow: IrInput } }, void>;
+}> {
   const id = "browser";
   return agent(id, {
     open: operation<{ input: Record<string, never> }, void>(),
@@ -18,7 +26,10 @@ export function Browser(): DeclaredAgent<{ open: OperationSpec<{ input: Record<s
   });
 }
 
-export function Host(): DeclaredAgent<{ stop: OperationSpec<{ input: Record<string, never> }, void>; restart: OperationSpec<{ input: { journalPath?: string } }, void> }> {
+export function Host(): DeclaredAgent<{
+  stop: OperationSpec<{ input: Record<string, never> }, void>;
+  restart: OperationSpec<{ input: { journalPath?: string } }, void>;
+}> {
   const id = "host";
   return agent(id, {
     stop: operation<{ input: Record<string, never> }, void>(),
@@ -26,176 +37,209 @@ export function Host(): DeclaredAgent<{ stop: OperationSpec<{ input: Record<stri
   });
 }
 
-export const basicSendReceive: TisynFn<[], unknown> =
-  Fn([],
-    Let(
-      "__discard_0",
-      Eval("browser.open",
-        Construct({
-          input: Construct({
-  
-            })
-        })),
-      Eval("browser.execute",
-        Construct({
-          input: Construct({
-              workflow: Ref("basicSendReceiveDom")
-            })
-        }))
-    ));
+export const basicSendReceive: TisynFn<[], unknown> = Fn(
+  [],
+  Let(
+    "__discard_0",
+    Eval(
+      "browser.open",
+      Construct({
+        input: Construct({}),
+      }),
+    ),
+    Eval(
+      "browser.execute",
+      Construct({
+        input: Construct({
+          workflow: Ref("basicSendReceiveDom"),
+        }),
+      }),
+    ),
+  ),
+);
 
-export const hostRestartPreservesState: TisynFn<[], unknown> =
-  Fn([],
+export const hostRestartPreservesState: TisynFn<[], unknown> = Fn(
+  [],
+  Let(
+    "__discard_0",
+    Eval(
+      "browser.open",
+      Construct({
+        input: Construct({}),
+      }),
+    ),
     Let(
-      "__discard_0",
-      Eval("browser.open",
+      "__discard_1",
+      Eval(
+        "browser.execute",
         Construct({
           input: Construct({
-  
-            })
-        })),
+            workflow: Ref("sendBeforeRestartDom"),
+          }),
+        }),
+      ),
       Let(
-        "__discard_1",
-        Eval("browser.execute",
+        "__discard_2",
+        Eval(
+          "host.restart",
           Construct({
-            input: Construct({
-                workflow: Ref("sendBeforeRestartDom")
-              })
-          })),
+            input: Construct({}),
+          }),
+        ),
         Let(
-          "__discard_2",
-          Eval("host.restart",
+          "__discard_3",
+          Eval(
+            "browser.execute",
             Construct({
               input: Construct({
-  
-                })
-            })),
+                workflow: Ref("expectDisconnectedDom"),
+              }),
+            }),
+          ),
           Let(
-            "__discard_3",
-            Eval("browser.execute",
+            "__discard_4",
+            Eval(
+              "browser.reload",
+              Construct({
+                input: Construct({}),
+              }),
+            ),
+            Eval(
+              "browser.execute",
               Construct({
                 input: Construct({
-                    workflow: Ref("expectDisconnectedDom")
-                  })
-              })),
-            Let(
-              "__discard_4",
-              Eval("browser.reload",
-                Construct({
-                  input: Construct({
-  
-                    })
-                })),
-              Eval("browser.execute",
-                Construct({
-                  input: Construct({
-                      workflow: Ref("verifyRestoredAndSendAfterRestartDom")
-                    })
-                }))
-            )
-          )
-        )
-      )
-    ));
+                  workflow: Ref("verifyRestoredAndSendAfterRestartDom"),
+                }),
+              }),
+            ),
+          ),
+        ),
+      ),
+    ),
+  ),
+);
 
-export const secondBrowserIsReadOnly: TisynFn<[], unknown> =
-  Fn([],
+export const secondBrowserIsReadOnly: TisynFn<[], unknown> = Fn(
+  [],
+  Let(
+    "__discard_0",
+    Eval(
+      "browser.open",
+      Construct({
+        input: Construct({}),
+      }),
+    ),
     Let(
-      "__discard_0",
-      Eval("browser.open",
+      "__discard_1",
+      Eval(
+        "browser.execute",
         Construct({
           input: Construct({
-  
-            })
-        })),
+            workflow: Ref("sendFirstMessageDom"),
+          }),
+        }),
+      ),
       Let(
-        "__discard_1",
-        Eval("browser.execute",
+        "__discard_2",
+        Eval(
+          "browser.openSession",
           Construct({
             input: Construct({
-                workflow: Ref("sendFirstMessageDom")
-              })
-          })),
+              sessionId: "second",
+            }),
+          }),
+        ),
         Let(
-          "__discard_2",
-          Eval("browser.openSession",
+          "__discard_3",
+          Eval(
+            "browser.execute",
             Construct({
               input: Construct({
-                  sessionId: "second"
-                })
-            })),
+                workflow: Ref("verifySecondBrowserReadOnlyDom"),
+              }),
+            }),
+          ),
           Let(
-            "__discard_3",
-            Eval("browser.execute",
+            "__discard_4",
+            Eval(
+              "browser.switchSession",
               Construct({
                 input: Construct({
-                    workflow: Ref("verifySecondBrowserReadOnlyDom")
-                  })
-              })),
+                  sessionId: "default",
+                }),
+              }),
+            ),
             Let(
-              "__discard_4",
-              Eval("browser.switchSession",
+              "__discard_5",
+              Eval(
+                "browser.execute",
                 Construct({
                   input: Construct({
-                      sessionId: "default"
-                    })
-                })),
-              Let(
-                "__discard_5",
-                Eval("browser.execute",
-                  Construct({
-                    input: Construct({
-                        workflow: Ref("verifyDefaultSessionEnabledDom")
-                      })
-                  })),
-                Eval("browser.closeSession",
-                  Construct({
-                    input: Construct({
-                        sessionId: "second"
-                      })
-                  }))
-              )
-            )
-          )
-        )
-      )
-    ));
+                    workflow: Ref("verifyDefaultSessionEnabledDom"),
+                  }),
+                }),
+              ),
+              Eval(
+                "browser.closeSession",
+                Construct({
+                  input: Construct({
+                    sessionId: "second",
+                  }),
+                }),
+              ),
+            ),
+          ),
+        ),
+      ),
+    ),
+  ),
+);
 
-export const transcriptRestoresAfterReload: TisynFn<[], unknown> =
-  Fn([],
+export const transcriptRestoresAfterReload: TisynFn<[], unknown> = Fn(
+  [],
+  Let(
+    "__discard_0",
+    Eval(
+      "browser.open",
+      Construct({
+        input: Construct({}),
+      }),
+    ),
     Let(
-      "__discard_0",
-      Eval("browser.open",
+      "__discard_1",
+      Eval(
+        "browser.execute",
         Construct({
           input: Construct({
-  
-            })
-        })),
+            workflow: Ref("sendTwoMessagesDom"),
+          }),
+        }),
+      ),
       Let(
-        "__discard_1",
-        Eval("browser.execute",
+        "__discard_2",
+        Eval(
+          "browser.reload",
+          Construct({
+            input: Construct({}),
+          }),
+        ),
+        Eval(
+          "browser.execute",
           Construct({
             input: Construct({
-                workflow: Ref("sendTwoMessagesDom")
-              })
-          })),
-        Let(
-          "__discard_2",
-          Eval("browser.reload",
-            Construct({
-              input: Construct({
-  
-                })
-            })),
-          Eval("browser.execute",
-            Construct({
-              input: Construct({
-                  workflow: Ref("verifyTranscriptAfterReloadDom")
-                })
-            }))
-        )
-      )
-    ));
+              workflow: Ref("verifyTranscriptAfterReloadDom"),
+            }),
+          }),
+        ),
+      ),
+    ),
+  ),
+);
 
 export const agents = { Browser, Host };
-export const workflows = { basicSendReceive, hostRestartPreservesState, secondBrowserIsReadOnly, transcriptRestoresAfterReload };
+export const workflows = {
+  basicSendReceive,
+  hostRestartPreservesState,
+  secondBrowserIsReadOnly,
+  transcriptRestoresAfterReload,
+};

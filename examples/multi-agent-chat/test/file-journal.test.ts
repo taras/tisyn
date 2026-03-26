@@ -47,7 +47,11 @@ effDescribe("FileJournalStream", () => {
       expect(events).toHaveLength(1);
       expect(events[0]).toEqual(event);
     } finally {
-      try { yield* call(() => unlink(path)); } catch { /* may not exist */ }
+      try {
+        yield* call(() => unlink(path));
+      } catch {
+        /* may not exist */
+      }
     }
   });
 
@@ -64,7 +68,11 @@ effDescribe("FileJournalStream", () => {
       expect(events[0]).toEqual(e1);
       expect(events[1]).toEqual(e2);
     } finally {
-      try { yield* call(() => unlink(path)); } catch { /* may not exist */ }
+      try {
+        yield* call(() => unlink(path));
+      } catch {
+        /* may not exist */
+      }
     }
   });
 
@@ -79,7 +87,11 @@ effDescribe("FileJournalStream", () => {
       expect(events).toHaveLength(1);
       expect((events[0] as YieldEvent).description.name).toBe("waitForUser");
     } finally {
-      try { yield* call(() => unlink(path)); } catch { /* may not exist */ }
+      try {
+        yield* call(() => unlink(path));
+      } catch {
+        /* may not exist */
+      }
     }
   });
 });
