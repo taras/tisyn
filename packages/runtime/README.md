@@ -25,11 +25,11 @@ If you want to run Tisyn programs rather than just inspect or validate them, thi
 
 The public surface from `src/index.ts` is:
 
-- `execute`
-- `ExecuteOptions`
-- `ExecuteResult`
-- `executeRemote`
-- `ExecuteRemoteOptions`
+- `execute`: Run IR durably against a stream, replay prior events, and dispatch live effects.
+- `ExecuteOptions`: Describe the inputs accepted by `execute()`, including IR, environment, and stream configuration.
+- `ExecuteResult`: Describe the structured outcome returned by `execute()`.
+- `executeRemote`: Execute received IR in a remote-execution context with supplied environment values.
+- `ExecuteRemoteOptions`: Describe the inputs accepted by `executeRemote()`.
 
 ## Execute IR Durably
 

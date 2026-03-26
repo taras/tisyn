@@ -29,12 +29,12 @@ The surface is intentionally broad, but it groups into a few jobs.
 
 ### Types and values
 
-- `Json`
-- `Val`
-- `TisynExpr`
-- `Expr`
-- `TisynFn`
-- `IrInput`
+- `Json`: Represent plain JSON-compatible values that can be serialized across boundaries.
+- `Val`: Represent the runtime value domain accepted by environments and protocols.
+- `TisynExpr`: Represent the full union of legal Tisyn expression nodes and literals.
+- `Expr`: Represent a typed expression input used by constructor helpers.
+- `TisynFn`: Represent a function-shaped IR value with parameter names and a body expression.
+- `IrInput`: Represent the validated input shapes accepted by IR-consuming APIs.
 
 ### Constructors
 

@@ -24,39 +24,39 @@ Use this package when you are building transport adapters, framing layers, or pr
 
 ### Types
 
-- `HostMessage`
-- `AgentMessage`
-- `InitializeRequest`
-- `InitializeResponse`
-- `ExecuteRequest`
-- `ExecuteResponse`
-- `ProgressNotification`
-- `CancelNotification`
-- `ShutdownNotification`
-- `ResultPayload`
-- `ApplicationError`
+- `HostMessage`: Union together all messages the host may send to a remote agent.
+- `AgentMessage`: Union together all messages a remote agent may send back to the host.
+- `InitializeRequest`: Represent the host-to-agent handshake request that opens a protocol session.
+- `InitializeResponse`: Represent the agent’s response to initialization.
+- `ExecuteRequest`: Represent a request to invoke one remote operation.
+- `ExecuteResponse`: Represent the success or failure response for an execute request.
+- `ProgressNotification`: Represent a one-way progress update during remote execution.
+- `CancelNotification`: Represent a one-way request to cancel an in-flight execution.
+- `ShutdownNotification`: Represent a one-way notification that the protocol session is ending.
+- `ResultPayload`: Represent the JSON-compatible result envelope carried by execution responses.
+- `ApplicationError`: Represent an application-level execution failure returned over the protocol.
 
 ### Constants
 
-- `ProtocolErrorCode`
+- `ProtocolErrorCode`: Export the stable numeric error codes used for protocol-layer failures.
 
 ### Constructors
 
-- `initializeRequest`
-- `initializeResponse`
-- `initializeProtocolError`
-- `executeRequest`
-- `executeSuccess`
-- `executeApplicationError`
-- `executeProtocolError`
-- `progressNotification`
-- `cancelNotification`
-- `shutdownNotification`
+- `initializeRequest`: Build a well-shaped initialize request message.
+- `initializeResponse`: Build a successful initialize response message.
+- `initializeProtocolError`: Build an initialize failure response at the protocol layer.
+- `executeRequest`: Build a request to execute one operation remotely.
+- `executeSuccess`: Build a successful execute response message.
+- `executeApplicationError`: Build an execute response that carries an application error.
+- `executeProtocolError`: Build an execute response that carries a protocol error.
+- `progressNotification`: Build a progress notification message.
+- `cancelNotification`: Build a cancellation notification message.
+- `shutdownNotification`: Build a shutdown notification message.
 
 ### Parsers
 
-- `parseHostMessage`
-- `parseAgentMessage`
+- `parseHostMessage`: Validate and narrow parsed JSON into one of the allowed host message shapes.
+- `parseAgentMessage`: Validate and narrow parsed JSON into one of the allowed agent message shapes.
 
 ## Example
 

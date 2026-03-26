@@ -23,37 +23,37 @@ Use it when a Tisyn effect should execute somewhere other than the current proce
 
 ### Host-side installation and sessions
 
-- `installRemoteAgent`
-- `createSession`
-- `ProtocolSession`
-- `CreateSessionOptions`
+- `installRemoteAgent`: Install an agent declaration so its invocations are forwarded over a transport session.
+- `createSession`: Create and manage a host-side protocol session over a concrete transport.
+- `ProtocolSession`: Represent the live session object that manages protocol lifecycle and request routing.
+- `CreateSessionOptions`: Describe the configuration accepted by `createSession()`.
 
 ### Transport interfaces
 
-- `Transport`
-- `AgentTransport`
-- `AgentTransportFactory`
+- `Transport`: Define the host-side transport contract used to open a protocol session.
+- `AgentTransport`: Define the agent-side transport contract used by protocol servers.
+- `AgentTransportFactory`: Define a factory that creates agent-side transports on demand.
 
 ### Concrete transports
 
-- `inprocessTransport`
-- `stdioTransport`
-- `websocketTransport`
-- `workerTransport`
-- `ssePostTransport`
+- `inprocessTransport`: Create an in-process reference transport with no real IO boundary.
+- `stdioTransport`: Create a transport that talks to a child process over stdin/stdout.
+- `websocketTransport`: Create a transport that speaks the protocol over WebSocket.
+- `workerTransport`: Create a transport that speaks the protocol through a worker boundary.
+- `ssePostTransport`: Create an HTTP transport that combines POST requests with SSE responses.
 
 ### Agent-side adapters
 
-- `createStdioAgentTransport`
-- `createSsePostAgentTransport`
-- `createProtocolServer`
-- `AgentServerTransport`
-- `ProtocolServer`
+- `createStdioAgentTransport`: Adapt stdin/stdout streams into an agent-side transport.
+- `createSsePostAgentTransport`: Adapt POST and SSE channels into an agent-side transport.
+- `createProtocolServer`: Build the agent-side protocol loop that serves requests over a transport.
+- `AgentServerTransport`: Define the server-side transport contract consumed by `createProtocolServer()`.
+- `ProtocolServer`: Represent the running server-side protocol adapter.
 
 ### Verification helpers
 
-- `transportComplianceSuite`
-- `TransportFactoryBuilder`
+- `transportComplianceSuite`: Run the shared conformance checks against a transport implementation.
+- `TransportFactoryBuilder`: Type the helper shape used to construct transports for compliance tests.
 
 ## Example
 

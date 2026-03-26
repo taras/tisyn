@@ -26,24 +26,24 @@ Declarations are pure metadata plus typed call helpers. They do not execute anyt
 
 The current public surface from `src/index.ts` is:
 
-- `agent`
-- `operation`
-- `implementAgent`
-- `Dispatch`
-- `dispatch`
-- `invoke`
+- `agent`: Declare a named agent boundary and its available operations.
+- `operation`: Declare the typed input/output contract for one operation on an agent.
+- `implementAgent`: Bind generator handlers to a declaration so the runtime can dispatch to it.
+- `Dispatch`: Represent the Effection middleware contract that routes invocations to handlers.
+- `dispatch`: Install dispatch middleware into the current Effection scope.
+- `invoke`: Execute a declared operation against the currently installed dispatch stack.
 
 Important exported types:
 
-- `OperationSpec`
-- `DeclaredAgent`
-- `AgentDeclaration`
-- `AgentImplementation`
-- `ImplementationHandlers`
-- `Invocation`
-- `ArgsOf`
-- `ResultOf`
-- `Workflow`
+- `OperationSpec`: Describe the typed input and result shape of a declared operation.
+- `DeclaredAgent`: Represent the callable declaration object returned by `agent()`.
+- `AgentDeclaration`: Name the structural type for a declared agent contract.
+- `AgentImplementation`: Represent a declaration paired with concrete handlers and install logic.
+- `ImplementationHandlers`: Type the handler map expected by `implementAgent()`.
+- `Invocation`: Represent one concrete operation call ready for dispatch.
+- `ArgsOf`: Extract the input shape from an operation declaration.
+- `ResultOf`: Extract the result type from an operation declaration.
+- `Workflow`: Represent the authored workflow return type used in ambient contract declarations.
 
 ## Define a Declaration
 

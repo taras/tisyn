@@ -24,13 +24,13 @@ If `@tisyn/ir` defines the language of Tisyn, `@tisyn/compiler` is what lets app
 
 The public API from `src/index.ts` is:
 
-- `compile`
-- `compileOne`
-- `generateWorkflowModule`
-- `DiscoveredContract`
-- `ContractMethod`
-- `CompileError`
-- `ErrorCodes`
+- `compile`: Compile authored source into discovered contracts plus compiled workflow IR values.
+- `compileOne`: Compile a single exported workflow from authored source and return just that result.
+- `generateWorkflowModule`: Generate a complete TypeScript module containing declarations and compiled workflows.
+- `DiscoveredContract`: Describe one ambient agent contract discovered from authored source.
+- `ContractMethod`: Describe one discovered method on a contract, including names and types.
+- `CompileError`: Represent a compiler failure with structured location and error-code data.
+- `ErrorCodes`: Export the stable compiler error-code catalog for tooling and tests.
 
 There are also exported IR-builder helpers such as `Q`, `Ref`, `Fn`, `Let`, `Call`, `ExternalEval`, `AllEval`, and `RaceEval`. These are primarily compiler-facing utilities and lower-level tooling helpers rather than the main entrypoint most consumers should start with.
 

@@ -30,9 +30,9 @@ Fixtures can cover:
 
 The public surface from `src/index.ts` is:
 
-- `runFixture`
-- `Fixture`
-- `FixtureResult`
+- `runFixture`: Execute one conformance fixture and return its structured outcome.
+- `Fixture`: Describe the inputs, expectations, and setup for a conformance scenario.
+- `FixtureResult`: Report whether a fixture passed or failed and why.
 
 ## Example
 

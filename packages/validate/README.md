@@ -24,20 +24,20 @@ Use it whenever IR comes from another process, persistent storage, user input, o
 
 The public surface from `src/index.ts` is:
 
-- `validateGrammar`
-- `validateIr`
-- `assertValidIr`
-- `MalformedIR`
-- `tisynExprSchema`
-- `evalSchema`
-- `quoteSchema`
-- `refSchema`
-- `fnSchema`
+- `validateGrammar`: Check that an IR tree follows the allowed grammar rules without throwing.
+- `validateIr`: Perform full validation and return the structured result.
+- `assertValidIr`: Validate IR and throw `MalformedIR` if it is invalid.
+- `MalformedIR`: Represent a validation failure that crossed a trust boundary.
+- `tisynExprSchema`: Export the top-level schema for a full Tisyn expression.
+- `evalSchema`: Export the schema for eval nodes.
+- `quoteSchema`: Export the schema for quote nodes.
+- `refSchema`: Export the schema for ref nodes.
+- `fnSchema`: Export the schema for function-shaped IR nodes.
 
 Useful exported types:
 
-- `ValidationError`
-- `ValidationResult`
+- `ValidationError`: Describe one concrete validation problem found in the IR.
+- `ValidationResult`: Represent the success or failure result returned by validation functions.
 
 ## Example
 

@@ -24,10 +24,10 @@ The important behavioral contract is that `append()` only completes after the ev
 
 The public surface from `src/index.ts` is:
 
-- `DurableStream`
-- `InMemoryStream`
-- `ReplayIndex`
-- `YieldEntry`
+- `DurableStream`: Define the append/read contract for durable event storage backends.
+- `InMemoryStream`: Provide a simple in-memory `DurableStream` implementation for tests and fixtures.
+- `ReplayIndex`: Index prior yield events so replay can answer lookup questions efficiently.
+- `YieldEntry`: Represent one indexed replay entry derived from a prior yield event.
 
 ## Example
 
