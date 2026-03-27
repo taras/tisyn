@@ -876,7 +876,7 @@ function emitWhileStatement(
   const loopCarriedVars = detectLoopCarriedLetVars(stmt, ctx);
 
   if (hasReturn || loopCarriedVars.length > 0) {
-    return emitWhileCaseB(stmt, rest, isLast, ctx, loopCarriedVars);
+    return emitWhileCaseB(stmt, rest, isLast, ctx, loopCarriedVars, hasReturn);
   }
 
   // Case A: no return, no loop-carried state → While IR node
@@ -922,6 +922,7 @@ function emitWhileCaseB(
   isLast: boolean,
   ctx: EmitContext,
   loopCarriedVars: string[],
+  hasReturn: boolean,
 ): Expr {
   const loopName = ctx.counter.next("loop");
   const condition = stmt.expression;
@@ -954,13 +955,61 @@ function emitWhileCaseB(
     condition,
     loopName,
     loopCarriedVars,
+    loopCarriedParams,
     fnCtx,
     lastParamName,
+    hasReturn,
   );
 
   const loopFn = Fn(loopCarriedParams, transformedBody);
 
   const callExpr = Call(Ref(loopName), initArgs);
+
+  const needsPack = hasReturn && lastParamName !== null;
+  const needsRebind = loopCarriedVars.length > 0;
+
+  if (needsPack || needsRebind) {
+    const resultName = ctx.counter.next("loop_result");
+    const resultRef = Ref(resultName);
+
+    // Bump each carried var in outer ctx BEFORE building rest(),
+    // so rest() references the new post-loop versions.
+    const newIrNames = needsRebind ? loopCarriedVars.map((v) => bumpVersion(v, ctx)) : [];
+
+    const buildRebindChain = (cont: Expr): Expr => {
+      let chain = cont;
+      for (let i = loopCarriedVars.length - 1; i >= 0; i--) {
+        chain = Let(newIrNames[i]!, Get(resultRef, loopCarriedVars[i]!) as Expr, chain);
+      }
+      return chain;
+    };
+
+    if (isLast) {
+      // Nothing follows the loop — just extract the value; rebind not needed.
+      return Let(loopName, loopFn, Let(resultName, callExpr, Get(resultRef, "__value") as Expr));
+    }
+
+    if (needsPack) {
+      // Dispatch: early return short-circuits, condition-false exit continues (with optional rebind).
+      const continuation: Expr = needsRebind ? buildRebindChain(rest()) : rest();
+      return Let(
+        loopName,
+        loopFn,
+        Let(
+          resultName,
+          callExpr,
+          If(
+            Eq(Get(resultRef, "__tag") as Expr, "return" as unknown as Expr) as Expr,
+            Get(resultRef, "__value") as Expr,
+            continuation,
+          ),
+        ),
+      );
+    }
+
+    // !needsPack && needsRebind && !isLast: no early return, just rebind and continue.
+    return Let(loopName, loopFn, Let(resultName, callExpr, buildRebindChain(rest())));
+  }
 
   if (isLast) {
     return Let(loopName, loopFn, callExpr);
@@ -977,25 +1026,48 @@ function emitLoopBody(
   condition: ts.Expression,
   loopName: string,
   loopCarriedVars: string[],
+  loopCarriedParams: string[],
   ctx: EmitContext,
   lastParamName: string | null,
+  hasReturn: boolean,
 ): Expr {
   // Check if condition is `true` literal
   const isTrueCondition = condition.kind === ts.SyntaxKind.TrueKeyword;
 
   if (isTrueCondition) {
     // while(true) — no condition check needed, just body + recurse
-    return emitLoopStatements(stmts, 0, loopName, loopCarriedVars, lastParamName, ctx);
+    return emitLoopStatements(stmts, 0, loopName, loopCarriedVars, lastParamName, ctx, null, hasReturn);
   }
 
   // Evaluate condition BEFORE body so it uses parameter versions (not body-bumped ones).
   // Body statements mutate ctx (bumping loop-carried var versions), so order matters.
   const condExpr = emitExpression(condition, ctx);
-  const bodyExpr = emitLoopStatements(stmts, 0, loopName, loopCarriedVars, lastParamName, ctx);
+  const bodyExpr = emitLoopStatements(stmts, 0, loopName, loopCarriedVars, lastParamName, ctx, null, hasReturn);
 
-  // while(cond) — wrap in If(cond, body, lastParamRef) so that when the condition
-  // becomes false the loop expression returns the last body result rather than null.
-  return lastParamName ? If(condExpr, bodyExpr, Ref(lastParamName)) : If(condExpr, bodyExpr);
+  if (lastParamName !== null) {
+    const needsPack = hasReturn;
+    const needsRebind = loopCarriedVars.length > 0;
+
+    if (needsPack || needsRebind) {
+      // Condition-false exit: pack into a struct so the caller can always destructure.
+      // loopCarriedParams are the Fn param-version names — their values ARE the current
+      // iteration's loop-carried values at the moment the condition is tested.
+      const fields: Record<string, Expr> = {};
+      if (needsPack) {
+        fields.__tag = "exit" as unknown as Expr;
+      }
+      fields.__value = Ref(lastParamName) as Expr;
+      if (needsRebind) {
+        loopCarriedVars.forEach((v, i) => {
+          fields[v] = Ref(loopCarriedParams[i]!) as Expr;
+        });
+      }
+      return If(condExpr, bodyExpr, Construct(fields as any) as Expr);
+    }
+
+    return If(condExpr, bodyExpr, Ref(lastParamName));
+  }
+  return If(condExpr, bodyExpr);
 }
 
 /**
@@ -1014,6 +1086,7 @@ function emitLoopStatements(
   lastParamName: string | null,
   ctx: EmitContext,
   lastBound: string | null = null,
+  hasReturn: boolean = false,
 ): Expr {
   if (index >= stmts.length) {
     // Fall-through: recurse, passing current versions of loop-carried vars
@@ -1026,14 +1099,31 @@ function emitLoopStatements(
 
   const stmt = stmts[index]!;
   const rest = (newBound: string | null) =>
-    emitLoopStatements(stmts, index + 1, loopName, loopCarriedVars, lastParamName, ctx, newBound);
+    emitLoopStatements(stmts, index + 1, loopName, loopCarriedVars, lastParamName, ctx, newBound, hasReturn);
 
   // Return → base case (value propagates out)
   if (ts.isReturnStatement(stmt)) {
-    if (stmt.expression) {
-      return emitExpression(stmt.expression, ctx);
+    const retVal: Expr = stmt.expression
+      ? emitExpression(stmt.expression, ctx)
+      : (null as unknown as Expr);
+
+    // When the loop can have early returns (needsPack), ALL exit paths must return
+    // a struct so the outer caller can always destructure.
+    const needsPack = hasReturn && lastParamName !== null;
+    const needsRebind = loopCarriedVars.length > 0;
+    if (needsPack) {
+      const fields: Record<string, Expr> = {
+        __tag: "return" as unknown as Expr,
+        __value: retVal,
+      };
+      if (needsRebind) {
+        for (const v of loopCarriedVars) {
+          fields[v] = Ref(resolveRef(v, ctx)) as Expr;
+        }
+      }
+      return Construct(fields as any) as Expr;
     }
-    return null as unknown as Expr;
+    return retVal;
   }
 
   // Variable declaration
@@ -1074,7 +1164,7 @@ function emitLoopStatements(
 
   // If with return → early return pattern
   if (ts.isIfStatement(stmt)) {
-    return emitLoopIfStatement(stmt, stmts, index, loopName, loopCarriedVars, lastParamName, ctx);
+    return emitLoopIfStatement(stmt, stmts, index, loopName, loopCarriedVars, lastParamName, ctx, hasReturn);
   }
 
   // Expression statement
@@ -1119,6 +1209,7 @@ function emitLoopIfStatement(
   loopCarriedVars: string[],
   lastParamName: string | null,
   ctx: EmitContext,
+  hasReturn: boolean,
 ): Expr {
   const condition = emitExpression(stmt.expression, ctx);
   const thenTerminates = alwaysTerminates(stmt.thenStatement);
@@ -1152,6 +1243,7 @@ function emitLoopIfStatement(
     lastParamName,
     thenCtx,
     null,
+    hasReturn,
   );
 
   const elseCtx: EmitContext = { ...ctx, scopeStack: cloneScopeStack(ctx.scopeStack) };
@@ -1163,6 +1255,7 @@ function emitLoopIfStatement(
     lastParamName,
     elseCtx,
     null,
+    hasReturn,
   );
 
   return If(condition, thenBranch, elseBranch);

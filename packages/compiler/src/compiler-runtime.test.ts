@@ -173,3 +173,126 @@ describe("Bug 6 — nested block continuation duplicated in emitStatementListWit
     }
   });
 });
+
+describe("Bug 7 — post-loop carried state rebinding: single var", () => {
+  it("outer scope sees the final loop value after loop exits", function* () {
+    // Before the fix: the loop Fn returned the last body result (x_N) but never
+    // rebound the outer SSA name. The outer `return x` emitted Ref("x_0") = 0.
+    // After the fix: the loop result struct is destructured and x is rebound in
+    // the outer scope before the continuation runs.
+    const ir = compileOne(`
+      function* test(): Workflow<unknown> {
+        let x = 0;
+        while (x < 3) { x = x + 1; }
+        return x;
+      }
+    `);
+    const { result } = yield* execute({ ir: Call(ir) });
+    expect(result.status).toBe("ok");
+    if (result.status === "ok") {
+      expect(result.value).toBe(3);
+    }
+  });
+});
+
+describe("Bug 7 — post-loop carried state rebinding: multiple vars", () => {
+  it("all loop-carried vars are rebound in outer scope after loop exits", function* () {
+    const ir = compileOne(`
+      function* test(): Workflow<unknown> {
+        let x = 0;
+        let y = 10;
+        while (x < 3) {
+          x = x + 1;
+          y = y + 2;
+        }
+        return y;
+      }
+    `);
+    const { result } = yield* execute({ ir: Call(ir) });
+    expect(result.status).toBe("ok");
+    if (result.status === "ok") {
+      expect(result.value).toBe(16);
+    }
+  });
+});
+
+describe("Bug 7 — post-loop carried state rebinding: if/else body", () => {
+  it("carried var updated through if/else inside loop is rebound after loop exits", function* () {
+    const ir = compileOne(`
+      function* test(): Workflow<unknown> {
+        let x = 0;
+        while (x < 5) {
+          if (x < 3) { x = x + 1; } else { x = x + 2; }
+        }
+        return x;
+      }
+    `);
+    const { result } = yield* execute({ ir: Call(ir) });
+    expect(result.status).toBe("ok");
+    if (result.status === "ok") {
+      expect(result.value).toBe(5);
+    }
+  });
+});
+
+describe("Bug 7 — early return with no loop-carried vars, not last statement", () => {
+  it("early return short-circuits post-loop continuation (Bug B)", function* () {
+    // Before the fix: the loop result was discarded and rest() always ran.
+    // When x > 0 was true on the first iteration, `return x` fired but the
+    // outer code discarded it and executed `return 0` instead.
+    // After the fix: the __tag dispatch short-circuits rest() on early return.
+    const ir = compileOne(`
+      function* test(): Workflow<unknown> {
+        let x = 1;
+        while (x > 0) {
+          return x;
+        }
+        return 0;
+      }
+    `);
+    const { result } = yield* execute({ ir: Call(ir) });
+    expect(result.status).toBe("ok");
+    if (result.status === "ok") {
+      expect(result.value).toBe(1);
+    }
+  });
+});
+
+describe("Bug 7 — early return inside loop, loop is last statement", () => {
+  it("early return value is the function result when loop is last", function* () {
+    const ir = compileOne(`
+      function* test(): Workflow<unknown> {
+        let x = 0;
+        while (x < 10) {
+          if (x === 5) return x;
+          x = x + 1;
+        }
+      }
+    `);
+    const { result } = yield* execute({ ir: Call(ir) });
+    expect(result.status).toBe("ok");
+    if (result.status === "ok") {
+      expect(result.value).toBe(5);
+    }
+  });
+});
+
+describe("Bug 7 — early return with carried vars, not last statement", () => {
+  it("early return short-circuits post-loop code even when loop has carried vars", function* () {
+    const ir = compileOne(`
+      function* test(): Workflow<unknown> {
+        let x = 0;
+        while (x < 10) {
+          if (x === 5) return x;
+          x = x + 1;
+        }
+        return x;
+      }
+    `);
+    const { result } = yield* execute({ ir: Call(ir) });
+    expect(result.status).toBe("ok");
+    if (result.status === "ok") {
+      expect(result.value).toBe(5);
+    }
+  });
+});
