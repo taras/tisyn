@@ -2,7 +2,7 @@
 import { agent, operation } from "@tisyn/agent";
 import type { DeclaredAgent, OperationSpec } from "@tisyn/agent";
 import type { TisynFn } from "@tisyn/ir";
-import { Fn, Ref, Eval, Let, While, Get, Construct } from "@tisyn/ir";
+import { Fn, Ref, Eval, Let, Call, Get, Construct, Arr, ConcatArrays } from "@tisyn/ir";
 
 export function App(): DeclaredAgent<{
   waitForUser: OperationSpec<{ input: { prompt: string } }, { message: string }>;
@@ -50,82 +50,71 @@ export function Llm(): DeclaredAgent<{
   });
 }
 
-export function State(): DeclaredAgent<{
-  getHistory: OperationSpec<
-    { input: { placeholder: string } },
-    Array<{ role: string; content: string }>
-  >;
-  recordTurn: OperationSpec<{ input: { userMessage: string; assistantMessage: string } }, void>;
-}> {
-  const id = "state";
-  return agent(id, {
-    getHistory: operation<
-      { input: { placeholder: string } },
-      Array<{ role: string; content: string }>
-    >(),
-    recordTurn: operation<{ input: { userMessage: string; assistantMessage: string } }, void>(),
-  });
-}
-
 export const chat: TisynFn<[], unknown> = Fn(
   [],
-  While(true, [
+  Let(
+    "history_0",
+    Arr(),
     Let(
-      "user",
-      Eval(
-        "app.waitForUser",
-        Construct({
-          input: Construct({
-            prompt: "Say something",
-          }),
-        }),
-      ),
-      Let(
-        "history",
-        Eval(
-          "state.getHistory",
-          Construct({
-            input: Construct({
-              placeholder: "",
-            }),
-          }),
-        ),
+      "__loop_0",
+      Fn(
+        ["history_0"],
         Let(
-          "assistant",
+          "user",
           Eval(
-            "llm.sample",
+            "app.waitForUser",
             Construct({
               input: Construct({
-                history: Ref("history"),
-                message: Get(Ref("user"), "message"),
+                prompt: "Say something",
               }),
             }),
           ),
           Let(
-            "__discard_0",
+            "assistant",
             Eval(
-              "state.recordTurn",
+              "llm.sample",
               Construct({
                 input: Construct({
-                  userMessage: Get(Ref("user"), "message"),
-                  assistantMessage: Get(Ref("assistant"), "message"),
+                  history: Ref("history_0"),
+                  message: Get(Ref("user"), "message"),
                 }),
               }),
             ),
-            Eval(
-              "app.showAssistantMessage",
-              Construct({
-                input: Construct({
-                  message: Get(Ref("assistant"), "message"),
-                }),
-              }),
+            Let(
+              "history_1",
+              ConcatArrays(
+                Ref("history_0"),
+                Arr(
+                  Construct({
+                    role: "user",
+                    content: Get(Ref("user"), "message"),
+                  }),
+                  Construct({
+                    role: "assistant",
+                    content: Get(Ref("assistant"), "message"),
+                  }),
+                ),
+              ),
+              Let(
+                "__discard_0",
+                Eval(
+                  "app.showAssistantMessage",
+                  Construct({
+                    input: Construct({
+                      message: Get(Ref("assistant"), "message"),
+                    }),
+                  }),
+                ),
+                Call(Ref("__loop_0"), Ref("history_1")),
+              ),
             ),
           ),
         ),
       ),
+      Call(Ref("__loop_0"), Ref("history_0")),
     ),
-  ]),
+  ),
 );
 
-export const agents = { App, Llm, State };
+export const agents = { App, Llm };
 export const workflows = { chat };

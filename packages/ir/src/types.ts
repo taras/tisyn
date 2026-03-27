@@ -263,3 +263,23 @@ export interface RaceNode {
   readonly id: "race";
   readonly data: QuoteNode<RaceShape>;
 }
+
+export interface ConcatArraysShape {
+  readonly arrays: readonly TisynExpr[];
+}
+
+export interface MergeObjectsShape {
+  readonly objects: readonly TisynExpr[];
+}
+
+export interface ConcatArraysNode {
+  readonly tisyn: "eval";
+  readonly id: "concat-arrays";
+  readonly data: QuoteNode<ConcatArraysShape>;
+}
+
+export interface MergeObjectsNode {
+  readonly tisyn: "eval";
+  readonly id: "merge-objects";
+  readonly data: QuoteNode<MergeObjectsShape>;
+}

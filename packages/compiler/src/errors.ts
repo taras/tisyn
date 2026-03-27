@@ -20,9 +20,9 @@ export class CompileError extends Error {
 
 /** Error code catalog from Compiler Spec §11. */
 export const ErrorCodes = {
-  E001: "Use 'const' instead of 'let'",
+  // E001 removed: 'let' is now supported
   E002: "Use 'const' instead of 'var'",
-  E003: "Reassignment is not allowed",
+  E003: "Reassignment of non-let binding or undeclared name is not allowed",
   E004: "Property mutation is not allowed",
   E005: "Computed property access is not allowed",
   E006: "Math.random() is not allowed (nondeterministic)",
@@ -45,4 +45,6 @@ export const ErrorCodes = {
   E028: "Variable names must not start with '__'",
   E029: "delete operator is not allowed",
   E030: "Symbol is not allowed",
+  E031: "Mutation method call is not allowed",
+  E032: "Spread element outside array or object literal is not allowed",
 } as const;

@@ -194,6 +194,16 @@ function printStructural(
       const s = shape as { message: TisynExpr };
       return formatCall(name, [printNode(s.message, depth + 1, opts)], depth, opts);
     }
+    case "concat-arrays": {
+      const s = shape as { arrays: TisynExpr[] };
+      const args = s.arrays.map((e) => printNode(e, depth + 1, opts));
+      return formatCall("ConcatArrays", args, depth, opts);
+    }
+    case "merge-objects": {
+      const s = shape as { objects: TisynExpr[] };
+      const args = s.objects.map((e) => printNode(e, depth + 1, opts));
+      return formatCall("MergeObjects", args, depth, opts);
+    }
     default:
       return `${name}(${printNode(shape as TisynExpr, depth + 1, opts)})`;
   }
@@ -268,6 +278,10 @@ function constructorName(id: string): string {
       return "Concat";
     case "throw":
       return "Throw";
+    case "concat-arrays":
+      return "ConcatArrays";
+    case "merge-objects":
+      return "MergeObjects";
     case "all":
       return "All";
     case "race":

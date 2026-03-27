@@ -1,6 +1,9 @@
 /**
  * End-to-end: session manager + worker LLM + compiled workflow.
  * A test WebSocket client simulates the browser.
+ *
+ * History is now managed locally inside the compiled workflow via SSA let;
+ * no State agent is required.
  */
 
 import { createServer } from "node:http";
@@ -13,7 +16,7 @@ import { implementAgent } from "@tisyn/agent";
 import { execute } from "@tisyn/runtime";
 import { installRemoteAgent, workerTransport } from "@tisyn/transport";
 import { Call } from "@tisyn/ir";
-import { App, Llm, State, chat } from "../src/workflow.generated.js";
+import { App, Llm, chat } from "../src/workflow.generated.js";
 import { BrowserSessionManager } from "../src/browser-session.js";
 import type { HostToBrowser } from "../src/browser-session.js";
 
@@ -64,10 +67,7 @@ describe("End-to-end chat", () => {
     const serverWs = yield* serverConnected.operation;
 
     // --- Set up agents (same pattern as host.ts) ---
-    const history: Array<{ role: string; content: string }> = [];
-    const sampleHistory: Array<Array<{ role: string; content: string }>> = [];
-
-    const session = new BrowserSessionManager(history);
+    const session = new BrowserSessionManager([]);
     session.attach("e2e-test", serverWs);
 
     // Browser agent — local, backed by session manager
@@ -92,21 +92,6 @@ describe("End-to-end chat", () => {
       url: new URL("../src/llm-worker.ts", import.meta.url).href,
     });
     yield* installRemoteAgent(Llm(), llmFactory);
-
-    // State agent (local)
-    const stateImpl = implementAgent(State(), {
-      *getHistory() {
-        sampleHistory.push([...history]);
-        return [...history];
-      },
-      *recordTurn({ input }) {
-        history.push(
-          { role: "user", content: input.userMessage },
-          { role: "assistant", content: input.assistantMessage },
-        );
-      },
-    });
-    yield* stateImpl.install();
 
     // --- Execute workflow ---
     const workflowDone = withResolvers<void>();
@@ -135,20 +120,6 @@ describe("End-to-end chat", () => {
     expect(assistantMessages).toHaveLength(2);
     expect(assistantMessages[0]).toBe("Echo: hello");
     expect(assistantMessages[1]).toBe("Echo: how are you?");
-
-    // History accumulated across turns
-    expect(sampleHistory[0]).toEqual([]);
-    expect(sampleHistory[1]).toEqual([
-      { role: "user", content: "hello" },
-      { role: "assistant", content: "Echo: hello" },
-    ]);
-
-    expect(history).toEqual([
-      { role: "user", content: "hello" },
-      { role: "assistant", content: "Echo: hello" },
-      { role: "user", content: "how are you?" },
-      { role: "assistant", content: "Echo: how are you?" },
-    ]);
 
     // Cleanup
     clientWs.close();

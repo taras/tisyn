@@ -44,6 +44,8 @@ export interface TisynAlgebra<A> {
   construct(fields: Record<string, A>): A;
   array(items: A[]): A;
   concat(parts: A[]): A;
+  concatArrays(arrays: A[]): A;
+  mergeObjects(objects: A[]): A;
 
   // Error
   throw(message: A): A;
@@ -190,6 +192,14 @@ function foldStructural<A>(id: string, shape: Record<string, unknown>, alg: Tisy
       const s = shape as { message: TisynExpr };
       return alg.throw(foldNode(s.message, alg));
     }
+    case "concat-arrays": {
+      const s = shape as { arrays: TisynExpr[] };
+      return alg.concatArrays(s.arrays.map((e) => foldNode(e, alg)));
+    }
+    case "merge-objects": {
+      const s = shape as { objects: TisynExpr[] };
+      return alg.mergeObjects(s.objects.map((e) => foldNode(e, alg)));
+    }
     default:
       // Unknown structural ID — should not happen, treat as literal
       return alg.literal(shape as TisynExpr);
@@ -237,6 +247,8 @@ export function defaultAlgebra<A>(zero: () => A): TisynAlgebra<A> {
     construct: z,
     array: z,
     concat: z,
+    concatArrays: z,
+    mergeObjects: z,
     throw: z,
     eval: z2,
   };

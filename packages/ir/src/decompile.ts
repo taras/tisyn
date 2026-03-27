@@ -218,6 +218,16 @@ function decompileStructural(
       const s = shape as { message: TisynExpr };
       return `(() => { throw new Error(${decompileExpr(s.message, depth, opts)}); })()`;
     }
+    case "concat-arrays": {
+      const s = shape as { arrays: TisynExpr[] };
+      const parts = s.arrays.map((e) => `...${decompileExpr(e, depth, opts)}`);
+      return `[${parts.join(", ")}]`;
+    }
+    case "merge-objects": {
+      const s = shape as { objects: TisynExpr[] };
+      const parts = s.objects.map((e) => `...${decompileExpr(e, depth, opts)}`);
+      return `{ ${parts.join(", ")} }`;
+    }
     case "while": {
       const s = shape as { condition: TisynExpr; exprs: TisynExpr[] };
       const condStr = decompileExpr(s.condition, depth, opts);

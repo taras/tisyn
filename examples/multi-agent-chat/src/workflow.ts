@@ -14,23 +14,19 @@ declare function Llm(): {
   }): Workflow<{ message: string }>;
 };
 
-declare function State(): {
-  getHistory(input: { placeholder: string }): Workflow<Array<{ role: string; content: string }>>;
-  recordTurn(input: { userMessage: string; assistantMessage: string }): Workflow<void>;
-};
-
 export function* chat() {
+  let history: Array<{ role: string; content: string }> = [];
   while (true) {
     const user = yield* App().waitForUser({ prompt: "Say something" });
-    const history = yield* State().getHistory({ placeholder: "" });
     const assistant = yield* Llm().sample({
       history: history,
       message: user.message,
     });
-    yield* State().recordTurn({
-      userMessage: user.message,
-      assistantMessage: assistant.message,
-    });
+    history = [
+      ...history,
+      { role: "user", content: user.message },
+      { role: "assistant", content: assistant.message },
+    ];
     yield* App().showAssistantMessage({ message: assistant.message });
   }
 }
