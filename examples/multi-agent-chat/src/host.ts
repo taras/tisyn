@@ -4,9 +4,11 @@
  * The host is the sole orchestrator. It:
  * 1. Starts a WebSocket server for the browser
  * 2. Spawns a Worker for the LLM agent
- * 3. Installs a local State agent for history management
- * 4. Installs a local Browser agent backed by a BrowserSessionManager
- * 5. Executes the compiled chat workflow
+ * 3. Installs a local Browser agent backed by a BrowserSessionManager
+ * 4. Executes the compiled chat workflow
+ *
+ * History is now managed locally inside the compiled workflow via SSA let;
+ * no State agent is required.
  *
  * Optional: --journal <path> enables file-backed durable journaling.
  * On restart, the runtime replays stored events and the State agent's
@@ -25,7 +27,7 @@ import { execute } from "@tisyn/runtime";
 import { InMemoryStream } from "@tisyn/durable-streams";
 import { installRemoteAgent, workerTransport } from "@tisyn/transport";
 import { Call } from "@tisyn/ir";
-import { App, chat, Llm, State } from "./workflow.generated.js";
+import { App, chat, Llm } from "./workflow.generated.js";
 import { useWebSocketServer } from "./browser-transport.js";
 import { FileJournalStream } from "./file-journal-stream.js";
 import { reconstructHistory } from "./reconstruct-history.js";
@@ -91,27 +93,6 @@ await main(function* () {
 
   yield* installRemoteAgent(Llm(), llmTransport);
   logInfo("host", "LLM worker agent installed");
-
-  const stateImpl = implementAgent(State(), {
-    *getHistory() {
-      logInfo("state", "getHistory", { length: history.length });
-      return [...history];
-    },
-    *recordTurn({ input }) {
-      logInfo("state", "recordTurn", {
-        user: input.userMessage,
-        assistant: input.assistantMessage,
-      });
-      history.push(
-        { role: "user", content: input.userMessage },
-        { role: "assistant", content: input.assistantMessage },
-      );
-      logInfo("state", "history updated", { length: history.length });
-    },
-  });
-
-  yield* stateImpl.install();
-  logInfo("host", "state agent installed");
 
   // --- Browser session manager ---
   const session = new BrowserSessionManager(history);

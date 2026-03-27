@@ -307,6 +307,10 @@ function getEvaluationPositions(id: string, fields: Record<string, unknown>): un
       return Array.isArray(fields["parts"]) ? fields["parts"] : [];
     case "throw":
       return fields["message"] !== undefined ? [fields["message"]] : [];
+    case "concat-arrays":
+      return Array.isArray(fields["arrays"]) ? (fields["arrays"] as unknown[]) : [];
+    case "merge-objects":
+      return Array.isArray(fields["objects"]) ? (fields["objects"] as unknown[]) : [];
     default:
       return [];
   }

@@ -1,5 +1,8 @@
 /**
  * Compiled workflow with local agents — no transports.
+ *
+ * History is now managed locally via SSA let + reassignment;
+ * no State agent is required.
  */
 
 import { describe, it } from "@effectionx/vitest";
@@ -8,7 +11,7 @@ import { spawn, withResolvers } from "effection";
 import { implementAgent } from "@tisyn/agent";
 import { execute } from "@tisyn/runtime";
 import { Call } from "@tisyn/ir";
-import { App, Llm, State, chat } from "../src/workflow.generated.js";
+import { App, Llm, chat } from "../src/workflow.generated.js";
 
 describe("Compiled workflow", () => {
   it("runs the chat loop: elicit → sample → display, with history accumulation", function* () {
@@ -20,13 +23,7 @@ describe("Compiled workflow", () => {
         message: string;
       };
     }> = [];
-    const recordTurnCalls: Array<{
-      input: { userMessage: string; assistantMessage: string };
-    }> = [];
     const showCalls: Array<{ input: { message: string } }> = [];
-
-    // Conversation history (mutable state managed by State agent)
-    const history: Array<{ role: string; content: string }> = [];
 
     // Canned user messages — after these, the agent throws to exit the loop
     const userMessages = ["hello", "how are you?"];
@@ -62,21 +59,6 @@ describe("Compiled workflow", () => {
     });
     yield* llmImpl.install();
 
-    // Install local State agent (closure over mutable history)
-    const stateImpl = implementAgent(State(), {
-      *getHistory(_args) {
-        return [...history];
-      },
-      *recordTurn(args) {
-        recordTurnCalls.push(args);
-        history.push(
-          { role: "user", content: args.input.userMessage },
-          { role: "assistant", content: args.input.assistantMessage },
-        );
-      },
-    });
-    yield* stateImpl.install();
-
     // Run the compiled workflow in a spawned task so we can cancel it
     const task = yield* spawn(function* () {
       yield* execute({ ir: Call(chat) });
@@ -90,7 +72,6 @@ describe("Compiled workflow", () => {
     // Two full cycles completed
     expect(waitForUserCalls).toHaveLength(3); // 2 successful + 1 that throws
     expect(sampleCalls).toHaveLength(2);
-    expect(recordTurnCalls).toHaveLength(2);
     expect(showCalls).toHaveLength(2);
 
     // Cycle 1: empty history
@@ -98,22 +79,12 @@ describe("Compiled workflow", () => {
     expect(sampleCalls[0]!.input.message).toBe("hello");
     expect(showCalls[0]!.input.message).toBe("Echo: hello");
 
-    // Cycle 2: history has entries from cycle 1
+    // Cycle 2: history has entries from cycle 1 (managed locally, not via State agent)
     expect(sampleCalls[1]!.input.history).toEqual([
       { role: "user", content: "hello" },
       { role: "assistant", content: "Echo: hello" },
     ]);
     expect(sampleCalls[1]!.input.message).toBe("how are you?");
     expect(showCalls[1]!.input.message).toBe("Echo: how are you?");
-
-    // State was recorded
-    expect(recordTurnCalls[0]!.input).toEqual({
-      userMessage: "hello",
-      assistantMessage: "Echo: hello",
-    });
-    expect(recordTurnCalls[1]!.input).toEqual({
-      userMessage: "how are you?",
-      assistantMessage: "Echo: how are you?",
-    });
   });
 });

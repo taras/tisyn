@@ -45,6 +45,8 @@ const ALL_IR_CONSTRUCTORS = [
   "Construct",
   "Arr",
   "Concat",
+  "ConcatArrays",
+  "MergeObjects",
   "Throw",
   "All",
   "Race",

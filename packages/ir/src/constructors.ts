@@ -198,6 +198,22 @@ export function Eval<T>(id: string, data: Expr<unknown>): EvalT<T> {
   } as EvalT<T>;
 }
 
+export function ConcatArrays<T>(...arrays: Expr<T[]>[]): EvalT<T[]> {
+  return {
+    tisyn: "eval",
+    id: "concat-arrays",
+    data: { tisyn: "quote", expr: { arrays } },
+  } as EvalT<T[]>;
+}
+
+export function MergeObjects<T extends Record<string, unknown>>(...objects: Expr<T>[]): EvalT<T> {
+  return {
+    tisyn: "eval",
+    id: "merge-objects",
+    data: { tisyn: "quote", expr: { objects } },
+  } as EvalT<T>;
+}
+
 export function All<T extends unknown[]>(...exprs: { [K in keyof T]: Expr<T[K]> }): EvalT<T> {
   return {
     tisyn: "eval",

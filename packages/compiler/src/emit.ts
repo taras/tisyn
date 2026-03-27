@@ -37,6 +37,8 @@ import {
   Throw,
   Ref,
   Fn,
+  ConcatArrays,
+  MergeObjects,
   ExternalEval,
   AllEval,
   RaceEval,
@@ -49,10 +51,93 @@ import type { DiscoveredContract } from "./discover.js";
 
 // ── Context ──
 
+interface BindingInfo {
+  kind: "let" | "const";
+  version: number;
+}
+
+type ScopeFrame = Map<string, BindingInfo>;
+
 interface EmitContext {
   counter: Counter;
   sourceFile: ts.SourceFile;
   contracts?: Map<string, DiscoveredContract>;
+  /** SSA binding scope stack. Innermost frame is last. */
+  scopeStack: ScopeFrame[];
+}
+
+// ── Scope helpers ──
+
+/** Push a new empty scope frame. */
+function pushFrame(ctx: EmitContext): void {
+  ctx.scopeStack.push(new Map());
+}
+
+/** Pop the innermost scope frame. */
+function popFrame(ctx: EmitContext): void {
+  ctx.scopeStack.pop();
+}
+
+/** Look up a binding from the top of the stack down. Returns undefined if not found. */
+function lookupBinding(name: string, ctx: EmitContext): { frame: ScopeFrame; info: BindingInfo } | undefined {
+  for (let i = ctx.scopeStack.length - 1; i >= 0; i--) {
+    const frame = ctx.scopeStack[i]!;
+    const info = frame.get(name);
+    if (info !== undefined) return { frame, info };
+  }
+  return undefined;
+}
+
+/** Declare a new binding in the current (innermost) frame. */
+function declareBinding(name: string, kind: "let" | "const", ctx: EmitContext): void {
+  const frame = ctx.scopeStack[ctx.scopeStack.length - 1]!;
+  frame.set(name, { kind, version: 0 });
+}
+
+/** Get the versioned IR name for a binding (e.g. "x_0", "x_1"). */
+function versionedName(name: string, info: BindingInfo): string {
+  return info.kind === "let" ? `${name}_${info.version}` : name;
+}
+
+/** Bump the version of a let binding in its owning frame. Returns the new versioned name. */
+function bumpVersion(name: string, ctx: EmitContext): string {
+  const found = lookupBinding(name, ctx);
+  if (!found || found.info.kind !== "let") {
+    throw new Error(`Cannot bump version of non-let binding: ${name}`);
+  }
+  found.info.version++;
+  return `${name}_${found.info.version}`;
+}
+
+/** Resolve a reference: return versioned name if it's a tracked let binding. */
+function resolveRef(name: string, ctx: EmitContext): string {
+  const found = lookupBinding(name, ctx);
+  if (found) return versionedName(name, found.info);
+  return name; // untracked (e.g. const declared before SSA, external)
+}
+
+/** Deep-clone the scope stack. Used before compiling branches. */
+function cloneScopeStack(stack: ScopeFrame[]): ScopeFrame[] {
+  return stack.map((frame) => {
+    const newFrame = new Map<string, BindingInfo>();
+    for (const [k, v] of frame) {
+      newFrame.set(k, { kind: v.kind, version: v.version });
+    }
+    return newFrame;
+  });
+}
+
+/** Snapshot current versions of all let bindings across the scope stack. */
+function snapshotVersions(ctx: EmitContext): Map<string, number> {
+  const snap = new Map<string, number>();
+  for (const frame of ctx.scopeStack) {
+    for (const [name, info] of frame) {
+      if (info.kind === "let" && !snap.has(name)) {
+        snap.set(name, info.version);
+      }
+    }
+  }
+  return snap;
 }
 
 function error(code: string, message: string, node: ts.Node, ctx: EmitContext): CompileError {
@@ -64,9 +149,15 @@ function error(code: string, message: string, node: ts.Node, ctx: EmitContext): 
 
 /**
  * Compile a function body (Block) into a Tisyn IR expression.
+ * Pushes a scope frame for the block and pops it after.
  */
 export function emitBlock(stmts: readonly ts.Statement[], ctx: EmitContext): Expr {
-  return emitStatementList(Array.from(stmts), 0, ctx);
+  pushFrame(ctx);
+  try {
+    return emitStatementList(Array.from(stmts), 0, ctx);
+  } finally {
+    popFrame(ctx);
+  }
 }
 
 /**
@@ -76,7 +167,7 @@ export function createContext(
   sourceFile: ts.SourceFile,
   contracts?: Map<string, DiscoveredContract>,
 ): EmitContext {
-  return { counter: new Counter(), sourceFile, contracts };
+  return { counter: new Counter(), sourceFile, contracts, scopeStack: [new Map()] };
 }
 
 // ── Statement compilation (Spec §5.1) ──
@@ -101,9 +192,18 @@ function emitStatementList(stmts: ts.Statement[], index: number, ctx: EmitContex
     return emitVariableStatement(stmt, rest, ctx);
   }
 
-  // ── Expression statement (bare yield*, function call, etc.) ──
+  // ── Expression statement (bare yield*, assignment, function call, etc.) ──
   if (ts.isExpressionStatement(stmt)) {
     const expr = stmt.expression;
+
+    // ── Let reassignment: x = newExpr (statement position) ──
+    if (
+      ts.isBinaryExpression(expr) &&
+      expr.operatorToken.kind === ts.SyntaxKind.EqualsToken &&
+      ts.isIdentifier(expr.left)
+    ) {
+      return emitLetReassignment(expr, stmts, index, rest, ctx);
+    }
 
     // Check for unsupported constructs
     checkUnsupportedExpression(expr, ctx);
@@ -152,6 +252,39 @@ function emitStatementList(stmts: ts.Statement[], index: number, ctx: EmitContex
   throw error("E999", `Unsupported statement: ${ts.SyntaxKind[stmt.kind]}`, stmt, ctx);
 }
 
+// ── Let reassignment ──
+
+function emitLetReassignment(
+  expr: ts.BinaryExpression,
+  stmts: ts.Statement[],
+  index: number,
+  rest: () => Expr,
+  ctx: EmitContext,
+): Expr {
+  const lhsName = (expr.left as ts.Identifier).text;
+
+  // Validate: must be a let binding in scope
+  const found = lookupBinding(lhsName, ctx);
+  if (!found) {
+    throw error("E003", `Reassignment of non-let binding or undeclared name is not allowed`, expr, ctx);
+  }
+  if (found.info.kind !== "let") {
+    throw error("E003", `Reassignment of non-let binding or undeclared name is not allowed`, expr, ctx);
+  }
+
+  // Emit the new value expression
+  const newValue = emitExpression(expr.right, ctx);
+
+  // Bump version and emit Let binding
+  const newIrName = bumpVersion(lhsName, ctx);
+  const isLast = index === stmts.length - 1;
+
+  if (isLast) {
+    return Let(newIrName, newValue, null as unknown as Expr);
+  }
+  return Let(newIrName, newValue, rest());
+}
+
 // ── Variable declarations ──
 
 function emitVariableStatement(
@@ -161,19 +294,21 @@ function emitVariableStatement(
 ): Expr {
   const declList = stmt.declarationList;
 
-  // Check for let/var → error
-  if (declList.flags & ts.NodeFlags.Let) {
-    throw error("E001", "Use 'const' instead of 'let'", stmt, ctx);
-  }
-  if (!(declList.flags & ts.NodeFlags.Const) && !(declList.flags & ts.NodeFlags.Let)) {
-    // var declaration
+  const isLet = !!(declList.flags & ts.NodeFlags.Let);
+  const isConst = !!(declList.flags & ts.NodeFlags.Const);
+
+  // var declaration → error
+  if (!isLet && !isConst) {
     throw error("E002", "Use 'const' instead of 'var'", stmt, ctx);
   }
 
-  let result = rest();
+  const kind: "let" | "const" = isLet ? "let" : "const";
 
-  // Process declarations in reverse to build correct Let nesting
-  for (let i = declList.declarations.length - 1; i >= 0; i--) {
+  // Process declarations left-to-right so each binding is in scope before rest() is called.
+  // This is critical: rest() must see all bindings from this statement.
+  function processDecl(i: number): Expr {
+    if (i >= declList.declarations.length) return rest();
+
     const decl = declList.declarations[i]!;
     if (!ts.isIdentifier(decl.name)) {
       throw error("E005", "Destructuring is not supported", decl, ctx);
@@ -190,25 +325,242 @@ function emitVariableStatement(
       throw error("E999", "Variables must have initializers", decl, ctx);
     }
 
-    // Check if initializer is yield*
+    // Emit initializer BEFORE declaring (so x = x + 1 sees old x)
+    let initExpr: Expr;
     if (
       ts.isYieldExpression(decl.initializer) &&
       decl.initializer.asteriskToken &&
       decl.initializer.expression
     ) {
-      const effect = emitYieldStar(decl.initializer.expression, ctx);
-      result = Let(name, effect, result);
+      initExpr = emitYieldStar(decl.initializer.expression, ctx);
     } else {
-      // Check for unsupported patterns in initializer
       checkUnsupportedExpression(decl.initializer, ctx);
-      result = Let(name, emitExpression(decl.initializer, ctx), result);
+      initExpr = emitExpression(decl.initializer, ctx);
     }
+
+    // Register in scope stack AFTER evaluating initializer, BEFORE rest
+    declareBinding(name, kind, ctx);
+    const irName = isLet ? `${name}_0` : name;
+
+    return Let(irName, initExpr, processDecl(i + 1));
   }
 
-  return result;
+  return processDecl(0);
 }
 
 // ── If statement (§6.1) ──
+
+/**
+ * Determine whether every execution path through a statement reaches a return or throw.
+ * Used for branch-join and early-return transforms.
+ */
+function alwaysTerminates(stmt: ts.Statement): boolean {
+  if (ts.isReturnStatement(stmt)) return true;
+  if (ts.isThrowStatement(stmt)) return true;
+  if (ts.isBlock(stmt)) {
+    // Block always terminates if any top-level statement always terminates
+    // (sequential: once a terminating statement is hit, rest is dead code)
+    return stmt.statements.some((s) => alwaysTerminates(s));
+  }
+  if (ts.isIfStatement(stmt)) {
+    // If-with-else terminates only when both branches always terminate
+    if (!stmt.elseStatement) return false;
+    return alwaysTerminates(stmt.thenStatement) && alwaysTerminates(stmt.elseStatement);
+  }
+  return false;
+}
+
+/** Compile a branch block into an expression that produces join values for `joinVars`.
+ * Only used when the branch does NOT always terminate (i.e., in the neither-terminates path).
+ *
+ * @param block - the branch statement (block or single statement)
+ * @param joinVars - variable names whose post-branch versions to collect
+ * @param branchCtx - an isolated context (cloned scope stack) for this branch
+ */
+function compileBranchToExpr(
+  block: ts.Statement,
+  joinVars: string[],
+  branchCtx: EmitContext,
+): Expr {
+  const stmts = getBodyStatements(block);
+
+  // Compile the statements normally, building the continuation chain.
+  // The terminal continuation produces the join values.
+  return emitStatementListWithTerminal(stmts, 0, branchCtx, () => {
+    // Terminal: produce join values
+    if (joinVars.length === 0) {
+      return null as unknown as Expr;
+    }
+    if (joinVars.length === 1) {
+      const v = joinVars[0]!;
+      return Ref(resolveRef(v, branchCtx));
+    }
+    // Multiple: pack into Construct
+    const fields: Record<string, Expr> = {};
+    for (const v of joinVars) {
+      fields[v] = Ref(resolveRef(v, branchCtx));
+    }
+    return Construct(fields);
+  });
+}
+
+/** Like emitStatementList but accepts a terminal function for the end of the list. */
+function emitStatementListWithTerminal(
+  stmts: ts.Statement[],
+  index: number,
+  ctx: EmitContext,
+  terminal: () => Expr,
+): Expr {
+  if (index >= stmts.length) return terminal();
+
+  const stmt = stmts[index]!;
+  const rest = () => emitStatementListWithTerminal(stmts, index + 1, ctx, terminal);
+  const isLast = index === stmts.length - 1;
+
+  // Return statement
+  if (ts.isReturnStatement(stmt)) {
+    if (stmt.expression) return emitExpression(stmt.expression, ctx);
+    return null as unknown as Expr;
+  }
+
+  // Variable declaration
+  if (ts.isVariableStatement(stmt)) {
+    return emitVariableStatementWithRest(stmt, rest, ctx);
+  }
+
+  // Let reassignment (x = newExpr)
+  if (
+    ts.isExpressionStatement(stmt) &&
+    ts.isBinaryExpression(stmt.expression) &&
+    stmt.expression.operatorToken.kind === ts.SyntaxKind.EqualsToken &&
+    ts.isIdentifier(stmt.expression.left)
+  ) {
+    const expr = stmt.expression;
+    const lhsName = (expr.left as ts.Identifier).text;
+    const found = lookupBinding(lhsName, ctx);
+    if (!found || found.info.kind !== "let") {
+      throw new CompileError("E003", "Reassignment of non-let binding or undeclared name is not allowed", 0, 0);
+    }
+    const newValue = emitExpression(expr.right, ctx);
+    const newIrName = bumpVersion(lhsName, ctx);
+    if (isLast) return Let(newIrName, newValue, terminal());
+    return Let(newIrName, newValue, rest());
+  }
+
+  // Expression statement
+  if (ts.isExpressionStatement(stmt)) {
+    const expr = stmt.expression;
+    checkUnsupportedExpression(expr, ctx);
+    if (ts.isYieldExpression(expr) && expr.asteriskToken && expr.expression) {
+      const effect = emitYieldStar(expr.expression, ctx);
+      if (isLast) return Let(ctx.counter.next("discard"), effect, terminal());
+      return Let(ctx.counter.next("discard"), effect, rest());
+    }
+    if (isLast) return Let(ctx.counter.next("discard"), emitExpression(expr, ctx), terminal());
+    return Let(ctx.counter.next("discard"), emitExpression(expr, ctx), rest());
+  }
+
+  // Throw statement
+  if (ts.isThrowStatement(stmt) && stmt.expression) {
+    return emitThrowStatement(stmt, ctx);
+  }
+
+  // Nested block
+  if (ts.isBlock(stmt)) {
+    pushFrame(ctx);
+    try {
+      const blockResult = emitStatementListWithTerminal(Array.from(stmt.statements), 0, ctx, index === stmts.length - 1 ? terminal : rest);
+      if (isLast) return blockResult;
+      return Let(ctx.counter.next("discard"), blockResult, rest());
+    } finally {
+      popFrame(ctx);
+    }
+  }
+
+  // If statement in branch (simplified — no SSA joins inside branch for now)
+  if (ts.isIfStatement(stmt)) {
+    return emitIfStatementInList(stmt, stmts, index, ctx, terminal);
+  }
+
+  throw new CompileError("E999", `Unsupported statement in branch: ${ts.SyntaxKind[stmt.kind]}`, 0, 0);
+}
+
+/** Emit a variable statement using a provided rest thunk (for use in branch contexts). */
+function emitVariableStatementWithRest(
+  stmt: ts.VariableStatement,
+  rest: () => Expr,
+  ctx: EmitContext,
+): Expr {
+  return emitVariableStatement(stmt, rest, ctx);
+}
+
+/** Emit an if-statement when it appears inside a branch-compilation context. */
+function emitIfStatementInList(
+  stmt: ts.IfStatement,
+  stmts: ts.Statement[],
+  index: number,
+  ctx: EmitContext,
+  terminal: () => Expr,
+): Expr {
+  const rest = () => emitStatementListWithTerminal(stmts, index + 1, ctx, terminal);
+  const condition = emitExpression(stmt.expression, ctx);
+
+  // Check termination classification
+  const thenTerminates = alwaysTerminates(stmt.thenStatement);
+  const elseTerminates = stmt.elseStatement ? alwaysTerminates(stmt.elseStatement) : false;
+
+  if (thenTerminates && (elseTerminates || !stmt.elseStatement)) {
+    // Both (or then-only without else) terminate
+    const thenBranch = emitStatementBodyWithCtx(stmt.thenStatement, ctx);
+    if (stmt.elseStatement) {
+      const elseBranch = emitStatementBodyWithCtx(stmt.elseStatement, ctx);
+      return If(condition, thenBranch, elseBranch);
+    }
+    return If(condition, thenBranch, rest());
+  }
+
+  if (thenTerminates && stmt.elseStatement && !elseTerminates) {
+    // Then terminates, else falls through
+    const thenBranch = emitStatementBodyWithCtx(stmt.thenStatement, ctx);
+    const elseAndRest = emitStatementListWithTerminal(
+      getBodyStatements(stmt.elseStatement),
+      0,
+      ctx,
+      index < stmts.length - 1 ? rest : terminal,
+    );
+    return If(condition, thenBranch, elseAndRest);
+  }
+
+  if (!thenTerminates && elseTerminates) {
+    // Else terminates, then falls through
+    const thenAndRest = emitStatementListWithTerminal(
+      getBodyStatements(stmt.thenStatement),
+      0,
+      ctx,
+      index < stmts.length - 1 ? rest : terminal,
+    );
+    const elseBranch = emitStatementBodyWithCtx(stmt.elseStatement!, ctx);
+    return If(condition, thenAndRest, elseBranch);
+  }
+
+  // Neither terminates — simple if with discard
+  const thenBranch = emitStatementBodyWithCtx(stmt.thenStatement, ctx);
+  if (stmt.elseStatement) {
+    const elseBranch = emitStatementBodyWithCtx(stmt.elseStatement, ctx);
+    if (index < stmts.length - 1) {
+      return Let(ctx.counter.next("discard"), If(condition, thenBranch, elseBranch), rest());
+    }
+    return If(condition, thenBranch, elseBranch);
+  }
+  if (index < stmts.length - 1) {
+    return Let(ctx.counter.next("discard"), If(condition, thenBranch), rest());
+  }
+  return If(condition, thenBranch);
+}
+
+function emitStatementBodyWithCtx(stmt: ts.Statement, ctx: EmitContext): Expr {
+  return emitStatementBody(stmt, ctx);
+}
 
 function emitIfStatement(
   stmt: ts.IfStatement,
@@ -217,56 +569,212 @@ function emitIfStatement(
   ctx: EmitContext,
 ): Expr {
   const condition = emitExpression(stmt.expression, ctx);
+  const hasMore = index < stmts.length - 1;
+  const rest = () => emitStatementList(stmts, index + 1, ctx);
 
-  // Check for early return: if the then-branch ends with return
-  // and there's no else, absorb remaining statements into else
-  const thenBranch = emitStatementBody(stmt.thenStatement, ctx);
+  const thenTerminates = alwaysTerminates(stmt.thenStatement);
+  const elseTerminates = stmt.elseStatement ? alwaysTerminates(stmt.elseStatement) : false;
 
-  if (stmt.elseStatement) {
+  // ── Both terminate ──
+  if (thenTerminates && elseTerminates) {
+    const thenBranch = emitStatementBody(stmt.thenStatement, ctx);
+    const elseBranch = emitStatementBody(stmt.elseStatement!, ctx);
+    return If(condition, thenBranch, elseBranch);
+  }
+
+  // ── No-else early return: then terminates, no explicit else ──
+  if (thenTerminates && !stmt.elseStatement) {
+    const thenBranch = emitStatementBody(stmt.thenStatement, ctx);
+    if (!hasMore) return If(condition, thenBranch);
+    return If(condition, thenBranch, rest());
+  }
+
+  // ── Then terminates, explicit non-terminating else ──
+  if (thenTerminates && stmt.elseStatement && !elseTerminates) {
+    const snapshot = snapshotVersions(ctx);
+    const elseStack = cloneScopeStack(ctx.scopeStack);
+    const elseCtx: EmitContext = { ...ctx, scopeStack: elseStack };
+
+    const thenBranch = emitStatementBody(stmt.thenStatement, ctx);
+    const elseAndRest = hasMore
+      ? emitStatementListWithTerminal(getBodyStatements(stmt.elseStatement), 0, elseCtx, rest)
+      : emitStatementBody(stmt.elseStatement, elseCtx);
+
+    // Merge elseCtx versions back (else is the continuation path)
+    mergeStackVersions(ctx, elseCtx);
+    void snapshot; // used for documentation
+    return If(condition, thenBranch, elseAndRest);
+  }
+
+  // ── Else terminates, then falls through ──
+  if (!thenTerminates && elseTerminates && stmt.elseStatement) {
+    const snapshot = snapshotVersions(ctx);
+    const thenStack = cloneScopeStack(ctx.scopeStack);
+    const thenCtx: EmitContext = { ...ctx, scopeStack: thenStack };
+
+    const thenAndRest = hasMore
+      ? emitStatementListWithTerminal(getBodyStatements(stmt.thenStatement), 0, thenCtx, rest)
+      : emitStatementBody(stmt.thenStatement, thenCtx);
     const elseBranch = emitStatementBody(stmt.elseStatement, ctx);
-    const ifExpr = If(condition, thenBranch, elseBranch);
 
-    // If there are more statements after this if, need to handle them
-    if (index < stmts.length - 1) {
-      // If both branches return, remaining code is dead
-      if (branchReturns(stmt.thenStatement) && branchReturns(stmt.elseStatement)) {
-        return ifExpr;
-      }
-      const name = ctx.counter.next("discard");
-      return Let(name, ifExpr, emitStatementList(stmts, index + 1, ctx));
+    // Merge thenCtx versions back (then is the continuation path)
+    mergeStackVersions(ctx, thenCtx);
+    void snapshot;
+    return If(condition, thenAndRest, elseBranch);
+  }
+
+  // ── Neither terminates: compute SSA join ──
+  const snapshot = snapshotVersions(ctx);
+  const allLetVars = getAllLetVars(ctx);
+
+  // Phase 1: dry-run in isolated contexts to detect which vars change per branch.
+  // These contexts are discarded after version detection.
+  const dryThenCtx: EmitContext = { ...ctx, scopeStack: cloneScopeStack(ctx.scopeStack) };
+  const dryElseCtx: EmitContext = { ...ctx, scopeStack: cloneScopeStack(ctx.scopeStack) };
+  const thenBodyStmts = getBodyStatements(stmt.thenStatement);
+  const elseBodyStmts = stmt.elseStatement ? getBodyStatements(stmt.elseStatement) : [];
+  compileBranchBodyToJoin(thenBodyStmts, allLetVars, snapshot, dryThenCtx);
+  if (stmt.elseStatement) compileBranchBodyToJoin(elseBodyStmts, allLetVars, snapshot, dryElseCtx);
+
+  const joinVars = allLetVars.filter((v) => {
+    const thenVersion = getVersion(v, dryThenCtx);
+    const elseVersion = stmt.elseStatement ? getVersion(v, dryElseCtx) : snapshot.get(v) ?? 0;
+    return thenVersion !== (snapshot.get(v) ?? 0) || elseVersion !== (snapshot.get(v) ?? 0);
+  });
+
+  if (joinVars.length === 0) {
+    // No variables changed — simple if
+    if (stmt.elseStatement) {
+      const thenBranch = emitStatementBody(stmt.thenStatement, ctx);
+      const elseBranch = emitStatementBody(stmt.elseStatement, ctx);
+      const ifExpr = If(condition, thenBranch, elseBranch);
+      if (!hasMore) return ifExpr;
+      return Let(ctx.counter.next("discard"), ifExpr, rest());
     }
-    return ifExpr;
-  }
-
-  // No else branch
-  if (branchReturns(stmt.thenStatement)) {
-    // Early return transform: remaining statements become else branch
-    const rest = emitStatementList(stmts, index + 1, ctx);
-    return If(condition, thenBranch, rest);
-  }
-
-  // No else, no early return — simple if
-  if (index < stmts.length - 1) {
+    const thenBranch = emitStatementBody(stmt.thenStatement, ctx);
     const ifExpr = If(condition, thenBranch);
-    const name = ctx.counter.next("discard");
-    return Let(name, ifExpr, emitStatementList(stmts, index + 1, ctx));
+    if (!hasMore) return ifExpr;
+    return Let(ctx.counter.next("discard"), ifExpr, rest());
   }
 
-  return If(condition, thenBranch);
+  // Phase 2: compile branches as join-producing expressions using fresh clones.
+  const thenCtx: EmitContext = { ...ctx, scopeStack: cloneScopeStack(ctx.scopeStack) };
+  const elseCtx: EmitContext = { ...ctx, scopeStack: cloneScopeStack(ctx.scopeStack) };
+  const thenJoinExpr = compileBranchToExpr(stmt.thenStatement, joinVars, thenCtx);
+  const elseJoinExpr = stmt.elseStatement
+    ? compileBranchToExpr(stmt.elseStatement, joinVars, elseCtx)
+    : buildJoinExprFromSnapshot(joinVars, snapshot);
+
+  // Update main scope stack versions to post-join
+  applyJoinVersions(joinVars, ctx);
+
+  if (joinVars.length === 1) {
+    const v = joinVars[0]!;
+    const joinIrName = resolveRef(v, ctx);
+    const ifExpr = If(condition, thenJoinExpr, elseJoinExpr);
+    if (!hasMore) return Let(joinIrName, ifExpr, null as unknown as Expr);
+    return Let(joinIrName, ifExpr, rest());
+  }
+
+  // Multiple join vars: pack into Construct, destructure with Get
+  const joinName = ctx.counter.next("j");
+  const ifExpr = If(condition, thenJoinExpr, elseJoinExpr);
+  let result = hasMore ? rest() : (null as unknown as Expr);
+  for (let i = joinVars.length - 1; i >= 0; i--) {
+    const v = joinVars[i]!;
+    const joinIrName = resolveRef(v, ctx);
+    result = Let(joinIrName, Get(Ref(joinName), v), result);
+  }
+  return Let(joinName, ifExpr, result);
 }
 
-/** Check if a statement (or block) contains a return. */
-function branchReturns(stmt: ts.Statement): boolean {
-  if (ts.isReturnStatement(stmt)) return true;
-  if (ts.isBlock(stmt)) {
-    return stmt.statements.some((s) => branchReturns(s));
+/** Get all in-scope let variable names. */
+function getAllLetVars(ctx: EmitContext): string[] {
+  const seen = new Set<string>();
+  const result: string[] = [];
+  // Scan from innermost to outermost, collect unique names
+  for (let i = ctx.scopeStack.length - 1; i >= 0; i--) {
+    for (const [name, info] of ctx.scopeStack[i]!) {
+      if (info.kind === "let" && !seen.has(name)) {
+        seen.add(name);
+        result.push(name);
+      }
+    }
   }
-  if (ts.isIfStatement(stmt)) {
-    const thenReturns = branchReturns(stmt.thenStatement);
-    const elseReturns = stmt.elseStatement ? branchReturns(stmt.elseStatement) : false;
-    return thenReturns && elseReturns;
+  return result;
+}
+
+/** Get current version number for a let binding. */
+function getVersion(name: string, ctx: EmitContext): number {
+  const found = lookupBinding(name, ctx);
+  if (found && found.info.kind === "let") return found.info.version;
+  return -1;
+}
+
+/** Compile branch body statements into an expression (for detecting version changes).
+ * This is a dry-run to collect which variables changed. */
+function compileBranchBodyToJoin(
+  stmts: ts.Statement[],
+  _joinVars: string[],
+  _snapshot: Map<string, number>,
+  branchCtx: EmitContext,
+): Expr {
+  // Just compile normally; the branchCtx tracks which versions changed
+  return emitStatementList(stmts, 0, branchCtx);
+}
+
+/** Build a join expression from snapshot versions (else-less case: vars stay at snapshot). */
+function buildJoinExpr(vars: string[], snapshot: Map<string, number>, _: Map<string, number>): Expr {
+  if (vars.length === 0) return null as unknown as Expr;
+  if (vars.length === 1) {
+    const v = vars[0]!;
+    const version = snapshot.get(v) ?? 0;
+    return Ref(`${v}_${version}`);
   }
-  return false;
+  const fields: Record<string, Expr> = {};
+  for (const v of vars) {
+    const version = snapshot.get(v) ?? 0;
+    fields[v] = Ref(`${v}_${version}`);
+  }
+  return Construct(fields);
+}
+
+/** Build a join expression using snapshot versions (for the "no else" case). */
+function buildJoinExprFromSnapshot(vars: string[], snapshot: Map<string, number>): Expr {
+  if (vars.length === 0) return null as unknown as Expr;
+  if (vars.length === 1) {
+    const v = vars[0]!;
+    const version = snapshot.get(v) ?? 0;
+    return Ref(`${v}_${version}`);
+  }
+  const fields: Record<string, Expr> = {};
+  for (const v of vars) {
+    const version = snapshot.get(v) ?? 0;
+    fields[v] = Ref(`${v}_${version}`);
+  }
+  return Construct(fields);
+}
+
+/** Bump the version of all join vars in the main context (post-join). */
+function applyJoinVersions(joinVars: string[], ctx: EmitContext): void {
+  for (const v of joinVars) {
+    bumpVersion(v, ctx);
+  }
+}
+
+/** Copy versions from a branch context back into the main context. */
+function mergeStackVersions(ctx: EmitContext, branchCtx: EmitContext): void {
+  // For each let binding in branchCtx, update the version in ctx
+  for (let i = 0; i < branchCtx.scopeStack.length && i < ctx.scopeStack.length; i++) {
+    const branchFrame = branchCtx.scopeStack[i]!;
+    const mainFrame = ctx.scopeStack[i]!;
+    for (const [name, info] of branchFrame) {
+      const mainInfo = mainFrame.get(name);
+      if (mainInfo && mainInfo.kind === "let") {
+        mainInfo.version = info.version;
+      }
+    }
+  }
 }
 
 /** Emit a single statement or block as a body expression. */
@@ -287,12 +795,14 @@ function emitWhileStatement(
 ): Expr {
   // Detect return in body → Case B (recursive Fn + Call)
   const hasReturn = bodyContainsReturn(stmt.statement);
+  // Detect loop-carried let vars (outer let bindings reassigned in loop body)
+  const loopCarriedVars = detectLoopCarriedLetVars(stmt, ctx);
 
-  if (hasReturn) {
-    return emitWhileCaseB(stmt, rest, isLast, ctx);
+  if (hasReturn || loopCarriedVars.length > 0) {
+    return emitWhileCaseB(stmt, rest, isLast, ctx, loopCarriedVars);
   }
 
-  // Case A: no return → While IR node
+  // Case A: no return, no loop-carried state → While IR node
   const condition = emitExpression(stmt.expression, ctx);
   const bodyStmts = getBodyStatements(stmt.statement);
   const bodyExpr = emitStatementList(bodyStmts, 0, ctx);
@@ -303,31 +813,63 @@ function emitWhileStatement(
   return Let(name, whileExpr, rest());
 }
 
-/** Case B: while-with-return → recursive Fn + Call (§6.2) */
+/**
+ * Detect loop-carried let variables: outer let bindings that are reassigned
+ * inside the while loop body.
+ */
+function detectLoopCarriedLetVars(stmt: ts.WhileStatement, ctx: EmitContext): string[] {
+  const assigned = new Set<string>();
+  collectAssignedIdents(stmt.statement, assigned);
+  return Array.from(assigned).filter((name) => {
+    const found = lookupBinding(name, ctx);
+    return found !== undefined && found.info.kind === "let";
+  });
+}
+
+/** Recursively collect all identifier names that appear on the LHS of assignment. */
+function collectAssignedIdents(node: ts.Node, result: Set<string>): void {
+  if (
+    ts.isBinaryExpression(node) &&
+    node.operatorToken.kind === ts.SyntaxKind.EqualsToken &&
+    ts.isIdentifier(node.left)
+  ) {
+    result.add((node.left as ts.Identifier).text);
+  }
+  ts.forEachChild(node, (child) => collectAssignedIdents(child, result));
+}
+
+/** Case B: while-with-return or loop-carried-state → recursive Fn + Call (§6.2) */
 function emitWhileCaseB(
   stmt: ts.WhileStatement,
   rest: () => Expr,
   isLast: boolean,
   ctx: EmitContext,
+  loopCarriedVars: string[],
 ): Expr {
   const loopName = ctx.counter.next("loop");
   const condition = stmt.expression;
 
-  // Build the Fn body:
-  // if (condition) { body; recurse } else { null }
-  // where body has returns as-is (base case) and fall-through → recurse
+  // Loop-carried var params: current versioned names become the Fn param names.
+  // Inside the Fn, references to these vars naturally resolve to the param values
+  // because the outer scope already has them at these versions.
+  const loopCarriedParams = loopCarriedVars.map((v) => resolveRef(v, ctx));
+
+  // Build the Fn body: body statements with fall-through = recursive Call
   const bodyStmts = getBodyStatements(stmt.statement);
+  const fnCtx: EmitContext = { ...ctx, scopeStack: cloneScopeStack(ctx.scopeStack) };
 
-  // Transform: append a recursive call at the end of body statements
-  // that don't return
-  const transformedBody = emitLoopBody(bodyStmts, condition, loopName, ctx);
+  const transformedBody = emitLoopBody(bodyStmts, condition, loopName, loopCarriedVars, fnCtx);
 
-  const loopFn = Fn([], transformedBody);
+  const loopFn = Fn(loopCarriedParams, transformedBody);
+
+  // Initial call: pass current versioned refs for each loop-carried var
+  const initArgs = loopCarriedParams.map((pn) => Ref(pn) as Expr);
+  const callExpr = Call(Ref(loopName), initArgs);
 
   if (isLast) {
-    return Let(loopName, loopFn, Call(Ref(loopName), []));
+    return Let(loopName, loopFn, callExpr);
   }
-  return Let(loopName, loopFn, Let(ctx.counter.next("discard"), Call(Ref(loopName), []), rest()));
+  return Let(loopName, loopFn, Let(ctx.counter.next("discard"), callExpr, rest()));
 }
 
 /**
@@ -338,12 +880,13 @@ function emitLoopBody(
   stmts: ts.Statement[],
   condition: ts.Expression,
   loopName: string,
+  loopCarriedVars: string[],
   ctx: EmitContext,
 ): Expr {
   // Check if condition is `true` literal
   const isTrueCondition = condition.kind === ts.SyntaxKind.TrueKeyword;
 
-  const bodyExpr = emitLoopStatements(stmts, 0, loopName, ctx);
+  const bodyExpr = emitLoopStatements(stmts, 0, loopName, loopCarriedVars, ctx);
 
   if (isTrueCondition) {
     // while(true) — no condition check needed, just body + recurse
@@ -358,21 +901,23 @@ function emitLoopBody(
 /**
  * Emit statements within a loop body (Case B).
  * Return statements become the value (base case).
- * End of body → recursive call (recursive case).
+ * End of body → recursive call with current loop-carried var versions.
  */
 function emitLoopStatements(
   stmts: ts.Statement[],
   index: number,
   loopName: string,
+  loopCarriedVars: string[],
   ctx: EmitContext,
 ): Expr {
   if (index >= stmts.length) {
-    // Fall-through: recurse
-    return Call(Ref(loopName), []);
+    // Fall-through: recurse, passing current versions of loop-carried vars
+    const args = loopCarriedVars.map((v) => Ref(resolveRef(v, ctx)) as Expr);
+    return Call(Ref(loopName), args);
   }
 
   const stmt = stmts[index]!;
-  const restLoop = () => emitLoopStatements(stmts, index + 1, loopName, ctx);
+  const restLoop = () => emitLoopStatements(stmts, index + 1, loopName, loopCarriedVars, ctx);
 
   // Return → base case (value propagates out)
   if (ts.isReturnStatement(stmt)) {
@@ -387,9 +932,27 @@ function emitLoopStatements(
     return emitVariableStatement(stmt, restLoop, ctx);
   }
 
+  // Let reassignment: x = newExpr — must handle here too for loop body
+  if (
+    ts.isExpressionStatement(stmt) &&
+    ts.isBinaryExpression(stmt.expression) &&
+    stmt.expression.operatorToken.kind === ts.SyntaxKind.EqualsToken &&
+    ts.isIdentifier(stmt.expression.left)
+  ) {
+    const expr = stmt.expression;
+    const lhsName = (expr.left as ts.Identifier).text;
+    const found = lookupBinding(lhsName, ctx);
+    if (!found || found.info.kind !== "let") {
+      throw error("E003", "Reassignment of non-let binding or undeclared name is not allowed", stmt, ctx);
+    }
+    const newValue = emitExpression(expr.right, ctx);
+    const newIrName = bumpVersion(lhsName, ctx);
+    return Let(newIrName, newValue, restLoop());
+  }
+
   // If with return → early return pattern
   if (ts.isIfStatement(stmt)) {
-    return emitLoopIfStatement(stmt, stmts, index, loopName, ctx);
+    return emitLoopIfStatement(stmt, stmts, index, loopName, loopCarriedVars, ctx);
   }
 
   // Expression statement
@@ -421,28 +984,29 @@ function emitLoopIfStatement(
   stmts: ts.Statement[],
   index: number,
   loopName: string,
+  loopCarriedVars: string[],
   ctx: EmitContext,
 ): Expr {
   const condition = emitExpression(stmt.expression, ctx);
-  const thenBranch = emitLoopBranch(stmt.thenStatement, loopName, ctx);
+  const thenBranch = emitLoopBranch(stmt.thenStatement, loopName, loopCarriedVars, ctx);
 
   if (stmt.elseStatement) {
-    const elseBranch = emitLoopBranch(stmt.elseStatement, loopName, ctx);
+    const elseBranch = emitLoopBranch(stmt.elseStatement, loopName, loopCarriedVars, ctx);
     const ifExpr = If(condition, thenBranch, elseBranch);
 
     if (index < stmts.length - 1) {
-      if (branchReturns(stmt.thenStatement) && branchReturns(stmt.elseStatement)) {
+      if (alwaysTerminates(stmt.thenStatement) && alwaysTerminates(stmt.elseStatement)) {
         return ifExpr;
       }
       const name = ctx.counter.next("discard");
-      return Let(name, ifExpr, emitLoopStatements(stmts, index + 1, loopName, ctx));
+      return Let(name, ifExpr, emitLoopStatements(stmts, index + 1, loopName, loopCarriedVars, ctx));
     }
     return ifExpr;
   }
 
   // No else, early return in then → remaining statements become else
-  if (branchReturns(stmt.thenStatement)) {
-    const rest = emitLoopStatements(stmts, index + 1, loopName, ctx);
+  if (alwaysTerminates(stmt.thenStatement)) {
+    const rest = emitLoopStatements(stmts, index + 1, loopName, loopCarriedVars, ctx);
     return If(condition, thenBranch, rest);
   }
 
@@ -451,7 +1015,7 @@ function emitLoopIfStatement(
     return Let(
       name,
       If(condition, thenBranch),
-      emitLoopStatements(stmts, index + 1, loopName, ctx),
+      emitLoopStatements(stmts, index + 1, loopName, loopCarriedVars, ctx),
     );
   }
 
@@ -459,9 +1023,9 @@ function emitLoopIfStatement(
 }
 
 /** Emit a branch within a Case B loop body. */
-function emitLoopBranch(stmt: ts.Statement, loopName: string, ctx: EmitContext): Expr {
+function emitLoopBranch(stmt: ts.Statement, loopName: string, loopCarriedVars: string[], ctx: EmitContext): Expr {
   const stmts = getBodyStatements(stmt);
-  return emitLoopStatements(stmts, 0, loopName, ctx);
+  return emitLoopStatements(stmts, 0, loopName, loopCarriedVars, ctx);
 }
 
 // ── Helpers ──
@@ -705,9 +1269,9 @@ export function emitExpression(node: ts.Expression, ctx: EmitContext): Expr {
     return null as unknown as Expr;
   }
 
-  // ── Identifiers → Ref ──
+  // ── Identifiers → Ref (versioned if SSA-tracked) ──
   if (ts.isIdentifier(node)) {
-    return Ref(node.text);
+    return Ref(resolveRef(node.text, ctx));
   }
 
   // ── Parenthesized ──
@@ -736,10 +1300,9 @@ export function emitExpression(node: ts.Expression, ctx: EmitContext): Expr {
     return emitObjectLiteral(node, ctx);
   }
 
-  // ── Array literal → Array (§7.7) ──
+  // ── Array literal → Array or ConcatArrays (§7.7) ──
   if (ts.isArrayLiteralExpression(node)) {
-    const items = node.elements.map((e) => emitExpression(e, ctx));
-    return ArrayNode(items);
+    return emitArrayLiteral(node, ctx);
   }
 
   // ── Template literal → Concat (§7.8) ──
@@ -825,9 +1388,10 @@ function emitBinaryExpression(node: ts.BinaryExpression, ctx: EmitContext): Expr
     case ts.SyntaxKind.BarBarToken:
       return Or(left, right);
 
-    // Assignment → error
+    // Assignment in expression position → always an error
+    // (let reassignment is handled at statement level in emitLetReassignment)
     case ts.SyntaxKind.EqualsToken:
-      throw error("E003", "Reassignment is not allowed", node, ctx);
+      throw error("E003", "Reassignment of non-let binding or undeclared name is not allowed", node, ctx);
 
     default:
       throw error(
@@ -859,13 +1423,52 @@ function emitPrefixUnary(node: ts.PrefixUnaryExpression, ctx: EmitContext): Expr
   }
 }
 
-// ── Object literal → Construct (§7.6) ──
+// ── Object literal → Construct or MergeObjects (§7.6) ──
 
 function emitObjectLiteral(node: ts.ObjectLiteralExpression, ctx: EmitContext): Expr {
-  const fields: Record<string, Expr> = {};
+  // Check if any spread elements are present
+  const hasSpread = node.properties.some((p) => ts.isSpreadAssignment(p));
+
+  if (!hasSpread) {
+    const fields: Record<string, Expr> = {};
+    for (const prop of node.properties) {
+      if (ts.isPropertyAssignment(prop)) {
+        let key: string;
+        if (ts.isIdentifier(prop.name)) {
+          key = prop.name.text;
+        } else if (ts.isStringLiteral(prop.name)) {
+          key = prop.name.text;
+        } else {
+          throw error("E005", "Computed property keys are not allowed", prop, ctx);
+        }
+        fields[key] = emitExpression(prop.initializer, ctx);
+      } else if (ts.isShorthandPropertyAssignment(prop)) {
+        // { x } → { x: Ref("x") }
+        const key = prop.name.text;
+        fields[key] = Ref(resolveRef(key, ctx));
+      } else {
+        throw error("E999", "Only property assignments are supported in object literals", prop, ctx);
+      }
+    }
+    return Construct(fields);
+  }
+
+  // Has spread: build MergeObjects segments
+  const segments: Expr[] = [];
+  let currentFields: Record<string, Expr> = {};
+
+  const flushFields = () => {
+    if (Object.keys(currentFields).length > 0) {
+      segments.push(Construct(currentFields));
+      currentFields = {};
+    }
+  };
 
   for (const prop of node.properties) {
-    if (ts.isPropertyAssignment(prop)) {
+    if (ts.isSpreadAssignment(prop)) {
+      flushFields();
+      segments.push(emitExpression(prop.expression, ctx));
+    } else if (ts.isPropertyAssignment(prop)) {
       let key: string;
       if (ts.isIdentifier(prop.name)) {
         key = prop.name.text;
@@ -874,17 +1477,51 @@ function emitObjectLiteral(node: ts.ObjectLiteralExpression, ctx: EmitContext): 
       } else {
         throw error("E005", "Computed property keys are not allowed", prop, ctx);
       }
-      fields[key] = emitExpression(prop.initializer, ctx);
+      currentFields[key] = emitExpression(prop.initializer, ctx);
     } else if (ts.isShorthandPropertyAssignment(prop)) {
-      // { x } → { x: Ref("x") }
       const key = prop.name.text;
-      fields[key] = Ref(key);
+      currentFields[key] = Ref(resolveRef(key, ctx));
     } else {
       throw error("E999", "Only property assignments are supported in object literals", prop, ctx);
     }
   }
+  flushFields();
 
-  return Construct(fields);
+  return MergeObjects(segments);
+}
+
+// ── Array literal → ArrayNode or ConcatArrays ──
+
+function emitArrayLiteral(node: ts.ArrayLiteralExpression, ctx: EmitContext): Expr {
+  const hasSpread = node.elements.some((e) => ts.isSpreadElement(e));
+
+  if (!hasSpread) {
+    const items = node.elements.map((e) => emitExpression(e, ctx));
+    return ArrayNode(items);
+  }
+
+  // Has spread: build ConcatArrays segments
+  const segments: Expr[] = [];
+  let currentItems: Expr[] = [];
+
+  const flushItems = () => {
+    if (currentItems.length > 0) {
+      segments.push(ArrayNode(currentItems));
+      currentItems = [];
+    }
+  };
+
+  for (const element of node.elements) {
+    if (ts.isSpreadElement(element)) {
+      flushItems();
+      segments.push(emitExpression(element.expression, ctx));
+    } else {
+      currentItems.push(emitExpression(element, ctx));
+    }
+  }
+  flushItems();
+
+  return ConcatArrays(segments);
 }
 
 // ── Template literal → Concat (§7.8) ──
@@ -951,6 +1588,15 @@ function emitCallExpression(node: ts.CallExpression, ctx: EmitContext): Expr {
 // ── Unsupported construct detection (§11) ──
 
 function checkUnsupportedExpression(node: ts.Expression, ctx: EmitContext): void {
+  // Spread in call args → E032
+  if (ts.isCallExpression(node)) {
+    for (const arg of node.arguments) {
+      if (ts.isSpreadElement(arg)) {
+        throw error("E032", "Spread element outside array or object literal is not allowed", arg, ctx);
+      }
+    }
+  }
+
   // yield without * → E017
   if (ts.isYieldExpression(node) && !node.asteriskToken) {
     throw error("E017", "yield without * is not allowed", node, ctx);
@@ -1033,6 +1679,14 @@ function checkUnsupportedExpression(node: ts.Expression, ctx: EmitContext): void
         if (callee.name.text === "now") {
           throw error("E007", "Date.now() is not allowed (nondeterministic)", node, ctx);
         }
+      }
+      // Mutation methods → E031
+      const MUTATION_METHODS = new Set([
+        "push", "pop", "splice", "shift", "unshift",
+        "sort", "reverse", "fill", "copyWithin",
+      ]);
+      if (MUTATION_METHODS.has(callee.name.text)) {
+        throw error("E031", "Mutation method call is not allowed", node, ctx);
       }
     }
   }

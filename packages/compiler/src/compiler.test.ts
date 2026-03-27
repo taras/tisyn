@@ -522,13 +522,188 @@ describe("Effects", () => {
   });
 });
 
+// ── SSA let + reassignment ──
+
+describe("SSA: let declarations and reassignment", () => {
+  it("compiles let in straight-line code with correct versioning", () => {
+    const ir = compileOne(`
+      function* f(): Workflow<number> {
+        let x = 1;
+        return x;
+      }
+    `);
+    // Body should be Let("x_0", 1, Ref("x_0"))
+    expect(ir).toHaveProperty("tisyn", "fn");
+    const fn = ir as any;
+    const body = fn.body;
+    expect(body.id).toBe("let");
+    expect(body.data.expr.name).toBe("x_0");
+    expect(body.data.expr.value).toBe(1);
+    const ret = body.data.expr.body;
+    expect(ret).toHaveProperty("tisyn", "ref");
+    expect(ret.name).toBe("x_0");
+  });
+
+  it("compiles let reassignment with version bump", () => {
+    const ir = compileOne(`
+      function* f(): Workflow<number> {
+        let x = 1;
+        x = 2;
+        return x;
+      }
+    `) as any;
+    const fn = ir;
+    // body: Let(x_0, 1, Let(x_1, 2, Ref(x_1)))
+    const outer = fn.body;
+    expect(outer.id).toBe("let");
+    expect(outer.data.expr.name).toBe("x_0");
+    const mid = outer.data.expr.body;
+    expect(mid.id).toBe("let");
+    expect(mid.data.expr.name).toBe("x_1");
+    const ret = mid.data.expr.body;
+    expect(ret.name).toBe("x_1");
+  });
+
+  it("rejects reassignment to const (E003)", () => {
+    expect(() =>
+      compileOne(`function* f(): Workflow<any> { const x = 1; x = 2; return x; }`),
+    ).toThrow(CompileError);
+  });
+
+  it("rejects reassignment to undeclared name (E003)", () => {
+    expect(() =>
+      compileOne(`function* f(): Workflow<any> { x = 2; return x; }`),
+    ).toThrow(CompileError);
+  });
+
+  it("rejects reassignment to function param (E003)", () => {
+    expect(() =>
+      compileOne(`function* f(x: number): Workflow<any> { x = 2; return x; }`),
+    ).toThrow(CompileError);
+  });
+});
+
+// ── SSA if-branch join ──
+
+describe("SSA: if-branch join lowering", () => {
+  it("compiles if with single reassigned var as join", () => {
+    const ir = compileOne(`
+      function* f(cond: boolean): Workflow<number> {
+        let x = 0;
+        if (cond) {
+          x = 1;
+        }
+        return x;
+      }
+    `) as any;
+    // Should produce: Let(x_0, 0, Let(x_1, If(cond, ..., ...), Ref(x_1)))
+    expect(ir.tisyn).toBe("fn");
+    const body = ir.body;
+    expect(body.id).toBe("let"); // x_0
+    expect(body.data.expr.name).toBe("x_0");
+    const joinLet = body.data.expr.body;
+    expect(joinLet.id).toBe("let"); // x_1
+    expect(joinLet.data.expr.name).toBe("x_1");
+    expect(joinLet.data.expr.value.id).toBe("if"); // If node
+    const ret = joinLet.data.expr.body;
+    expect(ret.name).toBe("x_1");
+  });
+
+  it("compiles if-else with two reassigned vars using Construct + Get", () => {
+    const ir = compileOne(`
+      function* f(cond: boolean): Workflow<number> {
+        let x = 0;
+        let y = 0;
+        if (cond) {
+          x = 1;
+          y = 2;
+        } else {
+          x = 3;
+          y = 4;
+        }
+        return x;
+      }
+    `) as any;
+    // Should produce __j = If(cond, Construct({x,y}), Construct({x,y}))
+    // followed by x_1 = Get(__j, "x"), y_1 = Get(__j, "y")
+    expect(ir.tisyn).toBe("fn");
+    // Find the __j let node
+    function findLetById(node: any, namePrefix: string): any {
+      if (!node || typeof node !== "object") return null;
+      if (node.id === "let" && node.data?.expr?.name?.startsWith(namePrefix)) return node;
+      for (const v of Object.values(node)) {
+        const found = findLetById(v, namePrefix);
+        if (found) return found;
+      }
+      return null;
+    }
+    const jLet = findLetById(ir.body, "__j");
+    expect(jLet).toBeTruthy();
+    expect(jLet.data.expr.value.id).toBe("if");
+  });
+});
+
+// ── Spread lowering ──
+
+describe("Spread lowering", () => {
+  it("array spread produces concat-arrays IR", () => {
+    const ir = compileOne(`
+      function* f(arr: number[]): Workflow<number[]> {
+        return [...arr, 1];
+      }
+    `) as any;
+    const body = ir.body;
+    expect(body.id).toBe("concat-arrays");
+  });
+
+  it("object spread produces merge-objects IR", () => {
+    const ir = compileOne(`
+      function* f(obj: Record<string, number>): Workflow<Record<string, number>> {
+        return { ...obj, x: 1 };
+      }
+    `) as any;
+    const body = ir.body;
+    expect(body.id).toBe("merge-objects");
+  });
+
+  it("rejects spread in function call args (E032)", () => {
+    expect(() =>
+      compileOne(`function* f(arr: number[]): Workflow<any> { return someFunc(...arr); }`),
+    ).toThrow(CompileError);
+  });
+
+  it("plain array without spread produces array IR", () => {
+    const ir = compileOne(`
+      function* f(): Workflow<number[]> { return [1, 2, 3]; }
+    `) as any;
+    const body = ir.body;
+    expect(body.id).toBe("array");
+  });
+});
+
+// ── Mutation detection ──
+
+describe("Mutation detection", () => {
+  it("rejects array .push call (E031)", () => {
+    expect(() =>
+      compileOne(`function* f(arr: number[]): Workflow<any> { arr.push(1); return arr; }`),
+    ).toThrow(CompileError);
+  });
+
+  it("rejects property mutation (E004)", () => {
+    expect(() =>
+      compileOne(`function* f(obj: any): Workflow<any> { obj.x = 1; return obj; }`),
+    ).toThrow(CompileError);
+  });
+});
+
 // ── Error detection ──
 
 describe("Error detection", () => {
-  it("rejects let declarations (E001)", () => {
-    expect(() => compileOne(`function* f(): Workflow<any> { let x = 1; return x; }`)).toThrow(
-      CompileError,
-    );
+  it("accepts let declarations (E001 removed)", () => {
+    // 'let' is now supported; this should compile without error
+    const result = compileOne(`function* f(): Workflow<any> { let x = 1; return x; }`);
+    expect(result).toBeDefined();
   });
 
   it("rejects reassignment (E003)", () => {

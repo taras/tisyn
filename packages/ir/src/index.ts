@@ -28,6 +28,8 @@ export type {
   ThrowShape,
   AllShape,
   RaceShape,
+  ConcatArraysShape,
+  MergeObjectsShape,
 } from "./types.js";
 
 export type {
@@ -58,6 +60,8 @@ export type {
   ThrowNode,
   AllNode,
   RaceNode,
+  ConcatArraysNode,
+  MergeObjectsNode,
 } from "./types.js";
 
 export type { Expr, Quote, TisynFn, ExprResult, AsExpr, TypedIrNode, IrInput } from "./expr.js";
@@ -115,6 +119,8 @@ export {
   Concat,
   Throw,
   Eval,
+  ConcatArrays,
+  MergeObjects,
   All,
   Race,
 } from "./constructors.js";

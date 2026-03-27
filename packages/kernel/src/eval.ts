@@ -304,6 +304,31 @@ function* evalStructural(id: string, data: Expr, env: Env): Generator<EffectDesc
       throw new ExplicitThrow(String(message));
     }
 
+    // §5.16 concat-arrays
+    case "concat-arrays": {
+      const arrays = fields["arrays"] as Expr[];
+      const result: Val[] = [];
+      for (const arr of arrays) {
+        const val = yield* evaluate(arr, env);
+        if (!Array.isArray(val)) throw new TypeError(`concat-arrays: operand is not an array`);
+        result.push(...(val as Val[]));
+      }
+      return result;
+    }
+
+    // §5.17 merge-objects
+    case "merge-objects": {
+      const objects = fields["objects"] as Expr[];
+      const result: Record<string, Val> = {};
+      for (const obj of objects) {
+        const val = yield* evaluate(obj, env);
+        if (typeof val !== "object" || val === null || Array.isArray(val))
+          throw new TypeError(`merge-objects: operand is not an object`);
+        Object.assign(result, val as Record<string, Val>);
+      }
+      return result;
+    }
+
     default:
       throw new Error(`Unknown structural operation: ${id}`);
   }

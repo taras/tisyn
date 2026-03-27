@@ -148,6 +148,16 @@ export function Throw(message: Expr): EvalNode {
   return { tisyn: "eval", id: "throw", data: Q({ message }) };
 }
 
+// ── Spread rebuild ops (quoted data) ──
+
+export function ConcatArrays(arrays: Expr[]): EvalNode {
+  return { tisyn: "eval", id: "concat-arrays", data: Q({ arrays }) };
+}
+
+export function MergeObjects(objects: Expr[]): EvalNode {
+  return { tisyn: "eval", id: "merge-objects", data: Q({ objects }) };
+}
+
 // ── External effects (unquoted data) ──
 
 export function ExternalEval(id: string, data: Expr): EvalNode {
