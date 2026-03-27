@@ -487,20 +487,22 @@ function emitStatementListWithTerminal(
   if (ts.isBlock(stmt)) {
     pushFrame(ctx);
     try {
+      // The terminal passed below inlines the continuation, so blockResult already
+      // contains rest() or terminal(). Return it directly — do NOT wrap in
+      // Let(discard, blockResult, rest()), which would call rest() a second time.
       const blockResult = emitStatementListWithTerminal(
         Array.from(stmt.statements),
         0,
         ctx,
         index === stmts.length - 1 ? terminal : rest,
       );
-      if (isLast) return blockResult;
-      return Let(ctx.counter.next("discard"), blockResult, rest());
+      return blockResult;
     } finally {
       popFrame(ctx);
     }
   }
 
-  // If statement in branch (simplified — no SSA joins inside branch for now)
+  // If statement in branch
   if (ts.isIfStatement(stmt)) {
     return emitIfStatementInList(stmt, stmts, index, ctx, terminal);
   }
@@ -548,8 +550,12 @@ function emitIfStatementInList(
   }
 
   if (thenTerminates && stmt.elseStatement && !elseTerminates) {
-    // Then terminates, else falls through
-    const thenBranch = emitStatementBodyWithCtx(stmt.thenStatement, ctx);
+    // Then terminates, else falls through.
+    // Compile the terminating branch in an isolated clone so that any SSA bumps it
+    // performs (e.g. x = 1; return x) do not pollute the version state seen by the
+    // fallthrough else branch and its continuation.
+    const thenCtx: EmitContext = { ...ctx, scopeStack: cloneScopeStack(ctx.scopeStack) };
+    const thenBranch = emitStatementBodyWithCtx(stmt.thenStatement, thenCtx);
     const elseAndRest = emitStatementListWithTerminal(
       getBodyStatements(stmt.elseStatement),
       0,
@@ -560,14 +566,17 @@ function emitIfStatementInList(
   }
 
   if (!thenTerminates && elseTerminates) {
-    // Else terminates, then falls through
+    // Else terminates, then falls through.
+    // Clone elseCtx before then mutates ctx so the terminating else branch sees
+    // pre-if versions (not the versions left by the then branch compilation).
+    const elseCtx: EmitContext = { ...ctx, scopeStack: cloneScopeStack(ctx.scopeStack) };
     const thenAndRest = emitStatementListWithTerminal(
       getBodyStatements(stmt.thenStatement),
       0,
       ctx,
       index < stmts.length - 1 ? rest : terminal,
     );
-    const elseBranch = emitStatementBodyWithCtx(stmt.elseStatement!, ctx);
+    const elseBranch = emitStatementBodyWithCtx(stmt.elseStatement!, elseCtx);
     return If(condition, thenAndRest, elseBranch);
   }
 
@@ -641,50 +650,49 @@ function emitIfStatement(
   const elseTerminates = stmt.elseStatement ? alwaysTerminates(stmt.elseStatement) : false;
 
   // ── Both terminate ──
+  // Each branch is compiled in its own clone so SSA bumps in one branch (e.g.
+  // x = 1; return x) do not bleed into the other branch's version numbering.
   if (thenTerminates && elseTerminates) {
-    const thenBranch = emitStatementBody(stmt.thenStatement, ctx);
-    const elseBranch = emitStatementBody(stmt.elseStatement!, ctx);
+    const thenCtx: EmitContext = { ...ctx, scopeStack: cloneScopeStack(ctx.scopeStack) };
+    const thenBranch = emitStatementBody(stmt.thenStatement, thenCtx);
+    const elseCtx: EmitContext = { ...ctx, scopeStack: cloneScopeStack(ctx.scopeStack) };
+    const elseBranch = emitStatementBody(stmt.elseStatement!, elseCtx);
     return If(condition, thenBranch, elseBranch);
   }
 
   // ── No-else early return: then terminates, no explicit else ──
+  // Compile the terminating branch in a clone so its SSA bumps do not pollute
+  // the version state seen by rest() (the implicit fallthrough).
   if (thenTerminates && !stmt.elseStatement) {
-    const thenBranch = emitStatementBody(stmt.thenStatement, ctx);
+    const thenCtx: EmitContext = { ...ctx, scopeStack: cloneScopeStack(ctx.scopeStack) };
+    const thenBranch = emitStatementBody(stmt.thenStatement, thenCtx);
     if (!hasMore) return If(condition, thenBranch);
     return If(condition, thenBranch, rest());
   }
 
   // ── Then terminates, explicit non-terminating else ──
+  // The terminating then branch is compiled in a clone (its mutations must not
+  // affect the else fallthrough). The else is compiled directly against ctx so
+  // that rest() — which captures ctx by reference — naturally sees the
+  // post-else versions when it is invoked at the end of the else body.
   if (thenTerminates && stmt.elseStatement && !elseTerminates) {
-    const snapshot = snapshotVersions(ctx);
-    const elseStack = cloneScopeStack(ctx.scopeStack);
-    const elseCtx: EmitContext = { ...ctx, scopeStack: elseStack };
-
-    const thenBranch = emitStatementBody(stmt.thenStatement, ctx);
+    const thenCtx: EmitContext = { ...ctx, scopeStack: cloneScopeStack(ctx.scopeStack) };
+    const thenBranch = emitStatementBody(stmt.thenStatement, thenCtx);
     const elseAndRest = hasMore
-      ? emitStatementListWithTerminal(getBodyStatements(stmt.elseStatement), 0, elseCtx, rest)
-      : emitStatementBody(stmt.elseStatement, elseCtx);
-
-    // Merge elseCtx versions back (else is the continuation path)
-    mergeStackVersions(ctx, elseCtx);
-    void snapshot; // used for documentation
+      ? emitStatementListWithTerminal(getBodyStatements(stmt.elseStatement), 0, ctx, rest)
+      : emitStatementBody(stmt.elseStatement, ctx);
     return If(condition, thenBranch, elseAndRest);
   }
 
   // ── Else terminates, then falls through ──
+  // The terminating else branch is compiled in a clone. The then branch is
+  // compiled directly against ctx so that rest() sees the post-then versions.
   if (!thenTerminates && elseTerminates && stmt.elseStatement) {
-    const snapshot = snapshotVersions(ctx);
-    const thenStack = cloneScopeStack(ctx.scopeStack);
-    const thenCtx: EmitContext = { ...ctx, scopeStack: thenStack };
-
+    const elseCtx: EmitContext = { ...ctx, scopeStack: cloneScopeStack(ctx.scopeStack) };
     const thenAndRest = hasMore
-      ? emitStatementListWithTerminal(getBodyStatements(stmt.thenStatement), 0, thenCtx, rest)
-      : emitStatementBody(stmt.thenStatement, thenCtx);
-    const elseBranch = emitStatementBody(stmt.elseStatement, ctx);
-
-    // Merge thenCtx versions back (then is the continuation path)
-    mergeStackVersions(ctx, thenCtx);
-    void snapshot;
+      ? emitStatementListWithTerminal(getBodyStatements(stmt.thenStatement), 0, ctx, rest)
+      : emitStatementBody(stmt.thenStatement, ctx);
+    const elseBranch = emitStatementBody(stmt.elseStatement, elseCtx);
     return If(condition, thenAndRest, elseBranch);
   }
 
@@ -1092,7 +1100,17 @@ function emitLoopStatements(
   throw error("E999", `Unsupported statement in loop body: ${ts.SyntaxKind[stmt.kind]}`, stmt, ctx);
 }
 
-/** Handle if statements within a Case B loop body. */
+/**
+ * Handle if statements within a Case B loop body.
+ *
+ * Key invariant: every path through the loop body must end with either a
+ * recursive Call(loopName, ...) or a return/throw. We achieve this by
+ * INLINING the remaining loop-body statements (restStmts) into each
+ * non-terminating branch rather than appending them after the If expression.
+ *
+ * This also means each branch is compiled in its own cloned context so that
+ * SSA version bumps in one branch do not pollute the other.
+ */
 function emitLoopIfStatement(
   stmt: ts.IfStatement,
   stmts: ts.Statement[],
@@ -1103,74 +1121,51 @@ function emitLoopIfStatement(
   ctx: EmitContext,
 ): Expr {
   const condition = emitExpression(stmt.expression, ctx);
-  const thenBranch = emitLoopBranch(
-    stmt.thenStatement,
+  const thenTerminates = alwaysTerminates(stmt.thenStatement);
+  const elseTerminates = stmt.elseStatement ? alwaysTerminates(stmt.elseStatement) : false;
+
+  // Statements that follow this if in the loop body.
+  const restStmts = stmts.slice(index + 1);
+
+  // Build the full statement list for each branch.
+  // Terminating branches (return/throw) don't need the rest inlined.
+  // Non-terminating branches get the rest concatenated so the recursive
+  // Call is emitted inside the branch, not after the If.
+  const thenFullStmts = thenTerminates
+    ? getBodyStatements(stmt.thenStatement)
+    : [...getBodyStatements(stmt.thenStatement), ...restStmts];
+
+  const elseBodyStmts = stmt.elseStatement
+    ? elseTerminates
+      ? getBodyStatements(stmt.elseStatement)
+      : [...getBodyStatements(stmt.elseStatement), ...restStmts]
+    : restStmts; // no else: implicit fallthrough = rest
+
+  // Compile each branch in an independent cloned context so SSA bumps in one
+  // branch (e.g. bumpVersion("x", ctx)) cannot contaminate the other.
+  const thenCtx: EmitContext = { ...ctx, scopeStack: cloneScopeStack(ctx.scopeStack) };
+  const thenBranch = emitLoopStatements(
+    thenFullStmts,
+    0,
     loopName,
     loopCarriedVars,
     lastParamName,
-    ctx,
+    thenCtx,
+    null,
   );
 
-  if (stmt.elseStatement) {
-    const elseBranch = emitLoopBranch(
-      stmt.elseStatement,
-      loopName,
-      loopCarriedVars,
-      lastParamName,
-      ctx,
-    );
-    const ifExpr = If(condition, thenBranch, elseBranch);
+  const elseCtx: EmitContext = { ...ctx, scopeStack: cloneScopeStack(ctx.scopeStack) };
+  const elseBranch = emitLoopStatements(
+    elseBodyStmts,
+    0,
+    loopName,
+    loopCarriedVars,
+    lastParamName,
+    elseCtx,
+    null,
+  );
 
-    if (index < stmts.length - 1) {
-      if (alwaysTerminates(stmt.thenStatement) && alwaysTerminates(stmt.elseStatement)) {
-        return ifExpr;
-      }
-      const name = ctx.counter.next("discard");
-      return Let(
-        name,
-        ifExpr,
-        emitLoopStatements(stmts, index + 1, loopName, loopCarriedVars, lastParamName, ctx, name),
-      );
-    }
-    return ifExpr;
-  }
-
-  // No else, early return in then → remaining statements become else
-  if (alwaysTerminates(stmt.thenStatement)) {
-    const rest = emitLoopStatements(
-      stmts,
-      index + 1,
-      loopName,
-      loopCarriedVars,
-      lastParamName,
-      ctx,
-      null,
-    );
-    return If(condition, thenBranch, rest);
-  }
-
-  if (index < stmts.length - 1) {
-    const name = ctx.counter.next("discard");
-    return Let(
-      name,
-      If(condition, thenBranch),
-      emitLoopStatements(stmts, index + 1, loopName, loopCarriedVars, lastParamName, ctx, name),
-    );
-  }
-
-  return If(condition, thenBranch);
-}
-
-/** Emit a branch within a Case B loop body. */
-function emitLoopBranch(
-  stmt: ts.Statement,
-  loopName: string,
-  loopCarriedVars: string[],
-  lastParamName: string | null,
-  ctx: EmitContext,
-): Expr {
-  const stmts = getBodyStatements(stmt);
-  return emitLoopStatements(stmts, 0, loopName, loopCarriedVars, lastParamName, ctx, null);
+  return If(condition, thenBranch, elseBranch);
 }
 
 // ── Helpers ──
