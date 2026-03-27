@@ -1,43 +1,97 @@
 # `@tisyn/validate`
 
-`@tisyn/validate` is the boundary-defense package for Tisyn IR. It checks that incoming trees match the allowed grammar, exposes schema values for integration points, and throws `MalformedIR` when invalid input crosses a trust boundary.
+`@tisyn/validate` is Tisyn’s IR validation and boundary-defense package. It verifies that incoming trees conform to the allowed grammar, provides schema values for integrations, and throws `MalformedIR` when invalid IR crosses a trust boundary.
+
+Use this package anywhere IR enters the system from a source you do not fully trust, including external processes, storage, user input, or separate compilation steps.
 
 ## Where It Fits
 
-This package sits between untrusted IR and execution.
+`@tisyn/validate` sits between untrusted IR and execution.
 
-- `@tisyn/compiler` validates generated IR by default.
-- `@tisyn/runtime` validates incoming IR before execution.
-- `@tisyn/kernel` re-exports `MalformedIR`, but validation now lives here.
+- `@tisyn/compiler` uses it to validate generated IR by default.
+- `@tisyn/runtime` uses it to validate incoming IR before execution.
+- `@tisyn/kernel` depends on valid IR and re-exports `MalformedIR`, but validation itself lives here.
 
-Use it whenever IR comes from another process, persistent storage, user input, or an external compiler step.
+In practice, this package answers one question:
+
+**Is this IR safe to admit into the system as a valid Tisyn expression?**
+
+## What It Does
+
+`@tisyn/validate` is responsible for:
+
+- validating IR against the allowed grammar
+- reporting concrete validation failures
+- throwing a boundary-specific error when invalid IR is admitted
+- exporting schema values for external integrations and tooling
+
+It does not define execution behavior, concurrency semantics, or durable replay. Its job is to protect the boundary before those layers begin.
 
 ## Core Concepts
 
-- `validateGrammar()`: grammar-level checks
-- `validateIr()`: full validation entrypoint
-- `assertValidIr()`: throws on failure
-- `MalformedIR`: error type for invalid IR
-- exported schema values for integration points
+### Trust boundaries
 
-## Main APIs
+Validation matters most when IR crosses a boundary between trusted and untrusted contexts. Common examples include:
 
-The public surface from `src/index.ts` is:
+- IR received from another process or service
+- IR loaded from persistent storage
+- IR constructed from user input
+- IR produced by an external or separate compiler step
 
-- `validateGrammar`: Check that an IR tree follows the allowed grammar rules without throwing.
-- `validateIr`: Perform full validation and return the structured result.
-- `assertValidIr`: Validate IR and throw `MalformedIR` if it is invalid.
-- `MalformedIR`: Represent a validation failure that crossed a trust boundary.
-- `tisynExprSchema`: Export the top-level schema for a full Tisyn expression.
-- `evalSchema`: Export the schema for eval nodes.
-- `quoteSchema`: Export the schema for quote nodes.
-- `refSchema`: Export the schema for ref nodes.
-- `fnSchema`: Export the schema for function-shaped IR nodes.
+Inside those boundaries, `@tisyn/validate` makes malformed input explicit before it reaches the runtime.
 
-Useful exported types:
+### Grammar validation
 
-- `ValidationError`: Describe one concrete validation problem found in the IR.
-- `ValidationResult`: Represent the success or failure result returned by validation functions.
+The package checks that IR follows the allowed Tisyn grammar and node shapes. This includes validating the structural form of the tree rather than executing or interpreting it.
+
+### `MalformedIR`
+
+When invalid input crosses a trust boundary, the package represents that failure with `MalformedIR`. This makes malformed IR a first-class boundary error rather than a vague downstream failure.
+
+## Public API
+
+The main public surface is exported from `src/index.ts`.
+
+### Validation functions
+
+- `validateGrammar`  
+  Check that an IR tree follows the allowed grammar rules without throwing.
+
+- `validateIr`  
+  Perform full validation and return a structured validation result.
+
+- `assertValidIr`  
+  Validate IR and throw `MalformedIR` if the input is invalid.
+
+### Error type
+
+- `MalformedIR`  
+  Error type used when invalid IR crosses a trust boundary.
+
+### Exported schemas
+
+- `tisynExprSchema`  
+  Top-level schema for a full Tisyn expression.
+
+- `evalSchema`  
+  Schema for eval nodes.
+
+- `quoteSchema`  
+  Schema for quote nodes.
+
+- `refSchema`  
+  Schema for ref nodes.
+
+- `fnSchema`  
+  Schema for function-shaped IR nodes.
+
+### Useful types
+
+- `ValidationError`  
+  Describes one concrete validation problem found in the IR.
+
+- `ValidationResult`  
+  Represents the success or failure result returned by validation functions.
 
 ## Example
 
@@ -49,19 +103,40 @@ assertValidIr(maybeExternalIr);
 
 If validation fails, `assertValidIr()` throws `MalformedIR`.
 
+## When to Use It
+
+Use `@tisyn/validate` whenever IR enters the system from a source that may be malformed, outdated, corrupted, or untrusted.
+
+Typical uses include:
+
+- validating IR before runtime execution
+- validating compiler output in tests or integration pipelines
+- protecting transport boundaries between services or agents
+- checking persisted IR before loading or replaying it
+- exposing schema definitions to external tools and adapters
+
 ## Relationship to the Rest of Tisyn
 
-- [`@tisyn/ir`](../ir/README.md) defines the node shapes being validated.
-- [`@tisyn/compiler`](../compiler/README.md) uses validation to catch bad compiled output.
-- [`@tisyn/runtime`](../runtime/README.md) uses validation before execution.
-- [`@tisyn/kernel`](../kernel/README.md) depends on valid input but does not own this validation layer.
+- [`@tisyn/ir`](../ir/README.md) defines the IR node shapes that this package validates.
+- [`@tisyn/compiler`](../compiler/README.md) uses validation to catch invalid compiled output.
+- [`@tisyn/runtime`](../runtime/README.md) validates incoming IR before execution.
+- [`@tisyn/kernel`](../kernel/README.md) assumes valid input but does not own validation.
 
-## Boundaries
+## Boundaries and Responsibilities
 
 `@tisyn/validate` owns:
 
-- grammar and IR boundary checks
-- malformed-IR error reporting
-- exported schema values for external integrations
+- grammar and structural IR validation
+- malformed-IR boundary errors
+- exported schema values for integrations
 
-It does not own execution semantics or durable replay.
+`@tisyn/validate` does not own:
+
+- execution semantics
+- runtime evaluation
+- structured concurrency behavior
+- durable replay or journaling
+
+## Summary
+
+`@tisyn/validate` protects the boundary between untrusted IR and the rest of the Tisyn system. It ensures that only well-formed expressions move forward into execution, and it gives both internal code and external integrations a clear, consistent validation surface.
