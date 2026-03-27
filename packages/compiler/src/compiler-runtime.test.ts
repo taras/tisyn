@@ -296,3 +296,50 @@ describe("Bug 7 — early return with carried vars, not last statement", () => {
     }
   });
 });
+
+describe("Bug 7 — while(true) early return, loop is last statement", () => {
+  it("early return value propagates as function result", function* () {
+    // Before the fix: while(true) set lastParamName=null → needsPack=false → early
+    // return was a raw scalar. For isLast the scalar happened to be the right value,
+    // but when loop has carried vars the outer code tried Get(scalar,"x") → undefined.
+    const ir = compileOne(`
+      function* test(): Workflow<unknown> {
+        let x = 0;
+        while (true) {
+          if (x === 3) return x;
+          x = x + 1;
+        }
+      }
+    `);
+    const { result } = yield* execute({ ir: Call(ir) });
+    expect(result.status).toBe("ok");
+    if (result.status === "ok") {
+      expect(result.value).toBe(3);
+    }
+  });
+});
+
+describe("Bug 7 — while(true) early return, not last statement (user example)", () => {
+  it("early return short-circuits post-loop code in while(true) with carried vars", function* () {
+    // Before the fix: needsPack was false for while(true) (lastParamName===null).
+    // For !isLast with carried vars the outer code went into the rebind branch and
+    // called Get(scalar,"x") on the raw early-return value → undefined.
+    // After the fix: needsPack = hasReturn regardless of lastParamName, so early
+    // returns are tagged structs and the __tag dispatch short-circuits rest().
+    const ir = compileOne(`
+      function* test(): Workflow<unknown> {
+        let x = 0;
+        while (true) {
+          if (x === 1) return x;
+          x = x + 1;
+        }
+        return x;
+      }
+    `);
+    const { result } = yield* execute({ ir: Call(ir) });
+    expect(result.status).toBe("ok");
+    if (result.status === "ok") {
+      expect(result.value).toBe(1);
+    }
+  });
+});
