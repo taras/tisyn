@@ -1,30 +1,57 @@
-# (T)ypeScript (I)nterpreter (Syn)tax
+# Tisyn
 
-Tisyn (pronounced like the Chicken) is a minimal set of interfaces and
-constructors to represent an abstract syntax tree that can be
-interpreted.
+**Tisyn** (pronounced like the chicken) is a system for building agents that can coordinate predictably across boundaries.
 
-Tisyn expressions do not come with any semantics whatsoever, they
-purely express how to compose values by ensuring that the types line
-up. This allows language designers to skip the development of their
-own syntax while they are figuring out how execution should work.
+It represents work as explicit, serializable program structure so agents can hand off tasks safely, stream progress, bound concurrent work, and continue after interruption without losing the execution story.
 
-The repository is split into small packages with clear boundaries. The root README explains how they fit together; package-level READMEs cover the concrete APIs.
+Tisyn is organized as a set of small packages with clear boundaries. Some packages define the program model, some define semantics, some handle execution and continuation, and some provide the agent and transport layers needed to move work across processes or machines.
+
+## What Tisyn is for
+
+Tisyn is for systems where work needs to cross boundaries without becoming ambiguous.
+
+Typical examples include:
+
+- handing work from a host to a remote agent
+- delegating a single task or a subtree of tasks
+- streaming progress back while work is running
+- resuming after interruption without losing the execution story
+- keeping concurrent work bounded so unnecessary background activity does not leak resources
+
+The key idea is that Tisyn makes the work itself explicit. Instead of depending on opaque in-memory runtime state, Tisyn represents execution as serializable structure that can be validated, transported, interpreted, and resumed.
+
+## Core properties
+
+### Explicit work
+
+Tisyn programs are data. They can be inspected, validated, transported, stored, and replayed.
+
+### Predictable boundaries
+
+Agents exchange explicit work and explicit results rather than hidden runtime state.
+
+### Bounded concurrency
+
+Concurrent work is structured, so child work stays tied to its parent and does not continue indefinitely after its purpose is gone.
+
+### Durable continuation
+
+Execution can resume from journaled results after interruption without requiring the interpreter’s in-memory state to be serialized.
 
 ## Package relationships
 
 Tisyn is easiest to understand as layers:
 
-1. Syntax and validation
+1. Program model and validation
    - [`@tisyn/ir`](./packages/ir/README.md): the Tisyn expression/value model
    - [`@tisyn/validate`](./packages/validate/README.md): boundary validation for untrusted or external IR
 
-2. Core semantics
+2. Semantics
    - [`@tisyn/kernel`](./packages/kernel/README.md): evaluation, environments, core errors, and durable event shapes
 
-3. Execution
+3. Execution and continuation
    - [`@tisyn/durable-streams`](./packages/durable-streams/README.md): append-only replay/journal primitives
-   - [`@tisyn/runtime`](./packages/runtime/README.md): durable execution and remote IR execution
+   - [`@tisyn/runtime`](./packages/runtime/README.md): execution of IR, including durable and remote flows
 
 4. Agents and remoting
    - [`@tisyn/agent`](./packages/agent/README.md): typed agent declarations, implementations, dispatch, and invocation helpers
@@ -32,31 +59,33 @@ Tisyn is easiest to understand as layers:
    - [`@tisyn/transport`](./packages/transport/README.md): sessions and concrete transports
 
 5. Tooling and verification
-   - [`@tisyn/compiler`](./packages/compiler/README.md): compile generator-shaped TypeScript into Tisyn IR
+   - [`@tisyn/compiler`](./packages/compiler/README.md): compile restricted generator-shaped TypeScript into Tisyn IR
    - [`@tisyn/conformance`](./packages/conformance/README.md): fixture harness for validating runtime behavior
 
 ## Recommended reading order
 
-- Start with [`@tisyn/ir`](./packages/ir/README.md) to see what a Tisyn program looks like.
-- Read [`@tisyn/validate`](./packages/validate/README.md) and [`@tisyn/kernel`](./packages/kernel/README.md) for correctness and semantics.
-- Read [`@tisyn/runtime`](./packages/runtime/README.md) for actual execution.
-- Read [`@tisyn/agent`](./packages/agent/README.md), [`@tisyn/protocol`](./packages/protocol/README.md), and [`@tisyn/transport`](./packages/transport/README.md) for host/agent integration.
+Start in different places depending on what you want to learn.
+
+- Start with [`@tisyn/ir`](./packages/ir/README.md) if you want to see what a Tisyn program looks like.
+- Read [`@tisyn/validate`](./packages/validate/README.md) and [`@tisyn/kernel`](./packages/kernel/README.md) if you want to understand correctness and semantics.
+- Read [`@tisyn/runtime`](./packages/runtime/README.md) and [`@tisyn/durable-streams`](./packages/durable-streams/README.md) if you want to understand execution and continuation.
+- Read [`@tisyn/agent`](./packages/agent/README.md), [`@tisyn/protocol`](./packages/protocol/README.md), and [`@tisyn/transport`](./packages/transport/README.md) if you want to understand host/agent integration and cross-boundary execution.
 - Read [`@tisyn/compiler`](./packages/compiler/README.md) if you want to generate IR from TypeScript source instead of building IR by hand.
 
 ## Package guide
 
-| Package                                                          | Purpose                                                                              |
-| ---------------------------------------------------------------- | ------------------------------------------------------------------------------------ |
-| [`@tisyn/ir`](./packages/ir/README.md)                           | AST types, constructors, walkers, printers, and value types                          |
-| [`@tisyn/validate`](./packages/validate/README.md)               | IR validation and `MalformedIR` errors                                               |
-| [`@tisyn/kernel`](./packages/kernel/README.md)                   | Core evaluation, environments, and runtime error/event types                         |
-| [`@tisyn/durable-streams`](./packages/durable-streams/README.md) | Durable append-only stream abstractions used by runtime replay                       |
-| [`@tisyn/runtime`](./packages/runtime/README.md)                 | Durable execution of IR plus remote IR execution                                     |
-| [`@tisyn/agent`](./packages/agent/README.md)                     | Typed agents, implementations, dispatch, and invocation helpers                      |
-| [`@tisyn/protocol`](./packages/protocol/README.md)               | Parsed/constructed protocol messages for host-agent communication                    |
-| [`@tisyn/transport`](./packages/transport/README.md)             | Protocol sessions and transports like `stdio`, `websocket`, `worker`, and `sse-post` |
-| [`@tisyn/compiler`](./packages/compiler/README.md)               | Compile TypeScript generator functions into Tisyn IR                                 |
-| [`@tisyn/conformance`](./packages/conformance/README.md)         | Execute fixtures against the runtime to verify behavior                              |
+| Package | Purpose |
+| --- | --- |
+| [`@tisyn/ir`](./packages/ir/README.md) | AST types, constructors, walkers, printers, and value types |
+| [`@tisyn/validate`](./packages/validate/README.md) | IR validation and `MalformedIR` errors |
+| [`@tisyn/kernel`](./packages/kernel/README.md) | Core evaluation, environments, and runtime error/event types |
+| [`@tisyn/durable-streams`](./packages/durable-streams/README.md) | Durable append-only stream abstractions used by replay |
+| [`@tisyn/runtime`](./packages/runtime/README.md) | Execution of IR, including durable and remote flows |
+| [`@tisyn/agent`](./packages/agent/README.md) | Typed agents, implementations, dispatch, and invocation helpers |
+| [`@tisyn/protocol`](./packages/protocol/README.md) | Parsed/constructed protocol messages for host-agent communication |
+| [`@tisyn/transport`](./packages/transport/README.md) | Protocol sessions and transports like `stdio`, `websocket`, `worker`, and `sse-post` |
+| [`@tisyn/compiler`](./packages/compiler/README.md) | Compile restricted TypeScript generator functions into Tisyn IR |
+| [`@tisyn/conformance`](./packages/conformance/README.md) | Execute fixtures against the runtime to verify behavior |
 
 ## Typical flows
 
@@ -89,7 +118,7 @@ For the detailed agent model and API examples, see [`@tisyn/agent`](./packages/a
 ## Specifications
 
 | Document | Scope |
-| -------- | ----- |
+| --- | --- |
 | [Tisyn Specification 1.0](./specs/tisyn-specification-1.0.md) | Core language: values, expressions, and evaluation rules |
 | [Kernel Specification](./specs/tisyn-kernel-specification.md) | Kernel semantics, environments, and effect dispatch |
 | [Agent Specification 1.1.0](./specs/tisyn-agent-specification-1.1.0.md) | Typed agent declarations, implementations, and invocation |
@@ -97,3 +126,15 @@ For the detailed agent model and API examples, see [`@tisyn/agent`](./packages/a
 | [Compound Concurrency Spec](./specs/tisyn-compound-concurrency-spec.md) | `all` and `race` orchestration semantics |
 | [Authoring Layer Spec](./specs/tisyn-authoring-layer-spec.md) | Generator-based authoring format and contract declarations |
 | [Architecture](./specs/tisyn-architecture.md) | System architecture and package relationships |
+
+## Design summary
+
+Tisyn separates concerns cleanly:
+
+- the **program model** is explicit and serializable
+- the **kernel** defines how expressions evaluate
+- the **runtime** executes and continues work
+- the **agent layer** moves work across boundaries
+- the **transport layer** carries messages between hosts and agents
+
+That separation is what lets Tisyn support deterministic coordination, safe delegation, bounded concurrency, and durable continuation in one system.
