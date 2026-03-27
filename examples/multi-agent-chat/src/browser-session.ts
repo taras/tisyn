@@ -21,6 +21,7 @@ export class BrowserSessionManager {
   private ownerSessionId: string | null = null;
   private socket: WebSocket | null = null;
   private pendingPrompt: { resolve(msg: string): void; prompt: string } | null = null;
+  private pendingUserMessage: string | null = null;
   private readOnly: { reason: string } | null = null;
   private ownerReady = withResolvers<void>();
 
@@ -125,10 +126,15 @@ export class BrowserSessionManager {
   }
 
   /**
-   * Send assistant message to the browser if connected.
-   * No-op if disconnected — history is the source of truth.
+   * Send assistant message to the browser if connected, and persist the complete
+   * user+assistant pair to history so reconnecting/non-owner clients see it.
    */
   showAssistantMessage(message: string): void {
+    if (this.pendingUserMessage !== null) {
+      this.history.push({ role: "user", content: this.pendingUserMessage });
+      this.pendingUserMessage = null;
+    }
+    this.history.push({ role: "assistant", content: message });
     if (this.socket) {
       this.safeSend(this.socket, { type: "assistantMessage", message });
     }
@@ -146,6 +152,7 @@ export class BrowserSessionManager {
     if (msg.type === "userMessage" && this.pendingPrompt) {
       logInfo("session", "userMessage received", { message: msg.message });
       const { resolve } = this.pendingPrompt;
+      this.pendingUserMessage = msg.message;
       this.pendingPrompt = null;
       resolve(msg.message);
     }

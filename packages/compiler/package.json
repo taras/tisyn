@@ -35,6 +35,9 @@
     "typescript": "~5.8.0"
   },
   "devDependencies": {
+    "@effectionx/vitest": "^0.3.0",
+    "@tisyn/runtime": "workspace:*",
+    "effection": "^3 || ^4",
     "vitest": "^4"
   }
 }

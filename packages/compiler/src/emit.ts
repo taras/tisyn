@@ -571,19 +571,56 @@ function emitIfStatementInList(
     return If(condition, thenAndRest, elseBranch);
   }
 
-  // Neither terminates — simple if with discard
-  const thenBranch = emitStatementBodyWithCtx(stmt.thenStatement, ctx);
-  if (stmt.elseStatement) {
-    const elseBranch = emitStatementBodyWithCtx(stmt.elseStatement, ctx);
-    if (index < stmts.length - 1) {
+  // Neither terminates — full SSA join (mirrors emitIfStatement)
+  const snapshot = snapshotVersions(ctx);
+  const allLetVars = getAllLetVars(ctx);
+  const dryThenCtx: EmitContext = { ...ctx, scopeStack: cloneScopeStack(ctx.scopeStack) };
+  const dryElseCtx: EmitContext = { ...ctx, scopeStack: cloneScopeStack(ctx.scopeStack) };
+  compileBranchBodyToJoin(getBodyStatements(stmt.thenStatement), allLetVars, snapshot, dryThenCtx);
+  if (stmt.elseStatement)
+    compileBranchBodyToJoin(
+      getBodyStatements(stmt.elseStatement),
+      allLetVars,
+      snapshot,
+      dryElseCtx,
+    );
+
+  const joinVars = allLetVars.filter((v) => {
+    const thenVer = getVersion(v, dryThenCtx);
+    const elseVer = stmt.elseStatement ? getVersion(v, dryElseCtx) : (snapshot.get(v) ?? 0);
+    return thenVer !== (snapshot.get(v) ?? 0) || elseVer !== (snapshot.get(v) ?? 0);
+  });
+
+  if (joinVars.length === 0) {
+    const thenBranch = emitStatementBodyWithCtx(stmt.thenStatement, ctx);
+    if (stmt.elseStatement) {
+      const elseBranch = emitStatementBodyWithCtx(stmt.elseStatement, ctx);
       return Let(ctx.counter.next("discard"), If(condition, thenBranch, elseBranch), rest());
     }
-    return If(condition, thenBranch, elseBranch);
-  }
-  if (index < stmts.length - 1) {
     return Let(ctx.counter.next("discard"), If(condition, thenBranch), rest());
   }
-  return If(condition, thenBranch);
+
+  const thenCtx: EmitContext = { ...ctx, scopeStack: cloneScopeStack(ctx.scopeStack) };
+  const elseCtx: EmitContext = { ...ctx, scopeStack: cloneScopeStack(ctx.scopeStack) };
+  const thenJoinExpr = compileBranchToExpr(stmt.thenStatement, joinVars, thenCtx);
+  const elseJoinExpr = stmt.elseStatement
+    ? compileBranchToExpr(stmt.elseStatement, joinVars, elseCtx)
+    : buildJoinExprFromSnapshot(joinVars, snapshot);
+
+  applyJoinVersions(joinVars, ctx);
+
+  if (joinVars.length === 1) {
+    const v = joinVars[0]!;
+    return Let(resolveRef(v, ctx), If(condition, thenJoinExpr, elseJoinExpr), rest());
+  }
+
+  const joinName = ctx.counter.next("j");
+  let result = rest();
+  for (let i = joinVars.length - 1; i >= 0; i--) {
+    const v = joinVars[i]!;
+    result = Let(resolveRef(v, ctx), Get(Ref(joinName), v), result);
+  }
+  return Let(joinName, If(condition, thenJoinExpr, elseJoinExpr), result);
 }
 
 function emitStatementBodyWithCtx(stmt: ts.Statement, ctx: EmitContext): Expr {
@@ -880,22 +917,41 @@ function emitWhileCaseB(
 ): Expr {
   const loopName = ctx.counter.next("loop");
   const condition = stmt.expression;
+  const isTrueCondition = condition.kind === ts.SyntaxKind.TrueKeyword;
+
+  // For non-while(true) loops, add a __last param so the loop expression returns
+  // the last body result when the condition becomes false.
+  const lastParamName = isTrueCondition ? null : ctx.counter.next("last");
 
   // Loop-carried var params: current versioned names become the Fn param names.
   // Inside the Fn, references to these vars naturally resolve to the param values
   // because the outer scope already has them at these versions.
   const loopCarriedParams = loopCarriedVars.map((v) => resolveRef(v, ctx));
 
+  // Initial call args: pass current versioned refs for each loop-carried var.
+  // Compute before appending lastParamName so we can push Q(null) separately.
+  const initArgs: Expr[] = loopCarriedParams.map((pn) => Ref(pn) as Expr);
+
+  if (lastParamName !== null) {
+    loopCarriedParams.push(lastParamName);
+    initArgs.push(null as unknown as Expr);
+  }
+
   // Build the Fn body: body statements with fall-through = recursive Call
   const bodyStmts = getBodyStatements(stmt.statement);
   const fnCtx: EmitContext = { ...ctx, scopeStack: cloneScopeStack(ctx.scopeStack) };
 
-  const transformedBody = emitLoopBody(bodyStmts, condition, loopName, loopCarriedVars, fnCtx);
+  const transformedBody = emitLoopBody(
+    bodyStmts,
+    condition,
+    loopName,
+    loopCarriedVars,
+    fnCtx,
+    lastParamName,
+  );
 
   const loopFn = Fn(loopCarriedParams, transformedBody);
 
-  // Initial call: pass current versioned refs for each loop-carried var
-  const initArgs = loopCarriedParams.map((pn) => Ref(pn) as Expr);
   const callExpr = Call(Ref(loopName), initArgs);
 
   if (isLast) {
@@ -914,42 +970,55 @@ function emitLoopBody(
   loopName: string,
   loopCarriedVars: string[],
   ctx: EmitContext,
+  lastParamName: string | null,
 ): Expr {
   // Check if condition is `true` literal
   const isTrueCondition = condition.kind === ts.SyntaxKind.TrueKeyword;
 
-  const bodyExpr = emitLoopStatements(stmts, 0, loopName, loopCarriedVars, ctx);
-
   if (isTrueCondition) {
     // while(true) — no condition check needed, just body + recurse
-    return bodyExpr;
+    return emitLoopStatements(stmts, 0, loopName, loopCarriedVars, lastParamName, ctx);
   }
 
-  // while(cond) — wrap in if(cond, body, null)
+  // Evaluate condition BEFORE body so it uses parameter versions (not body-bumped ones).
+  // Body statements mutate ctx (bumping loop-carried var versions), so order matters.
   const condExpr = emitExpression(condition, ctx);
-  return If(condExpr, bodyExpr);
+  const bodyExpr = emitLoopStatements(stmts, 0, loopName, loopCarriedVars, lastParamName, ctx);
+
+  // while(cond) — wrap in If(cond, body, lastParamRef) so that when the condition
+  // becomes false the loop expression returns the last body result rather than null.
+  return lastParamName ? If(condExpr, bodyExpr, Ref(lastParamName)) : If(condExpr, bodyExpr);
 }
 
 /**
  * Emit statements within a loop body (Case B).
  * Return statements become the value (base case).
  * End of body → recursive call with current loop-carried var versions.
+ *
+ * lastParamName: the Fn param name for the __last accumulator (null for while(true)).
+ * lastBound: the most recently Let-bound IR name in this body path (null if none yet).
  */
 function emitLoopStatements(
   stmts: ts.Statement[],
   index: number,
   loopName: string,
   loopCarriedVars: string[],
+  lastParamName: string | null,
   ctx: EmitContext,
+  lastBound: string | null = null,
 ): Expr {
   if (index >= stmts.length) {
     // Fall-through: recurse, passing current versions of loop-carried vars
     const args = loopCarriedVars.map((v) => Ref(resolveRef(v, ctx)) as Expr);
+    if (lastParamName !== null) {
+      args.push(lastBound !== null ? (Ref(lastBound) as Expr) : (null as unknown as Expr));
+    }
     return Call(Ref(loopName), args);
   }
 
   const stmt = stmts[index]!;
-  const restLoop = () => emitLoopStatements(stmts, index + 1, loopName, loopCarriedVars, ctx);
+  const rest = (newBound: string | null) =>
+    emitLoopStatements(stmts, index + 1, loopName, loopCarriedVars, lastParamName, ctx, newBound);
 
   // Return → base case (value propagates out)
   if (ts.isReturnStatement(stmt)) {
@@ -961,7 +1030,15 @@ function emitLoopStatements(
 
   // Variable declaration
   if (ts.isVariableStatement(stmt)) {
-    return emitVariableStatement(stmt, restLoop, ctx);
+    // Compute the last-bound IR name from the AST before delegating.
+    // emitVariableStatement takes a rest callback and cannot return the name itself.
+    const declList = stmt.declarationList;
+    const lastDecl = declList.declarations[declList.declarations.length - 1]!;
+    const isLet = !!(declList.flags & ts.NodeFlags.Let);
+    const lastName = (lastDecl.name as ts.Identifier).text;
+    // Matches what emitVariableStatement produces: "${name}_0" for let, name for const.
+    const newLastBound = isLet ? `${lastName}_0` : lastName;
+    return emitVariableStatement(stmt, () => rest(newLastBound), ctx);
   }
 
   // Let reassignment: x = newExpr — must handle here too for loop body
@@ -984,12 +1061,12 @@ function emitLoopStatements(
     }
     const newValue = emitExpression(expr.right, ctx);
     const newIrName = bumpVersion(lhsName, ctx);
-    return Let(newIrName, newValue, restLoop());
+    return Let(newIrName, newValue, rest(newIrName));
   }
 
   // If with return → early return pattern
   if (ts.isIfStatement(stmt)) {
-    return emitLoopIfStatement(stmt, stmts, index, loopName, loopCarriedVars, ctx);
+    return emitLoopIfStatement(stmt, stmts, index, loopName, loopCarriedVars, lastParamName, ctx);
   }
 
   // Expression statement
@@ -1000,11 +1077,11 @@ function emitLoopStatements(
     if (ts.isYieldExpression(expr) && expr.asteriskToken && expr.expression) {
       const effect = emitYieldStar(expr.expression, ctx);
       const name = ctx.counter.next("discard");
-      return Let(name, effect, restLoop());
+      return Let(name, effect, rest(name));
     }
 
     const name = ctx.counter.next("discard");
-    return Let(name, emitExpression(expr, ctx), restLoop());
+    return Let(name, emitExpression(expr, ctx), rest(name));
   }
 
   // Throw
@@ -1022,13 +1099,26 @@ function emitLoopIfStatement(
   index: number,
   loopName: string,
   loopCarriedVars: string[],
+  lastParamName: string | null,
   ctx: EmitContext,
 ): Expr {
   const condition = emitExpression(stmt.expression, ctx);
-  const thenBranch = emitLoopBranch(stmt.thenStatement, loopName, loopCarriedVars, ctx);
+  const thenBranch = emitLoopBranch(
+    stmt.thenStatement,
+    loopName,
+    loopCarriedVars,
+    lastParamName,
+    ctx,
+  );
 
   if (stmt.elseStatement) {
-    const elseBranch = emitLoopBranch(stmt.elseStatement, loopName, loopCarriedVars, ctx);
+    const elseBranch = emitLoopBranch(
+      stmt.elseStatement,
+      loopName,
+      loopCarriedVars,
+      lastParamName,
+      ctx,
+    );
     const ifExpr = If(condition, thenBranch, elseBranch);
 
     if (index < stmts.length - 1) {
@@ -1039,7 +1129,7 @@ function emitLoopIfStatement(
       return Let(
         name,
         ifExpr,
-        emitLoopStatements(stmts, index + 1, loopName, loopCarriedVars, ctx),
+        emitLoopStatements(stmts, index + 1, loopName, loopCarriedVars, lastParamName, ctx, name),
       );
     }
     return ifExpr;
@@ -1047,7 +1137,15 @@ function emitLoopIfStatement(
 
   // No else, early return in then → remaining statements become else
   if (alwaysTerminates(stmt.thenStatement)) {
-    const rest = emitLoopStatements(stmts, index + 1, loopName, loopCarriedVars, ctx);
+    const rest = emitLoopStatements(
+      stmts,
+      index + 1,
+      loopName,
+      loopCarriedVars,
+      lastParamName,
+      ctx,
+      null,
+    );
     return If(condition, thenBranch, rest);
   }
 
@@ -1056,7 +1154,7 @@ function emitLoopIfStatement(
     return Let(
       name,
       If(condition, thenBranch),
-      emitLoopStatements(stmts, index + 1, loopName, loopCarriedVars, ctx),
+      emitLoopStatements(stmts, index + 1, loopName, loopCarriedVars, lastParamName, ctx, name),
     );
   }
 
@@ -1068,10 +1166,11 @@ function emitLoopBranch(
   stmt: ts.Statement,
   loopName: string,
   loopCarriedVars: string[],
+  lastParamName: string | null,
   ctx: EmitContext,
 ): Expr {
   const stmts = getBodyStatements(stmt);
-  return emitLoopStatements(stmts, 0, loopName, loopCarriedVars, ctx);
+  return emitLoopStatements(stmts, 0, loopName, loopCarriedVars, lastParamName, ctx, null);
 }
 
 // ── Helpers ──
