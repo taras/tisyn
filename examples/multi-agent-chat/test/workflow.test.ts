@@ -8,25 +8,21 @@ import { spawn, withResolvers } from "effection";
 import { implementAgent } from "@tisyn/agent";
 import { execute } from "@tisyn/runtime";
 import { Call } from "@tisyn/ir";
-import { App, Llm, State, chat } from "../src/workflow.generated.js";
+import { Chat, Llm, chat } from "../src/workflow.generated.js";
 
 describe("Compiled workflow", () => {
-  it("runs the chat loop: elicit → sample → display, with history accumulation", function* () {
+  it("runs the chat loop: elicit → sample → renderTranscript, with history accumulation", function* () {
     // Track agent interactions
-    const waitForUserCalls: Array<{ input: { prompt: string } }> = [];
+    const elicitCalls: Array<{ input: { prompt: string } }> = [];
     const sampleCalls: Array<{
       input: {
-        history: Array<{ role: string; content: string }>;
+        history: Array<{ role: "user" | "assistant"; content: string }>;
         message: string;
       };
     }> = [];
-    const recordTurnCalls: Array<{
-      input: { userMessage: string; assistantMessage: string };
+    const renderCalls: Array<{
+      input: { messages: Array<{ role: "user" | "assistant"; content: string }> };
     }> = [];
-    const showCalls: Array<{ input: { message: string } }> = [];
-
-    // Conversation history (mutable state managed by State agent)
-    const history: Array<{ role: string; content: string }> = [];
 
     // Canned user messages — after these, the agent throws to exit the loop
     const userMessages = ["hello", "how are you?"];
@@ -34,10 +30,10 @@ describe("Compiled workflow", () => {
 
     const done = withResolvers<void>();
 
-    // Install local Browser agent
-    const browserImpl = implementAgent(App(), {
-      *waitForUser(args) {
-        waitForUserCalls.push(args);
+    // Install local Chat agent
+    const chatImpl = implementAgent(Chat(), {
+      *elicit(args) {
+        elicitCalls.push(args);
         if (userMessageIndex >= userMessages.length) {
           // Signal completion and throw to exit the loop
           done.resolve();
@@ -45,13 +41,12 @@ describe("Compiled workflow", () => {
         }
         return { message: userMessages[userMessageIndex++]! };
       },
-      *showAssistantMessage(args) {
-        showCalls.push(args);
+      *renderTranscript(args) {
+        renderCalls.push(args);
       },
-      *hydrateTranscript() {},
       *setReadOnly() {},
     });
-    yield* browserImpl.install();
+    yield* chatImpl.install();
 
     // Install local LLM agent (echo stub)
     const llmImpl = implementAgent(Llm(), {
@@ -61,21 +56,6 @@ describe("Compiled workflow", () => {
       },
     });
     yield* llmImpl.install();
-
-    // Install local State agent (closure over mutable history)
-    const stateImpl = implementAgent(State(), {
-      *getHistory(_args) {
-        return [...history];
-      },
-      *recordTurn(args) {
-        recordTurnCalls.push(args);
-        history.push(
-          { role: "user", content: args.input.userMessage },
-          { role: "assistant", content: args.input.assistantMessage },
-        );
-      },
-    });
-    yield* stateImpl.install();
 
     // Run the compiled workflow in a spawned task so we can cancel it
     const task = yield* spawn(function* () {
@@ -88,15 +68,13 @@ describe("Compiled workflow", () => {
     // --- Assertions ---
 
     // Two full cycles completed
-    expect(waitForUserCalls).toHaveLength(3); // 2 successful + 1 that throws
+    expect(elicitCalls).toHaveLength(3); // 2 successful + 1 that throws
     expect(sampleCalls).toHaveLength(2);
-    expect(recordTurnCalls).toHaveLength(2);
-    expect(showCalls).toHaveLength(2);
+    expect(renderCalls).toHaveLength(3); // initial empty + two updates
 
     // Cycle 1: empty history
     expect(sampleCalls[0]!.input.history).toEqual([]);
     expect(sampleCalls[0]!.input.message).toBe("hello");
-    expect(showCalls[0]!.input.message).toBe("Echo: hello");
 
     // Cycle 2: history has entries from cycle 1
     expect(sampleCalls[1]!.input.history).toEqual([
@@ -104,16 +82,19 @@ describe("Compiled workflow", () => {
       { role: "assistant", content: "Echo: hello" },
     ]);
     expect(sampleCalls[1]!.input.message).toBe("how are you?");
-    expect(showCalls[1]!.input.message).toBe("Echo: how are you?");
+    // Transcript was rendered from workflow-local state
+    expect(renderCalls[0]!.input.messages).toEqual([]);
+    expect(renderCalls[1]!.input.messages).toEqual([
+      { role: "user", content: "hello" },
+      { role: "assistant", content: "Echo: hello" },
+    });
+    expect(renderCalls[2]!.input.messages).toEqual([
+      { role: "user", content: "hello" },
+      { role: "assistant", content: "Echo: hello" },
+      { role: "user", content: "how are you?" },
+      { role: "assistant", content: "Echo: how are you?" },
+    });
 
-    // State was recorded
-    expect(recordTurnCalls[0]!.input).toEqual({
-      userMessage: "hello",
-      assistantMessage: "Echo: hello",
-    });
-    expect(recordTurnCalls[1]!.input).toEqual({
-      userMessage: "how are you?",
-      assistantMessage: "Echo: how are you?",
-    });
+    task.halt();
   });
 });

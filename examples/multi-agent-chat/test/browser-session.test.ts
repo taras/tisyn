@@ -2,8 +2,8 @@
  * BrowserSessionManager — reconnect semantics.
  *
  * Tests the session manager directly without running the full workflow.
- * Verifies: waitForUser suspension, reconnect continuation, identity-safe
- * detach, non-owner read-only, showAssistantMessage during disconnect.
+ * Verifies: elicit suspension, reconnect continuation, identity-safe
+ * detach, non-owner read-only, render projection during disconnect.
  */
 
 import { describe, it } from "@effectionx/vitest";
@@ -58,9 +58,8 @@ function nextTick(): Operation<void> {
 type AnyWs = any;
 
 describe("Browser session manager", () => {
-  it("waitForUser suspends until userMessage arrives", function* () {
-    const history: Array<{ role: string; content: string }> = [];
-    const session = new BrowserSessionManager(history);
+  it("elicit suspends until userMessage arrives", function* () {
+    const session = new BrowserSessionManager();
     const ws = createMockWs();
 
     session.attach("session-1", ws as AnyWs);
@@ -68,15 +67,15 @@ describe("Browser session manager", () => {
 
     let result: { message: string } | undefined;
     yield* spawn(function* () {
-      result = yield* session.waitForUser("Say something");
+      result = yield* session.elicit("Say something");
     });
 
     // Let the spawn start
     yield* nextTick();
 
-    // Should have sent waitForUser to the browser
-    const waitMsg = ws.sent.find((m: any) => m.type === "waitForUser");
-    expect(waitMsg).toEqual({ type: "waitForUser", prompt: "Say something" });
+    // Should have sent elicit to the browser
+    const waitMsg = ws.sent.find((m: any) => m.type === "elicit");
+    expect(waitMsg).toEqual({ type: "elicit", prompt: "Say something" });
 
     // Not yet resolved
     expect(result).toBeUndefined();
@@ -88,9 +87,8 @@ describe("Browser session manager", () => {
     expect(result).toEqual({ message: "hello" });
   });
 
-  it("waitForUser survives disconnect and resumes on reconnect", function* () {
-    const history: Array<{ role: string; content: string }> = [];
-    const session = new BrowserSessionManager(history);
+  it("elicit survives disconnect and resumes on reconnect", function* () {
+    const session = new BrowserSessionManager();
     const ws1 = createMockWs();
 
     session.attach("session-1", ws1 as AnyWs);
@@ -98,7 +96,7 @@ describe("Browser session manager", () => {
 
     let result: { message: string } | undefined;
     yield* spawn(function* () {
-      result = yield* session.waitForUser("Say something");
+      result = yield* session.elicit("Say something");
     });
     yield* nextTick();
 
@@ -110,10 +108,10 @@ describe("Browser session manager", () => {
     const ws2 = createMockWs();
     session.attach("session-1", ws2 as AnyWs);
 
-    const hydrate = ws2.sent.find((m: any) => m.type === "hydrateTranscript");
-    expect(hydrate).toBeDefined();
-    const reSentPrompt = ws2.sent.find((m: any) => m.type === "waitForUser");
-    expect(reSentPrompt).toEqual({ type: "waitForUser", prompt: "Say something" });
+    const render = ws2.sent.find((m: any) => m.type === "renderTranscript");
+    expect(render).toBeDefined();
+    const reSentPrompt = ws2.sent.find((m: any) => m.type === "elicit");
+    expect(reSentPrompt).toEqual({ type: "elicit", prompt: "Say something" });
 
     // Submit on new socket
     ws2.injectMessage({ type: "userMessage", message: "world" });
@@ -122,9 +120,8 @@ describe("Browser session manager", () => {
     expect(result).toEqual({ message: "world" });
   });
 
-  it("showAssistantMessage during disconnect does not fail", function* () {
-    const history: Array<{ role: string; content: string }> = [];
-    const session = new BrowserSessionManager(history);
+  it("renderTranscript during disconnect does not fail", function* () {
+    const session = new BrowserSessionManager();
     const ws = createMockWs();
 
     session.attach("session-1", ws as AnyWs);
@@ -133,12 +130,11 @@ describe("Browser session manager", () => {
     session.detach(ws as AnyWs);
 
     // Should not throw
-    session.showAssistantMessage("Echo: hello");
+    session.renderTranscript([{ role: "assistant", content: "Echo: hello" }]);
   });
 
   it("second connect with same ID replaces old socket (identity-safe)", function* () {
-    const history: Array<{ role: string; content: string }> = [];
-    const session = new BrowserSessionManager(history);
+    const session = new BrowserSessionManager();
     const ws1 = createMockWs();
     const ws2 = createMockWs();
 
@@ -149,16 +145,16 @@ describe("Browser session manager", () => {
 
     expect(ws1.closed).toBe(true);
 
-    const hydrate = ws2.sent.find((m: any) => m.type === "hydrateTranscript");
-    expect(hydrate).toBeDefined();
+    const render = ws2.sent.find((m: any) => m.type === "renderTranscript");
+    expect(render).toBeDefined();
   });
 
   it("non-owner gets read-only view", function* () {
-    const history = [
+    const transcript = [
       { role: "user", content: "hello" },
       { role: "assistant", content: "Echo: hello" },
-    ];
-    const session = new BrowserSessionManager(history);
+    ] as const;
+    const session = new BrowserSessionManager([...transcript]);
 
     const ownerWs = createMockWs();
     session.attach("owner-1", ownerWs as AnyWs);
@@ -167,9 +163,9 @@ describe("Browser session manager", () => {
     const nonOwnerWs = createMockWs();
     session.attach("other-2", nonOwnerWs as AnyWs);
 
-    expect(nonOwnerWs.sent.find((m: any) => m.type === "hydrateTranscript")).toEqual({
-      type: "hydrateTranscript",
-      messages: history,
+    expect(nonOwnerWs.sent.find((m: any) => m.type === "renderTranscript")).toEqual({
+      type: "renderTranscript",
+      messages: [...transcript],
     });
 
     expect(nonOwnerWs.sent.find((m: any) => m.type === "setReadOnly")).toEqual({
@@ -179,8 +175,7 @@ describe("Browser session manager", () => {
   });
 
   it("stale close from old socket does not clear new socket", function* () {
-    const history: Array<{ role: string; content: string }> = [];
-    const session = new BrowserSessionManager(history);
+    const session = new BrowserSessionManager();
     const ws1 = createMockWs();
 
     session.attach("session-1", ws1 as AnyWs);
@@ -188,7 +183,7 @@ describe("Browser session manager", () => {
 
     let result: { message: string } | undefined;
     yield* spawn(function* () {
-      result = yield* session.waitForUser("Prompt");
+      result = yield* session.elicit("Prompt");
     });
     yield* nextTick();
 
@@ -198,8 +193,8 @@ describe("Browser session manager", () => {
     // ws1 was closed by attach — its close listener called detach(ws1),
     // which is a no-op because this.socket is now ws2
 
-    const reSent = ws2.sent.find((m: any) => m.type === "waitForUser");
-    expect(reSent).toEqual({ type: "waitForUser", prompt: "Prompt" });
+    const reSent = ws2.sent.find((m: any) => m.type === "elicit");
+    expect(reSent).toEqual({ type: "elicit", prompt: "Prompt" });
 
     ws2.injectMessage({ type: "userMessage", message: "answer" });
     yield* nextTick();

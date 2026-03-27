@@ -13,7 +13,7 @@ import { implementAgent } from "@tisyn/agent";
 import { execute } from "@tisyn/runtime";
 import { installRemoteAgent, workerTransport } from "@tisyn/transport";
 import { Call } from "@tisyn/ir";
-import { App, Llm, State, chat } from "../src/workflow.generated.js";
+import { Chat, Llm, chat } from "../src/workflow.generated.js";
 import { BrowserSessionManager } from "../src/browser-session.js";
 import type { HostToBrowser } from "../src/browser-session.js";
 
@@ -38,23 +38,23 @@ describe("End-to-end chat", () => {
     clientWs.on("open", () => clientOpen.resolve());
     yield* clientOpen.operation;
 
-    // Collect messages from host and auto-respond to waitForUser
-    const assistantMessages: string[] = [];
+    // Collect transcript snapshots and auto-respond to elicit
+    const transcriptSnapshots: Array<Array<{ role: string; content: string }>> = [];
     const userInputs = ["hello", "how are you?"];
     let inputIndex = 0;
 
     clientWs.on("message", (data) => {
       const msg = JSON.parse(data.toString()) as HostToBrowser;
 
-      if (msg.type === "waitForUser") {
+      if (msg.type === "elicit") {
         if (inputIndex < userInputs.length) {
           clientWs.send(JSON.stringify({ type: "userMessage", message: userInputs[inputIndex++] }));
         }
         // After all inputs exhausted, just don't respond — workflow stays blocked
       }
 
-      if (msg.type === "assistantMessage") {
-        assistantMessages.push(msg.message);
+      if (msg.type === "renderTranscript") {
+        transcriptSnapshots.push(msg.messages);
       }
     });
 
@@ -64,49 +64,28 @@ describe("End-to-end chat", () => {
     const serverWs = yield* serverConnected.operation;
 
     // --- Set up agents (same pattern as host.ts) ---
-    const history: Array<{ role: string; content: string }> = [];
-    const sampleHistory: Array<Array<{ role: string; content: string }>> = [];
-
-    const session = new BrowserSessionManager(history);
+    const session = new BrowserSessionManager();
     session.attach("e2e-test", serverWs);
 
-    // Browser agent — local, backed by session manager
-    const browserImpl = implementAgent(App(), {
-      *waitForUser({ input }) {
-        return yield* session.waitForUser(input.prompt);
+    // Chat agent — local, backed by session manager
+    const chatImpl = implementAgent(Chat(), {
+      *elicit({ input }) {
+        return yield* session.elicit(input.prompt);
       },
-      *showAssistantMessage({ input }) {
-        session.showAssistantMessage(input.message);
-      },
-      *hydrateTranscript() {
-        // no-op
+      *renderTranscript({ input }) {
+        session.renderTranscript(input.messages);
       },
       *setReadOnly({ input }) {
         session.setReadOnly(input.reason);
       },
     });
-    yield* browserImpl.install();
+    yield* chatImpl.install();
 
     // LLM agent via Worker
     const llmFactory = workerTransport({
       url: new URL("../src/llm-worker.ts", import.meta.url).href,
     });
     yield* installRemoteAgent(Llm(), llmFactory);
-
-    // State agent (local)
-    const stateImpl = implementAgent(State(), {
-      *getHistory() {
-        sampleHistory.push([...history]);
-        return [...history];
-      },
-      *recordTurn({ input }) {
-        history.push(
-          { role: "user", content: input.userMessage },
-          { role: "assistant", content: input.assistantMessage },
-        );
-      },
-    });
-    yield* stateImpl.install();
 
     // --- Execute workflow ---
     const workflowDone = withResolvers<void>();
@@ -116,10 +95,11 @@ describe("End-to-end chat", () => {
       workflowDone.resolve();
     });
 
-    // Wait for 2 turns to complete (2 assistantMessages)
+    // Wait for transcript containing two turns
     const allTurnsDone = withResolvers<void>();
     const checkDone = () => {
-      if (assistantMessages.length >= 2) {
+      const latest = transcriptSnapshots[transcriptSnapshots.length - 1];
+      if (latest && latest.length >= 4) {
         allTurnsDone.resolve();
       }
     };
@@ -132,18 +112,8 @@ describe("End-to-end chat", () => {
     yield* allTurnsDone.operation;
 
     // --- Assertions ---
-    expect(assistantMessages).toHaveLength(2);
-    expect(assistantMessages[0]).toBe("Echo: hello");
-    expect(assistantMessages[1]).toBe("Echo: how are you?");
-
-    // History accumulated across turns
-    expect(sampleHistory[0]).toEqual([]);
-    expect(sampleHistory[1]).toEqual([
-      { role: "user", content: "hello" },
-      { role: "assistant", content: "Echo: hello" },
-    ]);
-
-    expect(history).toEqual([
+    const latest = transcriptSnapshots[transcriptSnapshots.length - 1];
+    expect(latest).toEqual([
       { role: "user", content: "hello" },
       { role: "assistant", content: "Echo: hello" },
       { role: "user", content: "how are you?" },

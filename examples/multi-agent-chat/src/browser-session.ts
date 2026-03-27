@@ -10,9 +10,8 @@ export type BrowserToHost =
   | { type: "userMessage"; message: string };
 
 export type HostToBrowser =
-  | { type: "hydrateTranscript"; messages: Array<{ role: string; content: string }> }
-  | { type: "waitForUser"; prompt: string }
-  | { type: "assistantMessage"; message: string }
+  | { type: "renderTranscript"; messages: Array<{ role: "user" | "assistant"; content: string }> }
+  | { type: "elicit"; prompt: string }
   | { type: "setReadOnly"; reason: string };
 
 // --- Session Manager ---
@@ -20,11 +19,14 @@ export type HostToBrowser =
 export class BrowserSessionManager {
   private ownerSessionId: string | null = null;
   private socket: WebSocket | null = null;
-  private pendingPrompt: { resolve(msg: string): void; prompt: string } | null = null;
+  private pendingElicitation: { resolve(msg: string): void; prompt: string } | null = null;
   private readOnly: { reason: string } | null = null;
+  private transcript: Array<{ role: "user" | "assistant"; content: string }>;
   private ownerReady = withResolvers<void>();
 
-  constructor(private history: Array<{ role: string; content: string }>) {}
+  constructor(initialTranscript: Array<{ role: "user" | "assistant"; content: string }> = []) {
+    this.transcript = [...initialTranscript];
+  }
 
   /** Yields until the first browser sends a connect message. */
   waitForOwner(): Operation<void> {
@@ -48,7 +50,7 @@ export class BrowserSessionManager {
     // Non-owner — send read-only view and return
     if (clientSessionId !== this.ownerSessionId) {
       logInfo("session", "non-owner connection", { clientSessionId });
-      this.safeSend(ws, { type: "hydrateTranscript", messages: [...this.history] });
+      this.safeSend(ws, { type: "renderTranscript", messages: [...this.transcript] });
       this.safeSend(ws, { type: "setReadOnly", reason: "Session owned by another browser" });
       return;
     }
@@ -78,12 +80,12 @@ export class BrowserSessionManager {
     }
 
     // Send current state to the new socket
-    logInfo("session", "owner attached", { historyLength: this.history.length });
-    this.safeSend(ws, { type: "hydrateTranscript", messages: [...this.history] });
+    logInfo("session", "owner attached", { transcriptLength: this.transcript.length });
+    this.safeSend(ws, { type: "renderTranscript", messages: [...this.transcript] });
 
-    if (this.pendingPrompt) {
-      logInfo("session", "re-sending pending prompt", { prompt: this.pendingPrompt.prompt });
-      this.safeSend(ws, { type: "waitForUser", prompt: this.pendingPrompt.prompt });
+    if (this.pendingElicitation) {
+      logInfo("session", "re-sending pending prompt", { prompt: this.pendingElicitation.prompt });
+      this.safeSend(ws, { type: "elicit", prompt: this.pendingElicitation.prompt });
     }
 
     if (this.readOnly) {
@@ -103,17 +105,17 @@ export class BrowserSessionManager {
   }
 
   /**
-   * Reconnect-safe waitForUser. Suspends via withResolvers until the owner
+   * Reconnect-safe elicitation. Suspends via withResolvers until the owner
    * browser sends a userMessage. Survives disconnect — the resolvers stay
    * pending until a reconnected browser submits.
    */
-  waitForUser(prompt: string): Operation<{ message: string }> {
+  elicit(prompt: string): Operation<{ message: string }> {
     const { operation, resolve } = withResolvers<string>();
 
-    this.pendingPrompt = { resolve, prompt };
+    this.pendingElicitation = { resolve, prompt };
 
     if (this.socket) {
-      this.safeSend(this.socket, { type: "waitForUser", prompt });
+      this.safeSend(this.socket, { type: "elicit", prompt });
     }
 
     return {
@@ -125,12 +127,12 @@ export class BrowserSessionManager {
   }
 
   /**
-   * Send assistant message to the browser if connected.
-   * No-op if disconnected — history is the source of truth.
+   * Update transcript projection and publish it if connected.
    */
-  showAssistantMessage(message: string): void {
+  renderTranscript(messages: Array<{ role: "user" | "assistant"; content: string }>): void {
+    this.transcript = [...messages];
     if (this.socket) {
-      this.safeSend(this.socket, { type: "assistantMessage", message });
+      this.safeSend(this.socket, { type: "renderTranscript", messages: [...this.transcript] });
     }
   }
 
@@ -143,10 +145,10 @@ export class BrowserSessionManager {
   }
 
   private handleMessage(msg: BrowserToHost): void {
-    if (msg.type === "userMessage" && this.pendingPrompt) {
+    if (msg.type === "userMessage" && this.pendingElicitation) {
       logInfo("session", "userMessage received", { message: msg.message });
-      const { resolve } = this.pendingPrompt;
-      this.pendingPrompt = null;
+      const { resolve } = this.pendingElicitation;
+      this.pendingElicitation = null;
       resolve(msg.message);
     }
   }

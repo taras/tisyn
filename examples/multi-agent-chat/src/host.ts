@@ -4,16 +4,15 @@
  * The host is the sole orchestrator. It:
  * 1. Starts a WebSocket server for the browser
  * 2. Spawns a Worker for the LLM agent
- * 3. Installs a local State agent for history management
- * 4. Installs a local Browser agent backed by a BrowserSessionManager
- * 5. Executes the compiled chat workflow
+ * 3. Installs a local Chat agent backed by a BrowserSessionManager
+ * 4. Executes the compiled chat workflow
  *
  * Optional: --journal <path> enables file-backed durable journaling.
- * On restart, the runtime replays stored events and the State agent's
- * history is reconstructed from the journal.
+ * On restart, the runtime replays stored events and the chat
+ * transcript projection is reconstructed from the journal.
  *
  * Browser disconnect is non-fatal: the workflow stays blocked on
- * waitForUser across disconnects and resumes when the same browser
+ * elicit across disconnects and resumes when the same browser
  * reconnects (identified by clientSessionId from localStorage).
  *
  * One workflow per host process, owned by the first clientSessionId
@@ -25,7 +24,7 @@ import { execute } from "@tisyn/runtime";
 import { InMemoryStream } from "@tisyn/durable-streams";
 import { installRemoteAgent, workerTransport } from "@tisyn/transport";
 import { Call } from "@tisyn/ir";
-import { App, chat, Llm, State } from "./workflow.generated.js";
+import { Chat, chat, Llm } from "./workflow.generated.js";
 import { useWebSocketServer } from "./browser-transport.js";
 import { FileJournalStream } from "./file-journal-stream.js";
 import { reconstructHistory } from "./reconstruct-history.js";
@@ -71,12 +70,12 @@ for (let i = 0; i < process.argv.length; i++) {
 await main(function* () {
   const stream = journalPath ? new FileJournalStream(journalPath) : new InMemoryStream();
 
-  // --- Startup history reconstruction (once, no browser) ---
-  const history: Array<{ role: string; content: string }> = [];
+  // --- Startup transcript reconstruction (once, no browser) ---
+  const transcript: Array<{ role: "user" | "assistant"; content: string }> = [];
   if (journalPath) {
     const stored = yield* stream.readAll();
     const restored = reconstructHistory(stored);
-    history.push(...restored);
+    transcript.push(...restored);
     logInfo("host", "journal loaded", {
       path: journalPath,
       events: stored.length,
@@ -92,39 +91,15 @@ await main(function* () {
   yield* installRemoteAgent(Llm(), llmTransport);
   logInfo("host", "LLM worker agent installed");
 
-  const stateImpl = implementAgent(State(), {
-    *getHistory() {
-      logInfo("state", "getHistory", { length: history.length });
-      return [...history];
-    },
-    *recordTurn({ input }) {
-      logInfo("state", "recordTurn", {
-        user: input.userMessage,
-        assistant: input.assistantMessage,
-      });
-      history.push(
-        { role: "user", content: input.userMessage },
-        { role: "assistant", content: input.assistantMessage },
-      );
-      logInfo("state", "history updated", { length: history.length });
-    },
-  });
-
-  yield* stateImpl.install();
-  logInfo("host", "state agent installed");
-
   // --- Browser session manager ---
-  const session = new BrowserSessionManager(history);
+  const session = new BrowserSessionManager(transcript);
 
-  const browserImpl = implementAgent(App(), {
-    *waitForUser({ input }) {
-      return yield* session.waitForUser(input.prompt);
+  const browserImpl = implementAgent(Chat(), {
+    *elicit({ input }) {
+      return yield* session.elicit(input.prompt);
     },
-    *showAssistantMessage({ input }) {
-      session.showAssistantMessage(input.message);
-    },
-    *hydrateTranscript() {
-      // No-op — hydration is handled by session.attach()
+    *renderTranscript({ input }) {
+      session.renderTranscript(input.messages);
     },
     *setReadOnly({ input }) {
       session.setReadOnly(input.reason);
@@ -132,7 +107,7 @@ await main(function* () {
   });
 
   yield* browserImpl.install();
-  logInfo("host", "browser agent installed (local, reconnectable)");
+  logInfo("host", "chat agent installed (local, reconnectable)");
 
   // --- WebSocket server ---
   const connections = yield* useWebSocketServer(port);
