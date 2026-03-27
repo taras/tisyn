@@ -10,7 +10,7 @@
  */
 
 import ts from "typescript";
-import type { TisynExpr as Expr } from "@tisyn/ir";
+import type { TisynExpr as Expr, TisynFn } from "@tisyn/ir";
 import { assertValidIr } from "@tisyn/validate";
 import { parseSource } from "./parse.js";
 import { emitBlock, createContext } from "./emit.js";
@@ -98,11 +98,11 @@ export function compile(source: string, options: CompileOptions = {}): CompileRe
  *
  * @throws CompileError if no generator functions found
  */
-export function compileOne(source: string, options: CompileOptions = {}): Expr {
+export function compileOne(source: string, options: CompileOptions = {}): TisynFn<unknown[], unknown> {
   const result = compile(source, options);
   const names = Object.keys(result.functions);
   if (names.length === 0) {
     throw new CompileError("E999", "No generator functions found", 1, 1);
   }
-  return result.functions[names[0]!]!;
+  return result.functions[names[0]!]! as TisynFn<unknown[], unknown>;
 }
