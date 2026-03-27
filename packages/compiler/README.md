@@ -377,9 +377,8 @@ The compiler enforces a deterministic, side-effect-free subset of TypeScript. Vi
 
 | Code | Restriction                                       |
 | ---- | ------------------------------------------------- |
-| E001 | Use `const` instead of `let`                      |
 | E002 | Use `const` instead of `var`                      |
-| E003 | Reassignment is not allowed                       |
+| E003 | Reassignment of `const` binding or undeclared name is not allowed |
 | E004 | Property mutation is not allowed                  |
 | E005 | Computed property access is not allowed           |
 | E006 | `Math.random()` is not allowed                    |

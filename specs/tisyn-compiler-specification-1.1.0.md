@@ -1,6 +1,6 @@
 # Tisyn Compiler Specification
 
-**Version:** 1.1.0
+**Version:** 1.2.0
 **Target:** Tisyn System Specification 1.0.0
 **Status:** Normative
 
@@ -37,6 +37,8 @@ This document specifies a compiler that transforms a restricted subset of JavaSc
 | Sleep           | `yield* sleep(ms)`                         | External Eval                            |
 | Sub-workflow    | `yield* otherWorkflow(args)`               | Inlined or `call`                        |
 | Variable        | `const x = <expr>`                         | `let`                                    |
+| `let` declaration | `let x = v`                              | SSA-versioned `let` binding (`x_0`)      |
+| `let` reassignment | `x = e` (where `x` is `let`)           | Bumped SSA binding (`x_N`)               |
 | Conditional     | `if / else`                                | `if`                                     |
 | While           | `while (cond) { ... }`                     | `while` or recursive Fn                  |
 | Return          | `return <expr>`                            | Final expression                         |
@@ -273,7 +275,75 @@ Let("__loop_0", Fn([],
 
 **Throw in body:** `throw` inside a while body works with both strategies. Errors propagate upward through `while` (Case A) and through `call` (Case B) identically.
 
-### 6.3 While with Invariant Condition
+### 6.3 While with Loop-Carried State
+
+When a `while` loop body reassigns one or more outer `let` variables, the compiler treats those variables as loop-carried and applies Case B (recursive Fn + Call), regardless of whether the body contains `return`.
+
+**Source:**
+
+```typescript
+let x = 0;
+while (x < 10) {
+  x = x + 1;
+}
+```
+
+**IR:**
+
+```
+Let("x_0", 0,
+  Let("loop_0", Fn(["x_0", "last_0"],
+    If(Lt(Ref("x_0"), 10),
+      Let("x_1", Add(Ref("x_0"), 1),
+        Call(Ref("loop_0"), [Ref("x_1"), Ref("x_1")])),
+      Ref("last_0"))),
+    Call(Ref("loop_0"), [Ref("x_0"), null])))
+```
+
+**How this works:**
+
+1. `loop_0` is a Fn with two parameters: the loop-carried variable `x_0` and a `last_0` accumulator initialized to `null`.
+2. The outer Call starts the first iteration with `x_0 = 0` and `last_0 = null`.
+3. Inside the Fn: the condition is checked **before** the body executes (using the parameter versions). If true, the body runs (`x_1 = x_0 + 1`), and the recursive Call passes both the updated `x` and the last body result as `last_0`.
+4. When the condition becomes false, the If returns `Ref("last_0")` — the last body result from the previous iteration.
+5. For `while(true)` loops, no `last_0` parameter is added (the condition is never false).
+
+**Loop-carried variable scope:** After the while statement, the outer scope still refers to `x_0` (the original version). The final value is only available as the while expression's result.
+
+### 6.4 SSA Lowering for `let` Declarations
+
+`let` variables are lowered to Static Single Assignment (SSA) form. Each reassignment produces a fresh versioned name:
+
+| Source | IR |
+|--------|-----|
+| `let x = e` | `Let("x_0", ⟦e⟧, ...)` |
+| `x = e` | `Let("x_1", ⟦e⟧, ...)` (bumps to next version) |
+
+**If/else SSA join:** When both branches of an if statement reassign `x`, the compiler synthesizes a join:
+
+```typescript
+let x = 0;
+if (cond) {
+  x = 1;
+} else {
+  x = 2;
+}
+return x;
+```
+
+Compiled:
+
+```
+Let("x_0", 0,
+  Let("x_1", If(⟦cond⟧, 1, 2),
+    Ref("x_1")))
+```
+
+The snapshot → dry-run → join-emit algorithm detects which variables change in each branch and synthesizes the minimal join expression. This works recursively: an `if` inside a branch also gets join synthesis.
+
+**Scope:** After a while loop with loop-carried state, the outer scope still refers to `x_0`. The final value is the loop expression's result.
+
+### 6.5 While with Invariant Condition
 
 ```typescript
 const limit = 10;
@@ -282,7 +352,7 @@ while (count < limit) { ... }
 
 If `count` is an immutable `const`, the condition is invariant. The compiler SHOULD emit warning W001.
 
-### 6.4 Break/Continue
+### 6.6 Break/Continue
 
 DISALLOWED. No IR equivalent. Loops terminate via return (Case B), throw, or condition.
 
@@ -525,7 +595,7 @@ Inner bindings shadow outer with same name. Outer restored after inner scope.
 
 ### 10.4 No Mutation
 
-`const` only. `let`/`var`/reassignment → compile error.
+**`let` and `const` are both allowed.** The compiler lowers `let` + reassignment to SSA form (§6.4). `var` is rejected (E002). Reassignment of a `const` binding or an undeclared name is rejected (E003).
 
 ---
 
@@ -533,9 +603,8 @@ Inner bindings shadow outer with same name. Outer restored after inner scope.
 
 | Construct                 | Code              | Error             |
 | ------------------------- | ----------------- | ----------------- |
-| Mutable binding           | `let x = ...`     | E001: Use "const" |
 | Var                       | `var x = ...`     | E002: Use "const" |
-| Reassignment              | `x = v`           | E003              |
+| Reassignment of `const` or undeclared name | `x = v` where x is `const` or undeclared | E003 |
 | Property mutation         | `obj.p = v`       | E004              |
 | Computed property         | `obj[expr]`       | E005              |
 | `Math.random()`           |                   | E006              |
