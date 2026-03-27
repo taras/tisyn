@@ -288,7 +288,7 @@ while (x < 10) {
 }
 ```
 
-**IR:**
+**IR** (loop is the last statement — result extracted directly):
 
 ```
 Let("x_0", 0,
@@ -296,8 +296,23 @@ Let("x_0", 0,
     If(Lt(Ref("x_0"), 10),
       Let("x_1", Add(Ref("x_0"), 1),
         Call(Ref("loop_0"), [Ref("x_1"), Ref("x_1")])),
-      Ref("last_0"))),
-    Call(Ref("loop_0"), [Ref("x_0"), null])))
+      Construct({ __value: Ref("last_0"), x: Ref("x_0") }))),
+    Let("loop_result_0", Call(Ref("loop_0"), [Ref("x_0"), null]),
+      Get(Ref("loop_result_0"), "__value"))))
+```
+
+**IR** (loop is followed by `return x` — carried var rebound in outer scope):
+
+```
+Let("x_0", 0,
+  Let("loop_0", Fn(["x_0", "last_0"],
+    If(Lt(Ref("x_0"), 10),
+      Let("x_1", Add(Ref("x_0"), 1),
+        Call(Ref("loop_0"), [Ref("x_1"), Ref("x_1")])),
+      Construct({ __value: Ref("last_0"), x: Ref("x_0") }))),
+    Let("loop_result_0", Call(Ref("loop_0"), [Ref("x_0"), null]),
+      Let("x_1", Get(Ref("loop_result_0"), "x"),
+        Ref("x_1")))))
 ```
 
 **How this works:**
@@ -305,10 +320,11 @@ Let("x_0", 0,
 1. `loop_0` is a Fn with two parameters: the loop-carried variable `x_0` and a `last_0` accumulator initialized to `null`.
 2. The outer Call starts the first iteration with `x_0 = 0` and `last_0 = null`.
 3. Inside the Fn: the condition is checked **before** the body executes (using the parameter versions). If true, the body runs (`x_1 = x_0 + 1`), and the recursive Call passes both the updated `x` and the last body result as `last_0`.
-4. When the condition becomes false, the If returns `Ref("last_0")` — the last body result from the previous iteration.
-5. For `while(true)` loops, no `last_0` parameter is added (the condition is never false).
+4. When the condition becomes false, the Fn returns a packed struct `{ __value: last_0, x: x_0 }`. The `__value` field carries the last body result; each loop-carried variable is included under its source name so the caller can destructure it.
+5. The outer scope destructures the result struct and rebinds each loop-carried variable to its final value before the continuation runs. Code following the loop sees the post-loop version.
+6. For `while(true)` loops, no `last_0` parameter is added (the condition is never false). Early returns are the only exit path.
 
-**Loop-carried variable scope:** After the while statement, the outer scope still refers to `x_0` (the original version). The final value is only available as the while expression's result.
+**Loop-carried variable scope:** After the while statement, each loop-carried variable is rebound in the outer scope to its final value. Code that follows the loop sees the post-loop version, so `return x` after a while loop correctly returns the final value.
 
 ### 6.4 SSA Lowering for `let` Declarations
 
@@ -341,7 +357,7 @@ Let("x_0", 0,
 
 The snapshot → dry-run → join-emit algorithm detects which variables change in each branch and synthesizes the minimal join expression. This works recursively: an `if` inside a branch also gets join synthesis.
 
-**Scope:** After a while loop with loop-carried state, the outer scope still refers to `x_0`. The final value is the loop expression's result.
+**Scope:** After a while loop with loop-carried state, each loop-carried variable is rebound in the outer scope to its final value. The continuation sees the post-loop versions.
 
 ### 6.5 While with Invariant Condition
 

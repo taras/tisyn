@@ -179,6 +179,37 @@ Supported constructs include:
 
 See [Restrictions and Errors](#restrictions-and-errors) for unsupported constructs.
 
+### `let` Declarations and Loop-Carried State
+
+`let` variables may be declared and reassigned within a workflow body. The compiler SSA-lowers each reassignment to a fresh versioned binding:
+
+```typescript
+let x = 0;
+x = x + 1;   // becomes x_1 = x_0 + 1 in IR
+x = x + 1;   // becomes x_2 = x_1 + 1 in IR
+```
+
+When a `let` variable is reassigned inside a `while` loop body, the loop uses the recursive Fn + Call pattern with the variable as a loop-carried parameter:
+
+```typescript
+let count = 0;
+while (count < 10) {
+  count = count + 1;
+}
+```
+
+The loop expression evaluates to the last body result (`count + 1` = 10 when the condition first becomes false).
+
+After the loop exits, the compiler rebinds each loop-carried variable in the outer scope to its final value. Code following the loop sees the post-loop version:
+
+```typescript
+let x = 0;
+while (x < target) {
+  x = x + step;
+}
+return x;   // returns the final value of x after the loop
+```
+
 ## Workflow Calls and Lowering
 
 When a workflow calls a contract method with `yield*`, the compiler lowers that call to an `ExternalEval` IR node.
