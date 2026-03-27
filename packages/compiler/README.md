@@ -1,46 +1,37 @@
 # `@tisyn/compiler`
 
-`@tisyn/compiler` turns authored workflow source into portable Tisyn IR plus generated TypeScript helpers. It is the bridge between the human-facing authoring format and the runtime-facing execution format.
+`@tisyn/compiler` turns authored Tisyn workflows into portable IR and generated TypeScript helpers.
 
-## Where It Fits
+It is the build-time bridge between the code humans author and the explicit execution structure Tisyn runtimes consume. Authors declare agent contracts and export generator workflows; the compiler validates that source, lowers it into Tisyn IR, and emits a generated module that hosts, runtimes, transports, and tests can use directly.
 
-This package owns the authoring-to-IR boundary.
+If `@tisyn/ir` defines the language of Tisyn, `@tisyn/compiler` is what lets authored TypeScript target that language safely.
 
-- Authors write ambient agent contract declarations and exported generator workflows.
-- The compiler discovers those contracts, validates the authored shape, and lowers workflows into IR.
-- The generated module is then consumed by hosts, runtimes, transports, or tests.
+## What This Package Does
 
-If `@tisyn/ir` defines the language of Tisyn, `@tisyn/compiler` is what lets application code target that language from authored TypeScript.
+`@tisyn/compiler` owns the boundary between authoring and execution:
+
+- discovers ambient agent contract declarations
+- validates that authored workflows stay within the supported deterministic subset
+- lowers exported generator workflows into Tisyn IR
+- generates a TypeScript module containing agent factories, compiled workflows, and grouped exports
+
+The output is portable, inspectable, and ready to plug into runtime execution or transport across boundaries.
 
 ## Core Concepts
 
-- authored workflow source: `declare function` contracts plus exported `function*` workflows
-- contract discovery: convert authored declarations into agent metadata
-- IR lowering: convert workflow syntax into Tisyn IR
-- generated module output: emit declarations, compiled workflows, and grouped maps
-- validation: reject authored shapes the runtime cannot safely support
-
-## Main APIs
-
-The public API from `src/index.ts` is:
-
-- `compile`: Compile authored source into discovered contracts plus compiled workflow IR values.
-- `compileOne`: Compile a single exported workflow from authored source and return just that result.
-- `generateWorkflowModule`: Generate a complete TypeScript module containing declarations and compiled workflows.
-- `DiscoveredContract`: Describe one ambient agent contract discovered from authored source.
-- `ContractMethod`: Describe one discovered method on a contract, including names and types.
-- `CompileError`: Represent a compiler failure with structured location and error-code data.
-- `ErrorCodes`: Export the stable compiler error-code catalog for tooling and tests.
-
-There are also exported IR-builder helpers such as `Q`, `Ref`, `Fn`, `Let`, `Call`, `ExternalEval`, `AllEval`, and `RaceEval`. These are primarily compiler-facing utilities and lower-level tooling helpers rather than the main entrypoint most consumers should start with.
+- **authored workflow source**: `declare function` contracts plus exported `function*` workflows
+- **contract discovery**: extract agent metadata from authored declarations
+- **IR lowering**: convert supported TypeScript workflow syntax into Tisyn IR
+- **generated module output**: emit declarations, compiled workflows, and grouped maps
+- **validation**: reject authored shapes the runtime cannot safely support
 
 ## Installation
 
-```
+```bash
 npm install @tisyn/compiler
 ```
 
-Dependencies (`@tisyn/ir`, `@tisyn/validate`, `typescript`) are regular dependencies and install automatically.
+Dependencies such as `@tisyn/ir`, `@tisyn/validate`, and `typescript` are installed automatically.
 
 ## Quick Start
 
@@ -69,16 +60,49 @@ import { readFileSync } from "fs";
 const source = readFileSync("orders.workflow.ts", "utf-8");
 const result = generateWorkflowModule(source);
 
-// result.source is the generated TypeScript module
-// result.contracts describes the discovered contracts
-// result.workflows contains the compiled IR by function name
+// result.source     -> generated TypeScript module source
+// result.contracts  -> discovered contract metadata
+// result.workflows  -> compiled IR by workflow name
 ```
 
-The generated module exports factory functions for agents, compiled workflow IR, and grouped `agents`/`workflows` maps. See [Generated Output Shape](#generated-output-shape) for the full structure.
+The generated module exports typed agent factories, compiled workflow IR values, and grouped `agents` / `workflows` maps.
 
-## Authoring Format — Contract Declarations
+## Where It Fits
 
-Contracts declare the external agent operations that workflows can call. They use TypeScript ambient function declarations:
+This package sits at the authoring-to-IR boundary.
+
+1. Authors write ambient agent contracts and exported generator workflows.
+2. The compiler discovers and validates those contracts.
+3. Exported workflows are lowered into Tisyn IR.
+4. A generated module is emitted for use by hosts, runtimes, transports, or tests.
+
+At build time:
+
+```text
+authored TypeScript -> compiler -> generated module
+```
+
+At runtime, that generated module is consumed by the rest of the Tisyn system.
+
+## Main APIs
+
+The public API from `src/index.ts` includes:
+
+- `generateWorkflowModule`: discover contracts, compile workflows, and generate a TypeScript module
+- `compile`: compile authored workflow source into IR
+- `compileOne`: compile a single workflow and return its IR directly
+- `DiscoveredContract`: metadata for one discovered ambient contract
+- `ContractMethod`: metadata for one discovered contract method
+- `CompileError`: structured compiler error with location and code
+- `ErrorCodes`: stable error-code catalog for tooling and tests
+
+The package also re-exports IR builder helpers such as `Q`, `Ref`, `Fn`, `Let`, `Call`, `ExternalEval`, `AllEval`, and `RaceEval`. These are primarily useful for compiler internals and low-level tooling, not the main entrypoint most consumers should start with.
+
+## Authoring Model
+
+### Contract Declarations
+
+Contracts declare the external agent operations a workflow may call. They use ambient TypeScript function declarations:
 
 ```typescript
 declare function ServiceName(instance?: string): {
@@ -86,15 +110,7 @@ declare function ServiceName(instance?: string): {
 };
 ```
 
-Rules:
-
-- **Ambient declaration**: `declare function` with no body. This is not a real function — it tells the compiler what operations exist.
-- **Factory parameter**: Zero or one parameter. If present, must be `instance?: string` (optional, typed as `string`). Used for multi-tenant agent IDs.
-- **Return type**: Must be an object type literal containing method signatures. Not a type reference — the methods must be inline.
-- **Method return type**: Each method must return `Workflow<T>` with exactly one type argument. `T` is the result type of the operation.
-- **Method parameters**: Each method must have at least one parameter (v1 restriction). Parameters must not be optional or rest parameters (v1 restriction). Each parameter must have an explicit type annotation.
-
-Example with multiple methods:
+Example:
 
 ```typescript
 import type { Order, OrderUpdate, Receipt } from "./types.js";
@@ -106,7 +122,18 @@ declare function OrderService(instance?: string): {
 };
 ```
 
-Example without instance parameter:
+Rules:
+
+- Contracts must use `declare function` and have no body.
+- A contract factory may accept zero parameters or one parameter.
+- If present, that parameter must be `instance?: string`.
+- The return type must be an inline object type literal containing method signatures.
+- Each method must return `Workflow<T>` with exactly one type argument.
+- Each method must have at least one parameter in v1.
+- Method parameters must not be optional or rest parameters in v1.
+- Each parameter must have an explicit type annotation.
+
+Example without an instance parameter:
 
 ```typescript
 declare function ConfigService(): {
@@ -114,9 +141,9 @@ declare function ConfigService(): {
 };
 ```
 
-## Authoring Format — Workflow Functions
+### Workflow Functions
 
-Workflows are exported generator functions that express orchestration logic:
+Workflows are exported generator functions:
 
 ```typescript
 export function* processOrder(orderId: string) {
@@ -133,48 +160,84 @@ export function* processOrder(orderId: string) {
 
 Rules:
 
-- Must be a generator function (`function*`).
-- Must be `export`ed to appear in the generated output.
-- `yield*` calls to contract methods are the mechanism for invoking agent operations.
-- Supported constructs: `const` declarations, `if`/`else`, `while` loops, `throw new Error(...)`, arrow functions (expression body only), object/array literals, template literals, ternary expressions.
+- Workflows must be generator functions (`function*`).
+- They must be exported to appear in generated output.
+- `yield*` calls to contract methods invoke agent operations.
 - Non-exported generator functions are ignored.
-- See [Restrictions and Error Catalog](#restrictions-and-error-catalog) for what is not allowed.
 
-## Workflow Call Syntax and Lowering
+Supported constructs include:
 
-When a workflow calls a contract method via `yield*`, the compiler lowers it to an `ExternalEval` IR node:
+- `const` declarations
+- `if` / `else`
+- `while`
+- `throw new Error(...)`
+- object literals
+- array literals
+- template literals
+- ternary expressions
+- arrow functions with expression bodies only
+
+See [Restrictions and Errors](#restrictions-and-errors) for unsupported constructs.
+
+## Workflow Calls and Lowering
+
+When a workflow calls a contract method with `yield*`, the compiler lowers that call to an `ExternalEval` IR node.
+
+Authored source:
 
 ```typescript
-// Authored
 const order = yield* OrderService().fetchOrder(orderId);
-
-// Compiles to (conceptual IR)
-// ExternalEval("order-service.fetchOrder", Construct({ orderId: Ref("orderId") }))
 ```
 
-**Positional-to-payload normalization**: The compiler uses the contract's parameter names to convert positional arguments into a named payload object. Given a contract method `fetchOrder(orderId: string, includeLines: boolean)`, the call `fetchOrder(id, true)` becomes `{ orderId: id, includeLines: true }`.
+Conceptual IR:
 
-**Instance variant**: When the factory is called with an instance string, the agent ID includes it as a suffix:
+```typescript
+ExternalEval("order-service.fetchOrder", Construct({ orderId: Ref("orderId") }))
+```
+
+### Positional-to-payload normalization
+
+Contract parameter names determine the payload shape. For a method like:
+
+```typescript
+fetchOrder(orderId: string, includeLines: boolean): Workflow<Order>;
+```
+
+this call:
+
+```typescript
+yield* OrderService().fetchOrder(id, true);
+```
+
+becomes a payload equivalent to:
+
+```typescript
+{ orderId: id, includeLines: true }
+```
+
+### Instance-aware IDs
+
+If the factory is called with an instance string, the instance is appended to the base agent ID:
 
 ```typescript
 yield* OrderService("legacy").fetchOrder(orderId);
-// Agent ID: "order-service:legacy"
-// Effect ID: "order-service:legacy.fetchOrder"
+// agent id:  "order-service:legacy"
+// effect id: "order-service:legacy.fetchOrder"
 ```
 
-Without an instance argument, the base agent ID is used:
+Without an instance:
 
 ```typescript
 yield* OrderService().fetchOrder(orderId);
-// Agent ID: "order-service"
-// Effect ID: "order-service.fetchOrder"
+// agent id:  "order-service"
+// effect id: "order-service.fetchOrder"
 ```
 
-The contract must be declared as a `declare function` in the same source file as the workflow that references it.
+The contract must be declared in the same source file as the workflows that reference it.
 
 ## Generated Output Shape
 
-The compiler produces a TypeScript module with this structure:
+The compiler generates a TypeScript module with this overall structure:
 
 ```typescript
 // Auto-generated by @tisyn/compiler — do not edit
@@ -200,19 +263,21 @@ export const agents = { OrderService };
 export const workflows = { processOrder };
 ```
 
-**Factory functions** mirror the contract shape. Each method becomes a typed `operation<Args, Result>()` call. The factory calls `agent(id, operations)` from `@tisyn/agent`, which returns a declaration with host-side call constructors.
+The generated module includes:
 
-**Workflow IR** is exported as a `const` with `as const` assertion. The IR is a JSON-serializable tree of Tisyn expression nodes.
+- **agent factory functions** that mirror the declared contract shape
+- **compiled workflow IR constants** exported as `const`
+- **grouped exports** named `agents` and `workflows`
 
-**Grouped exports**: `agents` collects all factory functions; `workflows` collects all compiled IR constants. Both are plain objects keyed by name.
+Additional notes:
 
-**Type imports** referenced by contract signatures are forwarded from the source. Only `import type` declarations are forwarded — value imports are never included.
+- Type-only imports used by contract signatures are forwarded automatically.
+- Contracts and workflows are emitted in alphabetical order for deterministic output.
+- Generated code is build output and should not be edited by hand.
 
-Contracts and workflows are sorted alphabetically in the output for deterministic generation.
+## Agent ID Naming
 
-## Agent ID Naming Convention
-
-Contract names are converted from PascalCase to kebab-case for agent IDs:
+Contract names are converted from PascalCase to kebab-case agent IDs:
 
 | Contract Name   | Agent ID         |
 | --------------- | ---------------- |
@@ -220,36 +285,57 @@ Contract names are converted from PascalCase to kebab-case for agent IDs:
 | `PlayerA`       | `player-a`       |
 | `FraudDetector` | `fraud-detector` |
 
-With an instance parameter, the instance is appended after a colon:
+With an instance:
 
-```
-OrderService("legacy") → "order-service:legacy"
-OrderService()         → "order-service"
+```text
+OrderService("legacy") -> "order-service:legacy"
+OrderService()         -> "order-service"
 ```
 
 ## Type Import Forwarding
 
-Contract signatures reference types in their parameter and return type positions. The compiler resolves these references against the source file's `import type` declarations and forwards matching imports to the generated module.
+Contract signatures may reference imported types in parameter and return positions. The compiler resolves these against the source file's `import type` declarations and forwards the needed imports to the generated module.
 
-**Supported import shapes**:
+Supported patterns:
 
 ```typescript
-// Named import — individual specifiers are matched
 import type { Order, Receipt } from "./types.js";
-
-// Namespace import — matched when contracts use T.Member syntax
 import type * as T from "./types.js";
-
-// Default import
 import type Config from "./config.js";
-
-// Mixed import with type specifiers — only type specifiers forwarded
 import { createOrder, type OrderInput } from "./orders.js";
 ```
 
-**Builtin types** are recognized automatically and never require imports: `string`, `number`, `boolean`, `null`, `undefined`, `void`, `never`, `any`, `unknown`, `object`, `bigint`, `symbol`, `Record`, `Array`, `ReadonlyArray`, `Promise`, `Partial`, `Required`, `Readonly`, `Pick`, `Omit`, `Exclude`, `Extract`, `ReturnType`, `Parameters`, `NonNullable`, `Awaited`.
+Builtin types are recognized automatically and never need imports, including:
 
-**Inline structural types** in parameters work without imports:
+- `string`
+- `number`
+- `boolean`
+- `null`
+- `undefined`
+- `void`
+- `never`
+- `any`
+- `unknown`
+- `object`
+- `bigint`
+- `symbol`
+- `Record`
+- `Array`
+- `ReadonlyArray`
+- `Promise`
+- `Partial`
+- `Required`
+- `Readonly`
+- `Pick`
+- `Omit`
+- `Exclude`
+- `Extract`
+- `ReturnType`
+- `Parameters`
+- `NonNullable`
+- `Awaited`
+
+Inline structural types are also supported:
 
 ```typescript
 declare function OrderService(): {
@@ -257,22 +343,37 @@ declare function OrderService(): {
 };
 ```
 
-Here, only `Order` needs an `import type` — the inline object type's property names (`orderId`, `items`, `sku`, `qty`) are not treated as type references.
+In this case only `Order` needs to be imported.
 
-**Rejected patterns**:
+Rejected patterns:
 
-- **Source-local types**: Interfaces, type aliases, classes, and enums defined in the same file as the contract are rejected. Move them to a separate module and use `import type`.
-- **Unresolved references**: If a contract references a type that has no corresponding `import type` in the source, compilation fails with an error indicating which type needs an import.
+- source-local interfaces, type aliases, classes, or enums used in contracts
+- unresolved type references with no matching `import type`
 
-**Supported type shapes**: Type references (`Foo`), namespace-qualified types (`T.Foo`), generic types (`Array<Foo>`), union and intersection types, tuple types, array shorthand (`Foo[]`), and inline object literals.
+Supported type shapes include:
 
-**Unsupported type operators**: `typeof`, `keyof`, `readonly` (operator form), and `unique` are rejected with a `CompileError` (v1 restriction). Conditional types (`T extends U ? X : Y`) and mapped types are not currently detected and may produce incorrect output. Limit contract signatures to the supported shapes listed above.
+- plain type references
+- namespace-qualified types
+- generic types
+- unions and intersections
+- tuples
+- array shorthand
+- inline object literals
 
-## Restrictions and Error Catalog
+Unsupported type operators in v1 include:
 
-The compiler enforces a deterministic, side-effect-free subset of TypeScript. Violations produce a `CompileError` with the corresponding error code, source line, and column.
+- `typeof`
+- `keyof`
+- `readonly` (operator form)
+- `unique`
 
-### Language Restrictions
+Conditional and mapped types are not currently guaranteed to compile correctly.
+
+## Restrictions and Errors
+
+The compiler enforces a deterministic, side-effect-free subset of TypeScript. Violations produce a `CompileError` with an error code, line, and column.
+
+### Language restrictions
 
 | Code | Restriction                                       |
 | ---- | ------------------------------------------------- |
@@ -281,20 +382,20 @@ The compiler enforces a deterministic, side-effect-free subset of TypeScript. Vi
 | E003 | Reassignment is not allowed                       |
 | E004 | Property mutation is not allowed                  |
 | E005 | Computed property access is not allowed           |
-| E006 | `Math.random()` is not allowed (nondeterministic) |
-| E007 | `Date.now()` is not allowed (nondeterministic)    |
-| E008 | `Map`/`Set` constructors are not allowed          |
-| E009 | `async`/`await` is not allowed                    |
+| E006 | `Math.random()` is not allowed                    |
+| E007 | `Date.now()` is not allowed                       |
+| E008 | `Map` / `Set` constructors are not allowed        |
+| E009 | `async` / `await` is not allowed                  |
 | E010 | `yield*` must appear in statement position only   |
 | E011 | Ambiguous `+` operator                            |
-| E013 | `for...in`/`for...of` is not allowed              |
-| E014 | `eval()`/`new Function()` is not allowed          |
-| E015 | `try`/`catch` is not allowed                      |
-| E016 | `class`/`this` is not allowed                     |
+| E013 | `for...in` / `for...of` is not allowed            |
+| E014 | `eval()` / `new Function()` is not allowed        |
+| E015 | `try` / `catch` is not allowed                    |
+| E016 | `class` / `this` is not allowed                   |
 | E017 | `yield` without `*` is not allowed                |
 | E018 | Cannot call arrow function directly               |
-| E019 | `typeof`/`instanceof` is not allowed              |
-| E020 | `break`/`continue` is not allowed                 |
+| E019 | `typeof` / `instanceof` is not allowed            |
+| E020 | `break` / `continue` is not allowed               |
 | E021 | `Promise` is not allowed                          |
 | E023 | Only `throw new Error(...)` is allowed            |
 | E024 | Arrow functions must have expression bodies       |
@@ -302,118 +403,129 @@ The compiler enforces a deterministic, side-effect-free subset of TypeScript. Vi
 | E029 | `delete` operator is not allowed                  |
 | E030 | `Symbol` is not allowed                           |
 
-### Contract Errors
+### Contract errors
 
-Contract validation errors use code `E999`:
+Contract validation errors use `E999`, including:
 
-- Duplicate ambient contract declaration names
-- Workflow name collides with a contract name
-- Contract return type is not an object type literal
-- Contract type literal contains non-method members
-- Contract method missing `Workflow<T>` return type
-- `Workflow` has wrong number of type arguments (must be exactly one)
-- Contract method has zero parameters (v1 restriction)
-- Contract method has optional parameters (v1 restriction)
-- Contract method has rest parameters (v1 restriction)
-- Factory parameter is not optional or not typed as `string`
-- Contract references a source-local type (must use `import type`)
-- Contract references an unresolved type (no matching `import type` found)
-- Contract uses `typeof`, `keyof`, `readonly`, or `unique` type operators (v1 restriction)
+- duplicate ambient contract declaration names
+- workflow name colliding with a contract name
+- contract return type not being an object type literal
+- non-method members inside the contract type literal
+- contract method missing `Workflow<T>` return type
+- wrong number of type arguments for `Workflow`
+- contract method with zero parameters in v1
+- optional or rest parameters in contract methods in v1
+- invalid factory parameter shape
+- source-local or unresolved type references
+- unsupported type operators in contract signatures
 
-### Validation Errors
+### Validation errors
 
-If IR validation is enabled (the default), malformed IR produces code `V001`.
+If IR validation is enabled, malformed IR produces code `V001`.
 
 ## Public API Reference
 
-### `generateWorkflowModule(source, options?): GenerateResult`
+### `generateWorkflowModule(source, options?)`
 
-Primary API. Discovers contracts, compiles workflows, and generates a TypeScript module.
+Primary API for most consumers. Discovers contracts, compiles workflows, validates IR, and generates a TypeScript module.
 
 ```typescript
 interface GenerateOptions {
-  filename?: string; // Source filename for error messages. Default: "input.ts"
-  validate?: boolean; // Run IR validation. Default: true
+  filename?: string; // default: "input.ts"
+  validate?: boolean; // default: true
 }
 
 interface GenerateResult {
-  source: string; // Generated TypeScript module source
-  contracts: DiscoveredContract[]; // Discovered ambient contracts
-  workflows: Record<string, Expr>; // Compiled workflow IR by name
+  source: string;
+  contracts: DiscoveredContract[];
+  workflows: Record<string, Expr>;
 }
 ```
 
-Throws `CompileError` on contract violations, compilation errors, or (with validation enabled) malformed IR.
+Throws `CompileError` on contract violations, compilation errors, or malformed IR when validation is enabled.
 
-### `compile(source, options?): CompileResult`
+### `compile(source, options?)`
 
-Lower-level API. Compiles generator functions to IR without contract discovery or codegen. Does not process `declare function` contracts or generate module source.
+Lower-level API that compiles exported generator functions to IR without contract discovery or code generation.
 
 ```typescript
 interface CompileOptions {
-  validate?: boolean; // Default: true
-  filename?: string; // Default: "input.ts"
+  validate?: boolean; // default: true
+  filename?: string; // default: "input.ts"
 }
 
 interface CompileResult {
-  functions: Record<string, Expr>; // Compiled IR by function name
+  functions: Record<string, Expr>;
 }
 ```
 
-### `compileOne(source, options?): Expr`
+### `compileOne(source, options?)`
 
-Convenience wrapper. Compiles source and returns the first function's IR directly.
+Convenience wrapper that compiles source and returns the first compiled function's IR directly.
 
-### `toAgentId(pascalCase: string): string`
+### `toAgentId(pascalCase: string)`
 
-Converts a PascalCase name to a kebab-case agent ID. `"OrderService"` → `"order-service"`.
+Convert a PascalCase contract name into a kebab-case agent ID.
+
+```typescript
+toAgentId("OrderService"); // "order-service"
+```
 
 ### `CompileError`
 
-Error class with structured fields:
-
 ```typescript
 class CompileError extends Error {
-  code: string; // e.g. "E001", "E999", "V001"
+  code: string;   // e.g. "E001", "E999", "V001"
   line: number;
   column: number;
-  // message format: "E001 at 3:5: Use 'const' instead of 'let'"
 }
 ```
 
-### `DiscoveredContract` / `ContractMethod`
+Message format:
+
+```text
+E001 at 3:5: Use 'const' instead of 'let'
+```
+
+### `DiscoveredContract` and `ContractMethod`
 
 ```typescript
 interface DiscoveredContract {
-  name: string; // e.g. "OrderService"
-  baseAgentId: string; // e.g. "order-service"
-  hasInstance: boolean; // true if factory accepts instance?: string
+  name: string;
+  baseAgentId: string;
+  hasInstance: boolean;
   methods: ContractMethod[];
 }
 
 interface ContractMethod {
-  name: string; // e.g. "fetchOrder"
+  name: string;
   params: Array<{ name: string; type: string }>;
-  resultType: string; // e.g. "Order"
+  resultType: string;
 }
 ```
 
-### IR Builders
+### IR builders
 
-Re-exported for programmatic IR construction: `Q`, `Ref`, `Fn`, `Let`, `Seq`, `If`, `While`, `Call`, `Get`, `Add`, `Sub`, `Mul`, `Div`, `Mod`, `Gt`, `Gte`, `Lt`, `Lte`, `Eq`, `Neq`, `And`, `Or`, `Not`, `Neg`, `Construct`, `ArrayNode`, `Concat`, `Throw`, `ExternalEval`, `AllEval`, `RaceEval`.
+Re-exported for programmatic IR construction:
 
-## Using the Generated Module — Host Side
+```typescript
+Q, Ref, Fn, Let, Seq, If, While, Call, Get, Add, Sub, Mul, Div, Mod, Gt, Gte,
+Lt, Lte, Eq, Neq, And, Or, Not, Neg, Construct, ArrayNode, Concat, Throw,
+ExternalEval, AllEval, RaceEval
+```
 
-The generated module is used by a host application to execute workflows:
+## Using the Generated Module
+
+A generated module is typically consumed by a host application:
 
 ```typescript
 import { processOrder } from "./orders.generated.js";
 import { execute } from "@tisyn/runtime";
 
 const { result, journal } = yield* execute({
-    ir: processOrder,
-    env: { orderId: "abc-123" },
-  });
+  ir: processOrder,
+  env: { orderId: "abc-123" },
+});
 
 if (result.status === "ok") {
   console.log("Order:", result.value);
@@ -422,22 +534,26 @@ if (result.status === "ok") {
 }
 ```
 
-`execute` accepts an options object:
+`execute` accepts:
 
 | Field         | Type                  | Description                                        |
 | ------------- | --------------------- | -------------------------------------------------- |
 | `ir`          | `Expr`                | The compiled workflow IR                           |
-| `env`         | `Record<string, Val>` | Initial environment bindings (workflow parameters) |
-| `stream`      | `DurableStream`       | Durable stream for journaling (default: in-memory) |
-| `coroutineId` | `string`              | Root task ID (default: `"root"`)                   |
+| `env`         | `Record<string, Val>` | Initial workflow parameter bindings                |
+| `stream`      | `DurableStream`       | Durable journal stream (defaults to in-memory)     |
+| `coroutineId` | `string`              | Root task ID (defaults to `"root"`)                |
 
-Returns `{ result: EventResult, journal: DurableEvent[] }`.
+It returns:
 
-The generated factory functions create agent declarations — they do not execute operations. You must provide agent implementations and install them before calling `execute`.
+```typescript
+{ result: EventResult, journal: DurableEvent[] }
+```
+
+Generated agent factories create declarations. They do not execute operations by themselves. Agent implementations must be installed before execution.
 
 ## Implementing Agents
 
-Use `implementAgent` from `@tisyn/agent` to bind operation handlers to a declaration:
+Use `implementAgent` from `@tisyn/agent` to bind handlers to a generated declaration:
 
 ```typescript
 import { implementAgent } from "@tisyn/agent";
@@ -450,13 +566,10 @@ const orderAgent = implementAgent(OrderService(), {
   },
 });
 
-// Install the agent's dispatch middleware
 yield* orderAgent.install();
 ```
 
-Each handler is an Effection generator function that receives the typed payload and returns the typed result. The `install()` method registers the agent's handlers as dispatch middleware — when a workflow executes an `ExternalEval` for this agent, the corresponding handler runs.
-
-For instanced agents, pass the instance to the factory:
+For instanced agents:
 
 ```typescript
 const legacyAgent = implementAgent(OrderService("legacy"), {
@@ -466,39 +579,41 @@ const legacyAgent = implementAgent(OrderService("legacy"), {
 });
 ```
 
+Each handler is an Effection generator function receiving typed payload and returning typed output. `install()` registers the handlers so runtime dispatch can resolve `ExternalEval` nodes for that agent.
+
 ## Package Relationships
 
-```
+```text
                     build time                          runtime
                    ┌──────────┐                      ┌─────────┐
-authored source ──▸│ compiler │──▸ generated module ──▸│ runtime │──▸ result
+authored source ──▶│ compiler │──▶ generated module ──▶│ runtime │──▶ result
                    └──────────┘         │              └─────────┘
                        uses             │                  uses
                     @tisyn/ir       imports from        @tisyn/agent
                     @tisyn/validate @tisyn/agent        @tisyn/kernel
 ```
 
-- **@tisyn/compiler** — compiles authored source into a generated module (build time)
-- **@tisyn/agent** — provides `agent()`, `operation()`, `implementAgent()` (used by generated code and host)
-- **@tisyn/runtime** — executes workflow IR with installed agent implementations (runtime)
-- **@tisyn/ir** — IR type definitions (`TisynExpr`)
-- **@tisyn/validate** — IR structural validation (`assertValidIr`)
+- **`@tisyn/compiler`**: compile authored source into generated modules
+- **`@tisyn/agent`**: provide `agent()`, `operation()`, and `implementAgent()`
+- **`@tisyn/runtime`**: execute workflow IR with installed agents
+- **`@tisyn/ir`**: define IR types and node shapes
+- **`@tisyn/validate`**: validate structural IR correctness
 
-## Compiler Pipeline Internals
+## Compiler Pipeline
 
-For contributors. The `generateWorkflowModule` pipeline:
+For contributors, `generateWorkflowModule` runs this pipeline:
 
-1. **Parse** (`src/parse.ts`) — extract generator functions from the TypeScript AST
-2. **Discover** (`src/discover.ts`) — find ambient `declare function` contracts, extract method signatures and type nodes
-3. **Emit** (`src/emit.ts`) — compile TypeScript AST nodes into Tisyn IR. Contract-aware: `yield*` calls to discovered contracts become `ExternalEval` nodes with positional-to-payload normalization
-4. **Validate** (`@tisyn/validate`) — structural IR validation (optional, enabled by default)
-5. **Codegen** (`src/codegen.ts`) — generate TypeScript module source with factory functions, IR exports, and grouped maps
+1. **parse** (`src/parse.ts`) — extract generator functions from the TypeScript AST
+2. **discover** (`src/discover.ts`) — find ambient contracts and extract method/type metadata
+3. **emit** (`src/emit.ts`) — lower authored syntax into Tisyn IR
+4. **validate** (`@tisyn/validate`) — validate IR structure
+5. **codegen** (`src/codegen.ts`) — emit the generated TypeScript module
 
-The lower-level `compile` API runs steps 1, 3, and 4 only (no discovery or codegen).
+The lower-level `compile` API runs only parse, emit, and validate.
 
-## Full End-to-End Example
+## End-to-End Example
 
-### 1. Authored Source
+### 1. Authored source
 
 ```typescript
 // orders.workflow.ts
@@ -537,7 +652,7 @@ const { source: generated } = generateWorkflowModule(source, {
 writeFileSync("orders.generated.ts", generated);
 ```
 
-### 3. Generated Output
+### 3. Generated output
 
 ```typescript
 // Auto-generated by @tisyn/compiler — do not edit
@@ -571,23 +686,23 @@ export const agents = { BillingService, OrderService };
 export const workflows = { fulfillOrder };
 ```
 
-### 4. Host-Side Usage
+### 4. Execute
 
 ```typescript
 import { fulfillOrder } from "./orders.generated.js";
 import { execute } from "@tisyn/runtime";
 
 const { result, journal } = yield* execute({
-    ir: fulfillOrder,
-    env: { orderId: "order-42" },
-  });
+  ir: fulfillOrder,
+  env: { orderId: "order-42" },
+});
 
 if (result.status === "ok") {
   console.log("Receipt:", result.value);
 }
 ```
 
-### 5. Agent Implementations
+### 5. Implement agents
 
 ```typescript
 import { implementAgent } from "@tisyn/agent";
