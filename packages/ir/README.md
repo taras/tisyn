@@ -1,83 +1,115 @@
 # `@tisyn/ir`
 
-`@tisyn/ir` is the shared language of Tisyn. It defines the node shapes, value types, constructors, traversal helpers, and printing/decompilation utilities that every other package relies on.
+`@tisyn/ir` defines the intermediate representation at the heart of Tisyn.
+
+It is the shared program format that the rest of the system agrees on: the compiler produces it, the validator checks it, the kernel interprets it, the runtime executes it, and protocols move its values across boundaries.
+
+If Tisyn has a common language, this is it.
 
 ## Where It Fits
 
-This package is the common representation layer for the whole system.
+`@tisyn/ir` is the representation layer for the whole system.
 
-- `@tisyn/compiler` produces IR.
-- `@tisyn/validate` checks IR.
-- `@tisyn/kernel` gives IR evaluation semantics.
-- `@tisyn/runtime` executes IR durably.
-- `@tisyn/protocol` and `@tisyn/transport` carry IR-compatible values across boundaries.
+- `@tisyn/compiler` lowers authored workflows into IR
+- `@tisyn/validate` checks that IR is well-formed
+- `@tisyn/kernel` defines how IR evaluates
+- `@tisyn/runtime` executes IR durably
+- `@tisyn/protocol` and `@tisyn/transport` move IR-compatible values across boundaries
 
-If you need a package that almost every other Tisyn package depends on, this is it.
+Almost every other Tisyn package depends on this one, directly or indirectly.
+
+## What It Contains
+
+This package provides the core building blocks for working with Tisyn programs as data:
+
+- expression and value types such as `TisynExpr`, `Val`, `Json`, and `TisynFn`
+- constructor helpers such as `Fn`, `Ref`, `Let`, `Call`, `Eval`, `All`, and `Race`
+- traversal and transformation utilities such as `walk()`, `fold()`, and `transform()`
+- inspection and developer tooling such as `classifyNode()`, `collectRefs()`, `print()`, and `decompile()`
 
 ## Core Concepts
 
-- `TisynExpr`: the broad expression type
-- `Val` / `Json`: runtime values that can flow through environments and protocols
-- `TisynFn`: function-shaped IR value
-- constructor helpers like `Fn`, `Ref`, `Let`, `Call`, `Eval`, `All`, and `Race`
-- traversal helpers like `walk()` and `transform()`
-- inspection helpers like `classifyNode()`, `collectRefs()`, and `print()`
+### Expressions are data
+
+A Tisyn program is represented as a tree of JSON-compatible expression nodes. `TisynExpr` is the broad union of those nodes and literals.
+
+That makes workflows explicit, serializable, inspectable, and transportable across package and process boundaries.
+
+### Functions are data too
+
+`TisynFn` represents a function-shaped IR value with parameter names and a body expression. Function values are not opaque host-language closures; they remain part of the IR.
+
+### Values stay boundary-friendly
+
+`Json` represents plain JSON-compatible values. `Val` represents the broader runtime value domain that environments and protocols can accept.
+
+These types define what can safely move through Tisyn systems.
 
 ## Main APIs
 
-The surface is intentionally broad, but it groups into a few jobs.
+The API surface is broad, but it falls into a few clear groups.
 
 ### Types and values
 
-- `Json`: Represent plain JSON-compatible values that can be serialized across boundaries.
-- `Val`: Represent the runtime value domain accepted by environments and protocols.
-- `TisynExpr`: Represent the full union of legal Tisyn expression nodes and literals.
-- `Expr`: Represent a typed expression input used by constructor helpers.
-- `TisynFn`: Represent a function-shaped IR value with parameter names and a body expression.
-- `IrInput`: Represent the validated input shapes accepted by IR-consuming APIs.
+- `Json` — plain JSON-compatible values
+- `Val` — runtime values accepted by environments and protocols
+- `TisynExpr` — the full union of legal Tisyn expressions and literals
+- `Expr` — typed expression input accepted by constructor helpers
+- `TisynFn` — a function-shaped IR value with parameters and a body
+- `IrInput` — validated input shapes accepted by IR-consuming APIs
 
 ### Constructors
 
-- `Q`: Quote an expression so it is treated as IR data instead of something to evaluate immediately.
-- `Ref`: Reference a named value from the current environment.
-- `Fn`: Build a function-shaped IR value with positional parameters and a body expression.
-- `Let`: Bind an intermediate value to a name and continue evaluation in the extended environment.
-- `Seq`: Evaluate a series of expressions in order and return the last result.
-- `If`: Conditionally choose between two expressions based on a boolean condition.
-- `While`: Represent a loop that keeps evaluating a body while a condition remains true.
-- `Call`: Invoke a function-shaped IR value with zero or more IR arguments.
-- `Get`: Read a named property from an object expression.
-- `Add`, `Sub`, `Mul`, `Div`, `Mod`, `Neg`, `Gt`, `Gte`, `Lt`, `Lte`, `Eq`, `Neq`, `And`, `Or`, `Not`: Build arithmetic, comparison, and boolean operations as IR nodes.
-- `Construct`, `Arr`, `Concat`: Build object, array, and string-concatenation expressions from IR inputs.
-- `Throw`: Represent an expression that raises an error with the given message.
-- `Eval`: Invoke an external operation or structural form by id with a single payload expression.
-- `All`: Evaluate multiple expressions concurrently and collect all of their results.
-- `Race`: Evaluate multiple expressions concurrently and resolve with the first one to complete.
+Use these to build IR programmatically:
+
+- `Q` — quote an expression as IR data
+- `Ref` — reference a named value from the current environment
+- `Fn` — construct a function-shaped IR value
+- `Let` — bind a value and continue in an extended environment
+- `Seq` — evaluate a series of expressions in order
+- `If` — choose between two expressions conditionally
+- `While` — represent looping while a condition remains true
+- `Call` — invoke a function-shaped IR value
+- `Get` — read a named property from an object expression
+- `Add`, `Sub`, `Mul`, `Div`, `Mod`, `Neg`
+- `Gt`, `Gte`, `Lt`, `Lte`, `Eq`, `Neq`
+- `And`, `Or`, `Not`
+- `Construct`, `Arr`, `Concat`
+- `Throw`
+- `Eval` — invoke an external operation or structural form by id
+- `All` — evaluate multiple expressions concurrently and collect their results
+- `Race` — evaluate multiple expressions concurrently and resolve with the first result
 
 ### Classification and guards
 
-- `classifyNode`: Categorize an unknown value as a literal, IR node, object-shaped IR, or non-IR value.
-- `classify`: Classify an eval id as structural or external.
-- `isStructural`: Check whether an eval id names a structural form handled by the kernel.
-- `isExternal`: Check whether an eval id names a non-structural external operation.
-- `isCompoundExternal`: Check whether an eval id names a compound external form such as `all` or `race`.
-- `isEvalNode`: Narrow an unknown value to an eval node.
-- `isFnNode`: Narrow an unknown value to a function-shaped IR node.
+Use these when inspecting unknown values or narrowing types:
+
+- `classifyNode`
+- `classify`
+- `isStructural`
+- `isExternal`
+- `isCompoundExternal`
+- `isEvalNode`
+- `isFnNode`
 
 ### Traversal and transformation
 
-- `walk`: Visit every node in an IR tree with enter/leave hooks and path information.
-- `fold`: Reduce an IR tree to a single value using an algebra over node shapes.
-- `foldWith`: Run a fold with a partially specified algebra layered on top of defaults.
-- `transform`: Produce a rewritten IR tree by replacing nodes during traversal.
-- `collectRefs`: Gather all referenced names that appear anywhere in an expression.
-- `collectExternalIds`: Gather all external eval ids used in an expression tree.
-- `collectFreeRefs`: Gather referenced names that are not bound locally by `Fn` or `Let`.
+Use these to analyze or rewrite IR trees:
+
+- `walk` — visit every node with enter/leave hooks
+- `fold` — reduce an IR tree to a single value
+- `foldWith` — extend a default fold with custom behavior
+- `transform` — rewrite an IR tree during traversal
+- `collectRefs` — gather referenced names
+- `collectExternalIds` — gather external eval ids
+- `collectFreeRefs` — gather references not bound locally by `Fn` or `Let`
 
 ### Developer tooling
 
-- `print`: Render IR into a stable constructor-style string for debugging and tests.
-- `decompile`: Render IR back into readable TypeScript-like source for inspection.
+Use these for debugging, testing, and inspection:
+
+- `print` — stable constructor-style rendering
+- `decompile` — readable TypeScript-like rendering
 
 ## Example
 
@@ -87,28 +119,28 @@ import { Add, Q } from "@tisyn/ir";
 const ir = Add(Q(20), Q(22));
 ```
 
-Function-shaped IR is just data too:
+Function-shaped IR values are data too:
 
 ```ts
-import { Fn, Ref, Add } from "@tisyn/ir";
+import { Add, Fn, Ref } from "@tisyn/ir";
 
 const double = Fn(["x"], Add(Ref("x"), Ref("x")));
 ```
 
 ## Relationship to the Rest of Tisyn
 
-- [`@tisyn/compiler`](../compiler/README.md) lowers authored workflows into these nodes.
-- [`@tisyn/validate`](../validate/README.md) checks that incoming trees match the allowed grammar.
-- [`@tisyn/kernel`](../kernel/README.md) interprets the nodes.
-- [`@tisyn/runtime`](../runtime/README.md) wraps kernel evaluation with replay and dispatch.
+- [`@tisyn/compiler`](../compiler/README.md) lowers authored workflows into IR
+- [`@tisyn/validate`](../validate/README.md) checks that trees match the allowed grammar
+- [`@tisyn/kernel`](../kernel/README.md) interprets the nodes
+- [`@tisyn/runtime`](../runtime/README.md) executes them with replay and dispatch
 
 ## Boundaries
 
-`@tisyn/ir` is intentionally representation-focused. It does not define:
+`@tisyn/ir` is intentionally focused on representation. It does not define:
 
 - validation policy
 - execution semantics
 - durable storage
 - remoting protocol
 
-It gives those packages a common vocabulary.
+Its job is to give the rest of Tisyn a common program format and vocabulary.
