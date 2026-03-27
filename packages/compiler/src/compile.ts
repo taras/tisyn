@@ -98,7 +98,10 @@ export function compile(source: string, options: CompileOptions = {}): CompileRe
  *
  * @throws CompileError if no generator functions found
  */
-export function compileOne(source: string, options: CompileOptions = {}): TisynFn<unknown[], unknown> {
+export function compileOne(
+  source: string,
+  options: CompileOptions = {},
+): TisynFn<unknown[], unknown> {
   const result = compile(source, options);
   const names = Object.keys(result.functions);
   if (names.length === 0) {
