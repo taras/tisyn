@@ -79,7 +79,10 @@ function popFrame(ctx: EmitContext): void {
 }
 
 /** Look up a binding from the top of the stack down. Returns undefined if not found. */
-function lookupBinding(name: string, ctx: EmitContext): { frame: ScopeFrame; info: BindingInfo } | undefined {
+function lookupBinding(
+  name: string,
+  ctx: EmitContext,
+): { frame: ScopeFrame; info: BindingInfo } | undefined {
   for (let i = ctx.scopeStack.length - 1; i >= 0; i--) {
     const frame = ctx.scopeStack[i]!;
     const info = frame.get(name);
@@ -266,10 +269,20 @@ function emitLetReassignment(
   // Validate: must be a let binding in scope
   const found = lookupBinding(lhsName, ctx);
   if (!found) {
-    throw error("E003", `Reassignment of non-let binding or undeclared name is not allowed`, expr, ctx);
+    throw error(
+      "E003",
+      `Reassignment of non-let binding or undeclared name is not allowed`,
+      expr,
+      ctx,
+    );
   }
   if (found.info.kind !== "let") {
-    throw error("E003", `Reassignment of non-let binding or undeclared name is not allowed`, expr, ctx);
+    throw error(
+      "E003",
+      `Reassignment of non-let binding or undeclared name is not allowed`,
+      expr,
+      ctx,
+    );
   }
 
   // Emit the new value expression
@@ -439,7 +452,12 @@ function emitStatementListWithTerminal(
     const lhsName = (expr.left as ts.Identifier).text;
     const found = lookupBinding(lhsName, ctx);
     if (!found || found.info.kind !== "let") {
-      throw new CompileError("E003", "Reassignment of non-let binding or undeclared name is not allowed", 0, 0);
+      throw new CompileError(
+        "E003",
+        "Reassignment of non-let binding or undeclared name is not allowed",
+        0,
+        0,
+      );
     }
     const newValue = emitExpression(expr.right, ctx);
     const newIrName = bumpVersion(lhsName, ctx);
@@ -469,7 +487,12 @@ function emitStatementListWithTerminal(
   if (ts.isBlock(stmt)) {
     pushFrame(ctx);
     try {
-      const blockResult = emitStatementListWithTerminal(Array.from(stmt.statements), 0, ctx, index === stmts.length - 1 ? terminal : rest);
+      const blockResult = emitStatementListWithTerminal(
+        Array.from(stmt.statements),
+        0,
+        ctx,
+        index === stmts.length - 1 ? terminal : rest,
+      );
       if (isLast) return blockResult;
       return Let(ctx.counter.next("discard"), blockResult, rest());
     } finally {
@@ -482,7 +505,12 @@ function emitStatementListWithTerminal(
     return emitIfStatementInList(stmt, stmts, index, ctx, terminal);
   }
 
-  throw new CompileError("E999", `Unsupported statement in branch: ${ts.SyntaxKind[stmt.kind]}`, 0, 0);
+  throw new CompileError(
+    "E999",
+    `Unsupported statement in branch: ${ts.SyntaxKind[stmt.kind]}`,
+    0,
+    0,
+  );
 }
 
 /** Emit a variable statement using a provided rest thunk (for use in branch contexts). */
@@ -638,7 +666,7 @@ function emitIfStatement(
 
   const joinVars = allLetVars.filter((v) => {
     const thenVersion = getVersion(v, dryThenCtx);
-    const elseVersion = stmt.elseStatement ? getVersion(v, dryElseCtx) : snapshot.get(v) ?? 0;
+    const elseVersion = stmt.elseStatement ? getVersion(v, dryElseCtx) : (snapshot.get(v) ?? 0);
     return thenVersion !== (snapshot.get(v) ?? 0) || elseVersion !== (snapshot.get(v) ?? 0);
   });
 
@@ -724,7 +752,11 @@ function compileBranchBodyToJoin(
 }
 
 /** Build a join expression from snapshot versions (else-less case: vars stay at snapshot). */
-function buildJoinExpr(vars: string[], snapshot: Map<string, number>, _: Map<string, number>): Expr {
+function buildJoinExpr(
+  vars: string[],
+  snapshot: Map<string, number>,
+  _: Map<string, number>,
+): Expr {
   if (vars.length === 0) return null as unknown as Expr;
   if (vars.length === 1) {
     const v = vars[0]!;
@@ -943,7 +975,12 @@ function emitLoopStatements(
     const lhsName = (expr.left as ts.Identifier).text;
     const found = lookupBinding(lhsName, ctx);
     if (!found || found.info.kind !== "let") {
-      throw error("E003", "Reassignment of non-let binding or undeclared name is not allowed", stmt, ctx);
+      throw error(
+        "E003",
+        "Reassignment of non-let binding or undeclared name is not allowed",
+        stmt,
+        ctx,
+      );
     }
     const newValue = emitExpression(expr.right, ctx);
     const newIrName = bumpVersion(lhsName, ctx);
@@ -999,7 +1036,11 @@ function emitLoopIfStatement(
         return ifExpr;
       }
       const name = ctx.counter.next("discard");
-      return Let(name, ifExpr, emitLoopStatements(stmts, index + 1, loopName, loopCarriedVars, ctx));
+      return Let(
+        name,
+        ifExpr,
+        emitLoopStatements(stmts, index + 1, loopName, loopCarriedVars, ctx),
+      );
     }
     return ifExpr;
   }
@@ -1023,7 +1064,12 @@ function emitLoopIfStatement(
 }
 
 /** Emit a branch within a Case B loop body. */
-function emitLoopBranch(stmt: ts.Statement, loopName: string, loopCarriedVars: string[], ctx: EmitContext): Expr {
+function emitLoopBranch(
+  stmt: ts.Statement,
+  loopName: string,
+  loopCarriedVars: string[],
+  ctx: EmitContext,
+): Expr {
   const stmts = getBodyStatements(stmt);
   return emitLoopStatements(stmts, 0, loopName, loopCarriedVars, ctx);
 }
@@ -1391,7 +1437,12 @@ function emitBinaryExpression(node: ts.BinaryExpression, ctx: EmitContext): Expr
     // Assignment in expression position → always an error
     // (let reassignment is handled at statement level in emitLetReassignment)
     case ts.SyntaxKind.EqualsToken:
-      throw error("E003", "Reassignment of non-let binding or undeclared name is not allowed", node, ctx);
+      throw error(
+        "E003",
+        "Reassignment of non-let binding or undeclared name is not allowed",
+        node,
+        ctx,
+      );
 
     default:
       throw error(
@@ -1447,7 +1498,12 @@ function emitObjectLiteral(node: ts.ObjectLiteralExpression, ctx: EmitContext): 
         const key = prop.name.text;
         fields[key] = Ref(resolveRef(key, ctx));
       } else {
-        throw error("E999", "Only property assignments are supported in object literals", prop, ctx);
+        throw error(
+          "E999",
+          "Only property assignments are supported in object literals",
+          prop,
+          ctx,
+        );
       }
     }
     return Construct(fields);
@@ -1592,7 +1648,12 @@ function checkUnsupportedExpression(node: ts.Expression, ctx: EmitContext): void
   if (ts.isCallExpression(node)) {
     for (const arg of node.arguments) {
       if (ts.isSpreadElement(arg)) {
-        throw error("E032", "Spread element outside array or object literal is not allowed", arg, ctx);
+        throw error(
+          "E032",
+          "Spread element outside array or object literal is not allowed",
+          arg,
+          ctx,
+        );
       }
     }
   }
@@ -1682,8 +1743,15 @@ function checkUnsupportedExpression(node: ts.Expression, ctx: EmitContext): void
       }
       // Mutation methods → E031
       const MUTATION_METHODS = new Set([
-        "push", "pop", "splice", "shift", "unshift",
-        "sort", "reverse", "fill", "copyWithin",
+        "push",
+        "pop",
+        "splice",
+        "shift",
+        "unshift",
+        "sort",
+        "reverse",
+        "fill",
+        "copyWithin",
       ]);
       if (MUTATION_METHODS.has(callee.name.text)) {
         throw error("E031", "Mutation method call is not allowed", node, ctx);

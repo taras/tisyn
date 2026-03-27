@@ -571,15 +571,15 @@ describe("SSA: let declarations and reassignment", () => {
   });
 
   it("rejects reassignment to undeclared name (E003)", () => {
-    expect(() =>
-      compileOne(`function* f(): Workflow<any> { x = 2; return x; }`),
-    ).toThrow(CompileError);
+    expect(() => compileOne(`function* f(): Workflow<any> { x = 2; return x; }`)).toThrow(
+      CompileError,
+    );
   });
 
   it("rejects reassignment to function param (E003)", () => {
-    expect(() =>
-      compileOne(`function* f(x: number): Workflow<any> { x = 2; return x; }`),
-    ).toThrow(CompileError);
+    expect(() => compileOne(`function* f(x: number): Workflow<any> { x = 2; return x; }`)).toThrow(
+      CompileError,
+    );
   });
 });
 
