@@ -11,11 +11,11 @@ import { Call } from "@tisyn/ir";
 import { execute } from "@tisyn/runtime";
 import { compileOne } from "./index.js";
 
-describe("Bug 1 — while loop __last accumulator", () => {
+describe("while loop expression value", () => {
   it("returns the last body result when the condition becomes false", function* () {
-    // Before the fix: emitLoopBody emitted If(cond, body) with no else branch,
-    // so the loop expression evaluated to null when cond became false.
-    // After the fix: If(cond, body, Ref(__last)) propagates the last computed value.
+    // The condition-false exit of the loop Fn must propagate the last computed
+    // body value, not null. The __last accumulator param carries it forward so
+    // If(cond, body, Ref(__last)) returns it when the loop exits normally.
     const ir = compileOne(`
       function* test(): Workflow<unknown> {
         let x = 0;
@@ -32,12 +32,11 @@ describe("Bug 1 — while loop __last accumulator", () => {
   });
 });
 
-describe("Bug 2 — nested if SSA join inside branch compilation", () => {
+describe("SSA join for nested if inside branch", () => {
   it("produces the post-join value for a variable reassigned in a nested if", function* () {
-    // Before the fix: emitIfStatementInList "neither terminates" path compiled the
-    // inner if using emitStatementBodyWithCtx (no join synthesis), so the join
-    // expression for x evaluated to null instead of 5.
-    // After the fix: SSA join synthesis is applied, producing the correct join value.
+    // A nested if-statement in the "neither branch terminates" path must still
+    // synthesize an SSA join so the variable's post-branch version is visible
+    // to subsequent statements.
     const ir = compileOne(`
       function* test(): Workflow<unknown> {
         let x = 0;
@@ -57,14 +56,12 @@ describe("Bug 2 — nested if SSA join inside branch compilation", () => {
   });
 });
 
-describe("Bug 4 — asymmetric branch SSA version leak in emitIfStatementInList", () => {
+describe("asymmetric branch SSA isolation", () => {
   it("thenTerminates && !elseTerminates: fallthrough does not reference unbound version", function* () {
-    // Before the fix: compiling the terminating then-branch against the shared ctx
-    // bumped x to x_1 in ctx. The else/fallthrough was then compiled against that
-    // mutated ctx and emitted Ref("x_1"), which is only bound inside the then-branch
-    // Let chain — causing an "Unbound variable" runtime error.
-    // After the fix: the then-branch is compiled in a cloned context so ctx is
-    // unchanged when the else/fallthrough is compiled.
+    // A terminating then-branch must be compiled in a cloned SSA context.
+    // If the shared context is mutated instead, the fallthrough path emits a
+    // versioned ref that is only bound inside the then Let chain, causing an
+    // "Unbound variable" error at runtime.
     const ir = compileOne(`
       function* test(): Workflow<unknown> {
         let x = 0;
@@ -85,13 +82,10 @@ describe("Bug 4 — asymmetric branch SSA version leak in emitIfStatementInList"
     }
   });
 
-  it("!thenTerminates && elseTerminates: terminating else does not see then's bumped versions", function* () {
-    // Before the fix: then-branch (falling-through) was compiled first, bumping x to
-    // x_1. The terminating else was then compiled against that mutated ctx and
-    // referenced Ref("x_1") — only bound in the then Let chain — causing an
-    // "Unbound variable" runtime error when the else branch was taken.
-    // After the fix: elseCtx is cloned from the pre-then ctx so the else branch
-    // always sees the original x_0.
+  it("!thenTerminates && elseTerminates: terminating else uses pre-then SSA versions", function* () {
+    // The else context must be cloned from the pre-then state. If it is cloned
+    // after the then-branch mutates the shared context, the else branch emits a
+    // ref only bound in the then Let chain and fails at runtime.
     const ir = compileOne(`
       function* test(): Workflow<unknown> {
         let x = 0;
@@ -114,17 +108,16 @@ describe("Bug 4 — asymmetric branch SSA version leak in emitIfStatementInList"
   });
 });
 
-describe("Bug 5 — loop if with per-branch SSA isolation", () => {
+describe("per-branch SSA isolation inside while loop body", () => {
   it("if/else inside while loop does not reference versions from the other branch", function* () {
-    // Before the fix: emitLoopIfStatement compiled the then-branch against the shared
-    // ctx (bumping x to x_1), then compiled the else-branch against the same mutated
-    // ctx. The else-branch emitted Ref("x_1") — only bound in the then Let chain —
-    // causing an "Unbound variable" runtime error when the else branch executed.
-    // After the fix: each branch is compiled in a cloned context with the remaining
-    // loop body inlined, so both branches independently track SSA versions.
+    // Each branch of an if inside a loop body must be compiled in its own cloned
+    // SSA context with the remaining loop statements inlined. Sharing the context
+    // between branches causes one branch to emit a ref that is only bound inside
+    // the other branch's Let chain.
+    //
     // Note: no explicit `return x` after the while — the while expression itself
-    // is the function's return value (the last_N accumulator when the condition
-    // becomes false). Adding `return x` would return the outer x_0 = 0 instead.
+    // is the function's return value (the __last accumulator when the condition
+    // becomes false).
     const ir = compileOne(`
       function* test(): Workflow<unknown> {
         let x = 0;
@@ -145,15 +138,12 @@ describe("Bug 5 — loop if with per-branch SSA isolation", () => {
   });
 });
 
-describe("Bug 6 — nested block continuation duplicated in emitStatementListWithTerminal", () => {
-  it("continuation after a nested block executes exactly once", function* () {
-    // Before the fix: emitStatementListWithTerminal compiled a nested block with
-    // `rest` as the terminal (so blockResult already ended with rest()), then wrapped
-    // it in Let(discard, blockResult, rest()) — calling rest() a second time. Any
-    // branch path with a nested block followed by more statements would therefore
-    // execute the suffix twice.
-    // After the fix: blockResult is returned directly; the embedded terminal already
-    // provides the single continuation.
+describe("nested block continuation executes exactly once", () => {
+  it("statements after a nested block inside a branch run exactly once", function* () {
+    // When a nested block is embedded in a statement list that has a terminal
+    // continuation, the block's result already contains that continuation. The
+    // outer list must return the block result directly rather than wrapping it in
+    // another Let(..., rest()), which would invoke the continuation twice.
     const ir = compileOne(`
       function* test(): Workflow<unknown> {
         let x = 0;
@@ -174,12 +164,11 @@ describe("Bug 6 — nested block continuation duplicated in emitStatementListWit
   });
 });
 
-describe("Bug 7 — post-loop carried state rebinding: single var", () => {
-  it("outer scope sees the final loop value after loop exits", function* () {
-    // Before the fix: the loop Fn returned the last body result (x_N) but never
-    // rebound the outer SSA name. The outer `return x` emitted Ref("x_0") = 0.
-    // After the fix: the loop result struct is destructured and x is rebound in
-    // the outer scope before the continuation runs.
+describe("post-loop carried state is visible after loop exits", () => {
+  it("single loop-carried variable is rebound in outer scope", function* () {
+    // The loop Fn executes in its own SSA scope. After it returns, the outer
+    // scope must destructure the result struct and rebind each loop-carried
+    // variable to its final value before the continuation runs.
     const ir = compileOne(`
       function* test(): Workflow<unknown> {
         let x = 0;
@@ -193,10 +182,8 @@ describe("Bug 7 — post-loop carried state rebinding: single var", () => {
       expect(result.value).toBe(3);
     }
   });
-});
 
-describe("Bug 7 — post-loop carried state rebinding: multiple vars", () => {
-  it("all loop-carried vars are rebound in outer scope after loop exits", function* () {
+  it("all loop-carried variables are rebound when multiple vars are updated", function* () {
     const ir = compileOne(`
       function* test(): Workflow<unknown> {
         let x = 0;
@@ -214,10 +201,8 @@ describe("Bug 7 — post-loop carried state rebinding: multiple vars", () => {
       expect(result.value).toBe(16);
     }
   });
-});
 
-describe("Bug 7 — post-loop carried state rebinding: if/else body", () => {
-  it("carried var updated through if/else inside loop is rebound after loop exits", function* () {
+  it("carried variable updated through if/else body is correctly rebound", function* () {
     const ir = compileOne(`
       function* test(): Workflow<unknown> {
         let x = 0;
@@ -235,12 +220,10 @@ describe("Bug 7 — post-loop carried state rebinding: if/else body", () => {
   });
 });
 
-describe("Bug 7 — early return with no loop-carried vars, not last statement", () => {
-  it("early return short-circuits post-loop continuation (Bug B)", function* () {
-    // Before the fix: the loop result was discarded and rest() always ran.
-    // When x > 0 was true on the first iteration, `return x` fired but the
-    // outer code discarded it and executed `return 0` instead.
-    // After the fix: the __tag dispatch short-circuits rest() on early return.
+describe("early return from while loop bypasses post-loop continuation", () => {
+  it("early return short-circuits following statements when loop has no carried vars", function* () {
+    // An early return inside the loop must propagate as the function's return
+    // value. The post-loop continuation must not execute.
     const ir = compileOne(`
       function* test(): Workflow<unknown> {
         let x = 1;
@@ -256,10 +239,8 @@ describe("Bug 7 — early return with no loop-carried vars, not last statement",
       expect(result.value).toBe(1);
     }
   });
-});
 
-describe("Bug 7 — early return inside loop, loop is last statement", () => {
-  it("early return value is the function result when loop is last", function* () {
+  it("early return value is the function result when the loop is the last statement", function* () {
     const ir = compileOne(`
       function* test(): Workflow<unknown> {
         let x = 0;
@@ -275,10 +256,8 @@ describe("Bug 7 — early return inside loop, loop is last statement", () => {
       expect(result.value).toBe(5);
     }
   });
-});
 
-describe("Bug 7 — early return with carried vars, not last statement", () => {
-  it("early return short-circuits post-loop code even when loop has carried vars", function* () {
+  it("early return short-circuits post-loop code even when the loop has carried vars", function* () {
     const ir = compileOne(`
       function* test(): Workflow<unknown> {
         let x = 0;
@@ -295,13 +274,11 @@ describe("Bug 7 — early return with carried vars, not last statement", () => {
       expect(result.value).toBe(5);
     }
   });
-});
 
-describe("Bug 7 — while(true) early return, loop is last statement", () => {
-  it("early return value propagates as function result", function* () {
-    // Before the fix: while(true) set lastParamName=null → needsPack=false → early
-    // return was a raw scalar. For isLast the scalar happened to be the right value,
-    // but when loop has carried vars the outer code tried Get(scalar,"x") → undefined.
+  it("while(true): early return value is the function result when loop is last", function* () {
+    // For while(true) with carried vars, the loop Fn has no last-body accumulator
+    // param (no condition-false exit). The early return value must still be
+    // correctly extracted from the packed result struct.
     const ir = compileOne(`
       function* test(): Workflow<unknown> {
         let x = 0;
@@ -317,15 +294,11 @@ describe("Bug 7 — while(true) early return, loop is last statement", () => {
       expect(result.value).toBe(3);
     }
   });
-});
 
-describe("Bug 7 — while(true) early return, not last statement (user example)", () => {
-  it("early return short-circuits post-loop code in while(true) with carried vars", function* () {
-    // Before the fix: needsPack was false for while(true) (lastParamName===null).
-    // For !isLast with carried vars the outer code went into the rebind branch and
-    // called Get(scalar,"x") on the raw early-return value → undefined.
-    // After the fix: needsPack = hasReturn regardless of lastParamName, so early
-    // returns are tagged structs and the __tag dispatch short-circuits rest().
+  it("while(true): early return short-circuits following statements when loop has carried vars", function* () {
+    // For while(true), needsPack must be true whenever the caller needs to
+    // dispatch on the exit path, even though lastParamName is null (no
+    // condition-false exit). The __tag dispatch must prevent rest() from running.
     const ir = compileOne(`
       function* test(): Workflow<unknown> {
         let x = 0;

@@ -36,7 +36,7 @@ function getHydrate(
     | undefined;
 }
 
-describe("BrowserSessionManager history accumulation (Bug 3)", () => {
+describe("BrowserSessionManager transcript hydration", () => {
   it("non-owner client receives current transcript after a completed turn", function* () {
     const session = new BrowserSessionManager([]);
 
