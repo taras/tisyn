@@ -1,51 +1,53 @@
 # `@tisyn/agent`
 
-`@tisyn/agent` is the package that turns "a thing the runtime may call" into a typed contract. It gives Tisyn a stable effect boundary: workflows compile down to effect IDs, and agent declarations and implementations give those effect IDs names, payload shapes, and handlers.
+`@tisyn/agent` defines the typed capability boundary between Tisyn workflows and the work that actually gets performed. It turns effectful calls into explicit contracts: named agent boundaries, typed operation payloads, and handlers the runtime can dispatch locally or across a transport boundary.
+
+If `@tisyn/ir` describes **what work should happen**, `@tisyn/agent` describes **who can do it and how it is called**.
 
 ## Where It Fits
 
 This package sits between authored workflow logic and concrete side effects.
 
-- The compiler lowers `yield* Service().method(...)` calls into effectful IR.
-- The runtime dispatches those effects through installed agent handlers.
-- The transport layer can expose the same declarations across process or network boundaries.
+- The compiler lowers authored calls like `yield* Service().method(...)` into effectful IR.
+- The runtime resolves those effects through installed agent handlers.
+- The transport layer can expose the same declarations across process, worker, or network boundaries.
 
-If `@tisyn/ir` is the language of workflows, `@tisyn/agent` is the language of capabilities.
+`@tisyn/agent` is the capability layer that gives effect IDs stable names, payload shapes, and implementations.
 
 ## Core Concepts
 
-- `agent(id, operations)`: declares a named capability boundary.
-- `operation<Spec>()`: declares one typed operation on that boundary.
-- `implementAgent()`: binds handlers to a declaration.
-- `dispatch()` / `Dispatch`: Effection middleware that routes invocations.
-- `invoke()`: executes a declared operation against the current dispatch stack.
+- `agent(id, operations)` declares a named capability boundary.
+- `operation<Spec>()` declares one typed operation on that boundary.
+- `implementAgent()` binds handlers to a declaration.
+- `dispatch()` / `Dispatch` provide Effection middleware for routing invocations.
+- `invoke()` executes a declared operation against the current dispatch stack.
 
-Declarations are pure metadata plus typed call helpers. They do not execute anything by themselves.
+Agent declarations are typed metadata plus call helpers. They describe invocations, but do not execute anything by themselves.
 
-## Main APIs
+## Public API
 
-The current public surface from `src/index.ts` is:
+The public surface exported from `src/index.ts` includes:
 
-- `agent`: Declare a named agent boundary and its available operations.
-- `operation`: Declare the typed input/output contract for one operation on an agent.
-- `implementAgent`: Bind generator handlers to a declaration so the runtime can dispatch to it.
-- `Dispatch`: Represent the Effection middleware contract that routes invocations to handlers.
-- `dispatch`: Install dispatch middleware into the current Effection scope.
-- `invoke`: Execute a declared operation against the currently installed dispatch stack.
+- `agent` — declare a named agent boundary and its available operations
+- `operation` — declare the typed input/output contract for one operation
+- `implementAgent` — bind handlers to a declaration so the runtime can dispatch them
+- `Dispatch` — represent the Effection middleware contract for invocation routing
+- `dispatch` — install dispatch middleware into the current Effection scope
+- `invoke` — execute a declared operation against the current dispatch stack
 
 Important exported types:
 
-- `OperationSpec`: Describe the typed input and result shape of a declared operation.
-- `DeclaredAgent`: Represent the callable declaration object returned by `agent()`.
-- `AgentDeclaration`: Name the structural type for a declared agent contract.
-- `AgentImplementation`: Represent a declaration paired with concrete handlers and install logic.
-- `ImplementationHandlers`: Type the handler map expected by `implementAgent()`.
-- `Invocation`: Represent one concrete operation call ready for dispatch.
-- `ArgsOf`: Extract the input shape from an operation declaration.
-- `ResultOf`: Extract the result type from an operation declaration.
-- `Workflow`: Represent the authored workflow return type used in ambient contract declarations.
+- `OperationSpec` — describe the typed input and result shape of an operation
+- `DeclaredAgent` — represent the callable declaration returned by `agent()`
+- `AgentDeclaration` — structural type for a declared agent contract
+- `AgentImplementation` — declaration paired with handlers and install logic
+- `ImplementationHandlers` — type the handler map expected by `implementAgent()`
+- `Invocation` — represent one concrete operation call ready for dispatch
+- `ArgsOf` — extract the input shape from an operation declaration
+- `ResultOf` — extract the result type from an operation declaration
+- `Workflow` — represent the authored workflow return type used in ambient declarations
 
-## Define a Declaration
+## Declare an Agent
 
 ```ts
 import { agent, operation } from "@tisyn/agent";
@@ -62,7 +64,7 @@ Calling a declared operation produces an invocation description. It is a typed e
 const request = orders.fetch({ input: { orderId: "ord-1" } });
 ```
 
-## Bind Handlers
+## Implement Handlers
 
 ```ts
 import { implementAgent } from "@tisyn/agent";
@@ -80,7 +82,7 @@ yield* ordersImpl.install();
 
 `install()` registers dispatch middleware in the current Effection scope. Once installed, `invoke()` and the Tisyn runtime can route matching invocations to these handlers.
 
-## Invoke Operations
+## Invoke an Operation
 
 ```ts
 import { invoke } from "@tisyn/agent";
@@ -90,10 +92,10 @@ const order = yield* invoke(
 );
 ```
 
-This is useful in two places:
+This is useful when:
 
-- application code that wants to call an installed agent directly
-- agent implementations that delegate to other agents
+- application code wants to call an installed agent directly
+- one agent implementation delegates work to another
 
 ```ts
 const checkoutImpl = implementAgent(checkout, {
@@ -101,25 +103,43 @@ const checkoutImpl = implementAgent(checkout, {
     const order = yield* invoke(
       orders.fetch({ input: { orderId: input.orderId } }),
     );
+
     return { ok: order.total > 0 };
   },
 });
 ```
 
+## Mental Model
+
+An agent declaration gives Tisyn a typed, named capability boundary.
+
+- **Declarations** define what operations exist and what they accept or return.
+- **Invocations** describe one requested operation call.
+- **Implementations** attach concrete handlers to those declarations.
+- **Dispatch middleware** decides how invocations are routed.
+
+That routing can stay local, or it can be forwarded through another layer such as a worker or network transport. `@tisyn/agent` stays focused on the contract and dispatch shape rather than the transport itself.
+
 ## Relationship to the Rest of Tisyn
 
-- Pair `@tisyn/agent` with [`@tisyn/runtime`](../runtime/README.md) when you want Tisyn IR to dispatch real effects.
-- Pair it with [`@tisyn/transport`](../transport/README.md) when those effects must cross a process, worker, or network boundary.
-- [`@tisyn/compiler`](../compiler/README.md) discovers effect usage from authored workflow source, but does not execute anything.
-- [`@tisyn/protocol`](../protocol/README.md) defines wire messages for remote execution, but `@tisyn/agent` itself stays protocol-agnostic.
+- Use `@tisyn/agent` with [`@tisyn/runtime`](../runtime/README.md) when executing IR against real effect handlers.
+- Use it with [`@tisyn/transport`](../transport/README.md) when those handlers must be reached across process, worker, or network boundaries.
+- [`@tisyn/compiler`](../compiler/README.md) discovers effect usage from authored workflow source, but does not execute effects.
+- [`@tisyn/protocol`](../protocol/README.md) defines wire messages for remote execution, but `@tisyn/agent` itself remains protocol-agnostic.
 
-## Boundaries
+## What This Package Does Not Define
 
 `@tisyn/agent` does not define:
 
 - the IR language
 - durable execution
 - replay semantics
-- network protocol messages
+- transport or protocol messages
 
-It defines the typed capability layer that those other packages rely on.
+It defines the typed capability layer that those systems rely on.
+
+## Summary
+
+Use `@tisyn/agent` when you want effectful workflow calls to become explicit, typed capability contracts.
+
+It gives Tisyn a stable boundary between workflow intent and concrete execution: declarations name the capability, operations define the payload shape, implementations provide handlers, and dispatch makes invocation routable wherever the work actually happens.
