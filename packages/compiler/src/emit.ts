@@ -1041,13 +1041,31 @@ function emitLoopBody(
 
   if (isTrueCondition) {
     // while(true) — no condition check needed, just body + recurse
-    return emitLoopStatements(stmts, 0, loopName, loopCarriedVars, lastParamName, ctx, null, needsPack);
+    return emitLoopStatements(
+      stmts,
+      0,
+      loopName,
+      loopCarriedVars,
+      lastParamName,
+      ctx,
+      null,
+      needsPack,
+    );
   }
 
   // Evaluate condition BEFORE body so it uses parameter versions (not body-bumped ones).
   // Body statements mutate ctx (bumping loop-carried var versions), so order matters.
   const condExpr = emitExpression(condition, ctx);
-  const bodyExpr = emitLoopStatements(stmts, 0, loopName, loopCarriedVars, lastParamName, ctx, null, needsPack);
+  const bodyExpr = emitLoopStatements(
+    stmts,
+    0,
+    loopName,
+    loopCarriedVars,
+    lastParamName,
+    ctx,
+    null,
+    needsPack,
+  );
 
   if (lastParamName !== null) {
     const needsRebind = loopCarriedVars.length > 0;
@@ -1103,7 +1121,16 @@ function emitLoopStatements(
 
   const stmt = stmts[index]!;
   const rest = (newBound: string | null) =>
-    emitLoopStatements(stmts, index + 1, loopName, loopCarriedVars, lastParamName, ctx, newBound, needsPack);
+    emitLoopStatements(
+      stmts,
+      index + 1,
+      loopName,
+      loopCarriedVars,
+      lastParamName,
+      ctx,
+      newBound,
+      needsPack,
+    );
 
   // Return → base case (value propagates out)
   if (ts.isReturnStatement(stmt)) {
@@ -1167,7 +1194,16 @@ function emitLoopStatements(
 
   // If with return → early return pattern
   if (ts.isIfStatement(stmt)) {
-    return emitLoopIfStatement(stmt, stmts, index, loopName, loopCarriedVars, lastParamName, ctx, needsPack);
+    return emitLoopIfStatement(
+      stmt,
+      stmts,
+      index,
+      loopName,
+      loopCarriedVars,
+      lastParamName,
+      ctx,
+      needsPack,
+    );
   }
 
   // Expression statement
