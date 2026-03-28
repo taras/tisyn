@@ -1,16 +1,19 @@
 {
-  "name": "@tisyn/compiler",
-  "version": "0.2.0",
+  "name": "@tisyn/cli",
+  "version": "0.0.0",
   "license": "UNLICENSED",
   "repository": {
     "type": "git",
     "url": "https://github.com/taras/tisyn.git",
-    "directory": "packages/compiler"
+    "directory": "packages/cli"
   },
   "files": [
     "dist"
   ],
   "type": "module",
+  "bin": {
+    "tsn": "./dist/cli.js"
+  },
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
   "exports": {
@@ -27,14 +30,15 @@
     "test": "vitest run"
   },
   "dependencies": {
-    "@tisyn/ir": "workspace:*",
-    "@tisyn/validate": "workspace:*",
-    "typescript": "~5.8.0"
+    "@tisyn/compiler": "workspace:*",
+    "configliere": "^0.3.0",
+    "effection": "4.0.2",
+    "typescript": "~5.8.0",
+    "zod": "^3"
   },
   "devDependencies": {
     "@effectionx/vitest": "^0.3.0",
-    "@tisyn/runtime": "workspace:*",
-    "effection": "^3 || ^4",
+    "@types/node": "^25.5.0",
     "vitest": "^4"
   }
 }
