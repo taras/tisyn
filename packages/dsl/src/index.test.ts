@@ -419,7 +419,7 @@ describe("DSL-095: error position is accurate", () => {
   it("reports error on line 3 for @@@", () => {
     const result = parseDSLSafe('Let("x",\n  1,\n  @@@)');
     expect(result.ok).toBe(false);
-    if (!result.ok) expect(result.error.line).toBe(3);
+    if (!result.ok) expect((result.error as DSLParseError).line).toBe(3);
   });
 });
 
@@ -541,7 +541,7 @@ describe("DSLParseError carries position properties", () => {
     const result = parseDSLSafe("@");
     expect(result.ok).toBe(false);
     if (!result.ok) {
-      const e = result.error;
+      const e = result.error as DSLParseError;
       expect(e).toBeInstanceOf(DSLParseError);
       expect(e.line).toBeGreaterThanOrEqual(1);
       expect(e.column).toBeGreaterThanOrEqual(1);
@@ -602,7 +602,7 @@ describe("DSL-205: whitespace-only differences", () => {
     expect(relaxed.ok).toBe(true);
     expect(compact.ok).toBe(true);
     if (relaxed.ok && compact.ok) {
-      expect(relaxed.ir).toEqual(compact.ir);
+      expect(relaxed.value).toEqual(compact.value);
     }
   });
 });
