@@ -14,6 +14,9 @@ export type {
   FrameInfo,
 } from "./types.js";
 
+export { print } from "@tisyn/ir";
+export type { PrintOptions } from "@tisyn/ir";
+
 /**
  * Parse a DSL string and return the IR. Throws `DSLParseError` on failure.
  *

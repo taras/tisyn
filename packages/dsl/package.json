@@ -1,11 +1,11 @@
 {
-  "name": "@tisyn/dsl-parser",
+  "name": "@tisyn/dsl",
   "version": "0.1.0",
   "license": "UNLICENSED",
   "repository": {
     "type": "git",
     "url": "https://github.com/taras/tisyn.git",
-    "directory": "packages/dsl-parser"
+    "directory": "packages/dsl"
   },
   "files": [
     "dist"

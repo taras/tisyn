@@ -707,7 +707,7 @@ it evaluates.
 
 ````
 @tisyn/compiler  ──→ TisynExpr ──→ @tisyn/validate ──→ @tisyn/kernel
-@tisyn/dsl-parser ──→ TisynExpr ──→ @tisyn/validate ──→ @tisyn/kernel
+@tisyn/dsl ──→ TisynExpr ──→ @tisyn/validate ──→ @tisyn/kernel
 ````
 
 ### 9.5 Security Boundary

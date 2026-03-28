@@ -1,11 +1,11 @@
-# @tisyn/dsl-parser
+# @tisyn/dsl
 
 Parser for the Tisyn Constructor DSL. Converts constructor-call text into Tisyn IR by calling the real `@tisyn/ir` constructor functions. The parser is the inverse of `@tisyn/ir#print()`.
 
 ## API
 
 ```typescript
-import { parseDSL, parseDSLSafe, parseDSLWithRecovery, tryAutoClose, DSLParseError } from "@tisyn/dsl-parser";
+import { parseDSL, parseDSLSafe, parseDSLWithRecovery, tryAutoClose, DSLParseError } from "@tisyn/dsl";
 ```
 
 ### `parseDSL(source: string): TisynExpr`
