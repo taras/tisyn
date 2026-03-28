@@ -600,7 +600,7 @@ The script becomes:
 
 ```json
 {
-  "build:test-workflows": "tsn build -c test/browser/tisyn.config.ts"
+  "build:test-workflows": "tsn build -c tisyn.config.ts"
 }
 ```
 
@@ -656,7 +656,7 @@ packages/cli/
   "license": "UNLICENSED",
   "type": "module",
   "bin": {
-    "tsn": "./dist/main.js"
+    "tsn": "./dist/cli.js"
   },
   "exports": {
     ".": {

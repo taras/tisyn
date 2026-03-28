@@ -37,6 +37,7 @@
     "zod": "^3"
   },
   "devDependencies": {
+    "@effectionx/process": "^0.7.4",
     "@effectionx/vitest": "^0.3.0",
     "@types/node": "^25.5.0",
     "vitest": "^4"

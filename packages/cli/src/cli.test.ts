@@ -8,9 +8,12 @@
 import { describe, it } from "@effectionx/vitest";
 import { expect, afterEach } from "vitest";
 import { call } from "effection";
+import { exec } from "@effectionx/process";
 import { mkdtemp, writeFile, mkdir, rm, readFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { createRequire } from "node:module";
+import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
 import { topoSort, runGenerate, runBuild } from "./compile.js";
 import { discoverConfig, validateAndResolveConfig, ConfigError } from "./config.js";
 
@@ -269,5 +272,41 @@ export function* greet() {
     const outB = yield* call(() => readFile(join(dir, "out-b.ts"), "utf-8"));
     expect(outA).toContain("Auto-generated");
     expect(outB).toContain("Auto-generated");
+  });
+});
+
+// ── CLI entry surface ─────────────────────────────────────────────────────────
+
+const CLI_BIN = join(dirname(fileURLToPath(import.meta.url)), "..", "dist", "cli.js");
+
+describe("CLI entry surface", () => {
+  it("--help exits 0 and prints usage", function* () {
+    const result = yield* exec("node", { arguments: [CLI_BIN, "--help"] }).join();
+    expect(result.code ?? 0).toBe(0);
+    expect(result.stdout).toContain("tsn");
+  });
+
+  it("--version exits 0 and prints the package version string", function* () {
+    const req = createRequire(import.meta.url);
+    const { version } = req("../package.json") as { version: string };
+    const result = yield* exec("node", { arguments: [CLI_BIN, "--version"] }).join();
+    expect(result.code ?? 0).toBe(0);
+    expect(result.stdout.trim()).toBe(version);
+  });
+
+  it("generate --help exits 0 and prints command-level help", function* () {
+    const result = yield* exec("node", { arguments: [CLI_BIN, "generate", "--help"] }).join();
+    expect(result.code ?? 0).toBe(0);
+    expect(result.stdout).toContain("generate");
+  });
+
+  it("unknown subcommand exits 2", function* () {
+    const result = yield* exec("node", { arguments: [CLI_BIN, "notacommand"] }).join();
+    expect(result.code).toBe(2);
+  });
+
+  it("generate with missing input exits non-zero", function* () {
+    const result = yield* exec("node", { arguments: [CLI_BIN, "generate"] }).join();
+    expect(result.code).not.toBe(0);
   });
 });

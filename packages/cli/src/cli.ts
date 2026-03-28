@@ -2,7 +2,7 @@
 
 import { createRequire } from "node:module";
 import { dirname, resolve } from "node:path";
-import { main } from "effection";
+import { exit, main } from "effection";
 import { cli, commands, field, object, program } from "configliere";
 import { runBuild, runGenerate, formatCompileError } from "./compile.js";
 import { ConfigError, discoverConfig, loadConfig, validateAndResolveConfig } from "./config.js";
@@ -77,7 +77,7 @@ await main(function* () {
 
   if (!parsed.ok) {
     console.error(parsed.error.message);
-    process.exitCode = 2;
+    yield* exit(2);
     return;
   }
 
@@ -87,7 +87,7 @@ await main(function* () {
   }
 
   if (parsed.value.version) {
-    console.log(parsed.value.version);
+    console.log(version);
     return;
   }
 
@@ -117,18 +117,18 @@ await main(function* () {
   } catch (error) {
     if (error instanceof ConfigError) {
       console.error(error.message);
-      process.exitCode = 2;
+      yield* exit(2);
       return;
     }
 
     if (error instanceof Error) {
       console.error(formatCompileError(error));
-      process.exitCode = 1;
+      yield* exit(1);
       return;
     }
 
     console.error(String(error));
-    process.exitCode = 3;
+    yield* exit(3);
   }
 });
 
