@@ -27,6 +27,7 @@
   },
   "scripts": {
     "build": "tsc --build",
+    "pretest": "tsc --build",
     "test": "vitest run"
   },
   "dependencies": {

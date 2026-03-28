@@ -24,16 +24,20 @@ export function* runGenerate(options: GenerateCommandOptions, cwd: string): Oper
   );
 
   const inputRelPath = relative(cwd, inputPath) || inputPath;
+  const filename = options.output
+    ? relative(cwd, resolve(cwd, options.output)) || options.output
+    : inputRelPath;
+
   let result: GenerateResult;
   try {
     result = generateWorkflowModule(assembled.source, {
-      filename: inputRelPath,
+      filename,
       validate: options.validate,
       workflowFormat: options.format,
     });
   } catch (err) {
     if (err instanceof CompileError) {
-      (err as CompileError & { inputFile: string }).inputFile = inputRelPath;
+      (err as CompileError & { inputFile: string }).inputFile = filename;
     }
     throw err;
   }
@@ -92,17 +96,17 @@ export function* runBuild(
       }),
     );
 
-    const inputRelPath = relative(configDir, pass.input) || pass.input;
+    const filename = relative(configDir, pass.output) || pass.output;
     let result: GenerateResult;
     try {
       result = generateWorkflowModule(assembled.source, {
-        filename: inputRelPath,
+        filename,
         validate: !pass.noValidate,
         workflowFormat: pass.format,
       });
     } catch (err) {
       if (err instanceof CompileError) {
-        (err as CompileError & { inputFile: string }).inputFile = inputRelPath;
+        (err as CompileError & { inputFile: string }).inputFile = filename;
       }
       throw err;
     }
