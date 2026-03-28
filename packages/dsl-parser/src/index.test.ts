@@ -473,6 +473,22 @@ describe("DSL-111: cannot recover mismatched delimiters", () => {
   });
 });
 
+describe("DSL-113: nested delimiters inside one arg do not inflate pending count", () => {
+  // Let("x", [[1 has bracketDepth=2 but only 2 args will be present after repair —
+  // the two open [ are nested and produce one completed expression, not two.
+  it("parseDSLSafe: recovery.autoClosable is false", () => {
+    const result = parseDSLSafe('Let("x", [[1');
+    expect(result.ok).toBe(false);
+    if (!result.ok) expect(result.recovery?.autoClosable).toBe(false);
+  });
+
+  it("parseDSLWithRecovery: does not attempt repair and returns failure", () => {
+    const result = parseDSLWithRecovery('Let("x", [[1');
+    expect(result.ok).toBe(false);
+    if (!result.ok) expect(result.repaired).toBeUndefined();
+  });
+});
+
 describe("DSL-112: already balanced input passes through", () => {
   it("tryAutoClose returns source unchanged when balanced", () => {
     expect(tryAutoClose("Add(1, 2)")).toBe("Add(1, 2)");

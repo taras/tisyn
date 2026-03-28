@@ -61,8 +61,10 @@ function buildRecoveryInfo(state: ParserState, expected: string): RecoveryInfo {
   // Simulate closing all pending delimiters innermost-first to determine
   // whether the repaired source would satisfy arity for every open frame.
   //
-  // Each open bracket or brace represents one in-progress expression that will
-  // complete as an argument to the current innermost frame when closed.
+  // All pending open brackets/braces are nested inside a single in-progress
+  // argument — no matter how many there are, they will produce exactly one
+  // completed expression when closed. So pending starts at 0 or 1, never more.
+  //
   // Each completed inner frame contributes +1 to the frame that contains it.
   //
   // Walk from innermost to outermost:
@@ -70,7 +72,7 @@ function buildRecoveryInfo(state: ParserState, expected: string): RecoveryInfo {
   //   if effective >= frame.minArgs → frame is closeable; contributes 1 outward
   //   else → cannot close without inventing missing args → not auto-closable
   let autoClosable = true;
-  let pending = state.bracketDepth + state.braceDepth;
+  let pending = state.bracketDepth + state.braceDepth > 0 ? 1 : 0;
   for (let i = state.frameStack.length - 1; i >= 0; i--) {
     const f = state.frameStack[i]!;
     const effective = f.argsReceived + pending;
