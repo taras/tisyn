@@ -36,6 +36,7 @@ const STRUCTURAL_IDS = new Set([
   "throw",
   "concat-arrays",
   "merge-objects",
+  "try",
 ]);
 
 /** Compound external operations — use unquote, not resolve. */

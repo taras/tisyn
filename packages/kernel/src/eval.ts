@@ -20,7 +20,14 @@ import {
 } from "@tisyn/ir";
 import type { EffectDescriptor } from "./events.js";
 import { canonical } from "./canonical.js";
-import { TypeError, DivisionByZero, ExplicitThrow, NotCallable } from "./errors.js";
+import {
+  TypeError,
+  DivisionByZero,
+  ExplicitThrow,
+  NotCallable,
+  isCatchable,
+  errorToValue,
+} from "./errors.js";
 import { type Env, lookup, extend, extendMulti } from "./environment.js";
 import { classify, isCompoundExternal } from "./classify.js";
 import { resolve } from "./resolve.js";
@@ -327,6 +334,51 @@ function* evalStructural(id: string, data: Expr, env: Env): Generator<EffectDesc
         Object.assign(result, val as Record<string, Val>);
       }
       return result;
+    }
+
+    // §5.16 try
+    case "try": {
+      const body = fields["body"] as Expr;
+      const catchParam = fields["catchParam"] as string | undefined;
+      const catchBody = fields["catchBody"] as Expr | undefined;
+      const finallyBody = fields["finally"] as Expr | undefined;
+
+      type Outcome = { ok: true; value: Val } | { ok: false; error: unknown };
+      let outcome: Outcome;
+
+      // Phase 1: body
+      try {
+        outcome = { ok: true, value: yield* evaluate(body, env) };
+      } catch (e) {
+        if (!isCatchable(e)) {
+          // Non-catchable (halt, divergence, etc.): run finally if present, then re-raise
+          if (finallyBody !== undefined) {
+            yield* evaluate(finallyBody, env);
+          }
+          throw e;
+        }
+        outcome = { ok: false, error: e };
+      }
+
+      // Phase 2: catch clause
+      if (!outcome.ok && catchBody !== undefined) {
+        const errorVal = errorToValue(outcome.error);
+        const catchEnv =
+          catchParam !== undefined ? extend(env, catchParam, errorVal) : env;
+        try {
+          outcome = { ok: true, value: yield* evaluate(catchBody, catchEnv) };
+        } catch (e) {
+          outcome = { ok: false, error: e };
+        }
+      }
+
+      // Phase 3: finally — result DISCARDED; if it throws, that error replaces prior outcome
+      if (finallyBody !== undefined) {
+        yield* evaluate(finallyBody, env);
+      }
+
+      if (outcome.ok) return outcome.value;
+      throw outcome.error;
     }
 
     default:

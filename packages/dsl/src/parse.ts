@@ -137,6 +137,11 @@ function parseExpr(state: ParserState): TisynExpr {
       consume(state);
       return null;
     }
+    if (value === "undefined") {
+      consume(state);
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      return undefined as any;
+    }
     return parseConstructorCall(state);
   }
 

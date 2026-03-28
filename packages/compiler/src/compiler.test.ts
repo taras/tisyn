@@ -760,6 +760,157 @@ describe("Validation", () => {
   });
 });
 
+describe("Try/catch/finally compilation", () => {
+  it("compiles try/catch as Try node (no join)", () => {
+    // No outer let vars → no SSA join needed
+    const ir = compileOne(`
+      function* f(): Workflow<string> {
+        try {
+          throw new Error("boom");
+        } catch (e) {
+          // catch body: discard result
+        }
+        return "done";
+      }
+    `) as any;
+    // The body starts with a Let that wraps the discard of the Try result
+    // Walk to find the try node
+    function findTry(node: any): any {
+      if (!node || typeof node !== "object") return undefined;
+      if (node.id === "try") return node;
+      for (const val of Object.values(node)) {
+        const found = findTry(val);
+        if (found) return found;
+      }
+      return undefined;
+    }
+    const tryNode = findTry(ir);
+    expect(tryNode).toBeDefined();
+    expect(tryNode.data.expr.catchParam).toBe("e");
+    expect(tryNode.data.expr.catchBody).toBeDefined();
+    expect(tryNode.data.expr["finally"]).toBeUndefined();
+  });
+
+  it("compiles try/finally as Try node with finally and no catchParam", () => {
+    const ir = compileOne(`
+      function* f(): Workflow<string> {
+        try {
+          throw new Error("x");
+        } finally {
+          // side effect only, no assignment to outer vars
+        }
+        return "done";
+      }
+    `) as any;
+    function findTry(node: any): any {
+      if (!node || typeof node !== "object") return undefined;
+      if (node.id === "try") return node;
+      for (const val of Object.values(node)) {
+        const found = findTry(val);
+        if (found) return found;
+      }
+      return undefined;
+    }
+    const tryNode = findTry(ir);
+    expect(tryNode).toBeDefined();
+    expect(tryNode.data.expr["finally"]).toBeDefined();
+    expect(tryNode.data.expr.catchParam).toBeUndefined();
+    expect(tryNode.data.expr.catchBody).toBeUndefined();
+  });
+
+  it("compiles try/catch/finally as Try node with all three clauses", () => {
+    const ir = compileOne(`
+      function* f(): Workflow<string> {
+        try {
+          throw new Error("body");
+        } catch (err) {
+          // handle error
+        } finally {
+          // cleanup
+        }
+        return "done";
+      }
+    `) as any;
+    function findTry(node: any): any {
+      if (!node || typeof node !== "object") return undefined;
+      if (node.id === "try") return node;
+      for (const val of Object.values(node)) {
+        const found = findTry(val);
+        if (found) return found;
+      }
+      return undefined;
+    }
+    const tryNode = findTry(ir);
+    expect(tryNode).toBeDefined();
+    expect(tryNode.data.expr.catchParam).toBe("err");
+    expect(tryNode.data.expr.catchBody).toBeDefined();
+    expect(tryNode.data.expr["finally"]).toBeDefined();
+  });
+
+  it("compiles try/catch with SSA join for reassigned let var", () => {
+    const ir = compileOne(`
+      function* f(): Workflow<number> {
+        let x = 0;
+        try {
+          x = 1;
+        } catch (e) {
+          x = 2;
+        }
+        return x;
+      }
+    `) as any;
+    // Should produce Let(x_0, 0, Let(x_1, Try(...join...), Ref(x_1)))
+    const outerLet = ir.body;
+    expect(outerLet.id).toBe("let");
+    expect(outerLet.data.expr.name).toBe("x_0");
+    const joinLet = outerLet.data.expr.body;
+    expect(joinLet.id).toBe("let");
+    expect(joinLet.data.expr.name).toBe("x_1");
+    const tryNode = joinLet.data.expr.value;
+    expect(tryNode.id).toBe("try");
+    expect(tryNode.data.expr.catchParam).toBe("e");
+  });
+
+  it("rejects return in try clause (E033)", () => {
+    expect(() =>
+      compileOne(`
+        function* f(): Workflow<string> {
+          try { return "x"; } catch (e) { /* no return here */ }
+        }
+      `),
+    ).toThrow("E033");
+  });
+
+  it("rejects catch without binding (E034)", () => {
+    expect(() =>
+      compileOne(`
+        function* f(): Workflow<string> {
+          try { throw new Error("x"); } catch { /* no binding */ }
+          return "done";
+        }
+      `),
+    ).toThrow("E034");
+  });
+
+  it("rejects outer-binding assignment in finally (E035)", () => {
+    expect(() =>
+      compileOne(`
+        function* f(): Workflow<number> {
+          let x = 0;
+          try {
+            x = 1;
+          } catch (e) {
+            x = 2;
+          } finally {
+            x = 3;
+          }
+          return x;
+        }
+      `),
+    ).toThrow("E035");
+  });
+});
+
 // ── Helpers ──
 
 function findWhileNode(node: unknown): Record<string, any> | undefined {

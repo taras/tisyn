@@ -50,6 +50,9 @@ export interface TisynAlgebra<A> {
   // Error
   throw(message: A): A;
 
+  // Structured error handling
+  try(body: A, catchParam: string | undefined, catchBody: A | undefined, finally_: A | undefined): A;
+
   // External eval (opaque to the fold — data not recursed)
   eval(id: string, data: TisynExpr): A;
 }
@@ -200,6 +203,20 @@ function foldStructural<A>(id: string, shape: Record<string, unknown>, alg: Tisy
       const s = shape as { objects: TisynExpr[] };
       return alg.mergeObjects(s.objects.map((e) => foldNode(e, alg)));
     }
+    case "try": {
+      const s = shape as {
+        body: TisynExpr;
+        catchParam?: string;
+        catchBody?: TisynExpr;
+        finally?: TisynExpr;
+      };
+      return alg.try(
+        foldNode(s.body, alg),
+        s.catchParam,
+        s.catchBody !== undefined ? foldNode(s.catchBody, alg) : undefined,
+        s["finally"] !== undefined ? foldNode(s["finally"], alg) : undefined,
+      );
+    }
     default:
       // Unknown structural ID — should not happen, treat as literal
       return alg.literal(shape as TisynExpr);
@@ -250,6 +267,7 @@ export function defaultAlgebra<A>(zero: () => A): TisynAlgebra<A> {
     concatArrays: z,
     mergeObjects: z,
     throw: z,
+    try: z2,
     eval: z2,
   };
 }

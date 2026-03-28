@@ -30,6 +30,7 @@ import {
   ConcatArrays,
   MergeObjects,
   Throw,
+  Try,
   Eval,
   All,
   Race,
@@ -716,9 +717,70 @@ describe("All constructors round-trip via print", () => {
     ["Q", Q(42)],
     ["While", While(true as never, [1, 2])],
     ["Get", Get(Ref("obj"), "key")],
+    ["Try/catch", Try(Throw("boom" as never), "e", Ref("e") as never)],
+    ["Try/finally", Try(Ref("x") as never, undefined, undefined, Ref("y") as never)],
+    [
+      "Try/catch/finally",
+      Try(Throw("boom" as never), "e", Ref("e") as never, Ref("y") as never),
+    ],
   ];
 
   for (const [name, expr] of cases) {
     it(name, () => roundTrip(expr));
   }
+});
+
+// ── Try constructor DSL tests ─────────────────────────────────────────────────
+
+describe("DSL-080: Try — try/catch form", () => {
+  it("parses Try(body, catchParam, catchBody)", () => {
+    const expected = Try(Throw("boom" as never), "e", Ref("e") as never);
+    const result = parseDSLSafe('Try(Throw("boom"), "e", Ref("e"))');
+    expect(result.ok).toBe(true);
+    if (result.ok) expect(result.value).toEqual(expected);
+  });
+  it("round-trips", () => {
+    roundTrip(Try(Throw("boom" as never), "e", Ref("e") as never) as never);
+  });
+});
+
+describe("DSL-081: Try — try/finally form", () => {
+  it("parses Try(body, undefined, undefined, finallyBody)", () => {
+    const expected = Try(Ref("x") as never, undefined, undefined, Ref("y") as never);
+    const result = parseDSLSafe('Try(Ref("x"), undefined, undefined, Ref("y"))');
+    expect(result.ok).toBe(true);
+    if (result.ok) expect(result.value).toEqual(expected);
+  });
+  it("round-trips", () => {
+    roundTrip(Try(Ref("x") as never, undefined, undefined, Ref("y") as never) as never);
+  });
+});
+
+describe("DSL-082: Try — try/catch/finally form", () => {
+  it("parses Try(body, catchParam, catchBody, finallyBody)", () => {
+    const expected = Try(Throw("boom" as never), "e", Ref("e") as never, Ref("y") as never);
+    const result = parseDSLSafe('Try(Throw("boom"), "e", Ref("e"), Ref("y"))');
+    expect(result.ok).toBe(true);
+    if (result.ok) expect(result.value).toEqual(expected);
+  });
+  it("round-trips", () => {
+    roundTrip(
+      Try(Throw("boom" as never), "e", Ref("e") as never, Ref("y") as never) as never,
+    );
+  });
+});
+
+describe("DSL-083: Try — argument validation errors", () => {
+  it("rejects Try with only body (no catch or finally)", () => {
+    const result = parseDSLSafe('Try(Ref("x"))');
+    expect(result.ok).toBe(false);
+  });
+  it("rejects Try with catchParam but no catchBody", () => {
+    const result = parseDSLSafe('Try(Ref("x"), "e")');
+    expect(result.ok).toBe(false);
+  });
+  it("rejects Try with empty-string catchParam", () => {
+    const result = parseDSLSafe('Try(Ref("x"), "", Ref("e"))');
+    expect(result.ok).toBe(false);
+  });
 });

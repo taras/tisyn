@@ -1054,6 +1054,9 @@ interface TisynAlgebra<A> {
   // Error
   throw(message: A): A;
 
+  // Structured error handling
+  try(body: A, catchParam: string | undefined, catchBody: A | undefined, finally_: A | undefined): A;
+
   // External eval (opaque to the fold — data not recursed)
   eval(id: string, data: TisynExpr): A;
 }

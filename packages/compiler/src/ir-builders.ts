@@ -148,6 +148,21 @@ export function Throw(message: Expr): EvalNode {
   return { tisyn: "eval", id: "throw", data: Q({ message }) };
 }
 
+// ── Try ──
+
+export function Try(
+  body: Expr,
+  catchParam?: string,
+  catchBody?: Expr,
+  finallyBody?: Expr,
+): EvalNode {
+  const fields: Record<string, unknown> = { body };
+  if (catchParam !== undefined) fields["catchParam"] = catchParam;
+  if (catchBody !== undefined) fields["catchBody"] = catchBody;
+  if (finallyBody !== undefined) fields["finally"] = finallyBody;
+  return { tisyn: "eval", id: "try", data: Q(fields) };
+}
+
 // ── Spread rebuild ops (quoted data) ──
 
 export function ConcatArrays(arrays: Expr[]): EvalNode {

@@ -43,6 +43,7 @@ This document specifies a compiler that transforms a restricted subset of JavaSc
 | While           | `while (cond) { ... }`                     | `while` or recursive Fn                  |
 | Return          | `return <expr>`                            | Final expression                         |
 | Throw           | `throw new Error(msg)`                     | `throw`                                  |
+| Try/catch/finally | `try { ... } catch (e) { ... } finally { ... }` | `try`                          |
 | Property        | `obj.prop` / `obj["literal"]`              | `get`                                    |
 | Arithmetic      | `+`, `-`, `*`, `/`, `%`, unary `-`         | `add`, `sub`, `mul`, `div`, `mod`, `neg` |
 | Comparison      | `>`, `>=`, `<`, `<=`, `===`, `!==`         | `gt`, `gte`, `lt`, `lte`, `eq`, `neq`    |
@@ -372,6 +373,68 @@ If `count` is an immutable `const`, the condition is invariant. The compiler SHO
 
 DISALLOWED. No IR equivalent. Loops terminate via return (Case B), throw, or condition.
 
+### 6.7 Try/Catch/Finally
+
+**Supported authored forms:**
+
+| Authored form | Constructor call |
+|---|---|
+| `try { B } catch (e) { C }` | `Try(B, "e", C)` |
+| `try { B } finally { F }` | `Try(B, undefined, undefined, F)` |
+| `try { B } catch (e) { C } finally { F }` | `Try(B, "e", C, F)` |
+
+**Disallowed constructs (compile errors):**
+
+| Condition | Code |
+|---|---|
+| `return` statement inside `try`, `catch`, or `finally` clause | E033 |
+| `catch {}` — catch clause with no binding parameter | E034 |
+| Assignment to an outer `let` binding inside `finally` | E035 |
+
+**SSA lowering — two phases:**
+
+**Phase A: body/catch join**
+
+The body and catch branches participate in a join following the same machinery as `if/else` (`compileBranchToExpr` / `applyJoinVersions`). Let `J_bc` = the set of outer variables whose SSA versions advanced in either branch.
+
+- **J_bc empty:** Emit `Try(bodyExpr, catchParam?, catchBodyExpr?, finallyExpr?)` as a plain expression. No outer join `Let`-bindings needed.
+- **J_bc = {x}, with catch:**
+  ```
+  Let(x_join, Try(bodyJoinExpr, catchParam, catchJoinExpr, finallyExpr?), rest())
+  ```
+- **J_bc = {x}, no catch (try/finally only):**
+  ```
+  Let(x_join, Try(bodyJoinExpr, undefined, undefined, finallyExpr), rest())
+  ```
+- **J_bc = {x, y, ...}, with catch:**
+  ```
+  Let(j, Try(bodyJoinExpr, catchParam, catchJoinExpr, finallyExpr?),
+    Let(x_join, Get(Ref(j), "x"),
+    Let(y_join, Get(Ref(j), "y"), rest())))
+  ```
+- **J_bc = {x, y, ...}, no catch (try/finally only):**
+  ```
+  Let(j, Try(bodyJoinExpr, undefined, undefined, finallyExpr),
+    Let(x_join, Get(Ref(j), "x"),
+    Let(y_join, Get(Ref(j), "y"), rest())))
+  ```
+
+`compileBranchToExpr` replaces the clause's natural result with the join terminal (`Ref(x)` for a single var, `Construct({x: Ref(x), y: Ref(y)})` for multiple). The natural result of the Try node is never used by the surrounding code (try is statement-only).
+
+**Phase B: finally compilation**
+
+Compile the `finally` block in a clone of the **original pre-try ctx** using `emitStatementBody` (no join terminal). References inside `finally` use pre-try SSA versions. The compiled expression is passed as the fourth argument to `Try(...)`. Finally does NOT contribute to post-try SSA state — its result is discarded by the kernel.
+
+**emitTryStatement flow:**
+1. Check all clauses for `return` → E033 if found.
+2. Check for catch without binding → E034 if present.
+3. Scan `finally` for outer-binding assignments → E035 if found.
+4. Compile `finally` in original ctx clone → `finallyExpr`.
+5. Dry-run body and catch in ctx clones; collect `J_bc`.
+6. Emit per the J_bc cases above.
+
+**Journal equivalence:** source containing `try/catch/finally` produces identical journals to equivalent generator-level error handling, because no new event types are added and yieldIndex is monotonic across phases.
+
 ---
 
 ## 7. Expression Compilation
@@ -631,7 +694,9 @@ Inner bindings shadow outer with same name. Outer restored after inner scope.
 | Ambiguous `+`             |                   | E011              |
 | `for...in`                |                   | E013              |
 | `eval()/new Function()`   |                   | E014              |
-| `try/catch`               |                   | E015              |
+| `try` — `return` in clause | `return x` inside `try`/`catch`/`finally` | E033 |
+| `try` — catch without binding | `catch {}` (no binding name) | E034    |
+| `try` — outer var in `finally` | assignment to outer `let` inside `finally` | E035 |
 | `class/this`              |                   | E016              |
 | `yield` (no `*`)          |                   | E017              |
 | `call(() => ...)`         |                   | E018              |

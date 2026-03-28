@@ -29,6 +29,7 @@ import type {
   RaceNode,
   ConcatArraysNode,
   MergeObjectsNode,
+  TryNode,
 } from "./types.js";
 
 // ── Structural IDs ──
@@ -61,6 +62,7 @@ export const STRUCTURAL_IDS = [
   "throw",
   "concat-arrays",
   "merge-objects",
+  "try",
 ] as const;
 
 export type StructuralId = (typeof STRUCTURAL_IDS)[number];
@@ -100,7 +102,8 @@ export type StructuralNode =
   | ConcatNode
   | ThrowNode
   | ConcatArraysNode
-  | MergeObjectsNode;
+  | MergeObjectsNode
+  | TryNode;
 
 export type CompoundExternalNode = AllNode | RaceNode;
 

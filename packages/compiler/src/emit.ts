@@ -35,6 +35,7 @@ import {
   ArrayNode,
   Concat,
   Throw,
+  Try,
   Ref,
   Fn,
   ConcatArrays,
@@ -242,6 +243,11 @@ function emitStatementList(stmts: ts.Statement[], index: number, ctx: EmitContex
   // ── Throw statement ──
   if (ts.isThrowStatement(stmt) && stmt.expression) {
     return emitThrowStatement(stmt, ctx);
+  }
+
+  // ── Try statement ──
+  if (ts.isTryStatement(stmt)) {
+    return emitTryStatement(stmt, stmts, index, ctx);
   }
 
   // ── Block (nested) ──
@@ -759,6 +765,191 @@ function emitIfStatement(
     result = Let(joinIrName, Get(Ref(joinName), v), result);
   }
   return Let(joinName, ifExpr, result);
+}
+
+/** Return true if the statement (or any descendant) contains a return statement. */
+function blockContainsReturn(stmt: ts.Statement | undefined): boolean {
+  if (!stmt) return false;
+  let found = false;
+  function visit(node: ts.Node): void {
+    if (found) return;
+    if (ts.isReturnStatement(node)) {
+      found = true;
+      return;
+    }
+    // Do not descend into nested function bodies (they have their own returns)
+    if (ts.isFunctionDeclaration(node) || ts.isFunctionExpression(node) || ts.isArrowFunction(node))
+      return;
+    ts.forEachChild(node, visit);
+  }
+  visit(stmt);
+  return found;
+}
+
+/** Return true if the statement contains an assignment to any outer let binding. */
+function finallyContainsOuterAssignment(
+  stmt: ts.Statement,
+  ctx: EmitContext,
+): string | undefined {
+  let found: string | undefined;
+  function visit(node: ts.Node): void {
+    if (found) return;
+    if (
+      ts.isBinaryExpression(node) &&
+      node.operatorToken.kind === ts.SyntaxKind.EqualsToken &&
+      ts.isIdentifier(node.left)
+    ) {
+      const name = node.left.text;
+      const binding = lookupBinding(name, ctx);
+      if (binding && binding.info.kind === "let") {
+        found = name;
+        return;
+      }
+    }
+    ts.forEachChild(node, visit);
+  }
+  visit(stmt);
+  return found;
+}
+
+function emitTryStatement(
+  stmt: ts.TryStatement,
+  stmts: ts.Statement[],
+  index: number,
+  ctx: EmitContext,
+): Expr {
+  const hasMore = index < stmts.length - 1;
+  const rest = () => emitStatementList(stmts, index + 1, ctx);
+
+  // ── Validation: step 1 — return in any clause → E033 ──
+  if (
+    blockContainsReturn(stmt.tryBlock) ||
+    blockContainsReturn(stmt.catchClause?.block) ||
+    blockContainsReturn(stmt.finallyBlock)
+  ) {
+    throw error(
+      "E033",
+      "'return' inside a try/catch/finally clause is not supported",
+      stmt,
+      ctx,
+    );
+  }
+
+  // ── Validation: step 2 — catch without binding → E034 ──
+  if (stmt.catchClause && !stmt.catchClause.variableDeclaration) {
+    throw error("E034", "catch clause requires a binding parameter", stmt.catchClause, ctx);
+  }
+
+  // ── Validation: step 3 — outer-binding assignment in finally → E035 ──
+  if (stmt.finallyBlock) {
+    const offendingVar = finallyContainsOuterAssignment(stmt.finallyBlock, ctx);
+    if (offendingVar !== undefined) {
+      throw error(
+        "E035",
+        `Variable '${offendingVar}' assigned inside 'finally' is not visible after the try statement`,
+        stmt.finallyBlock,
+        ctx,
+      );
+    }
+  }
+
+  // ── Phase B: compile finally in original pre-try ctx clone ──
+  const finallyExpr = stmt.finallyBlock
+    ? (() => {
+        const finallyCtx: EmitContext = { ...ctx, scopeStack: cloneScopeStack(ctx.scopeStack) };
+        return emitStatementBody(stmt.finallyBlock, finallyCtx);
+      })()
+    : undefined;
+
+  const catchParam = stmt.catchClause?.variableDeclaration
+    ? (stmt.catchClause.variableDeclaration.name as ts.Identifier).text
+    : undefined;
+  const catchBlock = stmt.catchClause?.block;
+
+  // ── Phase A: dry-run body and catch to compute J_bc ──
+  const snapshot = snapshotVersions(ctx);
+  const allLetVars = getAllLetVars(ctx);
+
+  const dryBodyCtx: EmitContext = { ...ctx, scopeStack: cloneScopeStack(ctx.scopeStack) };
+  compileBranchBodyToJoin(getBodyStatements(stmt.tryBlock), allLetVars, snapshot, dryBodyCtx);
+
+  const dryCatchCtx: EmitContext = { ...ctx, scopeStack: cloneScopeStack(ctx.scopeStack) };
+  if (catchBlock && catchParam) {
+    // Push catchParam into dryCatchCtx so it doesn't interfere with join var detection
+    pushFrame(dryCatchCtx);
+    dryCatchCtx.scopeStack[dryCatchCtx.scopeStack.length - 1]!.set(catchParam, {
+      kind: "const",
+      version: 0,
+    });
+  }
+  if (catchBlock) {
+    compileBranchBodyToJoin(getBodyStatements(catchBlock), allLetVars, snapshot, dryCatchCtx);
+  }
+
+  const joinVars = allLetVars.filter((v) => {
+    const bodyVer = getVersion(v, dryBodyCtx);
+    const catchVer = catchBlock ? getVersion(v, dryCatchCtx) : snapshot.get(v) ?? 0;
+    return bodyVer !== (snapshot.get(v) ?? 0) || catchVer !== (snapshot.get(v) ?? 0);
+  });
+
+  // ── Emit: J_bc empty ──
+  if (joinVars.length === 0) {
+    const bodyExpr = emitStatementBody(stmt.tryBlock, ctx);
+    const catchExpr = catchBlock
+      ? (() => {
+          const catchCtx: EmitContext = { ...ctx, scopeStack: cloneScopeStack(ctx.scopeStack) };
+          if (catchParam) {
+            pushFrame(catchCtx);
+            catchCtx.scopeStack[catchCtx.scopeStack.length - 1]!.set(catchParam, {
+              kind: "const",
+              version: 0,
+            });
+          }
+          return emitStatementBody(catchBlock, catchCtx);
+        })()
+      : undefined;
+    const tryIr = Try(bodyExpr, catchParam, catchExpr, finallyExpr);
+    if (!hasMore) return tryIr;
+    return Let(ctx.counter.next("discard"), tryIr, rest());
+  }
+
+  // ── Emit: J_bc non-empty ──
+  const bodyCtx: EmitContext = { ...ctx, scopeStack: cloneScopeStack(ctx.scopeStack) };
+  const bodyJoinExpr = compileBranchToExpr(stmt.tryBlock, joinVars, bodyCtx);
+
+  let catchJoinExpr: Expr | undefined;
+  if (catchBlock) {
+    const catchCtx: EmitContext = { ...ctx, scopeStack: cloneScopeStack(ctx.scopeStack) };
+    if (catchParam) {
+      pushFrame(catchCtx);
+      catchCtx.scopeStack[catchCtx.scopeStack.length - 1]!.set(catchParam, {
+        kind: "const",
+        version: 0,
+      });
+    }
+    catchJoinExpr = compileBranchToExpr(catchBlock, joinVars, catchCtx);
+  }
+
+  applyJoinVersions(joinVars, ctx);
+
+  const tryIr = Try(bodyJoinExpr, catchParam, catchJoinExpr, finallyExpr);
+
+  if (joinVars.length === 1) {
+    const v = joinVars[0]!;
+    const joinIrName = resolveRef(v, ctx);
+    if (!hasMore) return Let(joinIrName, tryIr, null as unknown as Expr);
+    return Let(joinIrName, tryIr, rest());
+  }
+
+  // Multiple join vars
+  const joinName = ctx.counter.next("j");
+  let result = hasMore ? rest() : (null as unknown as Expr);
+  for (let i = joinVars.length - 1; i >= 0; i--) {
+    const v = joinVars[i]!;
+    const joinIrName = resolveRef(v, ctx);
+    result = Let(joinIrName, Get(Ref(joinName), v), result);
+  }
+  return Let(joinName, tryIr, result);
 }
 
 /** Get all in-scope let variable names. */

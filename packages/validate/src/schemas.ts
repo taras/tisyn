@@ -43,6 +43,29 @@ export const FnNodeSchema = Type.Object(
   { additionalProperties: true, $id: "FnNode" },
 );
 
+export const TryNodeSchema = Type.Object(
+  {
+    tisyn: Type.Literal("eval"),
+    id: Type.Literal("try"),
+    data: Type.Object(
+      {
+        tisyn: Type.Literal("quote"),
+        expr: Type.Object(
+          {
+            body: Type.Any(),
+            catchParam: Type.Optional(Type.String({ minLength: 1 })),
+            catchBody: Type.Optional(Type.Any()),
+            finally: Type.Optional(Type.Any()),
+          },
+          { additionalProperties: false },
+        ),
+      },
+      { additionalProperties: false },
+    ),
+  },
+  { additionalProperties: false, $id: "TryNode" },
+);
+
 export const TisynExprSchema: TSchema = Type.Recursive(
   (This) =>
     Type.Union([

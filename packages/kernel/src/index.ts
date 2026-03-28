@@ -11,6 +11,9 @@ export {
   TypeError,
   DivisionByZero,
   ExplicitThrow,
+  EffectError,
+  isCatchable,
+  errorToValue,
 } from "./errors.js";
 export type {
   EffectDescription,
