@@ -27,6 +27,7 @@
   },
   "scripts": {
     "build": "tsc --build",
+    "prepare": "tsc --build",
     "pretest": "tsc --build",
     "test": "vitest run"
   },
