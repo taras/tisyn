@@ -45,16 +45,16 @@ try {
 }
 ```
 
-### `parseDSLSafe(source: string): ParseResult`
+### `parseDSLSafe(source: string): Result<TisynExpr>`
 
-Returns `{ ok: true, ir }` or `{ ok: false, error, recovery? }`. Never throws.
+Returns Effection's `Result<TisynExpr>`: `{ ok: true, value }` or `{ ok: false, error }`. Never throws.
 
-`result.recovery` is present when the failure was caused by unexpected EOF. `result.recovery.autoClosable` indicates whether the input is a candidate for auto-close repair.
+When parsing fails due to unexpected EOF, `result.error` is a `DSLParseError` with a `recovery` field. `error.recovery.autoClosable` indicates whether the input is a candidate for auto-close repair.
 
 ```typescript
 const result = parseDSLSafe(source);
 if (result.ok) {
-  use(result.ir);
+  use(result.value);
 } else {
   console.error(result.error.message); // includes line/col
 }
@@ -62,13 +62,13 @@ if (result.ok) {
 
 ### `parseDSLWithRecovery(source: string): ParseResult & { repaired?: string }`
 
-Recommended entry point for LLM-generated input. On failure, attempts to close unbalanced delimiters — but **only** when `recovery.autoClosable` is true (i.e. the parser reached EOF mid-expression with enough arguments present to complete every open constructor). Ordinary syntax errors are returned as-is.
+Recommended entry point for LLM-generated input. On failure, attempts to close unbalanced delimiters — but **only** when `error.recovery.autoClosable` is true (i.e. the parser reached EOF mid-expression with enough arguments present to complete every open constructor). Ordinary syntax errors are returned as-is.
 
 ```typescript
 const result = parseDSLWithRecovery(llmOutput);
 if (result.ok) {
   if (result.repaired) console.log("repaired:", result.repaired);
-  use(result.ir);
+  use(result.value);
 } else {
   feedBackToLLM(result.error.message);
 }

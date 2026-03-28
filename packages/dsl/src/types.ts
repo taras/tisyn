@@ -1,11 +1,3 @@
-import type { TisynExpr } from "@tisyn/ir";
-import type { DSLParseError } from "./errors.js";
-
-export interface ParseSuccess {
-  ok: true;
-  ir: TisynExpr;
-}
-
 export interface FrameInfo {
   constructor: string;
   argsReceived: number;
@@ -28,12 +20,3 @@ export interface RecoveryInfo {
    */
   autoClosable: boolean;
 }
-
-export interface ParseFailure {
-  ok: false;
-  error: DSLParseError;
-  /** Present when the failure was caused by unexpected EOF. */
-  recovery?: RecoveryInfo;
-}
-
-export type ParseResult = ParseSuccess | ParseFailure;

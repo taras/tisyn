@@ -1,5 +1,4 @@
 import { describe, it, expect } from "vitest";
-import { print } from "@tisyn/ir";
 import {
   Ref,
   Q,
@@ -41,6 +40,7 @@ import {
   parseDSLWithRecovery,
   tryAutoClose,
   DSLParseError,
+  print,
 } from "./index.js";
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
@@ -52,7 +52,7 @@ function roundTrip(expr: any) {
   expect(result.ok, `parseDSL(print(expr)) failed: ${!result.ok && result.error.message}`).toBe(
     true,
   );
-  if (result.ok) expect(result.ir).toEqual(expr);
+  if (result.ok) expect(result.value).toEqual(expr);
 }
 
 // ── §11.4 Core Fixtures — Literals ───────────────────────────────────────────
@@ -123,7 +123,7 @@ describe("DSL-020: Ref", () => {
   it('parses Ref("x")', () => {
     const result = parseDSLSafe('Ref("x")');
     expect(result.ok).toBe(true);
-    if (result.ok) expect(result.ir).toEqual({ tisyn: "ref", name: "x" });
+    if (result.ok) expect(result.value).toEqual({ tisyn: "ref", name: "x" });
   });
   it("round-trips", () => roundTrip(Ref("x") as never));
 });
@@ -133,7 +133,7 @@ describe("DSL-021: Add", () => {
     const expected = Add(1, 2);
     const result = parseDSLSafe("Add(1, 2)");
     expect(result.ok).toBe(true);
-    if (result.ok) expect(result.ir).toEqual(expected);
+    if (result.ok) expect(result.value).toEqual(expected);
   });
 });
 
@@ -142,7 +142,7 @@ describe("DSL-022: Not", () => {
     const expected = Not(true as never);
     const result = parseDSLSafe("Not(true)");
     expect(result.ok).toBe(true);
-    if (result.ok) expect(result.ir).toEqual(expected);
+    if (result.ok) expect(result.value).toEqual(expected);
   });
 });
 
@@ -151,7 +151,7 @@ describe("DSL-023: Throw", () => {
     const expected = Throw("bad" as never);
     const result = parseDSLSafe('Throw("bad")');
     expect(result.ok).toBe(true);
-    if (result.ok) expect(result.ir).toEqual(expected);
+    if (result.ok) expect(result.value).toEqual(expected);
   });
 });
 
@@ -162,7 +162,7 @@ describe("DSL-030: Let + Ref", () => {
     const expected = Let("x", 1, Ref("x"));
     const result = parseDSLSafe('Let("x", 1, Ref("x"))');
     expect(result.ok).toBe(true);
-    if (result.ok) expect(result.ir).toEqual(expected);
+    if (result.ok) expect(result.value).toEqual(expected);
   });
   it("round-trips", () => roundTrip(Let("x", 1, Ref("x")) as never));
 });
@@ -172,7 +172,7 @@ describe("DSL-031: If with else", () => {
     const expected = If(Eq(1, 2), "yes", "no");
     const result = parseDSLSafe('If(Eq(1, 2), "yes", "no")');
     expect(result.ok).toBe(true);
-    if (result.ok) expect(result.ir).toEqual(expected);
+    if (result.ok) expect(result.value).toEqual(expected);
   });
   it("round-trips", () => roundTrip(If(Eq(1, 2), "yes", "no") as never));
 });
@@ -182,7 +182,7 @@ describe("DSL-032: If without else", () => {
     const expected = If(true as never, 1);
     const result = parseDSLSafe("If(true, 1)");
     expect(result.ok).toBe(true);
-    if (result.ok) expect(result.ir).toEqual(expected);
+    if (result.ok) expect(result.value).toEqual(expected);
   });
   it("round-trips", () => roundTrip(If(true as never, 1) as never));
 });
@@ -192,7 +192,7 @@ describe("DSL-033: nested binary ops", () => {
     const expected = Add(Add(1, 2) as never, 3);
     const result = parseDSLSafe("Add(Add(1, 2), 3)");
     expect(result.ok).toBe(true);
-    if (result.ok) expect(result.ir).toEqual(expected);
+    if (result.ok) expect(result.value).toEqual(expected);
   });
   it("round-trips", () => roundTrip(Add(Add(1, 2) as never, 3) as never));
 });
@@ -204,7 +204,7 @@ describe("DSL-040: Eval with Ref payload", () => {
     const expected = Eval("svc.op", Ref("x"));
     const result = parseDSLSafe('Eval("svc.op", Ref("x"))');
     expect(result.ok).toBe(true);
-    if (result.ok) expect(result.ir).toEqual(expected);
+    if (result.ok) expect(result.value).toEqual(expected);
   });
   it("round-trips", () => roundTrip(Eval("svc.op", Ref("x")) as never));
 });
@@ -214,7 +214,7 @@ describe("DSL-041: Eval with array payload", () => {
     const expected = Eval("svc.op", [Ref("x"), 42]);
     const result = parseDSLSafe('Eval("svc.op", [Ref("x"), 42])');
     expect(result.ok).toBe(true);
-    if (result.ok) expect(result.ir).toEqual(expected);
+    if (result.ok) expect(result.value).toEqual(expected);
   });
   it("round-trips", () => roundTrip(Eval("svc.op", [Ref("x"), 42]) as never));
 });
@@ -224,7 +224,7 @@ describe("DSL-042: Eval with null payload", () => {
     const expected = Eval("svc.op", null);
     const result = parseDSLSafe('Eval("svc.op", null)');
     expect(result.ok).toBe(true);
-    if (result.ok) expect(result.ir).toEqual(expected);
+    if (result.ok) expect(result.value).toEqual(expected);
   });
   it("round-trips", () => roundTrip(Eval("svc.op", null) as never));
 });
@@ -236,7 +236,7 @@ describe("DSL-050: All", () => {
     const expected = All(Eval("a.b", null) as never, Eval("c.d", null) as never);
     const result = parseDSLSafe('All(Eval("a.b", null), Eval("c.d", null))');
     expect(result.ok).toBe(true);
-    if (result.ok) expect(result.ir).toEqual(expected);
+    if (result.ok) expect(result.value).toEqual(expected);
   });
   it("round-trips", () => {
     roundTrip(All(Eval("a.b", null) as never, Eval("c.d", null) as never) as never);
@@ -248,7 +248,7 @@ describe("DSL-051: Race", () => {
     const expected = Race(Eval("a.b", null) as never, Eval("c.d", null) as never);
     const result = parseDSLSafe('Race(Eval("a.b", null), Eval("c.d", null))');
     expect(result.ok).toBe(true);
-    if (result.ok) expect(result.ir).toEqual(expected);
+    if (result.ok) expect(result.value).toEqual(expected);
   });
   it("round-trips", () => {
     roundTrip(Race(Eval("a.b", null) as never, Eval("c.d", null) as never) as never);
@@ -260,7 +260,7 @@ describe("DSL-052: Arr", () => {
     const expected = Arr(1, 2, 3);
     const result = parseDSLSafe("Arr(1, 2, 3)");
     expect(result.ok).toBe(true);
-    if (result.ok) expect(result.ir).toEqual(expected);
+    if (result.ok) expect(result.value).toEqual(expected);
   });
   it("round-trips", () => roundTrip(Arr(1, 2, 3) as never));
 });
@@ -270,7 +270,7 @@ describe("DSL-053: Construct", () => {
     const expected = Construct({ name: "test" as never, value: 42 as never });
     const result = parseDSLSafe('Construct({ name: "test", value: 42 })');
     expect(result.ok).toBe(true);
-    if (result.ok) expect(result.ir).toEqual(expected);
+    if (result.ok) expect(result.value).toEqual(expected);
   });
   it("round-trips", () => {
     roundTrip(Construct({ name: "test" as never, value: 42 as never }) as never);
@@ -284,7 +284,7 @@ describe('DSL-060: Fn(["x"], Add(Ref("x"), 1))', () => {
     const expected = Fn(["x"], Add(Ref("x"), 1) as never);
     const result = parseDSLSafe('Fn(["x"], Add(Ref("x"), 1))');
     expect(result.ok).toBe(true);
-    if (result.ok) expect(result.ir).toEqual(expected);
+    if (result.ok) expect(result.value).toEqual(expected);
   });
   it("round-trips", () => {
     roundTrip(Fn(["x"], Add(Ref("x"), 1) as never) as never);
@@ -297,7 +297,7 @@ describe("DSL-061: Let + Fn + Call", () => {
     const expected = Let("f", Fn(["x"], Add(Ref("x"), 1) as never), (Call as any)(Ref("f"), [42]));
     const result = parseDSLSafe('Let("f", Fn(["x"], Add(Ref("x"), 1)), Call(Ref("f"), [42]))');
     expect(result.ok).toBe(true);
-    if (result.ok) expect(result.ir).toEqual(expected);
+    if (result.ok) expect(result.value).toEqual(expected);
   });
 });
 
@@ -343,7 +343,7 @@ describe("DSL-070: poll-job pattern", () => {
     const src = print(pollJobIR);
     const result = parseDSLSafe(src);
     expect(result.ok).toBe(true);
-    if (result.ok) expect(result.ir).toEqual(pollJobIR);
+    if (result.ok) expect(result.value).toEqual(pollJobIR);
   });
 });
 
@@ -438,7 +438,7 @@ describe("DSL-100: trailing parens closed", () => {
     expect(result.ok).toBe(true);
     if (result.ok) {
       expect(result.repaired).toBe(expectedRepaired);
-      expect(result.ir).toEqual(Let("x", Add(1, 2), Ref("x")));
+      expect(result.value).toEqual(Let("x", Add(1, 2), Ref("x")));
     }
   });
 });
@@ -456,7 +456,7 @@ describe("DSL-101: nested parens and brackets closed", () => {
     expect(result.ok).toBe(true);
     if (result.ok) {
       expect(result.repaired).toBe(expectedRepaired);
-      expect(result.ir).toEqual(Eval("svc.op", [Ref("x"), 42]));
+      expect(result.value).toEqual(Eval("svc.op", [Ref("x"), 42]));
     }
   });
 });
@@ -474,7 +474,7 @@ describe("DSL-102: deeply nested recovery", () => {
     expect(result.ok).toBe(true);
     if (result.ok) {
       expect(result.repaired).toBe(expectedRepaired);
-      expect(result.ir).toEqual(
+      expect(result.value).toEqual(
         Let("a", 1, Let("b", 2, Add(Ref("a") as never, Ref("b") as never))),
       );
     }
@@ -506,7 +506,10 @@ describe("DSL-113: nested delimiters inside one arg do not inflate pending count
   it("parseDSLSafe: recovery.autoClosable is false", () => {
     const result = parseDSLSafe('Let("x", [[1');
     expect(result.ok).toBe(false);
-    if (!result.ok) expect(result.recovery?.autoClosable).toBe(false);
+    if (!result.ok) {
+      expect(result.error).toBeInstanceOf(DSLParseError);
+      expect((result.error as DSLParseError).recovery?.autoClosable).toBe(false);
+    }
   });
 
   it("parseDSLWithRecovery: does not attempt repair and returns failure", () => {
@@ -526,7 +529,7 @@ describe("DSL-112: already balanced input passes through", () => {
     expect(result.ok).toBe(true);
     if (result.ok) {
       expect(result.repaired).toBeUndefined();
-      expect(result.ir).toEqual(Add(1, 2));
+      expect(result.value).toEqual(Add(1, 2));
     }
   });
 });
@@ -588,7 +591,7 @@ describe("DSL-204: Seq with zero args", () => {
     const expected = (Seq as any)();
     const result = parseDSLSafe("Seq()");
     expect(result.ok).toBe(true);
-    if (result.ok) expect(result.ir).toEqual(expected);
+    if (result.ok) expect(result.value).toEqual(expected);
   });
 });
 

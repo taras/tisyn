@@ -43,8 +43,7 @@ function expect(state: ParserState, kind: Token["kind"]): Token {
         tok.column,
         tok.offset,
       );
-      // Attach recovery info to the error for parseDSLSafe to capture
-      (err as DSLParseError & { recovery?: RecoveryInfo }).recovery = recovery;
+      err.recovery = recovery;
       throw err;
     }
     throw new DSLParseError(
@@ -110,7 +109,7 @@ function parseExpr(state: ParserState): TisynExpr {
       tok.column,
       tok.offset,
     );
-    (err as DSLParseError & { recovery?: RecoveryInfo }).recovery = recovery;
+    err.recovery = recovery;
     throw err;
   }
 

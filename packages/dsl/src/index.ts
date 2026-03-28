@@ -1,12 +1,12 @@
 import type { TisynExpr } from "@tisyn/ir";
+import type { Result } from "effection";
 import { tokenize } from "./tokenize.js";
 import { parseInternal } from "./parse.js";
 import { tryAutoClose as tryAutoCloseImpl } from "./recovery.js";
 import { DSLParseError } from "./errors.js";
-import type { ParseResult, RecoveryInfo } from "./types.js";
 
 export { DSLParseError } from "./errors.js";
-export type { ParseResult, ParseSuccess, ParseFailure, RecoveryInfo, FrameInfo } from "./types.js";
+export type { RecoveryInfo, FrameInfo } from "./types.js";
 
 export { print } from "@tisyn/ir";
 export type { PrintOptions } from "@tisyn/ir";
@@ -25,19 +25,18 @@ export function parseDSL(source: string): TisynExpr {
 /**
  * Parse a DSL string and return a discriminated result. Never throws.
  *
- * On failure, `result.recovery` is present when the error was caused by
- * unexpected EOF (a likely truncation), and `result.recovery.autoClosable`
+ * On failure, `result.error.recovery` is present when the error was caused by
+ * unexpected EOF (a likely truncation), and `result.error.recovery.autoClosable`
  * indicates whether auto-close repair is worth attempting.
  */
-export function parseDSLSafe(source: string): ParseResult {
+export function parseDSLSafe(source: string): Result<TisynExpr> {
   try {
     const tokens = tokenize(source);
-    const ir = parseInternal(tokens);
-    return { ok: true, ir };
+    const value = parseInternal(tokens);
+    return { ok: true, value };
   } catch (e) {
     if (e instanceof DSLParseError) {
-      const recovery = (e as DSLParseError & { recovery?: RecoveryInfo }).recovery;
-      return { ok: false, error: e, ...(recovery ? { recovery } : {}) };
+      return { ok: false, error: e };
     }
     // Unexpected non-DSL error — re-throw
     throw e;
@@ -48,19 +47,22 @@ export function parseDSLSafe(source: string): ParseResult {
  * Parse a DSL string with auto-close recovery for truncated input.
  *
  * Attempts `parseDSLSafe` first. If that fails with an EOF error where
- * `recovery.autoClosable === true`, attempts `tryAutoClose`. If repair
- * succeeds, returns `{ ok: true, ir, repaired }`. Otherwise returns the
+ * `error.recovery.autoClosable === true`, attempts `tryAutoClose`. If repair
+ * succeeds, returns `{ ok: true, value, repaired }`. Otherwise returns the
  * original parse failure.
  *
  * This is the recommended entry point for LLM-generated input.
  */
-export function parseDSLWithRecovery(source: string): ParseResult & { repaired?: string } {
+export function parseDSLWithRecovery(
+  source: string,
+): Result<TisynExpr> & { repaired?: string } {
   const first = parseDSLSafe(source);
   if (first.ok) return first;
 
   // Only attempt recovery when the parser's frame simulation confirmed every
   // open frame can be satisfied by closing pending delimiters.
-  if (!first.recovery?.autoClosable) return first;
+  const parseError = first.error instanceof DSLParseError ? first.error : null;
+  if (!parseError?.recovery?.autoClosable) return first;
 
   const repaired = tryAutoCloseImpl(source, parseDSLSafe);
   if (repaired === null) return first;

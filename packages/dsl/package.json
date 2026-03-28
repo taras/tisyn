@@ -27,7 +27,8 @@
     "test": "vitest run"
   },
   "dependencies": {
-    "@tisyn/ir": "workspace:*"
+    "@tisyn/ir": "workspace:*",
+    "effection": "^3 || ^4"
   },
   "devDependencies": {
     "vitest": "^4"
