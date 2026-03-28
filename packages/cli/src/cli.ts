@@ -6,7 +6,13 @@ import { exit, main } from "effection";
 import { cli, commands, field, object, program } from "configliere";
 import { runBuild, runGenerate, formatCompileError } from "./compile.js";
 import { ConfigError, discoverConfig, loadConfig, validateAndResolveConfig } from "./config.js";
-import { booleanSchema, enumSchema, optionalStringSchema, stringArraySchema, stringSchema } from "./schemas.js";
+import {
+  booleanSchema,
+  enumSchema,
+  optionalStringSchema,
+  stringArraySchema,
+  stringSchema,
+} from "./schemas.js";
 import type { BuildCommandOptions, GenerateCommandOptions } from "./types.js";
 
 const _require = createRequire(import.meta.url);
