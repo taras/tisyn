@@ -60,6 +60,7 @@ Tisyn is easiest to understand as layers:
 
 5. Tooling and verification
    - [`@tisyn/compiler`](./packages/compiler/README.md): compile restricted generator-shaped TypeScript into Tisyn IR
+   - [`@tisyn/dsl-parser`](./packages/dsl-parser/README.md): parse Tisyn Constructor DSL text into IR (inverse of `print()`)
    - [`@tisyn/conformance`](./packages/conformance/README.md): fixture harness for validating runtime behavior
 
 ## Recommended reading order
@@ -71,6 +72,7 @@ Start in different places depending on what you want to learn.
 - Read [`@tisyn/runtime`](./packages/runtime/README.md) and [`@tisyn/durable-streams`](./packages/durable-streams/README.md) if you want to understand execution and continuation.
 - Read [`@tisyn/agent`](./packages/agent/README.md), [`@tisyn/protocol`](./packages/protocol/README.md), and [`@tisyn/transport`](./packages/transport/README.md) if you want to understand host/agent integration and cross-boundary execution.
 - Read [`@tisyn/compiler`](./packages/compiler/README.md) if you want to generate IR from TypeScript source instead of building IR by hand.
+- Read [`@tisyn/dsl-parser`](./packages/dsl-parser/README.md) if you want to parse Constructor DSL text (e.g. from an LLM) back into IR.
 
 ## Package guide
 
@@ -85,6 +87,7 @@ Start in different places depending on what you want to learn.
 | [`@tisyn/protocol`](./packages/protocol/README.md) | Parsed/constructed protocol messages for host-agent communication |
 | [`@tisyn/transport`](./packages/transport/README.md) | Protocol sessions and transports like `stdio`, `websocket`, `worker`, and `sse-post` |
 | [`@tisyn/compiler`](./packages/compiler/README.md) | Compile restricted TypeScript generator functions into Tisyn IR |
+| [`@tisyn/dsl-parser`](./packages/dsl-parser/README.md) | Parse Tisyn Constructor DSL text into IR; inverse of `print()` |
 | [`@tisyn/conformance`](./packages/conformance/README.md) | Execute fixtures against the runtime to verify behavior |
 
 ## Typical flows
@@ -125,6 +128,7 @@ For the detailed agent model and API examples, see [`@tisyn/agent`](./packages/a
 | [Compiler Specification 1.1.0](./specs/tisyn-compiler-specification-1.1.0.md) | TypeScript-to-IR compilation rules and restrictions |
 | [Compound Concurrency Spec](./specs/tisyn-compound-concurrency-spec.md) | `all` and `race` orchestration semantics |
 | [Authoring Layer Spec](./specs/tisyn-authoring-layer-spec.md) | Generator-based authoring format and contract declarations |
+| [Constructor DSL Specification](./specs/tisyn-constructor-dsl-specification.md) | Grammar, constructor table, and recovery semantics for the DSL parser |
 | [Architecture](./specs/tisyn-architecture.md) | System architecture and package relationships |
 
 ## Design summary
