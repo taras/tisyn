@@ -99,8 +99,20 @@ export function tokenize(source: string): Token[] {
     if ((ch === "-" && isDigit(peek(1))) || isDigit(ch)) {
       let raw = "";
       if (source[i] === "-") raw += advance(); // optional leading minus
-      // Integer part
-      while (i < source.length && isDigit(source[i])) raw += advance();
+      // Integer part: JSON forbids leading zeroes — '0' may not be followed by another digit
+      if (source[i] === "0") {
+        raw += advance(); // consume the '0'
+        if (i < source.length && isDigit(source[i])) {
+          throw new DSLParseError(
+            `Invalid number: leading zeroes are not permitted`,
+            startLine,
+            startCol,
+            startOffset,
+          );
+        }
+      } else {
+        while (i < source.length && isDigit(source[i])) raw += advance();
+      }
       // Fractional part: '.' must be followed by at least one digit
       if (i < source.length && source[i] === ".") {
         if (!isDigit(source[i + 1] ?? "")) {

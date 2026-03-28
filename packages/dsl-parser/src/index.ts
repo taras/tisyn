@@ -63,8 +63,9 @@ export function parseDSLWithRecovery(
   const first = parseDSLSafe(source);
   if (first.ok) return first;
 
-  // Only attempt recovery for EOF failures (recovery field is present)
-  if (!first.recovery) return first;
+  // Only attempt recovery when the parser's frame simulation confirmed every
+  // open frame can be satisfied by closing pending delimiters.
+  if (!first.recovery?.autoClosable) return first;
 
   const repaired = tryAutoCloseImpl(source, parseDSLSafe);
   if (repaired === null) return first;

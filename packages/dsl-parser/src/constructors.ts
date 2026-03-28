@@ -77,6 +77,13 @@ function requireArray(
   }
 }
 
+const TAGGED_NODE_KINDS = new Set(["eval", "quote", "ref", "fn"]);
+
+function isTaggedNode(v: object): boolean {
+  const tisyn = (v as Record<string, unknown>)["tisyn"];
+  return typeof tisyn === "string" && TAGGED_NODE_KINDS.has(tisyn);
+}
+
 function requirePlainObject(
   v: TisynExpr,
   label: string,
@@ -86,7 +93,7 @@ function requirePlainObject(
     v === null ||
     typeof v !== "object" ||
     Array.isArray(v) ||
-    ("tisyn" in (v as object))
+    isTaggedNode(v as object)
   ) {
     throw new DSLParseError(label, tok.line, tok.column, tok.offset);
   }

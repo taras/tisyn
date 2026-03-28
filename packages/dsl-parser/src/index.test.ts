@@ -569,7 +569,40 @@ describe("DSL-206: trailing comma in array", () => {
 
 // ── Malformed number literals ─────────────────────────────────────────────────
 
+describe("Construct with 'tisyn' key in data object", () => {
+  it("accepts Construct({ tisyn: 1 }) — plain object, not a tagged node", () => {
+    const result = parseDSLSafe('Construct({ tisyn: 1 })');
+    expect(result.ok).toBe(true);
+  });
+
+  it("round-trips Construct({ tisyn: 1 })", () => {
+    const expected = Construct({ tisyn: 1 as never });
+    roundTrip(expected);
+  });
+
+  it("rejects Construct(Ref('x')) — tagged node, not a plain object", () => {
+    const result = parseDSLSafe('Construct(Ref("x"))');
+    expect(result.ok).toBe(false);
+  });
+});
+
 describe("Malformed numbers rejected by tokenizer", () => {
+  it("rejects 01 (leading zero)", () => {
+    expect(parseDSLSafe("01").ok).toBe(false);
+  });
+
+  it("rejects -01 (leading zero after minus)", () => {
+    expect(parseDSLSafe("-01").ok).toBe(false);
+  });
+
+  it("accepts 0 (bare zero is valid)", () => {
+    expect(parseDSL("0")).toBe(0);
+  });
+
+  it("accepts 0.5 (zero before decimal is valid)", () => {
+    expect(parseDSL("0.5")).toBeCloseTo(0.5);
+  });
+
   it("rejects 1. (no digits after decimal point)", () => {
     expect(parseDSLSafe("Add(1., 2)").ok).toBe(false);
   });
