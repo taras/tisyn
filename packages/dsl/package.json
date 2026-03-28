@@ -1,0 +1,36 @@
+{
+  "name": "@tisyn/dsl",
+  "version": "0.1.0",
+  "license": "UNLICENSED",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/taras/tisyn.git",
+    "directory": "packages/dsl"
+  },
+  "files": [
+    "dist"
+  ],
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "scripts": {
+    "build": "tsc --build",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@tisyn/ir": "workspace:*",
+    "effection": "^3 || ^4"
+  },
+  "devDependencies": {
+    "vitest": "^4"
+  }
+}
