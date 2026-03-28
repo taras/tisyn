@@ -567,6 +567,38 @@ describe("DSL-206: trailing comma in array", () => {
   });
 });
 
+// ── Malformed number literals ─────────────────────────────────────────────────
+
+describe("Malformed numbers rejected by tokenizer", () => {
+  it("rejects 1. (no digits after decimal point)", () => {
+    expect(parseDSLSafe("Add(1., 2)").ok).toBe(false);
+  });
+
+  it("rejects 1e (no digits after exponent)", () => {
+    expect(parseDSLSafe("Add(1e, 2)").ok).toBe(false);
+  });
+
+  it("rejects 1e+ (sign but no exponent digits)", () => {
+    expect(parseDSLSafe("Add(1e+, 2)").ok).toBe(false);
+  });
+
+  it("rejects 1E- (sign but no exponent digits)", () => {
+    expect(parseDSLSafe("Add(1E-, 2)").ok).toBe(false);
+  });
+
+  it("accepts 1.5 (valid float)", () => {
+    expect(parseDSLSafe("Add(1.5, 2)").ok).toBe(true);
+  });
+
+  it("accepts 1e10 (valid exponent)", () => {
+    expect(parseDSLSafe("Add(1e10, 2)").ok).toBe(true);
+  });
+
+  it("accepts 1e+10 (valid signed exponent)", () => {
+    expect(parseDSLSafe("Add(1e+10, 2)").ok).toBe(true);
+  });
+});
+
 // ── ArgList: no trailing comma ────────────────────────────────────────────────
 
 describe("ArgList: trailing comma is rejected", () => {

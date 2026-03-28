@@ -58,10 +58,29 @@ function expect(state: ParserState, kind: Token["kind"]): Token {
 }
 
 function buildRecoveryInfo(state: ParserState, expected: string): RecoveryInfo {
-  const autoClosable =
-    state.frameStack.every((f) => f.argsReceived >= f.minArgs) &&
-    state.bracketDepth === 0 &&
-    state.braceDepth === 0;
+  // Simulate closing all pending delimiters innermost-first to determine
+  // whether the repaired source would satisfy arity for every open frame.
+  //
+  // Each open bracket or brace represents one in-progress expression that will
+  // complete as an argument to the current innermost frame when closed.
+  // Each completed inner frame contributes +1 to the frame that contains it.
+  //
+  // Walk from innermost to outermost:
+  //   effective = frame.argsReceived + pending
+  //   if effective >= frame.minArgs → frame is closeable; contributes 1 outward
+  //   else → cannot close without inventing missing args → not auto-closable
+  let autoClosable = true;
+  let pending = state.bracketDepth + state.braceDepth;
+  for (let i = state.frameStack.length - 1; i >= 0; i--) {
+    const f = state.frameStack[i]!;
+    const effective = f.argsReceived + pending;
+    if (effective < f.minArgs) {
+      autoClosable = false;
+      break;
+    }
+    // This frame is closeable; it will contribute one expression outward
+    pending = 1;
+  }
 
   return {
     expected,

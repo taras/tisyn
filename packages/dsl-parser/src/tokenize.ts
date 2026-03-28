@@ -94,34 +94,38 @@ export function tokenize(source: string): Token[] {
     }
 
     // Number: -?[0-9]+(\.[0-9]+)?([eE][+-]?[0-9]+)?
-    // '-' only starts a number if followed by a digit
-    if (ch === "-" && isDigit(peek(1))) {
+    // JSON number rules: at least one digit required after '.' and after 'e'/'E'.
+    // '-' only starts a number if immediately followed by a digit.
+    if ((ch === "-" && isDigit(peek(1))) || isDigit(ch)) {
       let raw = "";
-      raw += advance(); // '-'
+      if (source[i] === "-") raw += advance(); // optional leading minus
+      // Integer part
       while (i < source.length && isDigit(source[i])) raw += advance();
+      // Fractional part: '.' must be followed by at least one digit
       if (i < source.length && source[i] === ".") {
+        if (!isDigit(source[i + 1] ?? "")) {
+          throw new DSLParseError(
+            `Invalid number: at least one digit required after '.'`,
+            startLine,
+            startCol,
+            startOffset,
+          );
+        }
         raw += advance(); // '.'
         while (i < source.length && isDigit(source[i])) raw += advance();
       }
+      // Exponent part: 'e'/'E' must be followed by at least one digit (with optional sign)
       if (i < source.length && (source[i] === "e" || source[i] === "E")) {
-        raw += advance();
+        raw += advance(); // 'e' or 'E'
         if (i < source.length && (source[i] === "+" || source[i] === "-")) raw += advance();
-        while (i < source.length && isDigit(source[i])) raw += advance();
-      }
-      tokens.push(makeToken("NUMBER", raw, startOffset, startLine, startCol));
-      continue;
-    }
-
-    if (isDigit(ch)) {
-      let raw = "";
-      while (i < source.length && isDigit(source[i])) raw += advance();
-      if (i < source.length && source[i] === ".") {
-        raw += advance();
-        while (i < source.length && isDigit(source[i])) raw += advance();
-      }
-      if (i < source.length && (source[i] === "e" || source[i] === "E")) {
-        raw += advance();
-        if (i < source.length && (source[i] === "+" || source[i] === "-")) raw += advance();
+        if (!isDigit(source[i] ?? "")) {
+          throw new DSLParseError(
+            `Invalid number: at least one digit required after exponent`,
+            startLine,
+            startCol,
+            startOffset,
+          );
+        }
         while (i < source.length && isDigit(source[i])) raw += advance();
       }
       tokens.push(makeToken("NUMBER", raw, startOffset, startLine, startCol));
