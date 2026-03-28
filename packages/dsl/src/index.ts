@@ -53,9 +53,7 @@ export function parseDSLSafe(source: string): Result<TisynExpr> {
  *
  * This is the recommended entry point for LLM-generated input.
  */
-export function parseDSLWithRecovery(
-  source: string,
-): Result<TisynExpr> & { repaired?: string } {
+export function parseDSLWithRecovery(source: string): Result<TisynExpr> & { repaired?: string } {
   const first = parseDSLSafe(source);
   if (first.ok) return first;
 
