@@ -16,6 +16,7 @@
   "files": [],
   "references": [
     { "path": "packages/ir" },
+    { "path": "packages/dsl-parser" },
     { "path": "packages/kernel" },
     { "path": "packages/durable-streams" },
     { "path": "packages/runtime" },
