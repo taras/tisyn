@@ -6,5 +6,5 @@
   },
   "include": ["src"],
   "exclude": ["src/**/*.test.ts"],
-  "references": [{ "path": "../ir" }, { "path": "../validate" }]
+  "references": [{ "path": "../compiler" }]
 }

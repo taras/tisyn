@@ -111,7 +111,11 @@ export const chat: TisynFn<[], unknown> = Fn(
           ),
         ),
       ),
-      Call(Ref("__loop_0"), Ref("history_0")),
+      Let(
+        "__loop_result_0",
+        Call(Ref("__loop_0"), Ref("history_0")),
+        Get(Ref("__loop_result_0"), "__value"),
+      ),
     ),
   ),
 );

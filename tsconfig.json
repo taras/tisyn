@@ -22,6 +22,7 @@
     { "path": "packages/runtime" },
     { "path": "packages/agent" },
     { "path": "packages/conformance" },
+    { "path": "packages/cli" },
     { "path": "packages/compiler" },
     { "path": "packages/protocol" },
     { "path": "packages/transport" },
