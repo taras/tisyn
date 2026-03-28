@@ -1,12 +1,39 @@
 import { describe, it, expect } from "vitest";
 import { print } from "@tisyn/ir";
 import {
-  Ref, Q, Fn, Let, Seq, If, While, Call, Get,
-  Add, Sub, Mul, Div, Mod, Neg,
-  Gt, Gte, Lt, Lte, Eq, Neq,
-  And, Or, Not,
-  Construct, Arr, Concat, ConcatArrays, MergeObjects,
-  Throw, Eval, All, Race,
+  Ref,
+  Q,
+  Fn,
+  Let,
+  Seq,
+  If,
+  While,
+  Call,
+  Get,
+  Add,
+  Sub,
+  Mul,
+  Div,
+  Mod,
+  Neg,
+  Gt,
+  Gte,
+  Lt,
+  Lte,
+  Eq,
+  Neq,
+  And,
+  Or,
+  Not,
+  Construct,
+  Arr,
+  Concat,
+  ConcatArrays,
+  MergeObjects,
+  Throw,
+  Eval,
+  All,
+  Race,
 } from "@tisyn/ir";
 import {
   parseDSL,
@@ -22,7 +49,9 @@ import {
 function roundTrip(expr: any) {
   const src = print(expr);
   const result = parseDSLSafe(src);
-  expect(result.ok, `parseDSL(print(expr)) failed: ${!result.ok && result.error.message}`).toBe(true);
+  expect(result.ok, `parseDSL(print(expr)) failed: ${!result.ok && result.error.message}`).toBe(
+    true,
+  );
   if (result.ok) expect(result.ir).toEqual(expr);
 }
 
@@ -266,9 +295,7 @@ describe("DSL-061: Let + Fn + Call", () => {
   it("parses", () => {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const expected = Let("f", Fn(["x"], Add(Ref("x"), 1) as never), (Call as any)(Ref("f"), [42]));
-    const result = parseDSLSafe(
-      'Let("f", Fn(["x"], Add(Ref("x"), 1)), Call(Ref("f"), [42]))',
-    );
+    const result = parseDSLSafe('Let("f", Fn(["x"], Add(Ref("x"), 1)), Call(Ref("f"), [42]))');
     expect(result.ok).toBe(true);
     if (result.ok) expect(result.ir).toEqual(expected);
   });
@@ -587,7 +614,7 @@ describe("DSL-206: trailing comma in array", () => {
 
 describe("Construct with 'tisyn' key in data object", () => {
   it("accepts Construct({ tisyn: 1 }) — plain object, not a tagged node", () => {
-    const result = parseDSLSafe('Construct({ tisyn: 1 })');
+    const result = parseDSLSafe("Construct({ tisyn: 1 })");
     expect(result.ok).toBe(true);
   });
 

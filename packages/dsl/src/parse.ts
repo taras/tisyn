@@ -149,12 +149,7 @@ function parseExpr(state: ParserState): TisynExpr {
     return parseObjectLit(state);
   }
 
-  throw new DSLParseError(
-    `Unexpected token '${tok.value}'`,
-    tok.line,
-    tok.column,
-    tok.offset,
-  );
+  throw new DSLParseError(`Unexpected token '${tok.value}'`, tok.line, tok.column, tok.offset);
 }
 
 function parseConstructorCall(state: ParserState): TisynExpr {

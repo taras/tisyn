@@ -44,34 +44,19 @@ export interface ConstructorEntry {
   dispatch(args: TisynExpr[], tok: Token): TisynExpr;
 }
 
-function requireString(
-  v: TisynExpr,
-  label: string,
-  tok: Token,
-): asserts v is string {
+function requireString(v: TisynExpr, label: string, tok: Token): asserts v is string {
   if (typeof v !== "string") {
     throw new DSLParseError(label, tok.line, tok.column, tok.offset);
   }
 }
 
-function requireStringArray(
-  v: TisynExpr,
-  label: string,
-  tok: Token,
-): asserts v is string[] {
-  if (
-    !Array.isArray(v) ||
-    !(v as unknown[]).every((x) => typeof x === "string")
-  ) {
+function requireStringArray(v: TisynExpr, label: string, tok: Token): asserts v is string[] {
+  if (!Array.isArray(v) || !(v as unknown[]).every((x) => typeof x === "string")) {
     throw new DSLParseError(label, tok.line, tok.column, tok.offset);
   }
 }
 
-function requireArray(
-  v: TisynExpr,
-  label: string,
-  tok: Token,
-): asserts v is TisynExpr[] {
+function requireArray(v: TisynExpr, label: string, tok: Token): asserts v is TisynExpr[] {
   if (!Array.isArray(v)) {
     throw new DSLParseError(label, tok.line, tok.column, tok.offset);
   }
@@ -89,12 +74,7 @@ function requirePlainObject(
   label: string,
   tok: Token,
 ): asserts v is Record<string, TisynExpr> {
-  if (
-    v === null ||
-    typeof v !== "object" ||
-    Array.isArray(v) ||
-    isTaggedNode(v as object)
-  ) {
+  if (v === null || typeof v !== "object" || Array.isArray(v) || isTaggedNode(v as object)) {
     throw new DSLParseError(label, tok.line, tok.column, tok.offset);
   }
 }
@@ -147,11 +127,7 @@ export const CONSTRUCTOR_TABLE: Record<string, ConstructorEntry> = {
     minArgs: 2,
     maxArgs: 3,
     dispatch(args) {
-      return If(
-        args[0] as AnyExpr,
-        args[1] as AnyExpr,
-        args[2] as AnyExpr,
-      ) as TisynExpr;
+      return If(args[0] as AnyExpr, args[1] as AnyExpr, args[2] as AnyExpr) as TisynExpr;
     },
   },
   While: {

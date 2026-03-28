@@ -150,12 +150,7 @@ export function tokenize(source: string): Token[] {
       let decoded = "";
       while (i < source.length && source[i] !== '"') {
         if (source[i] === "\n") {
-          throw new DSLParseError(
-            "Unterminated string literal",
-            startLine,
-            startCol,
-            startOffset,
-          );
+          throw new DSLParseError("Unterminated string literal", startLine, startCol, startOffset);
         }
         if (source[i] === "\\") {
           advance(); // backslash
@@ -206,12 +201,7 @@ export function tokenize(source: string): Token[] {
               const hex = source.slice(i, i + 4);
               const code = parseInt(hex, 16);
               if (isNaN(code)) {
-                throw new DSLParseError(
-                  `Invalid \\u escape: \\u${hex}`,
-                  line,
-                  col,
-                  i,
-                );
+                throw new DSLParseError(`Invalid \\u escape: \\u${hex}`, line, col, i);
               }
               decoded += String.fromCharCode(code);
               // advance 4 chars manually (they may not be newlines)
@@ -219,12 +209,7 @@ export function tokenize(source: string): Token[] {
               break;
             }
             default:
-              throw new DSLParseError(
-                `Invalid escape sequence: \\${esc}`,
-                line,
-                col,
-                i - 1,
-              );
+              throw new DSLParseError(`Invalid escape sequence: \\${esc}`, line, col, i - 1);
           }
         } else {
           decoded += advance();

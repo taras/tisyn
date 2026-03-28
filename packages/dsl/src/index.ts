@@ -6,13 +6,7 @@ import { DSLParseError } from "./errors.js";
 import type { ParseResult, RecoveryInfo } from "./types.js";
 
 export { DSLParseError } from "./errors.js";
-export type {
-  ParseResult,
-  ParseSuccess,
-  ParseFailure,
-  RecoveryInfo,
-  FrameInfo,
-} from "./types.js";
+export type { ParseResult, ParseSuccess, ParseFailure, RecoveryInfo, FrameInfo } from "./types.js";
 
 export { print } from "@tisyn/ir";
 export type { PrintOptions } from "@tisyn/ir";
@@ -60,9 +54,7 @@ export function parseDSLSafe(source: string): ParseResult {
  *
  * This is the recommended entry point for LLM-generated input.
  */
-export function parseDSLWithRecovery(
-  source: string,
-): ParseResult & { repaired?: string } {
+export function parseDSLWithRecovery(source: string): ParseResult & { repaired?: string } {
   const first = parseDSLSafe(source);
   if (first.ok) return first;
 
