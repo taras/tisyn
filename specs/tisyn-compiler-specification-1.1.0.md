@@ -423,15 +423,23 @@ The body and catch branches participate in a join following the same machinery a
 
 **Phase B: finally compilation**
 
-Compile the `finally` block in a clone of the **original pre-try ctx** using `emitStatementBody` (no join terminal). References inside `finally` use pre-try SSA versions. The compiled expression is passed as the fourth argument to `Try(...)`. Finally does NOT contribute to post-try SSA state — its result is discarded by the kernel.
+Finally compilation depends on whether `J_bc` is empty or non-empty:
+
+- **J_bc empty:** Compile `finally` in a clone of the current ctx (no join vars, no unpack needed). Pass as the fourth argument to `Try(...)`; no `finallyPayload`.
+
+- **J_bc non-empty:** Compile `finally` in a clone of the **post-join ctx** (after `applyJoinVersions`). Generate a fresh name `fp` from the counter. Wrap the compiled finally body with a Let-chain that unpacks join vars from `Ref(fp)`:
+  - Single join var `x` (post-join SSA name `x_N`): `Let("x_N", Ref(fp), compiledFinally)`
+  - Multiple join vars `{x, y}` (post-join names `x_N`, `y_N`): `Let("x_N", Get(Ref(fp), "x"), Let("y_N", Get(Ref(fp), "y"), compiledFinally))`
+  Pass the wrapped expression as `finallyBody` and `fp` as `finallyPayload` in `Try(body, catchParam, catchBody, finallyBody, fp)`.
+
+**Known limitation (J_bc non-empty, uncaught error path):** When the try body throws without a catch (or the catch itself throws after updating state), the kernel's `outcome.ok` is false. In that case, `finallyPayload` is not bound and the finally body evaluates in the pre-try env, which may not reflect state changes made inside throwing Let-chains. This is a consequence of the kernel's functional immutable env model; no compiler transformation can recover intermediate env state from a throw without kernel-level env-snapshot support.
 
 **emitTryStatement flow:**
 1. Check all clauses for `return` → E033 if found.
 2. Check for catch without binding → E034 if present.
 3. Scan `finally` for outer-binding assignments → E035 if found.
-4. Compile `finally` in original ctx clone → `finallyExpr`.
-5. Dry-run body and catch in ctx clones; collect `J_bc`.
-6. Emit per the J_bc cases above.
+4. Dry-run body and catch in ctx clones; collect `J_bc`.
+5. Emit per the J_bc cases above (finally compiled inside each branch).
 
 **Journal equivalence:** source containing `try/catch/finally` produces identical journals to equivalent generator-level error handling, because no new event types are added and yieldIndex is monotonic across phases.
 

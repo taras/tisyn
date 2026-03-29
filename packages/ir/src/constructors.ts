@@ -195,6 +195,7 @@ export function Try<T>(
   catchParam?: string,
   catchBody?: Expr<T>,
   finallyBody?: Expr<unknown>,
+  finallyPayload?: string,
 ): EvalT<T> {
   const fields: Record<string, unknown> = { body };
   if (catchParam !== undefined) {
@@ -205,6 +206,9 @@ export function Try<T>(
   }
   if (finallyBody !== undefined) {
     fields["finally"] = finallyBody;
+  }
+  if (finallyPayload !== undefined) {
+    fields["finallyPayload"] = finallyPayload;
   }
   return {
     tisyn: "eval",

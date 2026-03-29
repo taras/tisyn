@@ -97,6 +97,7 @@ export interface TryShape {
   readonly catchParam?: string;
   readonly catchBody?: TisynExpr;
   readonly finally?: TisynExpr;
+  readonly finallyPayload?: string;
 }
 
 export interface AllShape {

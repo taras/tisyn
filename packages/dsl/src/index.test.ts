@@ -723,6 +723,10 @@ describe("All constructors round-trip via print", () => {
       "Try/catch/finally",
       Try(Throw("boom" as never), "e", Ref("e") as never, Ref("y") as never),
     ],
+    [
+      "Try/finally/finallyPayload",
+      Try(Ref("x") as never, undefined, undefined, Ref("y") as never, "fp_0"),
+    ],
   ];
 
   for (const [name, expr] of cases) {
@@ -781,6 +785,26 @@ describe("DSL-083: Try — argument validation errors", () => {
   });
   it("rejects Try with empty-string catchParam", () => {
     const result = parseDSLSafe('Try(Ref("x"), "", Ref("e"))');
+    expect(result.ok).toBe(false);
+  });
+});
+
+describe("DSL-084: Try — finallyPayload (5th arg)", () => {
+  it("parses Try(body, undefined, undefined, finallyBody, fp)", () => {
+    const expected = Try(Ref("x") as never, undefined, undefined, Ref("y") as never, "fp_0");
+    const result = parseDSLSafe('Try(Ref("x"), undefined, undefined, Ref("y"), "fp_0")');
+    expect(result.ok).toBe(true);
+    if (result.ok) {
+      expect(result.value).toEqual(expected);
+    }
+  });
+  it("round-trips Try with finallyPayload", () => {
+    roundTrip(
+      Try(Ref("x") as never, undefined, undefined, Ref("y") as never, "fp_0") as never,
+    );
+  });
+  it("rejects empty-string finallyPayload", () => {
+    const result = parseDSLSafe('Try(Ref("x"), undefined, undefined, Ref("y"), "")');
     expect(result.ok).toBe(false);
   });
 });

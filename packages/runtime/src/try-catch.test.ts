@@ -109,4 +109,88 @@ describe("try/catch runtime integration", () => {
     expect(err).toBeInstanceOf(Error);
     expect(err.message).toBe("test message");
   });
+
+  it("finallyPayload: finally env receives body outcome value when body succeeds", function* () {
+    let capturedValue: unknown = "NOT_CAPTURED";
+
+    yield* Dispatch.around({
+      *dispatch([effectId, data]: [string, unknown]) {
+        if (effectId === "cap.capture") {
+          capturedValue = data;
+          return null;
+        }
+        return 77; // body effect
+      },
+    });
+
+    // Try body: effect returns 77
+    // Finally: capture Ref("fp_0") — should receive 77 (the body outcome value)
+    const ir = Try(
+      effectIR("svc", "op") as never,
+      undefined,
+      undefined,
+      ({ tisyn: "eval", id: "cap.capture", data: { tisyn: "ref", name: "fp_0" } }) as never,
+      "fp_0",
+    );
+
+    yield* execute({ ir: ir as never });
+    expect(capturedValue).toBe(77);
+  });
+
+  it("finallyPayload: finally env receives catch outcome value when body throws", function* () {
+    let capturedValue: unknown = "NOT_CAPTURED";
+
+    yield* Dispatch.around({
+      *dispatch([effectId, data]: [string, unknown]) {
+        if (effectId === "cap.capture") {
+          capturedValue = data;
+          return null;
+        }
+        // body effect throws
+        throw new Error("body failure");
+      },
+    });
+
+    // Try body: effect throws; catch returns 88; finally captures Ref("fp_0") = 88
+    const ir = Try(
+      effectIR("svc", "op") as never,
+      "e",
+      88 as never, // catch body: literal 88
+      ({ tisyn: "eval", id: "cap.capture", data: { tisyn: "ref", name: "fp_0" } }) as never,
+      "fp_0",
+    );
+
+    yield* execute({ ir: ir as never });
+    expect(capturedValue).toBe(88);
+  });
+
+  it("regression: no finallyPayload — finally still runs in pre-try env", function* () {
+    let finallyCalled = false;
+
+    yield* Dispatch.around({
+      // biome-ignore lint/correctness/useYield: mock
+      *dispatch([effectId]: [string, unknown]) {
+        if (effectId === "cap.finally") {
+          finallyCalled = true;
+          return null;
+        }
+        return 55;
+      },
+    });
+
+    // No finallyPayload — plain finally, classic behavior
+    const ir = Try(
+      effectIR("svc", "op") as never,
+      undefined,
+      undefined,
+      effectIR("cap", "finally") as never,
+    );
+
+    const { result } = yield* execute({ ir: ir as never });
+    expect(finallyCalled).toBe(true);
+    expect(result.status).toBe("ok");
+    if (result.status === "ok") {
+      expect(result.value).toBe(55);
+    }
+  });
 });

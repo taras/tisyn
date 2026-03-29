@@ -554,17 +554,20 @@ eval_structural("throw", D, E):
 
 ### 5.16 `try`
 
-**Shape:** `data: Q({ body: Expr, catchParam?: string, catchBody?: Expr, finally?: Expr })`
+**Shape:** `data: Q({ body: Expr, catchParam?: string, catchBody?: Expr, finally?: Expr, finallyPayload?: string })`
 
 Constraints: at least one of `catchBody` or `finally` must be present.
 If `catchParam` is present, `catchBody` must be present.
 `catchParam` must be a non-empty string when present.
+`finallyPayload` must be a non-empty string when present.
+`finally` must be present when `finallyPayload` is present.
 Absent fields are omitted (not null).
 
 ```
 eval_structural("try", D, E):
   { body, catchParam, catchBody } = unquote(D, E)
   finallyBody = fields["finally"]
+  fp = fields["finallyPayload"]   // optional binding name
 
   type Outcome = { ok: true, value: Val } | { ok: false, error: unknown }
   let outcome: Outcome
@@ -590,7 +593,8 @@ eval_structural("try", D, E):
 
   // Phase 3: finally — result DISCARDED; error replaces prior outcome
   if finallyBody present:
-    eval(finallyBody, E)     // natural throw propagation; result discarded
+    E_finally = (fp present AND outcome.ok) ? extend(E, fp, outcome.value) : E
+    eval(finallyBody, E_finally)   // natural throw propagation; result discarded
 
   if outcome.ok: return outcome.value
   raise outcome.error

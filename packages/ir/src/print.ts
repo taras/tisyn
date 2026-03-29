@@ -210,16 +210,23 @@ function printStructural(
         catchParam?: string;
         catchBody?: TisynExpr;
         finally?: TisynExpr;
+        finallyPayload?: string;
       };
       const args: string[] = [printNode(s.body, depth + 1, opts)];
-      if (s.catchParam !== undefined || s.catchBody !== undefined || s["finally"] !== undefined) {
+      const hasCatch = s.catchParam !== undefined || s.catchBody !== undefined;
+      const hasFinally = s["finally"] !== undefined;
+      const hasPayload = s.finallyPayload !== undefined;
+      if (hasCatch || hasFinally || hasPayload) {
         args.push(s.catchParam !== undefined ? JSON.stringify(s.catchParam) : "undefined");
       }
-      if (s.catchBody !== undefined || s["finally"] !== undefined) {
+      if (s.catchBody !== undefined || hasFinally || hasPayload) {
         args.push(s.catchBody !== undefined ? printNode(s.catchBody, depth + 1, opts) : "undefined");
       }
-      if (s["finally"] !== undefined) {
-        args.push(printNode(s["finally"], depth + 1, opts));
+      if (hasFinally || hasPayload) {
+        args.push(hasFinally ? printNode(s["finally"]!, depth + 1, opts) : "undefined");
+      }
+      if (hasPayload) {
+        args.push(JSON.stringify(s.finallyPayload));
       }
       return formatCall("Try", args, depth, opts);
     }

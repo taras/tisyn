@@ -327,7 +327,7 @@ than the maximum. Variadic constructors have `maxArgs = ∞`.
 | `ConcatArrays` | 0   | ∞   | `ConcatArrays(...expr[])`                |
 | `MergeObjects` | 0   | ∞   | `MergeObjects(...expr[])`                |
 | `Throw`        | 1   | 1   | `Throw(expr)`                            |
-| `Try`          | 1   | 4   | `Try(expr, string?, expr?, expr?)`       |
+| `Try`          | 1   | 5   | `Try(expr, string?, expr?, expr?, string?)` |
 | `Eval`         | 2   | 2   | `Eval(string, expr)`                     |
 | `All`          | 0   | ∞   | `All(...expr[])`                         |
 | `Race`         | 0   | ∞   | `Race(...expr[])`                        |
@@ -353,6 +353,7 @@ or any IR structure directly.
 - Arg 2 (catchParam): optional; if supplied, must be a non-empty string literal (not an Expr). If it is an empty string, emit a DSL-level diagnostic.
 - Arg 3 (catchBody): optional. Must be present if arg 2 (catchParam) is present.
 - Arg 4 (finallyBody): optional.
+- Arg 5 (finallyPayload): optional; if supplied, must be a non-empty string literal. If it is an empty string, emit a DSL-level diagnostic. `finallyPayload` requires `finallyBody` (arg 4) to also be present.
 - At least one of arg 3 (catchBody) or arg 4 (finallyBody) must be present.
 
 ### 4.5 Extensibility

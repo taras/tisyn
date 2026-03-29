@@ -304,12 +304,13 @@ export const CONSTRUCTOR_TABLE: Record<string, ConstructorEntry> = {
   },
   Try: {
     minArgs: 1,
-    maxArgs: 4,
+    maxArgs: 5,
     dispatch(args, tok) {
       const body = args[0] as AnyExpr;
       const catchParam = args[1];
       const catchBody = args[2] as AnyExpr | undefined;
       const finallyBody = args[3] as AnyExpr | undefined;
+      const finallyPayload = args[4];
       if (catchParam !== undefined) {
         requireString(catchParam, "Try catchParam must be a string", tok);
         if (catchParam === "") {
@@ -322,7 +323,13 @@ export const CONSTRUCTOR_TABLE: Record<string, ConstructorEntry> = {
       if (catchBody === undefined && finallyBody === undefined) {
         throw new DSLParseError("Try: at least one of catchBody or finallyBody must be present", tok.line, tok.column, tok.offset);
       }
-      return Try(body, catchParam as string | undefined, catchBody, finallyBody) as TisynExpr;
+      if (finallyPayload !== undefined) {
+        requireString(finallyPayload, "Try finallyPayload must be a string", tok);
+        if (finallyPayload === "") {
+          throw new DSLParseError("Try finallyPayload must not be empty", tok.line, tok.column, tok.offset);
+        }
+      }
+      return Try(body, catchParam as string | undefined, catchBody, finallyBody, finallyPayload as string | undefined) as TisynExpr;
     },
   },
   Eval: {

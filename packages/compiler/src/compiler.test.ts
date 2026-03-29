@@ -909,6 +909,129 @@ describe("Try/catch/finally compilation", () => {
       `),
     ).toThrow("E035");
   });
+
+  it("J_bc non-empty + finally: emits finallyPayload and Let-unpack wrapper (single join var)", () => {
+    const ir = compileOne(`
+      function* f(): Workflow<number> {
+        let x = 0;
+        try {
+          x = 1;
+        } finally {
+          x;
+        }
+        return x;
+      }
+    `) as any;
+    // Walk to find the try node (nested inside Let chains)
+    function findTry(node: unknown): Record<string, any> | undefined {
+      if (typeof node !== "object" || node === null) return undefined;
+      const obj = node as Record<string, any>;
+      if (obj["tisyn"] === "eval" && obj["id"] === "try") return obj;
+      for (const v of Object.values(obj)) {
+        const found = findTry(v);
+        if (found) return found;
+      }
+      return undefined;
+    }
+    const tryNode = findTry(ir);
+    expect(tryNode).toBeDefined();
+    // finallyPayload must be present
+    expect(tryNode!.data.expr.finallyPayload).toBeDefined();
+    expect(typeof tryNode!.data.expr.finallyPayload).toBe("string");
+    // finallyExpr must start with a Let that unpacks from Ref(finallyPayload)
+    const finallyExpr = tryNode!.data.expr["finally"];
+    expect(finallyExpr).toBeDefined();
+    expect(finallyExpr.id).toBe("let");
+    const fp = tryNode!.data.expr.finallyPayload;
+    expect(finallyExpr.data.expr.value).toEqual({ tisyn: "ref", name: fp });
+  });
+
+  it("J_bc non-empty + try/finally only (no catch): finallyPayload present, no catchBody", () => {
+    const ir = compileOne(`
+      function* f(): Workflow<number> {
+        let x = 0;
+        try {
+          x = 1;
+        } finally {
+          x;
+        }
+        return x;
+      }
+    `) as any;
+    function findTry(node: unknown): Record<string, any> | undefined {
+      if (typeof node !== "object" || node === null) return undefined;
+      const obj = node as Record<string, any>;
+      if (obj["tisyn"] === "eval" && obj["id"] === "try") return obj;
+      for (const v of Object.values(obj)) {
+        const found = findTry(v);
+        if (found) return found;
+      }
+      return undefined;
+    }
+    const tryNode = findTry(ir);
+    expect(tryNode).toBeDefined();
+    expect(tryNode!.data.expr.finallyPayload).toBeDefined();
+    expect(tryNode!.data.expr.catchBody).toBeUndefined();
+    expect(tryNode!.data.expr.catchParam).toBeUndefined();
+  });
+
+  it("J_bc non-empty + try/catch/finally: finallyPayload present with catch clauses", () => {
+    const ir = compileOne(`
+      function* f(): Workflow<number> {
+        let x = 0;
+        try {
+          x = 1;
+        } catch (e) {
+          x = 2;
+        } finally {
+          x;
+        }
+        return x;
+      }
+    `) as any;
+    function findTry(node: unknown): Record<string, any> | undefined {
+      if (typeof node !== "object" || node === null) return undefined;
+      const obj = node as Record<string, any>;
+      if (obj["tisyn"] === "eval" && obj["id"] === "try") return obj;
+      for (const v of Object.values(obj)) {
+        const found = findTry(v);
+        if (found) return found;
+      }
+      return undefined;
+    }
+    const tryNode = findTry(ir);
+    expect(tryNode).toBeDefined();
+    expect(tryNode!.data.expr.finallyPayload).toBeDefined();
+    expect(tryNode!.data.expr.catchParam).toBe("e");
+    expect(tryNode!.data.expr.catchBody).toBeDefined();
+  });
+
+  it("J_bc empty + finally: no finallyPayload emitted (plain finally expression)", () => {
+    const ir = compileOne(`
+      function* f(): Workflow<number> {
+        try {
+          const x = 1;
+        } finally {
+          const y = 2;
+        }
+        return 0;
+      }
+    `) as any;
+    function findTry(node: unknown): Record<string, any> | undefined {
+      if (typeof node !== "object" || node === null) return undefined;
+      const obj = node as Record<string, any>;
+      if (obj["tisyn"] === "eval" && obj["id"] === "try") return obj;
+      for (const v of Object.values(obj)) {
+        const found = findTry(v);
+        if (found) return found;
+      }
+      return undefined;
+    }
+    const tryNode = findTry(ir);
+    expect(tryNode).toBeDefined();
+    expect(tryNode!.data.expr.finallyPayload).toBeUndefined();
+    expect(tryNode!.data.expr["finally"]).toBeDefined();
+  });
 });
 
 // ── Helpers ──

@@ -56,6 +56,7 @@ export const TryNodeSchema = Type.Object(
             catchParam: Type.Optional(Type.String({ minLength: 1 })),
             catchBody: Type.Optional(Type.Any()),
             finally: Type.Optional(Type.Any()),
+            finallyPayload: Type.Optional(Type.String({ minLength: 1 })),
           },
           { additionalProperties: false },
         ),

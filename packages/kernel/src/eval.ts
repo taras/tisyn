@@ -374,7 +374,12 @@ function* evalStructural(id: string, data: Expr, env: Env): Generator<EffectDesc
 
       // Phase 3: finally — result DISCARDED; if it throws, that error replaces prior outcome
       if (finallyBody !== undefined) {
-        yield* evaluate(finallyBody, env);
+        const fp = fields["finallyPayload"] as string | undefined;
+        const finallyEnv =
+          fp !== undefined && outcome.ok
+            ? extend(env, fp, outcome.value as Val)
+            : env;
+        yield* evaluate(finallyBody, finallyEnv);
       }
 
       if (outcome.ok) return outcome.value;

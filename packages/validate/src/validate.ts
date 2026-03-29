@@ -288,6 +288,26 @@ function checkTryConstraints(
       });
     }
   }
+  // finallyPayload must be a non-empty string when present
+  if ("finallyPayload" in fields) {
+    if (typeof fields["finallyPayload"] !== "string" || fields["finallyPayload"] === "") {
+      errors.push({
+        level: 2,
+        path,
+        message: `"try" node "finallyPayload" must be a non-empty string`,
+        code: MALFORMED_EVAL,
+      });
+    }
+    // finallyPayload requires finally
+    if (fields["finally"] === undefined) {
+      errors.push({
+        level: 2,
+        path,
+        message: `"try" node "finallyPayload" requires "finally" to also be present`,
+        code: MALFORMED_EVAL,
+      });
+    }
+  }
 }
 
 /**

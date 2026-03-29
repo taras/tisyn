@@ -853,14 +853,6 @@ function emitTryStatement(
     }
   }
 
-  // ── Phase B: compile finally in original pre-try ctx clone ──
-  const finallyExpr = stmt.finallyBlock
-    ? (() => {
-        const finallyCtx: EmitContext = { ...ctx, scopeStack: cloneScopeStack(ctx.scopeStack) };
-        return emitStatementBody(stmt.finallyBlock, finallyCtx);
-      })()
-    : undefined;
-
   const catchParam = stmt.catchClause?.variableDeclaration
     ? (stmt.catchClause.variableDeclaration.name as ts.Identifier).text
     : undefined;
@@ -908,6 +900,13 @@ function emitTryStatement(
           return emitStatementBody(catchBlock, catchCtx);
         })()
       : undefined;
+    // J_bc empty: no join vars, compile finally in current ctx (no unpack needed)
+    const finallyExpr = stmt.finallyBlock
+      ? (() => {
+          const finallyCtx: EmitContext = { ...ctx, scopeStack: cloneScopeStack(ctx.scopeStack) };
+          return emitStatementBody(stmt.finallyBlock, finallyCtx);
+        })()
+      : undefined;
     const tryIr = Try(bodyExpr, catchParam, catchExpr, finallyExpr);
     if (!hasMore) return tryIr;
     return Let(ctx.counter.next("discard"), tryIr, rest());
@@ -932,7 +931,28 @@ function emitTryStatement(
 
   applyJoinVersions(joinVars, ctx);
 
-  const tryIr = Try(bodyJoinExpr, catchParam, catchJoinExpr, finallyExpr);
+  // J_bc non-empty: compile finally in post-join ctx with Let-unpack from fp
+  let finallyExpr: Expr | undefined;
+  let finallyPayload: string | undefined;
+  if (stmt.finallyBlock) {
+    finallyPayload = ctx.counter.next("fp");
+    const postJoinCtx: EmitContext = { ...ctx, scopeStack: cloneScopeStack(ctx.scopeStack) };
+    let compiledFinally: Expr = emitStatementBody(stmt.finallyBlock, postJoinCtx);
+    if (joinVars.length === 1) {
+      const v = joinVars[0]!;
+      const joinIrName = resolveRef(v, ctx);
+      compiledFinally = Let(joinIrName, Ref(finallyPayload), compiledFinally);
+    } else {
+      for (let i = joinVars.length - 1; i >= 0; i--) {
+        const v = joinVars[i]!;
+        const joinIrName = resolveRef(v, ctx);
+        compiledFinally = Let(joinIrName, Get(Ref(finallyPayload), v), compiledFinally);
+      }
+    }
+    finallyExpr = compiledFinally;
+  }
+
+  const tryIr = Try(bodyJoinExpr, catchParam, catchJoinExpr, finallyExpr, finallyPayload);
 
   if (joinVars.length === 1) {
     const v = joinVars[0]!;

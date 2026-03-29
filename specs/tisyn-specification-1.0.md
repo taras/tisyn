@@ -1001,6 +1001,7 @@ structural operation will `eval()` on:
 | `try`       | `{ body, catchBody?, finally? }` | `body`, `catchBody` (if present), `finally` (if present) |
 
 `catchParam` is a non-position field: it is a non-empty string (the catch binding name), not evaluated.
+`finallyPayload` is a non-position field: it is a non-empty string (the binding name for the outcome value in the finally environment), not evaluated.
 
 This table is exhaustive. The check is one level deep — it
 examines only nodes at evaluation positions, not their children.
@@ -1483,13 +1484,15 @@ The `try` structural operation provides structured error handling.
 **Node shape:**
 
 ```
-eval { id: "try", data: quote { body, catchParam?, catchBody?, finally? } }
+eval { id: "try", data: quote { body, catchParam?, catchBody?, finally?, finallyPayload? } }
 ```
 
 Constraints:
 - At least one of `catchBody` or `finally` MUST be present.
 - `catchParam` MUST be a non-empty string when present.
 - `catchBody` MUST be present when `catchParam` is present.
+- `finallyPayload` MUST be a non-empty string when present.
+- `finally` MUST be present when `finallyPayload` is present.
 - Absent fields MUST be omitted (never `null`).
 
 **Evaluation — three phases:**
@@ -1504,10 +1507,7 @@ Constraints:
    `catchBody` in that extended environment. The result replaces the
    body's error outcome.
 
-3. **Finally** (always, if present): Evaluate `finally` in the
-   original pre-try environment. Its return value is **discarded**.
-   If `finally` raises an error, that error **replaces** the prior
-   outcome (success or failure).
+3. **Finally** (always, if present): Evaluate `finally`. If `finallyPayload` is present and the outcome from phases 1–2 is a success (`ok`), evaluate `finally` in `extend(env, finallyPayload, outcome.value)`. Otherwise evaluate in the original pre-try environment. Its return value is **discarded**. If `finally` raises an error, that error **replaces** the prior outcome (success or failure).
 
 **Halt:** Cancellation (`generator.return()`) and divergence bypass
 the catch phase. `finally` still runs. A parent's catch does NOT
