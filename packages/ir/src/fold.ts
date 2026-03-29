@@ -51,7 +51,14 @@ export interface TisynAlgebra<A> {
   throw(message: A): A;
 
   // Structured error handling
-  try(body: A, catchParam: string | undefined, catchBody: A | undefined, finally_: A | undefined, finallyPayload?: string): A;
+  try(
+    body: A,
+    catchParam: string | undefined,
+    catchBody: A | undefined,
+    finally_: A | undefined,
+    finallyPayload?: string,
+    finallyDefault?: A,
+  ): A;
 
   // External eval (opaque to the fold — data not recursed)
   eval(id: string, data: TisynExpr): A;
@@ -210,6 +217,7 @@ function foldStructural<A>(id: string, shape: Record<string, unknown>, alg: Tisy
         catchBody?: TisynExpr;
         finally?: TisynExpr;
         finallyPayload?: string;
+        finallyDefault?: TisynExpr;
       };
       return alg.try(
         foldNode(s.body, alg),
@@ -217,6 +225,7 @@ function foldStructural<A>(id: string, shape: Record<string, unknown>, alg: Tisy
         s.catchBody !== undefined ? foldNode(s.catchBody, alg) : undefined,
         s["finally"] !== undefined ? foldNode(s["finally"], alg) : undefined,
         s.finallyPayload,
+        s.finallyDefault !== undefined ? foldNode(s.finallyDefault, alg) : undefined,
       );
     }
     default:

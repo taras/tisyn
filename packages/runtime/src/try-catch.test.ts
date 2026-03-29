@@ -30,11 +30,7 @@ describe("try/catch runtime integration", () => {
     });
 
     // try { effect("svc.op") } catch (e) { e }
-    const ir = Try(
-      effectIR("svc", "op") as never,
-      "e",
-      Ref("e") as never,
-    );
+    const ir = Try(effectIR("svc", "op") as never, "e", Ref("e") as never);
 
     const { result } = yield* execute({ ir: ir as never });
 
@@ -55,11 +51,7 @@ describe("try/catch runtime integration", () => {
     });
 
     // try { effect("svc.op") } catch (e) { Ref("e") } — body succeeds, so result = 42
-    const ir = Try(
-      effectIR("svc", "op") as never,
-      "e",
-      Ref("e") as never,
-    );
+    const ir = Try(effectIR("svc", "op") as never, "e", Ref("e") as never);
 
     const { result } = yield* execute({ ir: ir as never });
 
@@ -129,7 +121,7 @@ describe("try/catch runtime integration", () => {
       effectIR("svc", "op") as never,
       undefined,
       undefined,
-      ({ tisyn: "eval", id: "cap.capture", data: { tisyn: "ref", name: "fp_0" } }) as never,
+      { tisyn: "eval", id: "cap.capture", data: { tisyn: "ref", name: "fp_0" } } as never,
       "fp_0",
     );
 
@@ -156,12 +148,45 @@ describe("try/catch runtime integration", () => {
       effectIR("svc", "op") as never,
       "e",
       88 as never, // catch body: literal 88
-      ({ tisyn: "eval", id: "cap.capture", data: { tisyn: "ref", name: "fp_0" } }) as never,
+      { tisyn: "eval", id: "cap.capture", data: { tisyn: "ref", name: "fp_0" } } as never,
       "fp_0",
     );
 
     yield* execute({ ir: ir as never });
     expect(capturedValue).toBe(88);
+  });
+
+  it("finallyDefault: finally runs with pre-trial value on uncaught-error path (no catch)", function* () {
+    // Regression test for: UnboundVariable(fp) when body throws with no catch clause.
+    // When outcome.ok = false and finallyDefault is present, the kernel must bind
+    // finallyPayload to the finallyDefault value so the Let-unpack in finally does not fail.
+    let capturedValue: unknown = "NOT_CAPTURED";
+
+    yield* Dispatch.around({
+      *dispatch([effectId, data]: [string, unknown]) {
+        if (effectId === "cap.capture") {
+          capturedValue = data;
+          return null;
+        }
+        // body effect throws — no catch clause
+        throw new Error("body failure");
+      },
+    });
+
+    // IR equivalent of: try { effect() } finally { capture(fp_0) }
+    // with finallyPayload = "fp_0" and finallyDefault = literal 0.
+    // On error path, kernel must bind fp_0 = 0 (from finallyDefault) and run finally.
+    const ir = Try(
+      effectIR("svc", "op") as never,
+      undefined,
+      undefined,
+      { tisyn: "eval", id: "cap.capture", data: { tisyn: "ref", name: "fp_0" } } as never,
+      "fp_0",
+      0 as never, // finallyDefault = literal 0 (pre-trial snapshot)
+    );
+
+    yield* execute({ ir: ir as never });
+    expect(capturedValue).toBe(0);
   });
 
   it("regression: no finallyPayload — finally still runs in pre-try env", function* () {

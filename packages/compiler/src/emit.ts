@@ -787,10 +787,7 @@ function blockContainsReturn(stmt: ts.Statement | undefined): boolean {
 }
 
 /** Return true if the statement contains an assignment to any outer let binding. */
-function finallyContainsOuterAssignment(
-  stmt: ts.Statement,
-  ctx: EmitContext,
-): string | undefined {
+function finallyContainsOuterAssignment(stmt: ts.Statement, ctx: EmitContext): string | undefined {
   let found: string | undefined;
   function visit(node: ts.Node): void {
     if (found) return;
@@ -827,12 +824,7 @@ function emitTryStatement(
     blockContainsReturn(stmt.catchClause?.block) ||
     blockContainsReturn(stmt.finallyBlock)
   ) {
-    throw error(
-      "E033",
-      "'return' inside a try/catch/finally clause is not supported",
-      stmt,
-      ctx,
-    );
+    throw error("E033", "'return' inside a try/catch/finally clause is not supported", stmt, ctx);
   }
 
   // ── Validation: step 2 — catch without binding → E034 ──
@@ -880,7 +872,7 @@ function emitTryStatement(
 
   const joinVars = allLetVars.filter((v) => {
     const bodyVer = getVersion(v, dryBodyCtx);
-    const catchVer = catchBlock ? getVersion(v, dryCatchCtx) : snapshot.get(v) ?? 0;
+    const catchVer = catchBlock ? getVersion(v, dryCatchCtx) : (snapshot.get(v) ?? 0);
     return bodyVer !== (snapshot.get(v) ?? 0) || catchVer !== (snapshot.get(v) ?? 0);
   });
 
@@ -929,11 +921,18 @@ function emitTryStatement(
     catchJoinExpr = compileBranchToExpr(catchBlock, joinVars, catchCtx);
   }
 
+  // Capture pre-trial SSA names before applyJoinVersions advances versions
+  const preTrialRefs = new Map<string, string>();
+  for (const v of joinVars) {
+    preTrialRefs.set(v, resolveRef(v, ctx));
+  }
+
   applyJoinVersions(joinVars, ctx);
 
   // J_bc non-empty: compile finally in post-join ctx with Let-unpack from fp
   let finallyExpr: Expr | undefined;
   let finallyPayload: string | undefined;
+  let finallyDefault: Expr | undefined;
   if (stmt.finallyBlock) {
     finallyPayload = ctx.counter.next("fp");
     const postJoinCtx: EmitContext = { ...ctx, scopeStack: cloneScopeStack(ctx.scopeStack) };
@@ -942,17 +941,30 @@ function emitTryStatement(
       const v = joinVars[0]!;
       const joinIrName = resolveRef(v, ctx);
       compiledFinally = Let(joinIrName, Ref(finallyPayload), compiledFinally);
+      finallyDefault = Ref(preTrialRefs.get(v)!);
     } else {
       for (let i = joinVars.length - 1; i >= 0; i--) {
         const v = joinVars[i]!;
         const joinIrName = resolveRef(v, ctx);
         compiledFinally = Let(joinIrName, Get(Ref(finallyPayload), v), compiledFinally);
       }
+      const defaultFields: Record<string, Expr> = {};
+      for (const v of joinVars) {
+        defaultFields[v] = Ref(preTrialRefs.get(v)!);
+      }
+      finallyDefault = Construct(defaultFields as Record<string, Expr>);
     }
     finallyExpr = compiledFinally;
   }
 
-  const tryIr = Try(bodyJoinExpr, catchParam, catchJoinExpr, finallyExpr, finallyPayload);
+  const tryIr = Try(
+    bodyJoinExpr,
+    catchParam,
+    catchJoinExpr,
+    finallyExpr,
+    finallyPayload,
+    finallyDefault,
+  );
 
   if (joinVars.length === 1) {
     const v = joinVars[0]!;

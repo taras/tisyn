@@ -363,8 +363,7 @@ function* evalStructural(id: string, data: Expr, env: Env): Generator<EffectDesc
       // Phase 2: catch clause
       if (!outcome.ok && catchBody !== undefined) {
         const errorVal = errorToValue(outcome.error);
-        const catchEnv =
-          catchParam !== undefined ? extend(env, catchParam, errorVal) : env;
+        const catchEnv = catchParam !== undefined ? extend(env, catchParam, errorVal) : env;
         try {
           outcome = { ok: true, value: yield* evaluate(catchBody, catchEnv) };
         } catch (e) {
@@ -375,10 +374,17 @@ function* evalStructural(id: string, data: Expr, env: Env): Generator<EffectDesc
       // Phase 3: finally — result DISCARDED; if it throws, that error replaces prior outcome
       if (finallyBody !== undefined) {
         const fp = fields["finallyPayload"] as string | undefined;
-        const finallyEnv =
-          fp !== undefined && outcome.ok
-            ? extend(env, fp, outcome.value as Val)
-            : env;
+        let finallyEnv = env;
+        if (fp !== undefined) {
+          if (outcome.ok) {
+            finallyEnv = extend(env, fp, outcome.value as Val);
+          } else {
+            const finallyDefault = fields["finallyDefault"] as Expr | undefined;
+            if (finallyDefault !== undefined) {
+              finallyEnv = extend(env, fp, yield* evaluate(finallyDefault, env));
+            }
+          }
+        }
         yield* evaluate(finallyBody, finallyEnv);
       }
 
