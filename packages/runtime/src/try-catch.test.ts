@@ -8,7 +8,7 @@
 import { describe, it } from "@effectionx/vitest";
 import { expect } from "vitest";
 import { execute } from "./execute.js";
-import { EffectError } from "./errors.js";
+import { EffectError } from "./index.js";
 import { Dispatch } from "@tisyn/agent";
 import { Try, Ref, Let } from "@tisyn/ir";
 
