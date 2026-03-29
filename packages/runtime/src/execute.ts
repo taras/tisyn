@@ -14,6 +14,7 @@ import {
   type DurableEvent,
   type YieldEvent,
   type CloseEvent,
+  type StartEvent,
   type EffectDescriptor,
   type EventResult,
   parseEffectId,
@@ -34,6 +35,11 @@ export interface ExecuteOptions {
   stream?: DurableStream;
   /** Coroutine ID for the root task. Defaults to "root". */
   coroutineId?: string;
+  /**
+   * Middleware IR (FnNode as a plain JSON value) passed with this execution.
+   * When provided, recorded as a StartEvent for replay divergence detection.
+   */
+  middleware?: Val | null;
 }
 
 export interface ExecuteResult {
@@ -58,7 +64,13 @@ interface DriveContext {
  * 5. Write Close event on completion/error
  */
 export function* execute(options: ExecuteOptions): Operation<ExecuteResult> {
-  const { ir, env: envRecord = {}, stream = new InMemoryStream(), coroutineId = "root" } = options;
+  const {
+    ir,
+    env: envRecord = {},
+    stream = new InMemoryStream(),
+    coroutineId = "root",
+    middleware = null,
+  } = options;
 
   // Phase 1: Validate IR before evaluation
   let validatedIr: Expr;
@@ -88,6 +100,37 @@ export function* execute(options: ExecuteOptions): Operation<ExecuteResult> {
 
   // Build initial environment
   const env: Env = envFromRecord(envRecord);
+
+  // Phase 2b: StartEvent — record or validate middleware inputs
+  if (middleware != null) {
+    const storedStart = replayIndex.getStart(coroutineId);
+    if (storedStart) {
+      // Replay path: validate middleware matches stored value
+      const storedMiddleware = storedStart.inputs.middleware ?? null;
+      if (JSON.stringify(storedMiddleware) !== JSON.stringify(middleware)) {
+        return {
+          result: {
+            status: "err",
+            error: {
+              message: `Divergence at ${coroutineId}: middleware changed since last run`,
+              name: "DivergenceError",
+            },
+          },
+          journal,
+        };
+      }
+      journal.push(storedStart);
+    } else {
+      // Live path: write StartEvent before first yield
+      const startEvent: StartEvent = {
+        type: "start",
+        coroutineId,
+        inputs: { middleware: middleware as Json },
+      };
+      yield* stream.append(startEvent);
+      journal.push(startEvent);
+    }
+  }
 
   // Phase 3: Create kernel generator and drive it
   const kernel = evaluate(validatedIr, env);

@@ -23,7 +23,17 @@ export interface CloseEvent {
   result: EventResult;
 }
 
-export type DurableEvent = YieldEvent | CloseEvent;
+/** Inputs recorded at the start of a durable execution for replay validation. */
+export interface StartEvent {
+  type: "start";
+  coroutineId: string;
+  inputs: {
+    middleware?: Json | null;
+    args?: Json | null;
+  };
+}
+
+export type DurableEvent = YieldEvent | CloseEvent | StartEvent;
 
 export interface EffectDescriptor {
   id: string;

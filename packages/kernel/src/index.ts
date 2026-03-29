@@ -14,12 +14,14 @@ export {
   EffectError,
   isCatchable,
   errorToValue,
+  ProhibitedEffectError,
 } from "./errors.js";
 export type {
   EffectDescription,
   EventResult,
   YieldEvent,
   CloseEvent,
+  StartEvent,
   DurableEvent,
   EffectDescriptor,
 } from "./events.js";
