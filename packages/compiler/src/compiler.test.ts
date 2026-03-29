@@ -871,14 +871,23 @@ describe("Try/catch/finally compilation", () => {
     expect(tryNode.data.expr.catchParam).toBe("e");
   });
 
-  it("rejects return in try clause (E033)", () => {
+  it("rejects return in finally clause (E033) — return in try is now allowed", () => {
+    // return inside finally is still rejected
+    expect(() =>
+      compileOne(`
+        function* f(): Workflow<number> {
+          try { yield* Agent().op(); } catch (e) { /* ok */ } finally { return 1; }
+        }
+      `),
+    ).toThrow("E033");
+    // return inside try body is now supported (packing mode)
     expect(() =>
       compileOne(`
         function* f(): Workflow<string> {
           try { return "x"; } catch (e) { /* no return here */ }
         }
       `),
-    ).toThrow("E033");
+    ).not.toThrow();
   });
 
   it("rejects catch without binding (E034)", () => {
@@ -1035,6 +1044,433 @@ describe("Try/catch/finally compilation", () => {
     expect(tryNode).toBeDefined();
     expect(tryNode!.data.expr.finallyPayload).toBeUndefined();
     expect(tryNode!.data.expr["finally"]).toBeDefined();
+  });
+});
+
+// ── Return-in-try structural IR tests (§6.7.1) ──
+
+// Helpers shared by return-in-try tests
+function findTryNode(node: unknown): Record<string, any> | undefined {
+  if (typeof node !== "object" || node === null) return undefined;
+  const obj = node as Record<string, any>;
+  if (obj["tisyn"] === "eval" && obj["id"] === "try") return obj;
+  for (const v of Object.values(obj)) {
+    const found = findTryNode(v);
+    if (found) return found;
+  }
+  return undefined;
+}
+
+/** Find a Construct node that has a __tag field anywhere in the IR tree. */
+function findPackedConstruct(node: unknown): Record<string, any> | undefined {
+  if (typeof node !== "object" || node === null) return undefined;
+  const obj = node as Record<string, any>;
+  if (obj["tisyn"] === "eval" && obj["id"] === "construct") {
+    const fields = obj["data"]?.["expr"] as Record<string, any> | undefined;
+    if (fields && "__tag" in fields) return obj;
+  }
+  for (const v of Object.values(obj)) {
+    const found = findPackedConstruct(v);
+    if (found) return found;
+  }
+  return undefined;
+}
+
+/** Find all Construct nodes with a __tag field. */
+function findAllPackedConstructs(node: unknown, result: Record<string, any>[] = []): Record<string, any>[] {
+  if (typeof node !== "object" || node === null) return result;
+  const obj = node as Record<string, any>;
+  if (obj["tisyn"] === "eval" && obj["id"] === "construct") {
+    const fields = obj["data"]?.["expr"] as Record<string, any> | undefined;
+    if (fields && "__tag" in fields) result.push(obj);
+  }
+  for (const v of Object.values(obj)) {
+    findAllPackedConstructs(v, result);
+  }
+  return result;
+}
+
+/** Find an If(Eq(Get(..., "__tag"), "return"), ...) dispatch node. */
+function findTagDispatch(node: unknown): Record<string, any> | undefined {
+  if (typeof node !== "object" || node === null) return undefined;
+  const obj = node as Record<string, any>;
+  if (obj["tisyn"] === "eval" && obj["id"] === "if") {
+    // If node uses "condition" key (not "cond")
+    const cond = obj["data"]?.["expr"]?.["condition"];
+    if (cond?.["tisyn"] === "eval" && cond?.["id"] === "eq") {
+      // Eq node uses "a" and "b" keys
+      const getNode = cond["data"]?.["expr"]?.["a"];
+      if (getNode?.["tisyn"] === "eval" && getNode?.["id"] === "get") {
+        const key = getNode["data"]?.["expr"]?.["key"];
+        if (key === "__tag") return obj;
+      }
+    }
+  }
+  for (const v of Object.values(obj)) {
+    const found = findTagDispatch(v);
+    if (found) return found;
+  }
+  return undefined;
+}
+
+describe("Return-in-try: A — Packing activation", () => {
+  it("A01: return in try body activates packing", () => {
+    const ir = compileOne(`
+      function* f(): Workflow<number> {
+        try { return 1; } catch (e) { /* fallthrough */ }
+        return 0;
+      }
+    `) as any;
+    const tryNode = findTryNode(ir);
+    expect(tryNode).toBeDefined();
+    // Body must be a packed Construct — findAllPackedConstructs finds it somewhere in the IR
+    const constructs = findAllPackedConstructs(ir);
+    expect(constructs.length).toBeGreaterThanOrEqual(1);
+    // Dispatch If must be present in post-try IR
+    expect(findTagDispatch(ir)).toBeDefined();
+  });
+
+  it("A02: return in catch body activates packing", () => {
+    const ir = compileOne(`
+      function* f(): Workflow<string> {
+        try { yield* Agent().op(); } catch (e) { return "err"; }
+        return "ok";
+      }
+    `) as any;
+    const tryNode = findTryNode(ir);
+    expect(tryNode).toBeDefined();
+    // Packed Constructs must be present
+    const constructs = findAllPackedConstructs(ir);
+    expect(constructs.length).toBeGreaterThanOrEqual(1);
+    // Dispatch must be present
+    expect(findTagDispatch(ir)).toBeDefined();
+  });
+
+  it("A03: no return — packing inactive (CR1)", () => {
+    const ir = compileOne(`
+      function* f(): Workflow<number> {
+        let x = 0;
+        try { x = 1; } catch (e) { x = 2; }
+        return x;
+      }
+    `) as any;
+    // No packed Construct with __tag should exist
+    expect(findPackedConstruct(ir)).toBeUndefined();
+    // No dispatch If should exist
+    expect(findTagDispatch(ir)).toBeUndefined();
+  });
+});
+
+describe("Return-in-try: B — Packed outcome structure", () => {
+  it("B01: return path has __tag:return and __value, fallthrough has __tag:fallthrough, both have same field set", () => {
+    const ir = compileOne(`
+      function* f(): Workflow<number> {
+        try { return 1; } catch (e) { /* fallthrough */ }
+        return 0;
+      }
+    `) as any;
+    const constructs = findAllPackedConstructs(ir);
+    expect(constructs.length).toBeGreaterThanOrEqual(2);
+    const returnC = constructs.find((c) => c.data.expr.__tag === "return");
+    const fallthroughC = constructs.find((c) => c.data.expr.__tag === "fallthrough");
+    expect(returnC).toBeDefined();
+    expect(fallthroughC).toBeDefined();
+    // __value present on both
+    expect("__value" in returnC!.data.expr).toBe(true);
+    expect("__value" in fallthroughC!.data.expr).toBe(true);
+    // J_bc empty: no extra fields beyond __tag and __value
+    const returnKeys = Object.keys(returnC!.data.expr);
+    const fallthroughKeys = Object.keys(fallthroughC!.data.expr);
+    expect(returnKeys.sort()).toEqual(["__tag", "__value"].sort());
+    expect(fallthroughKeys.sort()).toEqual(["__tag", "__value"].sort());
+  });
+
+  it("B02: packed outcomes include join variable x keyed by source name", () => {
+    const ir = compileOne(`
+      function* f(): Workflow<number> {
+        let x = 0;
+        try { x = 1; return x; } catch (e) { x = 2; }
+        return x;
+      }
+    `) as any;
+    const constructs = findAllPackedConstructs(ir);
+    const returnC = constructs.find((c) => c.data.expr.__tag === "return");
+    const fallthroughC = constructs.find((c) => c.data.expr.__tag === "fallthrough");
+    expect(returnC).toBeDefined();
+    expect(fallthroughC).toBeDefined();
+    // Both must have x field (source-level name)
+    expect("x" in returnC!.data.expr).toBe(true);
+    expect("x" in fallthroughC!.data.expr).toBe(true);
+    // Both have identical field sets: __tag, __value, x
+    const returnKeys = Object.keys(returnC!.data.expr).sort();
+    const fallthroughKeys = Object.keys(fallthroughC!.data.expr).sort();
+    expect(returnKeys).toEqual(fallthroughKeys);
+    expect(returnKeys).toEqual(["__tag", "__value", "x"].sort());
+  });
+
+  it("B03: multiple join variables x and y in packed outcomes", () => {
+    const ir = compileOne(`
+      function* f(): Workflow<number> {
+        let x = 0;
+        let y = 10;
+        try { x = 1; y = 11; return x; } catch (e) { x = 2; y = 12; }
+        return y;
+      }
+    `) as any;
+    const constructs = findAllPackedConstructs(ir);
+    const returnC = constructs.find((c) => c.data.expr.__tag === "return");
+    const fallthroughC = constructs.find((c) => c.data.expr.__tag === "fallthrough");
+    expect(returnC).toBeDefined();
+    expect(fallthroughC).toBeDefined();
+    const returnKeys = Object.keys(returnC!.data.expr).sort();
+    const fallthroughKeys = Object.keys(fallthroughC!.data.expr).sort();
+    expect(returnKeys).toEqual(fallthroughKeys);
+    expect(returnKeys).toContain("x");
+    expect(returnKeys).toContain("y");
+    expect(returnKeys).toContain("__tag");
+    expect(returnKeys).toContain("__value");
+  });
+});
+
+describe("Return-in-try: D — Finally interaction (structural)", () => {
+  it("D03: packing + finally + single join var — struct-shaped unpack (no scalar shortcut)", () => {
+    const ir = compileOne(`
+      function* f(): Workflow<number> {
+        let x = 0;
+        try { x = 1; return x; } catch (e) { x = 2; } finally { x; }
+        return x;
+      }
+    `) as any;
+    const tryNode = findTryNode(ir);
+    expect(tryNode).toBeDefined();
+    // finallyPayload must be present
+    const fp = tryNode!.data.expr.finallyPayload;
+    expect(fp).toBeDefined();
+    expect(typeof fp).toBe("string");
+    // finally expr must contain an inner Try with Ref(fp) as body
+    const finallyExpr = tryNode!.data.expr["finally"];
+    expect(finallyExpr).toBeDefined();
+    // Walk the finally chain to find the inner Try
+    function findInnerTry(node: unknown): Record<string, any> | undefined {
+      if (typeof node !== "object" || node === null) return undefined;
+      const obj = node as Record<string, any>;
+      if (obj["tisyn"] === "eval" && obj["id"] === "try") {
+        const body = obj["data"]?.["expr"]?.["body"];
+        if (body?.["tisyn"] === "ref" && body?.["name"] === fp) return obj;
+      }
+      for (const v of Object.values(obj)) {
+        const found = findInnerTry(v);
+        if (found) return found;
+      }
+      return undefined;
+    }
+    const innerTry = findInnerTry(finallyExpr);
+    expect(innerTry).toBeDefined();
+    // Inner Try's catch fallback must be a Construct (not bare Ref) — struct-shaped
+    const catchFallback = innerTry!.data.expr.catchBody;
+    expect(catchFallback?.["tisyn"]).toBe("eval");
+    expect(catchFallback?.["id"]).toBe("construct");
+  });
+
+  it("D04: non-packing + finally + single join var — scalar shortcut (contrast)", () => {
+    const ir = compileOne(`
+      function* f(): Workflow<number> {
+        let x = 0;
+        try { x = 1; } finally { x; }
+        return x;
+      }
+    `) as any;
+    const tryNode = findTryNode(ir);
+    expect(tryNode).toBeDefined();
+    const fp = tryNode!.data.expr.finallyPayload;
+    expect(fp).toBeDefined();
+    const finallyExpr = tryNode!.data.expr["finally"];
+    expect(finallyExpr).toBeDefined();
+    // Find inner Try — its catch fallback must be a bare Ref (scalar shortcut)
+    function findInnerTryD04(node: unknown): Record<string, any> | undefined {
+      if (typeof node !== "object" || node === null) return undefined;
+      const obj = node as Record<string, any>;
+      if (obj["tisyn"] === "eval" && obj["id"] === "try") {
+        const body = obj["data"]?.["expr"]?.["body"];
+        if (body?.["tisyn"] === "ref" && body?.["name"] === fp) return obj;
+      }
+      for (const v of Object.values(obj)) {
+        const found = findInnerTryD04(v);
+        if (found) return found;
+      }
+      return undefined;
+    }
+    const innerTry = findInnerTryD04(finallyExpr);
+    expect(innerTry).toBeDefined();
+    // Scalar shortcut: catch fallback is a bare Ref (not Construct)
+    const catchFallback = innerTry!.data.expr.catchBody;
+    expect(catchFallback?.["tisyn"]).toBe("ref");
+  });
+
+  it("D05: packing + finally + multiple join vars — struct-shaped unpack for all", () => {
+    const ir = compileOne(`
+      function* f(): Workflow<number> {
+        let x = 0;
+        let y = 10;
+        try { x = 1; y = 11; return x; } catch (e) { x = 2; y = 12; } finally { x; y; }
+        return y;
+      }
+    `) as any;
+    const tryNode = findTryNode(ir);
+    expect(tryNode).toBeDefined();
+    const fp = tryNode!.data.expr.finallyPayload;
+    expect(fp).toBeDefined();
+    const finallyExpr = tryNode!.data.expr["finally"];
+    expect(finallyExpr).toBeDefined();
+    function findInnerTryD05(node: unknown): Record<string, any> | undefined {
+      if (typeof node !== "object" || node === null) return undefined;
+      const obj = node as Record<string, any>;
+      if (obj["tisyn"] === "eval" && obj["id"] === "try") {
+        const body = obj["data"]?.["expr"]?.["body"];
+        if (body?.["tisyn"] === "ref" && body?.["name"] === fp) return obj;
+      }
+      for (const v of Object.values(obj)) {
+        const found = findInnerTryD05(v);
+        if (found) return found;
+      }
+      return undefined;
+    }
+    const innerTry = findInnerTryD05(finallyExpr);
+    expect(innerTry).toBeDefined();
+    const catchFallback = innerTry!.data.expr.catchBody;
+    // Must be Construct with x and y fields
+    expect(catchFallback?.["tisyn"]).toBe("eval");
+    expect(catchFallback?.["id"]).toBe("construct");
+    const fields = catchFallback?.["data"]?.["expr"] as Record<string, any> | undefined;
+    expect(fields).toBeDefined();
+    expect("x" in fields!).toBe(true);
+    expect("y" in fields!).toBe(true);
+  });
+});
+
+describe("Return-in-try: F — alwaysReturns integration", () => {
+  it("F01: both clauses always return — direct extraction (no dispatch If)", () => {
+    const ir = compileOne(`
+      function* f(): Workflow<number> {
+        try { return 1; } catch (e) { return 2; }
+      }
+    `) as any;
+    // No dispatch If(__tag) should be present
+    expect(findTagDispatch(ir)).toBeUndefined();
+    // Clause bodies still produce packed Constructs
+    const constructs = findAllPackedConstructs(ir);
+    expect(constructs.length).toBeGreaterThanOrEqual(2);
+  });
+
+  it("F02: try always returns, no catch — direct extraction with finally", () => {
+    const ir = compileOne(`
+      function* f(): Workflow<number> {
+        try { return 1; } finally { yield* Agent().cleanup(); }
+      }
+    `) as any;
+    // Packing active, body always returns → no dispatch If
+    expect(findTagDispatch(ir)).toBeUndefined();
+    // Try node must have a finally expr
+    const tryNode = findTryNode(ir);
+    expect(tryNode).toBeDefined();
+    expect(tryNode!.data.expr["finally"]).toBeDefined();
+  });
+
+  it("F03: try always returns, catch may fall through — dispatch If present", () => {
+    const ir = compileOne(`
+      function* f(): Workflow<number> {
+        try { return 1; } catch (e) { /* fallthrough */ }
+        return 0;
+      }
+    `) as any;
+    // Catch can produce fallthrough → dispatch required
+    expect(findTagDispatch(ir)).toBeDefined();
+  });
+});
+
+describe("Return-in-try: G — Nested control flow", () => {
+  it("G01: return inside if branch within try body", () => {
+    const ir = compileOne(`
+      function* f(x: number): Workflow<string> {
+        try {
+          if (x > 0) { return "positive"; }
+        } catch (e) { return "error"; }
+        return "non-positive";
+      }
+    `) as any;
+    // Packing active: packed constructs present
+    const constructs = findAllPackedConstructs(ir);
+    expect(constructs.length).toBeGreaterThanOrEqual(2);
+    const returnC = constructs.find((c) => c.data.expr.__tag === "return");
+    const fallthroughC = constructs.find((c) => c.data.expr.__tag === "fallthrough");
+    expect(returnC).toBeDefined();
+    expect(fallthroughC).toBeDefined();
+    // Dispatch present (catch may fallthrough)
+    expect(findTagDispatch(ir)).toBeDefined();
+  });
+
+  it("G02: return inside nested try within outer try body", () => {
+    const ir = compileOne(`
+      function* f(): Workflow<number> {
+        try {
+          try { return 1; } catch (e2) { /* inner catch */ }
+        } catch (e) { return 2; }
+        return 0;
+      }
+    `) as any;
+    // Packing active for outer try
+    const constructs = findAllPackedConstructs(ir);
+    expect(constructs.length).toBeGreaterThanOrEqual(2);
+    // Outer dispatch present
+    expect(findTagDispatch(ir)).toBeDefined();
+  });
+
+  it("G03: return inside while within try body", () => {
+    const ir = compileOne(`
+      function* f(): Workflow<number> {
+        try {
+          let x = 0;
+          while (x < 10) {
+            if (x === 5) { return x; }
+            x = x + 1;
+          }
+        } catch (e) { /* fallthrough */ }
+        return 0;
+      }
+    `) as any;
+    // Packing active: packed Constructs present
+    const constructs = findAllPackedConstructs(ir);
+    expect(constructs.length).toBeGreaterThanOrEqual(1);
+    // Outer dispatch present
+    expect(findTagDispatch(ir)).toBeDefined();
+  });
+});
+
+describe("Return-in-try: H — Negative cases", () => {
+  it("H01: return in finally — E033", () => {
+    expect(() =>
+      compileOne(`
+        function* f(): Workflow<number> {
+          try { yield* Agent().op(); } catch (e) { /* ok */ } finally { return 1; }
+        }
+      `),
+    ).toThrow("E033");
+  });
+
+  it("H02: function expression inside try is rejected (E999), not treated as packing trigger", () => {
+    // The compiler rejects function expressions entirely (E999: unsupported).
+    // This verifies that function expression bodies are not traversed for return detection.
+    // Since function expressions are unsupported, they fail with E999 (not E033 or packing).
+    expect(() =>
+      compileOne(`
+        function* f(): Workflow<number> {
+          try {
+            const g = function* (): Workflow<number> { return 99; };
+          } catch (e) { /* ok */ }
+          return 0;
+        }
+      `),
+    ).toThrow("E999");
   });
 });
 
