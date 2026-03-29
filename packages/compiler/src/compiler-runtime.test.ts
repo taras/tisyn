@@ -316,3 +316,115 @@ describe("early return from while loop bypasses post-loop continuation", () => {
     }
   });
 });
+
+// ── Return-in-try runtime integration tests (§6.7.1) ──
+
+describe("Return-in-try: C — Dispatch behavior", () => {
+  it("C01: return suppresses post-try continuation", function* () {
+    const ir = compileOne(`
+      function* f(): Workflow<number> {
+        try { return 1; } catch (e) { /* fallthrough */ }
+        return 99;
+      }
+    `);
+    const { result } = yield* execute({ ir: Call(ir) });
+    expect(result.status).toBe("ok");
+    if (result.status === "ok") {
+      expect(result.value).toBe(1);
+    }
+  });
+
+  it("C02: fallthrough continues post-try execution", function* () {
+    const ir = compileOne(`
+      function* f(): Workflow<string> {
+        try { const x = 1; } catch (e) { return "caught"; }
+        return "continued";
+      }
+    `);
+    const { result } = yield* execute({ ir: Call(ir) });
+    expect(result.status).toBe("ok");
+    if (result.status === "ok") {
+      expect(result.value).toBe("continued");
+    }
+  });
+
+  it("C03: fallthrough extracts join vars before rest", function* () {
+    const ir = compileOne(`
+      function* f(): Workflow<number> {
+        let x = 0;
+        try { x = 1; } catch (e) { x = 2; return x; }
+        return x;
+      }
+    `);
+    const { result } = yield* execute({ ir: Call(ir) });
+    expect(result.status).toBe("ok");
+    if (result.status === "ok") {
+      expect(result.value).toBe(1);
+    }
+  });
+});
+
+describe("Return-in-try: D — Finally interaction (runtime)", () => {
+  it("D02: finally throw overrides packed return outcome", function* () {
+    const ir = compileOne(`
+      function* f(): Workflow<number> {
+        try { return 1; } catch (e) { /* fallthrough */ } finally { throw new Error("fail"); }
+        return 0;
+      }
+    `);
+    const { result } = yield* execute({ ir: Call(ir) });
+    expect(result.status).toBe("err");
+    if (result.status === "err") {
+      expect(result.error.message).toBe("fail");
+    }
+  });
+});
+
+describe("Return-in-try: E — SSA join propagation", () => {
+  it("E01: body assigns and returns — fallthrough sees post-join x", function* () {
+    const ir = compileOne(`
+      function* f(): Workflow<number> {
+        let x = 0;
+        try { x = 1; return x; } catch (e) { x = 2; }
+        return x;
+      }
+    `);
+    const { result } = yield* execute({ ir: Call(ir) });
+    expect(result.status).toBe("ok");
+    if (result.status === "ok") {
+      // Body returns 1 on success path
+      expect(result.value).toBe(1);
+    }
+  });
+
+  it("E02: catch assigns and returns — body fallthrough sees post-join x", function* () {
+    const ir = compileOne(`
+      function* f(): Workflow<number> {
+        let x = 0;
+        try { x = 1; } catch (e) { x = 2; return x; }
+        return x;
+      }
+    `);
+    const { result } = yield* execute({ ir: Call(ir) });
+    expect(result.status).toBe("ok");
+    if (result.status === "ok") {
+      // Body falls through with x=1, join extracts x=1, returns x=1
+      expect(result.value).toBe(1);
+    }
+  });
+
+  it("E04: return value independent of join vars", function* () {
+    const ir = compileOne(`
+      function* f(): Workflow<string> {
+        let x = 0;
+        try { x = 1; return "hello"; } catch (e) { x = 2; }
+        return "world";
+      }
+    `);
+    const { result } = yield* execute({ ir: Call(ir) });
+    expect(result.status).toBe("ok");
+    if (result.status === "ok") {
+      expect(result.value).toBe("hello");
+    }
+  });
+});

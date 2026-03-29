@@ -33,7 +33,7 @@ export const ErrorCodes = {
   E011: "Ambiguous '+' operator",
   E013: "for...in/for...of is not allowed",
   E014: "eval()/new Function() is not allowed",
-  E033: "'return' inside a try/catch/finally clause is not supported",
+  E033: "'return' inside a finally clause is not supported",
   E034: "catch clause requires a binding parameter",
   E035: "Variable assigned inside 'finally' is not visible after the try statement",
   E016: "class/this is not allowed",

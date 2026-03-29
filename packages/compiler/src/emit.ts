@@ -386,6 +386,49 @@ function alwaysTerminates(stmt: ts.Statement): boolean {
     if (!stmt.elseStatement) return false;
     return alwaysTerminates(stmt.thenStatement) && alwaysTerminates(stmt.elseStatement);
   }
+  if (ts.isTryStatement(stmt)) {
+    const bodyTerminates = alwaysTerminates(stmt.tryBlock);
+    if (!stmt.catchClause) return bodyTerminates;
+    return bodyTerminates && alwaysTerminates(stmt.catchClause.block);
+  }
+  return false;
+}
+
+/**
+ * Walk a statement list sequentially:
+ * - If a statement alwaysReturns, return true immediately (tail is dead code).
+ * - If a statement alwaysTerminates but does NOT alwaysReturn (i.e. always throws),
+ *   return false immediately (return is unreachable).
+ * - Otherwise continue to the next statement.
+ */
+function alwaysReturnsStatementList(stmts: readonly ts.Statement[]): boolean {
+  for (const s of stmts) {
+    if (alwaysReturns(s)) return true;
+    if (alwaysTerminates(s)) return false; // always throws — return is unreachable
+  }
+  return false;
+}
+
+/**
+ * True iff every reachable normal exit from the statement is a return (not a throw).
+ * Used to gate the always-return fast path in packing mode.
+ */
+function alwaysReturns(stmt: ts.Statement): boolean {
+  if (ts.isReturnStatement(stmt)) return true;
+  if (ts.isThrowStatement(stmt)) return false; // terminal, but not a return
+  if (ts.isBlock(stmt)) return alwaysReturnsStatementList(stmt.statements);
+  if (ts.isIfStatement(stmt)) {
+    if (!stmt.elseStatement) return false;
+    return alwaysReturns(stmt.thenStatement) && alwaysReturns(stmt.elseStatement);
+  }
+  if (ts.isTryStatement(stmt)) {
+    // If finally always terminates it must always throw (return in finally is rejected by E033).
+    // An always-throwing finally overrides any packed "return" outcome.
+    if (stmt.finallyBlock && alwaysTerminates(stmt.finallyBlock)) return false;
+    const bodyReturns = alwaysReturns(stmt.tryBlock);
+    if (!stmt.catchClause) return bodyReturns;
+    return bodyReturns && alwaysReturns(stmt.catchClause.block);
+  }
   return false;
 }
 
@@ -818,14 +861,14 @@ function emitTryStatement(
   const hasMore = index < stmts.length - 1;
   const rest = () => emitStatementList(stmts, index + 1, ctx);
 
-  // ── Validation: step 1 — return in any clause → E033 ──
-  if (
-    blockContainsReturn(stmt.tryBlock) ||
-    blockContainsReturn(stmt.catchClause?.block) ||
-    blockContainsReturn(stmt.finallyBlock)
-  ) {
-    throw error("E033", "'return' inside a try/catch/finally clause is not supported", stmt, ctx);
+  // ── Validation: step 1 — return in finally → E033 ──
+  if (blockContainsReturn(stmt.finallyBlock)) {
+    throw error("E033", "'return' inside a finally clause is not supported", stmt, ctx);
   }
+
+  // ── Packing mode determination ──
+  const needsPack =
+    blockContainsReturn(stmt.tryBlock) || blockContainsReturn(stmt.catchClause?.block);
 
   // ── Validation: step 2 — catch without binding → E034 ──
   if (stmt.catchClause && !stmt.catchClause.variableDeclaration) {
@@ -876,7 +919,12 @@ function emitTryStatement(
     return bodyVer !== (snapshot.get(v) ?? 0) || catchVer !== (snapshot.get(v) ?? 0);
   });
 
-  // ── Emit: J_bc empty ──
+  // ── Packing mode emit ──
+  if (needsPack) {
+    return emitTryStatementPacked(stmt, stmts, index, ctx, catchParam, catchBlock, joinVars);
+  }
+
+  // ── Emit: J_bc empty (non-packing) ──
   if (joinVars.length === 0) {
     const bodyExpr = emitStatementBody(stmt.tryBlock, ctx);
     const catchExpr = catchBlock
@@ -904,7 +952,7 @@ function emitTryStatement(
     return Let(ctx.counter.next("discard"), tryIr, rest());
   }
 
-  // ── Emit: J_bc non-empty ──
+  // ── Emit: J_bc non-empty (non-packing) ──
   const bodyCtx: EmitContext = { ...ctx, scopeStack: cloneScopeStack(ctx.scopeStack) };
   const bodyJoinExpr = compileBranchToExpr(stmt.tryBlock, joinVars, bodyCtx);
 
@@ -990,6 +1038,759 @@ function emitTryStatement(
     result = Let(joinIrName, Get(Ref(joinName), v), result);
   }
   return Let(joinName, tryIr, result);
+}
+
+// ── Try statement — packing mode (§6.7.1) ──
+
+/** Emit a try statement in packing mode (return present in try or catch body). */
+function emitTryStatementPacked(
+  stmt: ts.TryStatement,
+  stmts: ts.Statement[],
+  index: number,
+  ctx: EmitContext,
+  catchParam: string | undefined,
+  catchBlock: ts.Block | undefined,
+  joinVars: string[],
+): Expr {
+  const hasMore = index < stmts.length - 1;
+  const rest = () => emitStatementList(stmts, index + 1, ctx);
+
+  if (joinVars.length === 0) {
+    // ── Packing, J_bc empty ──
+    const bodyCtxP: EmitContext = { ...ctx, scopeStack: cloneScopeStack(ctx.scopeStack) };
+    const bodyExpr = compileBranchToExprPacked(stmt.tryBlock, [], bodyCtxP);
+
+    let catchExpr: Expr | undefined;
+    if (catchBlock && catchParam) {
+      const catchCtxP: EmitContext = { ...ctx, scopeStack: cloneScopeStack(ctx.scopeStack) };
+      pushFrame(catchCtxP);
+      catchCtxP.scopeStack[catchCtxP.scopeStack.length - 1]!.set(catchParam, {
+        kind: "const",
+        version: 0,
+      });
+      catchExpr = compileBranchToExprPacked(catchBlock, [], catchCtxP);
+    }
+
+    const finallyExpr = stmt.finallyBlock
+      ? (() => {
+          const finallyCtx: EmitContext = { ...ctx, scopeStack: cloneScopeStack(ctx.scopeStack) };
+          return emitStatementBody(stmt.finallyBlock!, finallyCtx);
+        })()
+      : undefined;
+
+    const r = ctx.counter.next("r");
+    const tryIr = Try(bodyExpr, catchParam, catchExpr, finallyExpr);
+    const useDirectExtract = alwaysReturns(stmt);
+    if (useDirectExtract) {
+      return Let(r, tryIr, Get(Ref(r), "__value") as Expr);
+    }
+    return Let(r, tryIr, buildPackedDispatch(r, [], ctx, stmts, index));
+  }
+
+  // ── Packing, J_bc non-empty ──
+  const bodyCtxP: EmitContext = { ...ctx, scopeStack: cloneScopeStack(ctx.scopeStack) };
+  const bodyExpr = compileBranchToExprPacked(stmt.tryBlock, joinVars, bodyCtxP);
+
+  let catchExpr: Expr | undefined;
+  if (catchBlock && catchParam) {
+    const catchCtxP: EmitContext = { ...ctx, scopeStack: cloneScopeStack(ctx.scopeStack) };
+    pushFrame(catchCtxP);
+    catchCtxP.scopeStack[catchCtxP.scopeStack.length - 1]!.set(catchParam, {
+      kind: "const",
+      version: 0,
+    });
+    catchExpr = compileBranchToExprPacked(catchBlock, joinVars, catchCtxP);
+  }
+
+  // Capture pre-trial SSA names BEFORE applyJoinVersions
+  const preTrialRefs = new Map<string, string>();
+  for (const v of joinVars) {
+    preTrialRefs.set(v, resolveRef(v, ctx));
+  }
+
+  applyJoinVersions(joinVars, ctx);
+
+  // Finally: MUST use struct-shaped unpack for ALL J_bc sizes >= 1 under packing (§6.7.1.5 F5)
+  let finallyExpr: Expr | undefined;
+  let finallyPayload: string | undefined;
+  if (stmt.finallyBlock) {
+    finallyPayload = ctx.counter.next("fp");
+    const postJoinCtx: EmitContext = { ...ctx, scopeStack: cloneScopeStack(ctx.scopeStack) };
+    let compiledFinally: Expr = emitStatementBody(stmt.finallyBlock, postJoinCtx);
+
+    const errFp = ctx.counter.next("err_fp");
+    const fpEff = ctx.counter.next("fp_eff");
+    const preTrialConstruct: Record<string, Expr> = {};
+    for (const v of joinVars) {
+      preTrialConstruct[v] = Ref(preTrialRefs.get(v)!);
+    }
+    let innerChain = compiledFinally;
+    for (let i = joinVars.length - 1; i >= 0; i--) {
+      const v = joinVars[i]!;
+      const joinIrName = resolveRef(v, ctx);
+      innerChain = Let(joinIrName, Get(Ref(fpEff), v), innerChain);
+    }
+    compiledFinally = Let(
+      fpEff,
+      Try(Ref(finallyPayload), errFp, Construct(preTrialConstruct as Record<string, Expr>)),
+      innerChain,
+    );
+    finallyExpr = compiledFinally;
+  }
+
+  const r = ctx.counter.next("r");
+  const tryIr = Try(bodyExpr, catchParam, catchExpr, finallyExpr, finallyPayload);
+
+  const useDirectExtract = alwaysReturns(stmt);
+  if (useDirectExtract) {
+    return Let(r, tryIr, Get(Ref(r), "__value") as Expr);
+  }
+  return Let(r, tryIr, buildPackedDispatch(r, joinVars, ctx, stmts, index));
+}
+
+/** Build the post-Try dispatch expression for packing mode. */
+function buildPackedDispatch(
+  r: string,
+  joinVars: string[],
+  ctx: EmitContext,
+  stmts: ts.Statement[],
+  index: number,
+): Expr {
+  const hasMore = index < stmts.length - 1;
+  const rest = () => emitStatementList(stmts, index + 1, ctx);
+
+  let fallthroughCont: Expr;
+  if (joinVars.length === 0) {
+    fallthroughCont = hasMore ? rest() : (null as unknown as Expr);
+  } else if (joinVars.length === 1) {
+    const v = joinVars[0]!;
+    const joinIrName = resolveRef(v, ctx);
+    fallthroughCont = Let(joinIrName, Get(Ref(r), v), hasMore ? rest() : (null as unknown as Expr));
+  } else {
+    let chain: Expr = hasMore ? rest() : (null as unknown as Expr);
+    for (let i = joinVars.length - 1; i >= 0; i--) {
+      const v = joinVars[i]!;
+      const joinIrName = resolveRef(v, ctx);
+      chain = Let(joinIrName, Get(Ref(r), v), chain);
+    }
+    fallthroughCont = chain;
+  }
+
+  return If(
+    Eq(Get(Ref(r), "__tag") as Expr, "return" as unknown as Expr) as Expr,
+    Get(Ref(r), "__value") as Expr,
+    fallthroughCont,
+  );
+}
+
+/** Compile a clause body in packing mode. Returns a packed outcome expression. */
+function compileBranchToExprPacked(
+  block: ts.Statement,
+  joinVars: string[],
+  branchCtx: EmitContext,
+): Expr {
+  const stmts = getBodyStatements(block);
+  return emitStatementListWithTerminalPacked(stmts, 0, branchCtx, joinVars, () => {
+    // Fallthrough terminal: Construct({ __tag: "fallthrough", __value: null, ...joinVarRefs })
+    const fields: Record<string, Expr> = {
+      __tag: "fallthrough" as unknown as Expr,
+      __value: null as unknown as Expr,
+    };
+    for (const v of joinVars) {
+      fields[v] = Ref(resolveRef(v, branchCtx));
+    }
+    return Construct(fields);
+  });
+}
+
+/** Like emitStatementListWithTerminal but intercepts returns for packed outcomes. */
+function emitStatementListWithTerminalPacked(
+  stmts: ts.Statement[],
+  index: number,
+  ctx: EmitContext,
+  joinVars: string[],
+  terminal: () => Expr,
+): Expr {
+  if (index >= stmts.length) return terminal();
+
+  const stmt = stmts[index]!;
+  const rest = () => emitStatementListWithTerminalPacked(stmts, index + 1, ctx, joinVars, terminal);
+  const isLast = index === stmts.length - 1;
+
+  // Return statement → packed outcome
+  if (ts.isReturnStatement(stmt)) {
+    const retVal = stmt.expression
+      ? emitExpression(stmt.expression, ctx)
+      : (null as unknown as Expr);
+    const fields: Record<string, Expr> = {
+      __tag: "return" as unknown as Expr,
+      __value: retVal,
+    };
+    for (const v of joinVars) {
+      fields[v] = Ref(resolveRef(v, ctx));
+    }
+    return Construct(fields);
+  }
+
+  // Variable declaration
+  if (ts.isVariableStatement(stmt)) {
+    return emitVariableStatementWithRest(stmt, rest, ctx);
+  }
+
+  // Let reassignment (x = newExpr)
+  if (
+    ts.isExpressionStatement(stmt) &&
+    ts.isBinaryExpression(stmt.expression) &&
+    stmt.expression.operatorToken.kind === ts.SyntaxKind.EqualsToken &&
+    ts.isIdentifier(stmt.expression.left)
+  ) {
+    const expr = stmt.expression;
+    const lhsName = (expr.left as ts.Identifier).text;
+    const found = lookupBinding(lhsName, ctx);
+    if (!found || found.info.kind !== "let") {
+      throw new CompileError(
+        "E003",
+        "Reassignment of non-let binding or undeclared name is not allowed",
+        0,
+        0,
+      );
+    }
+    const newValue = emitExpression(expr.right, ctx);
+    const newIrName = bumpVersion(lhsName, ctx);
+    if (isLast) return Let(newIrName, newValue, terminal());
+    return Let(newIrName, newValue, rest());
+  }
+
+  // Expression statement
+  if (ts.isExpressionStatement(stmt)) {
+    const expr = stmt.expression;
+    checkUnsupportedExpression(expr, ctx);
+    if (ts.isYieldExpression(expr) && expr.asteriskToken && expr.expression) {
+      const effect = emitYieldStar(expr.expression, ctx);
+      if (isLast) return Let(ctx.counter.next("discard"), effect, terminal());
+      return Let(ctx.counter.next("discard"), effect, rest());
+    }
+    if (isLast) return Let(ctx.counter.next("discard"), emitExpression(expr, ctx), terminal());
+    return Let(ctx.counter.next("discard"), emitExpression(expr, ctx), rest());
+  }
+
+  // Throw statement
+  if (ts.isThrowStatement(stmt) && stmt.expression) {
+    return emitThrowStatement(stmt, ctx);
+  }
+
+  // Nested block
+  if (ts.isBlock(stmt)) {
+    pushFrame(ctx);
+    try {
+      const blockResult = emitStatementListWithTerminalPacked(
+        Array.from(stmt.statements),
+        0,
+        ctx,
+        joinVars,
+        index === stmts.length - 1 ? terminal : rest,
+      );
+      return blockResult;
+    } finally {
+      popFrame(ctx);
+    }
+  }
+
+  // If statement in packed branch
+  if (ts.isIfStatement(stmt)) {
+    return emitIfStatementInListPacked(stmt, stmts, index, ctx, joinVars, terminal);
+  }
+
+  // While statement in packed branch
+  if (ts.isWhileStatement(stmt)) {
+    return emitWhileStatementInPackedBranch(stmt, stmts, index, ctx, joinVars, terminal);
+  }
+
+  // Nested try statement in packed branch
+  if (ts.isTryStatement(stmt)) {
+    return emitTryStatementInPackedBranch(stmt, stmts, index, ctx, joinVars, terminal);
+  }
+
+  throw new CompileError(
+    "E999",
+    `Unsupported statement in packed branch: ${ts.SyntaxKind[stmt.kind]}`,
+    0,
+    0,
+  );
+}
+
+/** Emit an if-statement inside a packed branch compilation context. */
+function emitIfStatementInListPacked(
+  stmt: ts.IfStatement,
+  stmts: ts.Statement[],
+  index: number,
+  ctx: EmitContext,
+  joinVars: string[],
+  terminal: () => Expr,
+): Expr {
+  const rest = () => emitStatementListWithTerminalPacked(stmts, index + 1, ctx, joinVars, terminal);
+  const condition = emitExpression(stmt.expression, ctx);
+
+  const thenTerminates = alwaysTerminates(stmt.thenStatement);
+  const elseTerminates = stmt.elseStatement ? alwaysTerminates(stmt.elseStatement) : false;
+
+  if (thenTerminates && elseTerminates) {
+    // Both branches always terminate → compile each in packed mode
+    const thenCtx: EmitContext = { ...ctx, scopeStack: cloneScopeStack(ctx.scopeStack) };
+    const thenBranch = emitStatementListWithTerminalPacked(
+      getBodyStatements(stmt.thenStatement),
+      0,
+      thenCtx,
+      joinVars,
+      terminal,
+    );
+    const elseCtx: EmitContext = { ...ctx, scopeStack: cloneScopeStack(ctx.scopeStack) };
+    const elseBranch = emitStatementListWithTerminalPacked(
+      getBodyStatements(stmt.elseStatement!),
+      0,
+      elseCtx,
+      joinVars,
+      terminal,
+    );
+    return If(condition, thenBranch, elseBranch);
+  }
+
+  if (thenTerminates && !stmt.elseStatement) {
+    // Then always terminates, no else → else path produces fallthrough terminal
+    const thenCtx: EmitContext = { ...ctx, scopeStack: cloneScopeStack(ctx.scopeStack) };
+    const thenBranch = emitStatementListWithTerminalPacked(
+      getBodyStatements(stmt.thenStatement),
+      0,
+      thenCtx,
+      joinVars,
+      terminal,
+    );
+    // Implicit else: produce fallthrough with current join var versions
+    const fallthroughFields: Record<string, Expr> = {
+      __tag: "fallthrough" as unknown as Expr,
+      __value: null as unknown as Expr,
+    };
+    for (const v of joinVars) {
+      fallthroughFields[v] = Ref(resolveRef(v, ctx));
+    }
+    return If(condition, thenBranch, Construct(fallthroughFields));
+  }
+
+  if (thenTerminates && stmt.elseStatement && !elseTerminates) {
+    // Then terminates, else falls through — clone ctx for then
+    const thenCtx: EmitContext = { ...ctx, scopeStack: cloneScopeStack(ctx.scopeStack) };
+    const thenBranch = emitStatementListWithTerminalPacked(
+      getBodyStatements(stmt.thenStatement),
+      0,
+      thenCtx,
+      joinVars,
+      terminal,
+    );
+    const elseAndRest = emitStatementListWithTerminalPacked(
+      getBodyStatements(stmt.elseStatement),
+      0,
+      ctx,
+      joinVars,
+      index < stmts.length - 1 ? rest : terminal,
+    );
+    return If(condition, thenBranch, elseAndRest);
+  }
+
+  if (!thenTerminates && elseTerminates) {
+    // Else terminates, then falls through — clone ctx for else
+    const elseCtx: EmitContext = { ...ctx, scopeStack: cloneScopeStack(ctx.scopeStack) };
+    const thenAndRest = emitStatementListWithTerminalPacked(
+      getBodyStatements(stmt.thenStatement),
+      0,
+      ctx,
+      joinVars,
+      index < stmts.length - 1 ? rest : terminal,
+    );
+    const elseBranch = emitStatementListWithTerminalPacked(
+      getBodyStatements(stmt.elseStatement!),
+      0,
+      elseCtx,
+      joinVars,
+      terminal,
+    );
+    return If(condition, thenAndRest, elseBranch);
+  }
+
+  // Neither terminates — full SSA join for if-level vars, then packed continuation
+  const snapshot = snapshotVersions(ctx);
+  const allLetVars = getAllLetVars(ctx);
+  const dryThenCtx: EmitContext = { ...ctx, scopeStack: cloneScopeStack(ctx.scopeStack) };
+  const dryElseCtx: EmitContext = { ...ctx, scopeStack: cloneScopeStack(ctx.scopeStack) };
+  compileBranchBodyToJoin(getBodyStatements(stmt.thenStatement), allLetVars, snapshot, dryThenCtx);
+  if (stmt.elseStatement)
+    compileBranchBodyToJoin(
+      getBodyStatements(stmt.elseStatement),
+      allLetVars,
+      snapshot,
+      dryElseCtx,
+    );
+
+  const ifJoinVars = allLetVars.filter((v) => {
+    const thenVer = getVersion(v, dryThenCtx);
+    const elseVer = stmt.elseStatement ? getVersion(v, dryElseCtx) : (snapshot.get(v) ?? 0);
+    return thenVer !== (snapshot.get(v) ?? 0) || elseVer !== (snapshot.get(v) ?? 0);
+  });
+
+  if (ifJoinVars.length === 0) {
+    // No if-level SSA joins — compile both branches in packed mode with rest as continuation
+    const thenBranch = emitStatementListWithTerminalPacked(
+      getBodyStatements(stmt.thenStatement),
+      0,
+      ctx,
+      joinVars,
+      rest,
+    );
+    if (stmt.elseStatement) {
+      const elseCtx2: EmitContext = { ...ctx, scopeStack: cloneScopeStack(ctx.scopeStack) };
+      const elseBranch = emitStatementListWithTerminalPacked(
+        getBodyStatements(stmt.elseStatement),
+        0,
+        elseCtx2,
+        joinVars,
+        rest,
+      );
+      return If(condition, thenBranch, elseBranch);
+    }
+    return If(condition, thenBranch, rest());
+  }
+
+  // If-level SSA joins: use standard compileBranchToExpr (fine since neither branch always terminates),
+  // then continue with packed rest
+  const ifThenCtx: EmitContext = { ...ctx, scopeStack: cloneScopeStack(ctx.scopeStack) };
+  const ifElseCtx: EmitContext = { ...ctx, scopeStack: cloneScopeStack(ctx.scopeStack) };
+  const thenJoinExpr = compileBranchToExpr(stmt.thenStatement, ifJoinVars, ifThenCtx);
+  const elseJoinExpr = stmt.elseStatement
+    ? compileBranchToExpr(stmt.elseStatement, ifJoinVars, ifElseCtx)
+    : buildJoinExprFromSnapshot(ifJoinVars, snapshot);
+
+  applyJoinVersions(ifJoinVars, ctx);
+
+  if (ifJoinVars.length === 1) {
+    const v = ifJoinVars[0]!;
+    return Let(resolveRef(v, ctx), If(condition, thenJoinExpr, elseJoinExpr), rest());
+  }
+
+  const joinName = ctx.counter.next("j");
+  let result = rest();
+  for (let i = ifJoinVars.length - 1; i >= 0; i--) {
+    const v = ifJoinVars[i]!;
+    result = Let(resolveRef(v, ctx), Get(Ref(joinName), v), result);
+  }
+  return Let(joinName, If(condition, thenJoinExpr, elseJoinExpr), result);
+}
+
+/** Emit a while statement inside a packed branch compilation context. */
+function emitWhileStatementInPackedBranch(
+  stmt: ts.WhileStatement,
+  stmts: ts.Statement[],
+  index: number,
+  ctx: EmitContext,
+  outerJoinVars: string[],
+  terminal: () => Expr,
+): Expr {
+  const rest = () =>
+    emitStatementListWithTerminalPacked(stmts, index + 1, ctx, outerJoinVars, terminal);
+  const isLast = index === stmts.length - 1;
+  const hasReturn = bodyContainsReturn(stmt.statement);
+  const loopCarriedVars = detectLoopCarriedLetVars(stmt, ctx);
+
+  if (!hasReturn && loopCarriedVars.length === 0) {
+    // Case A: no return, no loop-carried state — While IR node, then packed continuation
+    const condition = emitExpression(stmt.expression, ctx);
+    const bodyStmts = getBodyStatements(stmt.statement);
+    const bodyExpr = emitStatementList(bodyStmts, 0, ctx);
+    const whileExpr = While(condition, [bodyExpr]);
+    const whileName = ctx.counter.next("while");
+    return Let(whileName, whileExpr, isLast ? terminal() : rest());
+  }
+
+  // Case B: has return or loop-carried state — use recursive Fn + Call with outer packing
+  const outerPackCont = isLast ? terminal : rest;
+  return emitWhileCaseB(stmt, rest, false, ctx, loopCarriedVars, hasReturn, {
+    joinVars: outerJoinVars,
+    fallthroughCont: outerPackCont,
+  });
+}
+
+/** Emit a try statement nested inside a packed branch compilation context. */
+function emitTryStatementInPackedBranch(
+  stmt: ts.TryStatement,
+  stmts: ts.Statement[],
+  index: number,
+  ctx: EmitContext,
+  outerJoinVars: string[],
+  terminal: () => Expr,
+): Expr {
+  const isLast = index === stmts.length - 1;
+  const outerCont = isLast
+    ? terminal
+    : () => emitStatementListWithTerminalPacked(stmts, index + 1, ctx, outerJoinVars, terminal);
+
+  // Validate: E033 only for finally
+  if (blockContainsReturn(stmt.finallyBlock)) {
+    throw error("E033", "'return' inside a finally clause is not supported", stmt, ctx);
+  }
+  if (stmt.catchClause && !stmt.catchClause.variableDeclaration) {
+    throw error("E034", "catch clause requires a binding parameter", stmt.catchClause, ctx);
+  }
+  if (stmt.finallyBlock) {
+    const offendingVar = finallyContainsOuterAssignment(stmt.finallyBlock, ctx);
+    if (offendingVar !== undefined) {
+      throw error(
+        "E035",
+        `Variable '${offendingVar}' assigned inside 'finally' is not visible after the try statement`,
+        stmt.finallyBlock,
+        ctx,
+      );
+    }
+  }
+
+  const catchParam = stmt.catchClause?.variableDeclaration
+    ? (stmt.catchClause.variableDeclaration.name as ts.Identifier).text
+    : undefined;
+  const catchBlock = stmt.catchClause?.block;
+
+  const innerNeedsPack = blockContainsReturn(stmt.tryBlock) || blockContainsReturn(catchBlock);
+
+  // ── J_bc computation for inner try ──
+  const snapshot = snapshotVersions(ctx);
+  const allLetVars = getAllLetVars(ctx);
+  const dryBodyCtx: EmitContext = { ...ctx, scopeStack: cloneScopeStack(ctx.scopeStack) };
+  compileBranchBodyToJoin(getBodyStatements(stmt.tryBlock), allLetVars, snapshot, dryBodyCtx);
+  const dryCatchCtx: EmitContext = { ...ctx, scopeStack: cloneScopeStack(ctx.scopeStack) };
+  if (catchBlock && catchParam) {
+    pushFrame(dryCatchCtx);
+    dryCatchCtx.scopeStack[dryCatchCtx.scopeStack.length - 1]!.set(catchParam, {
+      kind: "const",
+      version: 0,
+    });
+  }
+  if (catchBlock) {
+    compileBranchBodyToJoin(getBodyStatements(catchBlock), allLetVars, snapshot, dryCatchCtx);
+  }
+  const innerJoinVars = allLetVars.filter((v) => {
+    const bodyVer = getVersion(v, dryBodyCtx);
+    const catchVer = catchBlock ? getVersion(v, dryCatchCtx) : (snapshot.get(v) ?? 0);
+    return bodyVer !== (snapshot.get(v) ?? 0) || catchVer !== (snapshot.get(v) ?? 0);
+  });
+
+  if (!innerNeedsPack) {
+    // Inner try doesn't need packing — emit it as a statement, then outer packed continuation
+    if (innerJoinVars.length === 0) {
+      const bodyExpr = emitStatementBody(stmt.tryBlock, ctx);
+      const catchExpr = catchBlock
+        ? (() => {
+            const catchCtxNP: EmitContext = {
+              ...ctx,
+              scopeStack: cloneScopeStack(ctx.scopeStack),
+            };
+            if (catchParam) {
+              pushFrame(catchCtxNP);
+              catchCtxNP.scopeStack[catchCtxNP.scopeStack.length - 1]!.set(catchParam, {
+                kind: "const",
+                version: 0,
+              });
+            }
+            return emitStatementBody(catchBlock, catchCtxNP);
+          })()
+        : undefined;
+      const finallyExpr = stmt.finallyBlock
+        ? (() => {
+            const finallyCtxNP: EmitContext = {
+              ...ctx,
+              scopeStack: cloneScopeStack(ctx.scopeStack),
+            };
+            return emitStatementBody(stmt.finallyBlock!, finallyCtxNP);
+          })()
+        : undefined;
+      const tryIrNP = Try(bodyExpr, catchParam, catchExpr, finallyExpr);
+      return Let(ctx.counter.next("discard"), tryIrNP, outerCont());
+    }
+    // innerJoinVars non-empty, no packing: emit standard join, then outer packed continuation
+    const bodyCtxNP: EmitContext = { ...ctx, scopeStack: cloneScopeStack(ctx.scopeStack) };
+    const bodyJoinExprNP = compileBranchToExpr(stmt.tryBlock, innerJoinVars, bodyCtxNP);
+    let catchJoinExprNP: Expr | undefined;
+    if (catchBlock) {
+      const catchCtxNP: EmitContext = { ...ctx, scopeStack: cloneScopeStack(ctx.scopeStack) };
+      if (catchParam) {
+        pushFrame(catchCtxNP);
+        catchCtxNP.scopeStack[catchCtxNP.scopeStack.length - 1]!.set(catchParam, {
+          kind: "const",
+          version: 0,
+        });
+      }
+      catchJoinExprNP = compileBranchToExpr(catchBlock, innerJoinVars, catchCtxNP);
+    }
+    const preTrialRefsNP = new Map<string, string>();
+    for (const v of innerJoinVars) preTrialRefsNP.set(v, resolveRef(v, ctx));
+    applyJoinVersions(innerJoinVars, ctx);
+    let finallyExprNP: Expr | undefined;
+    let finallyPayloadNP: string | undefined;
+    if (stmt.finallyBlock) {
+      finallyPayloadNP = ctx.counter.next("fp");
+      const postJoinCtxNP: EmitContext = { ...ctx, scopeStack: cloneScopeStack(ctx.scopeStack) };
+      let compiledFinallyNP: Expr = emitStatementBody(stmt.finallyBlock, postJoinCtxNP);
+      if (innerJoinVars.length === 1) {
+        const v = innerJoinVars[0]!;
+        const joinIrName = resolveRef(v, ctx);
+        const errFpNP = ctx.counter.next("err_fp");
+        compiledFinallyNP = Let(
+          joinIrName,
+          Try(Ref(finallyPayloadNP), errFpNP, Ref(preTrialRefsNP.get(v)!)),
+          compiledFinallyNP,
+        );
+      } else {
+        const errFpNP = ctx.counter.next("err_fp");
+        const fpEffNP = ctx.counter.next("fp_eff");
+        const preTrialConstructNP: Record<string, Expr> = {};
+        for (const v of innerJoinVars) preTrialConstructNP[v] = Ref(preTrialRefsNP.get(v)!);
+        let innerChainNP = compiledFinallyNP;
+        for (let i = innerJoinVars.length - 1; i >= 0; i--) {
+          const v = innerJoinVars[i]!;
+          innerChainNP = Let(resolveRef(v, ctx), Get(Ref(fpEffNP), v), innerChainNP);
+        }
+        compiledFinallyNP = Let(
+          fpEffNP,
+          Try(
+            Ref(finallyPayloadNP),
+            errFpNP,
+            Construct(preTrialConstructNP as Record<string, Expr>),
+          ),
+          innerChainNP,
+        );
+      }
+      finallyExprNP = compiledFinallyNP;
+    }
+    const tryIrNP2 = Try(
+      bodyJoinExprNP,
+      catchParam,
+      catchJoinExprNP,
+      finallyExprNP,
+      finallyPayloadNP,
+    );
+    if (innerJoinVars.length === 1) {
+      const v = innerJoinVars[0]!;
+      return Let(resolveRef(v, ctx), tryIrNP2, outerCont());
+    }
+    const joinNameNP = ctx.counter.next("j");
+    let resultNP = outerCont();
+    for (let i = innerJoinVars.length - 1; i >= 0; i--) {
+      const v = innerJoinVars[i]!;
+      resultNP = Let(resolveRef(v, ctx), Get(Ref(joinNameNP), v), resultNP);
+    }
+    return Let(joinNameNP, tryIrNP2, resultNP);
+  }
+
+  // ── Inner try needs packing ──
+  const innerBodyCtx: EmitContext = { ...ctx, scopeStack: cloneScopeStack(ctx.scopeStack) };
+  const innerBodyExpr = compileBranchToExprPacked(stmt.tryBlock, innerJoinVars, innerBodyCtx);
+
+  let innerCatchExpr: Expr | undefined;
+  if (catchBlock && catchParam) {
+    const innerCatchCtx: EmitContext = { ...ctx, scopeStack: cloneScopeStack(ctx.scopeStack) };
+    pushFrame(innerCatchCtx);
+    innerCatchCtx.scopeStack[innerCatchCtx.scopeStack.length - 1]!.set(catchParam, {
+      kind: "const",
+      version: 0,
+    });
+    innerCatchExpr = compileBranchToExprPacked(catchBlock, innerJoinVars, innerCatchCtx);
+  }
+
+  const innerPreTrialRefs = new Map<string, string>();
+  for (const v of innerJoinVars) innerPreTrialRefs.set(v, resolveRef(v, ctx));
+
+  applyJoinVersions(innerJoinVars, ctx);
+
+  let innerFinallyExpr: Expr | undefined;
+  let innerFinallyPayload: string | undefined;
+  if (stmt.finallyBlock) {
+    innerFinallyPayload = ctx.counter.next("fp");
+    const innerPostJoinCtx: EmitContext = { ...ctx, scopeStack: cloneScopeStack(ctx.scopeStack) };
+    let innerCompiledFinally: Expr = emitStatementBody(stmt.finallyBlock, innerPostJoinCtx);
+    const errFpInner = ctx.counter.next("err_fp");
+    const fpEffInner = ctx.counter.next("fp_eff");
+    const innerPreTrialConstruct: Record<string, Expr> = {};
+    for (const v of innerJoinVars) innerPreTrialConstruct[v] = Ref(innerPreTrialRefs.get(v)!);
+    let innerFinallyChain = innerCompiledFinally;
+    for (let i = innerJoinVars.length - 1; i >= 0; i--) {
+      const v = innerJoinVars[i]!;
+      innerFinallyChain = Let(resolveRef(v, ctx), Get(Ref(fpEffInner), v), innerFinallyChain);
+    }
+    innerCompiledFinally = Let(
+      fpEffInner,
+      Try(
+        Ref(innerFinallyPayload),
+        errFpInner,
+        Construct(innerPreTrialConstruct as Record<string, Expr>),
+      ),
+      innerFinallyChain,
+    );
+    innerFinallyExpr = innerCompiledFinally;
+  }
+
+  const r = ctx.counter.next("r");
+  const innerTryIr = Try(
+    innerBodyExpr,
+    catchParam,
+    innerCatchExpr,
+    innerFinallyExpr,
+    innerFinallyPayload,
+  );
+
+  const innerAlwaysReturns = alwaysReturns(stmt);
+
+  if (innerAlwaysReturns) {
+    // Direct extraction: wrap in outer packed return
+    const outerReturnFields: Record<string, Expr> = {
+      __tag: "return" as unknown as Expr,
+      __value: Get(Ref(r), "__value") as Expr,
+    };
+    for (const v of outerJoinVars) {
+      outerReturnFields[v] = Ref(resolveRef(v, ctx));
+    }
+    return Let(r, innerTryIr, Construct(outerReturnFields));
+  }
+
+  // Dispatch: translate inner packed outcome to outer packed outcome
+  const outerReturnFields: Record<string, Expr> = {
+    __tag: "return" as unknown as Expr,
+    __value: Get(Ref(r), "__value") as Expr,
+  };
+  for (const v of outerJoinVars) {
+    outerReturnFields[v] = Ref(resolveRef(v, ctx));
+  }
+  const outerReturnExpr = Construct(outerReturnFields);
+
+  // Fallthrough: extract inner join vars, then outer continuation
+  let fallthroughCont: Expr;
+  if (innerJoinVars.length === 0) {
+    fallthroughCont = outerCont();
+  } else if (innerJoinVars.length === 1) {
+    const v = innerJoinVars[0]!;
+    fallthroughCont = Let(resolveRef(v, ctx), Get(Ref(r), v), outerCont());
+  } else {
+    let chain: Expr = outerCont();
+    for (let i = innerJoinVars.length - 1; i >= 0; i--) {
+      const v = innerJoinVars[i]!;
+      chain = Let(resolveRef(v, ctx), Get(Ref(r), v), chain);
+    }
+    fallthroughCont = chain;
+  }
+
+  return Let(
+    r,
+    innerTryIr,
+    If(
+      Eq(Get(Ref(r), "__tag") as Expr, "return" as unknown as Expr) as Expr,
+      outerReturnExpr,
+      fallthroughCont,
+    ),
+  );
 }
 
 /** Get all in-scope let variable names. */
@@ -1154,6 +1955,7 @@ function emitWhileCaseB(
   ctx: EmitContext,
   loopCarriedVars: string[],
   hasReturn: boolean,
+  outerPack?: { joinVars: string[]; fallthroughCont: () => Expr },
 ): Expr {
   const loopName = ctx.counter.next("loop");
   const condition = stmt.expression;
@@ -1219,6 +2021,34 @@ function emitWhileCaseB(
       }
       return chain;
     };
+
+    if (outerPack) {
+      // Outer packed context: emit dispatch with outer-packed return outcome
+      const outerReturnFields: Record<string, Expr> = {
+        __tag: "return" as unknown as Expr,
+        __value: Get(resultRef, "__value") as Expr,
+      };
+      for (const v of outerPack.joinVars) {
+        outerReturnFields[v] = Ref(resolveRef(v, ctx));
+      }
+      const outerReturnExpr = Construct(outerReturnFields) as Expr;
+      const fallthroughCont: Expr = needsRebind
+        ? buildRebindChain(outerPack.fallthroughCont())
+        : outerPack.fallthroughCont();
+      return Let(
+        loopName,
+        loopFn,
+        Let(
+          resultName,
+          callExpr,
+          If(
+            Eq(Get(resultRef, "__tag") as Expr, "return" as unknown as Expr) as Expr,
+            outerReturnExpr,
+            fallthroughCont,
+          ),
+        ),
+      );
+    }
 
     if (isLast) {
       // Nothing follows the loop — just extract the value; rebind not needed.
