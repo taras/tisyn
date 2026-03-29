@@ -1,5 +1,16 @@
 # @tisyn/validate
 
+## 0.3.0
+
+### Minor Changes
+
+- 4375b0a: Add validation for the `"try"` IR node. Grammar walker checks required fields; semantic pass enforces the single-Quote rule and try-specific constraints: at least one of `catchBody` or `finally` must be present, `catchParam` requires `catchBody`, and `finallyPayload` requires `finally`.
+
+### Patch Changes
+
+- Updated dependencies [4375b0a]
+  - @tisyn/ir@0.3.0
+
 ## 0.2.0
 
 ### Minor Changes

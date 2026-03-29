@@ -1,5 +1,11 @@
 # @tisyn/ir
 
+## 0.3.0
+
+### Minor Changes
+
+- 4375b0a: Add `TryNode` / `TryShape` to the Tisyn IR type system. New `Try()` constructor builds a `{ tisyn: "eval", id: "try", data: Q({...}) }` node. `foldStructural` handles the `"try"` case. `classify` counts try nodes. `print` renders `try { … } catch (e) { … } finally { … }` DSL syntax. `isStructural` recognises `"try"`. Public exports updated.
+
 ## 0.2.0
 
 ### Minor Changes

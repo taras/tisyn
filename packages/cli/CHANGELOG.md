@@ -1,5 +1,13 @@
 # @tisyn/cli
 
+## 0.1.1
+
+### Patch Changes
+
+- Updated dependencies [473f5ab]
+- Updated dependencies [4375b0a]
+  - @tisyn/compiler@0.3.0
+
 ## 0.1.0
 
 ### Minor Changes
