@@ -171,6 +171,7 @@ Supported constructs include:
 - `if` / `else`
 - `while`
 - `throw new Error(...)`
+- `try / catch / finally`
 - object literals
 - array literals
 - template literals
@@ -420,8 +421,10 @@ The compiler enforces a deterministic, side-effect-free subset of TypeScript. Vi
 | E011 | Ambiguous `+` operator                            |
 | E013 | `for...in` / `for...of` is not allowed            |
 | E014 | `eval()` / `new Function()` is not allowed        |
-| E015 | `try` / `catch` is not allowed                    |
 | E016 | `class` / `this` is not allowed                   |
+| E033 | `return` inside a `try` / `catch` / `finally` clause is not supported |
+| E034 | `catch` clause requires a binding parameter       |
+| E035 | Variable assigned inside `finally` is not visible after the `try` statement |
 | E017 | `yield` without `*` is not allowed                |
 | E018 | Cannot call arrow function directly               |
 | E019 | `typeof` / `instanceof` is not allowed            |
@@ -540,7 +543,7 @@ Re-exported for programmatic IR construction:
 
 ```typescript
 Q, Ref, Fn, Let, Seq, If, While, Call, Get, Add, Sub, Mul, Div, Mod, Gt, Gte,
-Lt, Lte, Eq, Neq, And, Or, Not, Neg, Construct, ArrayNode, Concat, Throw,
+Lt, Lte, Eq, Neq, And, Or, Not, Neg, Construct, ArrayNode, Concat, Throw, Try,
 ExternalEval, AllEval, RaceEval
 ```
 

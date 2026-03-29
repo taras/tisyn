@@ -23,10 +23,14 @@
     "access": "public"
   },
   "scripts": {
-    "build": "tsc --build"
+    "build": "tsc --build",
+    "test": "vitest run"
   },
   "dependencies": {
     "@tisyn/ir": "workspace:*",
     "@tisyn/validate": "workspace:*"
+  },
+  "devDependencies": {
+    "vitest": "^4"
   }
 }

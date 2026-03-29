@@ -110,6 +110,12 @@ The public surface exported from `src/index.ts` includes the following:
 - `TypeError` — structural operation given values of the wrong kind
 - `DivisionByZero` — division or modulo by zero
 - `ExplicitThrow` — application-level error raised by `Throw(...)`
+- `EffectError` — error raised when a dispatched effect fails
+
+### Error helpers
+
+- `isCatchable` — returns true if an error can be caught by a `try` node
+- `errorToValue` — converts a caught error to its string message value
 
 ### Event and effect types
 

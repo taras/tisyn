@@ -552,6 +552,68 @@ eval_structural("throw", D, E):
   raise ExplicitThrow(M)
 ```
 
+### 5.16 `try`
+
+**Shape:** `data: Q({ body: Expr, catchParam?: string, catchBody?: Expr, finally?: Expr, finallyPayload?: string })`
+
+Constraints: at least one of `catchBody` or `finally` must be present.
+If `catchParam` is present, `catchBody` must be present.
+`catchParam` must be a non-empty string when present.
+`finallyPayload` must be a non-empty string when present.
+`finally` must be present when `finallyPayload` is present.
+Absent fields are omitted (not null).
+
+```
+eval_structural("try", D, E):
+  { body, catchParam, catchBody } = unquote(D, E)
+  finallyBody = fields["finally"]
+  fp = fields["finallyPayload"]   // optional binding name
+
+  type Outcome = { ok: true, value: Val } | { ok: false, error: unknown }
+  let outcome: Outcome
+
+  // Phase 1: body
+  try:
+    outcome = { ok: true, value: eval(body, E) }
+  catch e:
+    if not isCatchable(e):
+      // Non-catchable (halt, divergence, etc.)
+      if finallyBody present: eval(finallyBody, E)   // if this throws, that propagates
+      re-raise e
+    outcome = { ok: false, error: e }
+
+  // Phase 2: catch clause
+  if outcome.ok = false AND catchBody present:
+    errorVal = errorToValue(outcome.error)
+    E' = catchParam present ? extend(E, catchParam, errorVal) : E
+    try:
+      outcome = { ok: true, value: eval(catchBody, E') }
+    catch e:
+      outcome = { ok: false, error: e }
+
+  // Phase 3: finally — result DISCARDED; error replaces prior outcome
+  if finallyBody present:
+    E_finally = (fp present AND outcome.ok) ? extend(E, fp, outcome.value) : E
+    eval(finallyBody, E_finally)   // natural throw propagation; result discarded
+
+  if outcome.ok: return outcome.value
+  raise outcome.error
+```
+
+`isCatchable(e)` returns true for: `ExplicitThrow`, `TypeError`,
+`NotCallable`, `ArityMismatch`, `UnboundVariable`, `DivisionByZero`,
+`EffectError`. All other signals (halt/cancellation, `DivergenceError`,
+`RuntimeBugError`) are non-catchable.
+
+`errorToValue(e)` returns `e.message` for `Error` instances; `String(e)` otherwise.
+
+**Halt/cancellation:** skips the catch phase; `finally` still runs
+in the original environment `E`. A parent's catch does NOT catch
+cancellation.
+
+**yieldIndex:** monotonic across phase boundaries. Does NOT reset
+between body, catch, and finally phases.
+
 ---
 
 ## 6. Quote Semantics

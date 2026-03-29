@@ -30,6 +30,7 @@ export type {
   RaceShape,
   ConcatArraysShape,
   MergeObjectsShape,
+  TryShape,
 } from "./types.js";
 
 export type {
@@ -62,6 +63,7 @@ export type {
   RaceNode,
   ConcatArraysNode,
   MergeObjectsNode,
+  TryNode,
 } from "./types.js";
 
 export type { Expr, Quote, TisynFn, ExprResult, AsExpr, TypedIrNode, IrInput } from "./expr.js";
@@ -118,6 +120,7 @@ export {
   Arr,
   Concat,
   Throw,
+  Try,
   Eval,
   ConcatArrays,
   MergeObjects,

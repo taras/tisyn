@@ -190,6 +190,33 @@ export function Throw(message: Expr<string>): EvalT<never> {
   } as EvalT<never>;
 }
 
+export function Try<T>(
+  body: Expr<T>,
+  catchParam?: string,
+  catchBody?: Expr<T>,
+  finallyBody?: Expr<unknown>,
+  finallyPayload?: string,
+): EvalT<T> {
+  const fields: Record<string, unknown> = { body };
+  if (catchParam !== undefined) {
+    fields["catchParam"] = catchParam;
+  }
+  if (catchBody !== undefined) {
+    fields["catchBody"] = catchBody;
+  }
+  if (finallyBody !== undefined) {
+    fields["finally"] = finallyBody;
+  }
+  if (finallyPayload !== undefined) {
+    fields["finallyPayload"] = finallyPayload;
+  }
+  return {
+    tisyn: "eval",
+    id: "try",
+    data: { tisyn: "quote", expr: fields },
+  } as EvalT<T>;
+}
+
 export function Eval<T>(id: string, data: Expr<unknown>): EvalT<T> {
   return {
     tisyn: "eval",

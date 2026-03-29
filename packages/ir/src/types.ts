@@ -92,6 +92,14 @@ export interface ThrowShape {
   readonly message: TisynExpr;
 }
 
+export interface TryShape {
+  readonly body: TisynExpr;
+  readonly catchParam?: string;
+  readonly catchBody?: TisynExpr;
+  readonly finally?: TisynExpr;
+  readonly finallyPayload?: string;
+}
+
 export interface AllShape {
   readonly exprs: readonly TisynExpr[];
 }
@@ -282,4 +290,10 @@ export interface MergeObjectsNode {
   readonly tisyn: "eval";
   readonly id: "merge-objects";
   readonly data: QuoteNode<MergeObjectsShape>;
+}
+
+export interface TryNode {
+  readonly tisyn: "eval";
+  readonly id: "try";
+  readonly data: QuoteNode<TryShape>;
 }

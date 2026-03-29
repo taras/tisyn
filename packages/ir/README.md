@@ -23,7 +23,7 @@ Almost every other Tisyn package depends on this one, directly or indirectly.
 This package provides the core building blocks for working with Tisyn programs as data:
 
 - expression and value types such as `TisynExpr`, `Val`, `Json`, and `TisynFn`
-- constructor helpers such as `Fn`, `Ref`, `Let`, `Call`, `Eval`, `All`, and `Race`
+- constructor helpers such as `Fn`, `Ref`, `Let`, `Call`, `Try`, `Eval`, `All`, and `Race`
 - traversal and transformation utilities such as `walk()`, `fold()`, and `transform()`
 - inspection and developer tooling such as `classifyNode()`, `collectRefs()`, `print()`, and `decompile()`
 
@@ -76,6 +76,7 @@ Use these to build IR programmatically:
 - `And`, `Or`, `Not`
 - `Construct`, `Arr`, `Concat`
 - `Throw`
+- `Try` — handle exceptions with optional catch and finally clauses
 - `Eval` — invoke an external operation or structural form by id
 - `All` — evaluate multiple expressions concurrently and collect their results
 - `Race` — evaluate multiple expressions concurrently and resolve with the first result

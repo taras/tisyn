@@ -215,6 +215,9 @@ function walkSemantic(value: unknown, path: string[], errors: ValidationError[])
         const fields = (data as Record<string, unknown>)["expr"];
         if (isPlainObject(fields)) {
           checkPositions(id, fields as Record<string, unknown>, path, errors);
+          if (id === "try") {
+            checkTryConstraints(fields as Record<string, unknown>, path, errors);
+          }
         }
       }
       break;
@@ -246,6 +249,62 @@ function checkPositions(
         path,
         message: `Quote found at evaluation position in structural operation "${id}"`,
         code: QUOTE_AT_EVAL_POSITION,
+      });
+    }
+  }
+}
+
+function checkTryConstraints(
+  fields: Record<string, unknown>,
+  path: string[],
+  errors: ValidationError[],
+): void {
+  // At least one of catchBody or finally must be present
+  if (fields["catchBody"] === undefined && fields["finally"] === undefined) {
+    errors.push({
+      level: 2,
+      path,
+      message: `"try" node requires at least one of "catchBody" or "finally"`,
+      code: MALFORMED_EVAL,
+    });
+  }
+  // catchParam must be a non-empty string when present
+  if ("catchParam" in fields) {
+    if (typeof fields["catchParam"] !== "string" || fields["catchParam"] === "") {
+      errors.push({
+        level: 2,
+        path,
+        message: `"try" node "catchParam" must be a non-empty string`,
+        code: MALFORMED_EVAL,
+      });
+    }
+    // catchParam requires catchBody
+    if (fields["catchBody"] === undefined) {
+      errors.push({
+        level: 2,
+        path,
+        message: `"try" node "catchParam" requires "catchBody" to also be present`,
+        code: MALFORMED_EVAL,
+      });
+    }
+  }
+  // finallyPayload must be a non-empty string when present
+  if ("finallyPayload" in fields) {
+    if (typeof fields["finallyPayload"] !== "string" || fields["finallyPayload"] === "") {
+      errors.push({
+        level: 2,
+        path,
+        message: `"try" node "finallyPayload" must be a non-empty string`,
+        code: MALFORMED_EVAL,
+      });
+    }
+    // finallyPayload requires finally
+    if (fields["finally"] === undefined) {
+      errors.push({
+        level: 2,
+        path,
+        message: `"try" node "finallyPayload" requires "finally" to also be present`,
+        code: MALFORMED_EVAL,
       });
     }
   }
@@ -311,6 +370,13 @@ function getEvaluationPositions(id: string, fields: Record<string, unknown>): un
       return Array.isArray(fields["arrays"]) ? (fields["arrays"] as unknown[]) : [];
     case "merge-objects":
       return Array.isArray(fields["objects"]) ? (fields["objects"] as unknown[]) : [];
+    case "try": {
+      const p: unknown[] = [];
+      if (fields["body"] !== undefined) p.push(fields["body"]);
+      if (fields["catchBody"] !== undefined) p.push(fields["catchBody"]);
+      if (fields["finally"] !== undefined) p.push(fields["finally"]);
+      return p;
+    }
     default:
       return [];
   }

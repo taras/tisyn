@@ -204,6 +204,34 @@ function printStructural(
       const args = s.objects.map((e) => printNode(e, depth + 1, opts));
       return formatCall("MergeObjects", args, depth, opts);
     }
+    case "try": {
+      const s = shape as {
+        body: TisynExpr;
+        catchParam?: string;
+        catchBody?: TisynExpr;
+        finally?: TisynExpr;
+        finallyPayload?: string;
+      };
+      const args: string[] = [printNode(s.body, depth + 1, opts)];
+      const hasCatch = s.catchParam !== undefined || s.catchBody !== undefined;
+      const hasFinally = s["finally"] !== undefined;
+      const hasPayload = s.finallyPayload !== undefined;
+      if (hasCatch || hasFinally || hasPayload) {
+        args.push(s.catchParam !== undefined ? JSON.stringify(s.catchParam) : "undefined");
+      }
+      if (s.catchBody !== undefined || hasFinally || hasPayload) {
+        args.push(
+          s.catchBody !== undefined ? printNode(s.catchBody, depth + 1, opts) : "undefined",
+        );
+      }
+      if (hasFinally || hasPayload) {
+        args.push(hasFinally ? printNode(s["finally"]!, depth + 1, opts) : "undefined");
+      }
+      if (hasPayload) {
+        args.push(JSON.stringify(s.finallyPayload));
+      }
+      return formatCall("Try", args, depth, opts);
+    }
     default:
       return `${name}(${printNode(shape as TisynExpr, depth + 1, opts)})`;
   }
@@ -278,6 +306,8 @@ function constructorName(id: string): string {
       return "Concat";
     case "throw":
       return "Throw";
+    case "try":
+      return "Try";
     case "concat-arrays":
       return "ConcatArrays";
     case "merge-objects":

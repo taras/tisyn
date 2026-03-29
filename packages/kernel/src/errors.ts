@@ -39,3 +39,29 @@ export class ExplicitThrow extends Error {
     super(message);
   }
 }
+
+export class EffectError extends Error {
+  override name: string = "EffectError";
+  constructor(message: string, agentErrorName?: string) {
+    super(message);
+    if (agentErrorName) {
+      this.name = agentErrorName;
+    }
+  }
+}
+
+export function isCatchable(e: unknown): boolean {
+  return (
+    e instanceof ExplicitThrow ||
+    e instanceof TypeError ||
+    e instanceof NotCallable ||
+    e instanceof ArityMismatch ||
+    e instanceof UnboundVariable ||
+    e instanceof DivisionByZero ||
+    e instanceof EffectError
+  );
+}
+
+export function errorToValue(e: unknown): string {
+  return e instanceof Error ? e.message : String(e);
+}

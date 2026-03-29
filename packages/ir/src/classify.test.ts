@@ -63,7 +63,7 @@ describe("isCompoundExternal", () => {
 });
 
 describe("STRUCTURAL_IDS", () => {
-  it("has 27 entries", () => {
-    expect(STRUCTURAL_IDS).toHaveLength(27);
+  it("has 28 entries", () => {
+    expect(STRUCTURAL_IDS).toHaveLength(28);
   });
 });

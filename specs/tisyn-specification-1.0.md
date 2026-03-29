@@ -663,7 +663,8 @@ STRUCTURAL_IDS = {
   "gt", "gte", "lt", "lte", "eq", "neq",
   "add", "sub", "mul", "div", "mod",
   "and", "or", "not", "neg",
-  "construct", "array", "concat", "throw"
+  "construct", "array", "concat", "throw",
+  "try"
 }
 
 classify(id) = STRUCTURAL  if id ∈ STRUCTURAL_IDS
@@ -997,6 +998,10 @@ structural operation will `eval()` on:
 | `array`     | `{ items: [...] }`            | each element of `items`                  |
 | `concat`    | `{ parts: [...] }`            | each element of `parts`                  |
 | `throw`     | `{ message }`                 | `message`                                |
+| `try`       | `{ body, catchBody?, finally? }` | `body`, `catchBody` (if present), `finally` (if present) |
+
+`catchParam` is a non-position field: it is a non-empty string (the catch binding name), not evaluated.
+`finallyPayload` is a non-position field: it is a non-empty string (the binding name for the outcome value in the finally environment), not evaluated.
 
 This table is exhaustive. The check is one level deep — it
 examines only nodes at evaluation positions, not their children.
@@ -1472,12 +1477,45 @@ Cancellation propagates downward, not upward. It is a distinct
 signal: `generator.return()`, not `generator.throw()`. A parent's
 `catch` does NOT catch cancellation.
 
-### 14.7 No Try/Catch in the IR
+### 14.7 Try/Catch/Finally in the IR
 
-The IR has no error-handling construct. Error handling is at the
-generator level using JavaScript `try/catch`. A future `try`
-structural operation is deferred until journal interaction
-semantics are resolved.
+The `try` structural operation provides structured error handling.
+
+**Node shape:**
+
+```
+eval { id: "try", data: quote { body, catchParam?, catchBody?, finally?, finallyPayload? } }
+```
+
+Constraints:
+- At least one of `catchBody` or `finally` MUST be present.
+- `catchParam` MUST be a non-empty string when present.
+- `catchBody` MUST be present when `catchParam` is present.
+- `finallyPayload` MUST be a non-empty string when present.
+- `finally` MUST be present when `finallyPayload` is present.
+- Absent fields MUST be omitted (never `null`).
+
+**Evaluation — three phases:**
+
+1. **Body:** Evaluate `body`. If it succeeds, record the value. If it
+   raises a catchable error, proceed to phase 2. If it raises a
+   non-catchable signal (halt, divergence), run `finally` (if present)
+   without suppressing it, then re-raise the original signal.
+
+2. **Catch** (only if catchable error AND `catchBody` present): Bind
+   `catchParam` (if provided) to the error message string; evaluate
+   `catchBody` in that extended environment. The result replaces the
+   body's error outcome.
+
+3. **Finally** (always, if present): Evaluate `finally`. If `finallyPayload` is present and the outcome from phases 1–2 is a success (`ok`), evaluate `finally` in `extend(env, finallyPayload, outcome.value)`. Otherwise evaluate in the original pre-try environment. Its return value is **discarded**. If `finally` raises an error, that error **replaces** the prior outcome (success or failure).
+
+**Halt:** Cancellation (`generator.return()`) and divergence bypass
+the catch phase. `finally` still runs. A parent's catch does NOT
+catch cancellation.
+
+**No new journal events.** Effects inside any clause emit Yield events
+per §9. The `yieldIndex` counter is monotonic across phase boundaries
+and does NOT reset.
 
 ---
 

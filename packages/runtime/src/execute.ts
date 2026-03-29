@@ -158,10 +158,14 @@ function* driveKernel(
   }
 
   let nextValue: Val = null;
+  // When kernel.throw() yields a new effect (e.g., from catch/finally bodies),
+  // we store it here so the next loop iteration processes it without calling kernel.next().
+  let pendingStep: IteratorResult<EffectDescriptor, Val> | null = null;
 
   try {
     for (;;) {
-      const step = kernel.next(nextValue);
+      const step = pendingStep ?? kernel.next(nextValue);
+      pendingStep = null;
 
       if (step.done) {
         closed = true;
@@ -245,6 +249,8 @@ function* driveKernel(
             ctx.journal.push(closeEvent);
             return { status: "ok", value: throwResult.value as Json };
           }
+          // kernel.throw() yielded a new effect (e.g., from catch/finally body)
+          pendingStep = throwResult;
           nextValue = null;
           continue;
         } else {
@@ -300,6 +306,8 @@ function* driveKernel(
           ctx.journal.push(closeEvent);
           return { status: "ok", value: throwResult.value as Json };
         }
+        // kernel.throw() yielded a new effect (e.g., from catch/finally body)
+        pendingStep = throwResult;
         nextValue = null;
         continue;
       }

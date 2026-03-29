@@ -228,6 +228,24 @@ function decompileStructural(
       const parts = s.objects.map((e) => `...${decompileExpr(e, depth, opts)}`);
       return `{ ${parts.join(", ")} }`;
     }
+    case "try": {
+      const s = shape as {
+        body: TisynExpr;
+        catchParam?: string;
+        catchBody?: TisynExpr;
+        finally?: TisynExpr;
+      };
+      const bodyStr = decompileExpr(s.body, depth + 1, opts);
+      let result = `try { ${bodyStr} }`;
+      if (s.catchBody !== undefined) {
+        const catchBindStr = s.catchParam !== undefined ? `(${s.catchParam})` : "(_e)";
+        result += ` catch ${catchBindStr} { ${decompileExpr(s.catchBody, depth + 1, opts)} }`;
+      }
+      if (s["finally"] !== undefined) {
+        result += ` finally { ${decompileExpr(s["finally"], depth + 1, opts)} }`;
+      }
+      return result;
+    }
     case "while": {
       const s = shape as { condition: TisynExpr; exprs: TisynExpr[] };
       const condStr = decompileExpr(s.condition, depth, opts);
