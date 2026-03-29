@@ -308,17 +308,6 @@ function checkTryConstraints(
       });
     }
   }
-  // finallyDefault requires finallyPayload
-  if ("finallyDefault" in fields && fields["finallyDefault"] !== undefined) {
-    if (!("finallyPayload" in fields)) {
-      errors.push({
-        level: 2,
-        path,
-        message: `"try" node "finallyDefault" requires "finallyPayload" to also be present`,
-        code: MALFORMED_EVAL,
-      });
-    }
-  }
 }
 
 /**

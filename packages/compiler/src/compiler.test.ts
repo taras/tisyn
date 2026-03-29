@@ -938,12 +938,16 @@ describe("Try/catch/finally compilation", () => {
     // finallyPayload must be present
     expect(tryNode!.data.expr.finallyPayload).toBeDefined();
     expect(typeof tryNode!.data.expr.finallyPayload).toBe("string");
-    // finallyExpr must start with a Let that unpacks from Ref(finallyPayload)
+    // finallyExpr must start with a Let whose value is an inner Try resolving fp
     const finallyExpr = tryNode!.data.expr["finally"];
     expect(finallyExpr).toBeDefined();
     expect(finallyExpr.id).toBe("let");
     const fp = tryNode!.data.expr.finallyPayload;
-    expect(finallyExpr.data.expr.value).toEqual({ tisyn: "ref", name: fp });
+    // value = Try(Ref(fp), errFp, Ref(x_0_pretrial)) — inner Try for safe fp resolution
+    const letValue = finallyExpr.data.expr.value;
+    expect(letValue.tisyn).toBe("eval");
+    expect(letValue.id).toBe("try");
+    expect(letValue.data.expr.body).toEqual({ tisyn: "ref", name: fp });
   });
 
   it("J_bc non-empty + try/finally only (no catch): finallyPayload present, no catchBody", () => {

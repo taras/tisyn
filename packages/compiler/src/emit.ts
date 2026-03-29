@@ -921,7 +921,8 @@ function emitTryStatement(
     catchJoinExpr = compileBranchToExpr(catchBlock, joinVars, catchCtx);
   }
 
-  // Capture pre-trial SSA names before applyJoinVersions advances versions
+  // Capture pre-trial SSA names BEFORE applyJoinVersions advances versions.
+  // These are used in the inner-Try fallback for error paths (see below).
   const preTrialRefs = new Map<string, string>();
   for (const v of joinVars) {
     preTrialRefs.set(v, resolveRef(v, ctx));
@@ -929,10 +930,13 @@ function emitTryStatement(
 
   applyJoinVersions(joinVars, ctx);
 
-  // J_bc non-empty: compile finally in post-join ctx with Let-unpack from fp
+  // J_bc non-empty: compile finally with inner-Try-based unpack.
+  // On the success path, fp = outcome.value and the inner Try body (Ref(fp)) succeeds.
+  // On the error path (catchable or non-catchable), fp is unbound, so Ref(fp) throws
+  // UnboundVariable (which is catchable), and the inner Try catch returns the pre-trial ref.
+  // This keeps finallyPayload semantics unchanged (raw outcome.value on success).
   let finallyExpr: Expr | undefined;
   let finallyPayload: string | undefined;
-  let finallyDefault: Expr | undefined;
   if (stmt.finallyBlock) {
     finallyPayload = ctx.counter.next("fp");
     const postJoinCtx: EmitContext = { ...ctx, scopeStack: cloneScopeStack(ctx.scopeStack) };
@@ -940,31 +944,35 @@ function emitTryStatement(
     if (joinVars.length === 1) {
       const v = joinVars[0]!;
       const joinIrName = resolveRef(v, ctx);
-      compiledFinally = Let(joinIrName, Ref(finallyPayload), compiledFinally);
-      finallyDefault = Ref(preTrialRefs.get(v)!);
+      const errFp = ctx.counter.next("err_fp");
+      compiledFinally = Let(
+        joinIrName,
+        Try(Ref(finallyPayload), errFp, Ref(preTrialRefs.get(v)!)),
+        compiledFinally,
+      );
     } else {
+      const errFp = ctx.counter.next("err_fp");
+      const fpEff = ctx.counter.next("fp_eff");
+      const preTrialConstruct: Record<string, Expr> = {};
+      for (const v of joinVars) {
+        preTrialConstruct[v] = Ref(preTrialRefs.get(v)!);
+      }
+      let innerChain = compiledFinally;
       for (let i = joinVars.length - 1; i >= 0; i--) {
         const v = joinVars[i]!;
         const joinIrName = resolveRef(v, ctx);
-        compiledFinally = Let(joinIrName, Get(Ref(finallyPayload), v), compiledFinally);
+        innerChain = Let(joinIrName, Get(Ref(fpEff), v), innerChain);
       }
-      const defaultFields: Record<string, Expr> = {};
-      for (const v of joinVars) {
-        defaultFields[v] = Ref(preTrialRefs.get(v)!);
-      }
-      finallyDefault = Construct(defaultFields as Record<string, Expr>);
+      compiledFinally = Let(
+        fpEff,
+        Try(Ref(finallyPayload), errFp, Construct(preTrialConstruct as Record<string, Expr>)),
+        innerChain,
+      );
     }
     finallyExpr = compiledFinally;
   }
 
-  const tryIr = Try(
-    bodyJoinExpr,
-    catchParam,
-    catchJoinExpr,
-    finallyExpr,
-    finallyPayload,
-    finallyDefault,
-  );
+  const tryIr = Try(bodyJoinExpr, catchParam, catchJoinExpr, finallyExpr, finallyPayload);
 
   if (joinVars.length === 1) {
     const v = joinVars[0]!;

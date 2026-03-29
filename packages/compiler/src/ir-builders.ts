@@ -156,14 +156,12 @@ export function Try(
   catchBody?: Expr,
   finallyBody?: Expr,
   finallyPayload?: string,
-  finallyDefault?: Expr,
 ): EvalNode {
   const fields: Record<string, unknown> = { body };
   if (catchParam !== undefined) fields["catchParam"] = catchParam;
   if (catchBody !== undefined) fields["catchBody"] = catchBody;
   if (finallyBody !== undefined) fields["finally"] = finallyBody;
   if (finallyPayload !== undefined) fields["finallyPayload"] = finallyPayload;
-  if (finallyDefault !== undefined) fields["finallyDefault"] = finallyDefault;
   return { tisyn: "eval", id: "try", data: Q(fields) };
 }
 

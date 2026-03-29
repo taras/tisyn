@@ -10,7 +10,7 @@ import { expect } from "vitest";
 import { execute } from "./execute.js";
 import { EffectError } from "./errors.js";
 import { Dispatch } from "@tisyn/agent";
-import { Try, Ref } from "@tisyn/ir";
+import { Try, Ref, Let } from "@tisyn/ir";
 
 // ── IR helpers ──
 
@@ -156,10 +156,12 @@ describe("try/catch runtime integration", () => {
     expect(capturedValue).toBe(88);
   });
 
-  it("finallyDefault: finally runs with pre-trial value on uncaught-error path (no catch)", function* () {
+  it("compiler inner-Try fallback: finally sees pre-trial value on uncaught-error path", function* () {
     // Regression test for: UnboundVariable(fp) when body throws with no catch clause.
-    // When outcome.ok = false and finallyDefault is present, the kernel must bind
-    // finallyPayload to the finallyDefault value so the Let-unpack in finally does not fail.
+    // The compiler fix wraps the Let-unpack as:
+    //   Let(x_1, Try(Ref(fp), "err_fp", Ref(x_0_pretrial)), finallyBody)
+    // UnboundVariable is catchable, so the inner Try falls back to the pre-trial ref.
+    // This test hand-authors that emitted IR shape to verify the kernel contract holds.
     let capturedValue: unknown = "NOT_CAPTURED";
 
     yield* Dispatch.around({
@@ -173,19 +175,29 @@ describe("try/catch runtime integration", () => {
       },
     });
 
-    // IR equivalent of: try { effect() } finally { capture(fp_0) }
-    // with finallyPayload = "fp_0" and finallyDefault = literal 0.
-    // On error path, kernel must bind fp_0 = 0 (from finallyDefault) and run finally.
+    // Simulates compiled IR for:
+    //   let x = 0; try { yield* f(); } finally { yield* capture(x); }
+    // where x is a join var: pre-trial name "x_0" = 0, post-join name "x_1".
+    //
+    // Compiler emits:
+    //   Let("x_1", Try(Ref("fp_0"), "err_fp", Ref("x_0")), capture(Ref("x_1")))
+    //
+    // Error path: fp_0 unbound → Ref("fp_0") throws UnboundVariable (catchable)
+    //             → inner Try catch returns Ref("x_0") = 0 → x_1 = 0 ✓
     const ir = Try(
       effectIR("svc", "op") as never,
       undefined,
       undefined,
-      { tisyn: "eval", id: "cap.capture", data: { tisyn: "ref", name: "fp_0" } } as never,
+      Let(
+        "x_1",
+        Try(Ref("fp_0") as never, "err_fp", Ref("x_0") as never) as never,
+        { tisyn: "eval", id: "cap.capture", data: { tisyn: "ref", name: "x_1" } } as never,
+      ) as never,
       "fp_0",
-      0 as never, // finallyDefault = literal 0 (pre-trial snapshot)
     );
 
-    yield* execute({ ir: ir as never });
+    // x_0 = 0 simulates the pre-trial SSA binding that the compiler captures
+    yield* execute({ ir: ir as never, env: { x_0: 0 } });
     expect(capturedValue).toBe(0);
   });
 
