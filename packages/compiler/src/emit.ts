@@ -1493,7 +1493,8 @@ function emitWhileStatementInPackedBranch(
   outerJoinVars: string[],
   terminal: () => Expr,
 ): Expr {
-  const rest = () => emitStatementListWithTerminalPacked(stmts, index + 1, ctx, outerJoinVars, terminal);
+  const rest = () =>
+    emitStatementListWithTerminalPacked(stmts, index + 1, ctx, outerJoinVars, terminal);
   const isLast = index === stmts.length - 1;
   const hasReturn = bodyContainsReturn(stmt.statement);
   const loopCarriedVars = detectLoopCarriedLetVars(stmt, ctx);
@@ -1554,8 +1555,7 @@ function emitTryStatementInPackedBranch(
     : undefined;
   const catchBlock = stmt.catchClause?.block;
 
-  const innerNeedsPack =
-    blockContainsReturn(stmt.tryBlock) || blockContainsReturn(catchBlock);
+  const innerNeedsPack = blockContainsReturn(stmt.tryBlock) || blockContainsReturn(catchBlock);
 
   // ── J_bc computation for inner try ──
   const snapshot = snapshotVersions(ctx);
@@ -1656,7 +1656,11 @@ function emitTryStatementInPackedBranch(
         }
         compiledFinallyNP = Let(
           fpEffNP,
-          Try(Ref(finallyPayloadNP), errFpNP, Construct(preTrialConstructNP as Record<string, Expr>)),
+          Try(
+            Ref(finallyPayloadNP),
+            errFpNP,
+            Construct(preTrialConstructNP as Record<string, Expr>),
+          ),
           innerChainNP,
         );
       }

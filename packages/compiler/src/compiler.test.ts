@@ -1077,7 +1077,10 @@ function findPackedConstruct(node: unknown): Record<string, any> | undefined {
 }
 
 /** Find all Construct nodes with a __tag field. */
-function findAllPackedConstructs(node: unknown, result: Record<string, any>[] = []): Record<string, any>[] {
+function findAllPackedConstructs(
+  node: unknown,
+  result: Record<string, any>[] = [],
+): Record<string, any>[] {
   if (typeof node !== "object" || node === null) return result;
   const obj = node as Record<string, any>;
   if (obj["tisyn"] === "eval" && obj["id"] === "construct") {
