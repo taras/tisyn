@@ -220,7 +220,9 @@ function printStructural(
         args.push(s.catchParam !== undefined ? JSON.stringify(s.catchParam) : "undefined");
       }
       if (s.catchBody !== undefined || hasFinally || hasPayload) {
-        args.push(s.catchBody !== undefined ? printNode(s.catchBody, depth + 1, opts) : "undefined");
+        args.push(
+          s.catchBody !== undefined ? printNode(s.catchBody, depth + 1, opts) : "undefined",
+        );
       }
       if (hasFinally || hasPayload) {
         args.push(hasFinally ? printNode(s["finally"]!, depth + 1, opts) : "undefined");

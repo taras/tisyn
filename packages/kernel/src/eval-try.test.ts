@@ -37,12 +37,7 @@ function throwNode(message: unknown) {
   return { tisyn: "eval", id: "throw", data: { tisyn: "quote", expr: { message } } };
 }
 
-function tryNode(
-  body: unknown,
-  catchParam?: string,
-  catchBody?: unknown,
-  finallyBody?: unknown,
-) {
+function tryNode(body: unknown, catchParam?: string, catchBody?: unknown, finallyBody?: unknown) {
   const expr: Record<string, unknown> = { body };
   if (catchParam !== undefined) expr["catchParam"] = catchParam;
   if (catchBody !== undefined) expr["catchBody"] = catchBody;

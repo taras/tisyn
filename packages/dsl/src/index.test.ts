@@ -719,10 +719,7 @@ describe("All constructors round-trip via print", () => {
     ["Get", Get(Ref("obj"), "key")],
     ["Try/catch", Try(Throw("boom" as never), "e", Ref("e") as never)],
     ["Try/finally", Try(Ref("x") as never, undefined, undefined, Ref("y") as never)],
-    [
-      "Try/catch/finally",
-      Try(Throw("boom" as never), "e", Ref("e") as never, Ref("y") as never),
-    ],
+    ["Try/catch/finally", Try(Throw("boom" as never), "e", Ref("e") as never, Ref("y") as never)],
     [
       "Try/finally/finallyPayload",
       Try(Ref("x") as never, undefined, undefined, Ref("y") as never, "fp_0"),
@@ -768,9 +765,7 @@ describe("DSL-082: Try — try/catch/finally form", () => {
     if (result.ok) expect(result.value).toEqual(expected);
   });
   it("round-trips", () => {
-    roundTrip(
-      Try(Throw("boom" as never), "e", Ref("e") as never, Ref("y") as never) as never,
-    );
+    roundTrip(Try(Throw("boom" as never), "e", Ref("e") as never, Ref("y") as never) as never);
   });
 });
 
@@ -799,9 +794,7 @@ describe("DSL-084: Try — finallyPayload (5th arg)", () => {
     }
   });
   it("round-trips Try with finallyPayload", () => {
-    roundTrip(
-      Try(Ref("x") as never, undefined, undefined, Ref("y") as never, "fp_0") as never,
-    );
+    roundTrip(Try(Ref("x") as never, undefined, undefined, Ref("y") as never, "fp_0") as never);
   });
   it("rejects empty-string finallyPayload", () => {
     const result = parseDSLSafe('Try(Ref("x"), undefined, undefined, Ref("y"), "")');

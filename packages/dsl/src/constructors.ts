@@ -314,22 +314,48 @@ export const CONSTRUCTOR_TABLE: Record<string, ConstructorEntry> = {
       if (catchParam !== undefined) {
         requireString(catchParam, "Try catchParam must be a string", tok);
         if (catchParam === "") {
-          throw new DSLParseError("Try catchParam must not be empty", tok.line, tok.column, tok.offset);
+          throw new DSLParseError(
+            "Try catchParam must not be empty",
+            tok.line,
+            tok.column,
+            tok.offset,
+          );
         }
       }
       if (catchParam !== undefined && catchBody === undefined) {
-        throw new DSLParseError("Try: catchParam requires catchBody", tok.line, tok.column, tok.offset);
+        throw new DSLParseError(
+          "Try: catchParam requires catchBody",
+          tok.line,
+          tok.column,
+          tok.offset,
+        );
       }
       if (catchBody === undefined && finallyBody === undefined) {
-        throw new DSLParseError("Try: at least one of catchBody or finallyBody must be present", tok.line, tok.column, tok.offset);
+        throw new DSLParseError(
+          "Try: at least one of catchBody or finallyBody must be present",
+          tok.line,
+          tok.column,
+          tok.offset,
+        );
       }
       if (finallyPayload !== undefined) {
         requireString(finallyPayload, "Try finallyPayload must be a string", tok);
         if (finallyPayload === "") {
-          throw new DSLParseError("Try finallyPayload must not be empty", tok.line, tok.column, tok.offset);
+          throw new DSLParseError(
+            "Try finallyPayload must not be empty",
+            tok.line,
+            tok.column,
+            tok.offset,
+          );
         }
       }
-      return Try(body, catchParam as string | undefined, catchBody, finallyBody, finallyPayload as string | undefined) as TisynExpr;
+      return Try(
+        body,
+        catchParam as string | undefined,
+        catchBody,
+        finallyBody,
+        finallyPayload as string | undefined,
+      ) as TisynExpr;
     },
   },
   Eval: {
