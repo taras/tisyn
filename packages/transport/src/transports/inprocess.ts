@@ -1,5 +1,5 @@
 import type { Operation } from "effection";
-import { createChannel, spawn } from "effection";
+import { createChannel, createScope, ensure } from "effection";
 import type { OperationSpec, AgentDeclaration, ImplementationHandlers } from "@tisyn/agent";
 import { implementAgent } from "@tisyn/agent";
 import type {
@@ -18,6 +18,12 @@ import { createProtocolServer } from "../protocol-server.js";
  * This is the reference transport. Its cancel behavior is normative:
  * cancel interrupts a running handler if still in-flight, and is
  * harmless if the handler already completed.
+ *
+ * The server runs in an isolated scope (parented to the Effection global
+ * root, not to the host task scope) so that host Effects middleware and
+ * BoundAgentsContext do not leak into the agent-side runtime. Cross-
+ * boundary middleware reaches the child only via the protocol middleware
+ * field, not through scope inheritance.
  */
 export function inprocessTransport<Ops extends Record<string, OperationSpec>>(
   declaration: AgentDeclaration<Ops>,
@@ -33,8 +39,15 @@ export function inprocessTransport<Ops extends Record<string, OperationSpec>>(
     const impl = implementAgent(declaration, handlers);
     const server = createProtocolServer(impl);
 
-    // Spawn agent-side processing loop
-    yield* spawn(function* () {
+    // Create an isolated scope parented to the Effection global root.
+    // Its contexts prototype chain terminates at null — no host contexts
+    // (Effects middleware, BoundAgentsContext, etc.) are inherited.
+    // Lifecycle is tied to the caller scope via ensure(destroyScope).
+    const [agentScope, destroyScope] = createScope();
+    yield* ensure(destroyScope);
+
+    // Start the server loop inside the isolated scope.
+    agentScope.run(function* () {
       yield* server.use({
         *receive() {
           return hostSub;
