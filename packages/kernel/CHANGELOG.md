@@ -1,5 +1,18 @@
 # @tisyn/kernel
 
+## 0.4.0
+
+### Minor Changes
+
+- 0393e25: Add `ProhibitedEffectError` for scoped effects.
+
+  - Add `ProhibitedEffectError` thrown when an IR middleware expression attempts to use any effect other than `dispatch`
+
+### Patch Changes
+
+- @tisyn/ir@0.4.0
+- @tisyn/validate@0.4.0
+
 ## 0.3.0
 
 ### Minor Changes
