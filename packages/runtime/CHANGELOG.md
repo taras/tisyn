@@ -1,5 +1,23 @@
 # @tisyn/runtime
 
+## 0.4.0
+
+### Minor Changes
+
+- 0393e25: Add scoped-effects runtime wiring to `execute()`.
+
+  - `execute()` now routes effects through the scope-local `Effects` middleware chain (enforcement wrappers, transport middleware) by calling `dispatch()` from `@tisyn/agent`
+
+### Patch Changes
+
+- Updated dependencies [0393e25]
+- Updated dependencies [0393e25]
+  - @tisyn/agent@0.4.0
+  - @tisyn/kernel@0.4.0
+  - @tisyn/durable-streams@0.4.0
+  - @tisyn/ir@0.4.0
+  - @tisyn/validate@0.4.0
+
 ## 0.3.0
 
 ### Minor Changes

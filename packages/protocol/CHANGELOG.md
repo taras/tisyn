@@ -1,5 +1,17 @@
 # @tisyn/protocol
 
+## 0.4.0
+
+### Minor Changes
+
+- 0393e25: Add optional `middleware` field to `ExecuteRequest.params`.
+
+  - `ExecuteRequest.params.middleware?: Val | null` carries an IR function node (as a plain JSON value) from host to agent, enabling the host to impose cross-boundary middleware restrictions on the delegated execution
+
+### Patch Changes
+
+- @tisyn/ir@0.4.0
+
 ## 0.3.0
 
 ### Patch Changes
