@@ -1,7 +1,11 @@
 import type { Operation, Subscription, Task } from "effection";
 import { spawn, scoped } from "effection";
 import type { AgentImplementation, OperationSpec } from "@tisyn/agent";
-import { installEnforcement, evaluateMiddlewareFn, installCrossBoundaryMiddleware } from "@tisyn/agent";
+import {
+  installEnforcement,
+  evaluateMiddlewareFn,
+  installCrossBoundaryMiddleware,
+} from "@tisyn/agent";
 import type { AgentMessage, HostMessage } from "@tisyn/protocol";
 import type { Val } from "@tisyn/ir";
 import { isFnNode } from "@tisyn/ir";
