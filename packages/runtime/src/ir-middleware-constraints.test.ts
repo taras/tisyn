@@ -182,11 +182,7 @@ describe("IR middleware constraints", () => {
     // Let bound = effectId; forward it as-is
     const withLet = Fn(
       ["effectId", "data"],
-      Let(
-        "bound",
-        Ref("effectId"),
-        Eval("dispatch", Arr(Ref("bound"), Ref("data"))),
-      ),
+      Let("bound", Ref("effectId"), Eval("dispatch", Arr(Ref("bound"), Ref("data")))),
     );
     let forwardedId: string | null = null;
     const next = (eid: string, _d: Val): Operation<Val> => ({
@@ -229,22 +225,14 @@ describe("IR middleware constraints", () => {
         return "not-called" as Val;
       },
     });
-    const result = yield* evaluateMiddlewareFn(
-      returnLiteral,
-      "test.op",
-      null,
-      next,
-    );
+    const result = yield* evaluateMiddlewareFn(returnLiteral, "test.op", null, next);
     expect(result).toBe(42);
   });
 
   // PML-13
   it("Fn with different param names still works", function* () {
     // Use non-conventional param names "eid" and "payload"
-    const altParams = Fn(
-      ["eid", "payload"],
-      Eval("dispatch", Arr(Ref("eid"), Ref("payload"))),
-    );
+    const altParams = Fn(["eid", "payload"], Eval("dispatch", Arr(Ref("eid"), Ref("payload"))));
     let forwardedId: string | null = null;
     let forwardedData: Val = null;
     const next = (eid: string, d: Val): Operation<Val> => ({

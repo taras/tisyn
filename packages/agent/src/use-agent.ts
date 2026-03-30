@@ -12,10 +12,7 @@ export type AgentHandle<Ops extends Record<string, OperationSpec>> = {
  * Scope-local registry of bound agent IDs.
  * Set by `useTransport()`; read by `useAgent()`.
  */
-export const BoundAgentsContext = createContext<Set<string> | null>(
-  "$bound-agents",
-  null,
-);
+export const BoundAgentsContext = createContext<Set<string> | null>("$bound-agents", null);
 
 /**
  * Get a typed handle for an agent that was previously bound via `useTransport()`.

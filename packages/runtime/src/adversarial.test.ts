@@ -16,13 +16,7 @@ import { describe, it } from "@effectionx/vitest";
 import { expect } from "vitest";
 import { useScope } from "effection";
 import type { Val } from "@tisyn/ir";
-import {
-  Dispatch,
-  dispatch,
-  installEnforcement,
-  useAgent,
-  BoundAgentsContext,
-} from "@tisyn/agent";
+import { Dispatch, dispatch, installEnforcement, useAgent, BoundAgentsContext } from "@tisyn/agent";
 import type { AgentDeclaration, OperationSpec } from "@tisyn/agent";
 
 describe("Adversarial / edge cases", () => {

@@ -30,11 +30,7 @@ const denyAll = Fn(["effectId", "data"], Throw("denied"));
 function denyEffect(id: string) {
   return Fn(
     ["effectId", "data"],
-    If(
-      Eq(Ref("effectId"), Q(id)),
-      Throw(id),
-      Eval("dispatch", Arr(Ref("effectId"), Ref("data"))),
-    ),
+    If(Eq(Ref("effectId"), Q(id)), Throw(id), Eval("dispatch", Arr(Ref("effectId"), Ref("data")))),
   );
 }
 
@@ -150,12 +146,7 @@ describe("Scope-local dispatch semantics", () => {
       },
     });
 
-    yield* evaluateMiddlewareFn(
-      transform,
-      "test.op",
-      { original: true } as unknown as Val,
-      next,
-    );
+    yield* evaluateMiddlewareFn(transform, "test.op", { original: true } as unknown as Val, next);
     expect(receivedData).toEqual({ transformed: true });
   });
 

@@ -7,7 +7,13 @@
  * See Conformance Suite §10.1 for the replay algorithm.
  */
 
-import type { DurableEvent, CloseEvent, StartEvent, EffectDescription, EventResult } from "@tisyn/kernel";
+import type {
+  DurableEvent,
+  CloseEvent,
+  StartEvent,
+  EffectDescription,
+  EventResult,
+} from "@tisyn/kernel";
 
 export interface YieldEntry {
   description: EffectDescription;

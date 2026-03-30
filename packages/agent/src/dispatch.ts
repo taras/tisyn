@@ -15,10 +15,7 @@ export type EnforcementFn = (
   inner: (eid: string, d: Val) => Operation<Val>,
 ) => Operation<Val>;
 
-const EnforcementContext = createContext<EnforcementFn | null>(
-  "$enforcement",
-  null,
-);
+const EnforcementContext = createContext<EnforcementFn | null>("$enforcement", null);
 
 export function* installEnforcement(fn: EnforcementFn): Operation<void> {
   const scope = yield* useScope();
@@ -46,8 +43,7 @@ export function* dispatch(effectId: string, data: Val): Operation<Val> {
   const scope = yield* useScope();
   const enforcement = scope.get(EnforcementContext) ?? null;
 
-  const inner = (eid: string, d: Val): Operation<Val> =>
-    DispatchApi.operations.dispatch(eid, d);
+  const inner = (eid: string, d: Val): Operation<Val> => DispatchApi.operations.dispatch(eid, d);
 
   if (enforcement !== null) {
     return yield* enforcement(effectId, data, inner);
