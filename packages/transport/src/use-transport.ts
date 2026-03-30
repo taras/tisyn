@@ -19,9 +19,7 @@ export function* useTransport<Ops extends Record<string, OperationSpec>>(
 ): Operation<void> {
   const scope = yield* useScope();
 
-  const current = scope.hasOwn(BoundAgentsContext)
-    ? scope.expect(BoundAgentsContext)
-    : null;
+  const current = scope.get(BoundAgentsContext) ?? null;
   const next = new Set(current ?? []);
   next.add(declaration.id);
   scope.set(BoundAgentsContext, next);

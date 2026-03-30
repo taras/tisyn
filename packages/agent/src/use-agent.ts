@@ -25,9 +25,7 @@ export function* useAgent<Ops extends Record<string, OperationSpec>>(
   declaration: AgentDeclaration<Ops>,
 ): Operation<AgentHandle<Ops>> {
   const scope = yield* useScope();
-  const bound = scope.hasOwn(BoundAgentsContext)
-    ? scope.expect(BoundAgentsContext)
-    : null;
+  const bound = scope.get(BoundAgentsContext) ?? null;
 
   if (!bound?.has(declaration.id)) {
     throw new Error(

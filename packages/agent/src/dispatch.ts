@@ -44,9 +44,7 @@ export const Dispatch = DispatchApi;
  */
 export function* dispatch(effectId: string, data: Val): Operation<Val> {
   const scope = yield* useScope();
-  const enforcement = scope.hasOwn(EnforcementContext)
-    ? scope.expect(EnforcementContext)
-    : null;
+  const enforcement = scope.get(EnforcementContext) ?? null;
 
   const inner = (eid: string, d: Val): Operation<Val> =>
     DispatchApi.operations.dispatch(eid, d);

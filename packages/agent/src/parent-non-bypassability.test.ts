@@ -1,6 +1,6 @@
 import { describe, it } from "@effectionx/vitest";
 import { expect } from "vitest";
-import { scoped } from "effection";
+import { scoped, spawn, suspend } from "effection";
 import type { Val } from "@tisyn/ir";
 import type { FnNode } from "@tisyn/ir";
 import { Fn, Eval, Ref, Arr, If, Eq, Q, Throw } from "@tisyn/ir";
@@ -41,8 +41,8 @@ function* withEnforcementFromIr(fn: FnNode) {
 // ---------------------------------------------------------------------------
 
 describe("parent enforcement non-bypassability", () => {
-  // PNB-1: enforcement is scoped to where installEnforcement is called (hasOwn semantics)
-  it("enforcement only fires in the scope where installEnforcement was called, not child scopes", function* () {
+  // PNB-1: enforcement installed in parent scope is inherited by child scopes
+  it("enforcement installed in parent fires for dispatches from child scopes", function* () {
     const log: string[] = [];
 
     yield* Dispatch.around({
@@ -59,16 +59,15 @@ describe("parent enforcement non-bypassability", () => {
       return yield* inner(effectId, data);
     });
 
-    // Dispatch from a child scope — hasOwn returns false for the child scope,
-    // so enforcement does NOT run. This documents the actual scoping behavior:
-    // enforcement is tied to the exact scope where installEnforcement was called.
+    // Dispatch from a child scope — inherited lookup means enforcement DOES run
     yield* scoped(function* () {
       yield* dispatch("test.op", null);
     });
 
-    // enforcement does not fire for dispatches from child scopes
-    expect(log).not.toContain("enforcement");
+    // enforcement fires because child scope inherits from parent via prototype chain
+    expect(log).toContain("enforcement");
     expect(log).toContain("core");
+    expect(log.indexOf("enforcement")).toBeLessThan(log.indexOf("core"));
   });
 
   // PNB-2: enforcement runs before the Dispatch handler in the same scope
@@ -258,6 +257,7 @@ describe("parent enforcement non-bypassability", () => {
   });
 
   // PNB-9: enforcement allows overriding effectId forwarded to inner
+  // (keeping original numbering; new inheritance tests are PNB-10 through PNB-14 below)
   it("enforcement can transform the effectId before forwarding to the Dispatch chain", function* () {
     let receivedEffectId: string | null = null;
 
@@ -275,5 +275,90 @@ describe("parent enforcement non-bypassability", () => {
 
     yield* dispatch("original.op", null);
     expect(receivedEffectId).toBe("canonical.op");
+  });
+
+  // PNB-10: child scope inherits parent enforcement (inherited lookup)
+  it("child scoped() task inherits enforcement installed in parent", function* () {
+    const log: string[] = [];
+
+    yield* Dispatch.around({
+      // biome-ignore lint/correctness/useYield: mock core handler
+      *dispatch([_e, _d]: [string, Val]) {
+        log.push("core");
+        return "core" as Val;
+      },
+    });
+
+    yield* installEnforcement(function* (effectId, data, inner) {
+      log.push("enforcement");
+      return yield* inner(effectId, data);
+    });
+
+    yield* scoped(function* () {
+      yield* dispatch("test.op", null);
+    });
+
+    expect(log).toContain("enforcement");
+    expect(log).toContain("core");
+  });
+
+  // PNB-11: spawned task inherits parent enforcement
+  it("spawned task inherits enforcement installed in parent", function* () {
+    const log: string[] = [];
+
+    yield* Dispatch.around({
+      // biome-ignore lint/correctness/useYield: mock core handler
+      *dispatch([_e, _d]: [string, Val]) {
+        log.push("core");
+        return "core" as Val;
+      },
+    });
+
+    yield* installEnforcement(function* (effectId, data, inner) {
+      log.push("enforcement");
+      return yield* inner(effectId, data);
+    });
+
+    const task = yield* spawn(function* () {
+      yield* dispatch("test.op", null);
+    });
+    yield* task;
+
+    expect(log).toContain("enforcement");
+    expect(log).toContain("core");
+  });
+
+  // PNB-12: child scope enforcement shadows parent enforcement
+  it("child enforcement shadows parent enforcement for that subtree", function* () {
+    const log: string[] = [];
+
+    yield* Dispatch.around({
+      // biome-ignore lint/correctness/useYield: mock core handler
+      *dispatch([_e, _d]: [string, Val]) {
+        log.push("core");
+        return "core" as Val;
+      },
+    });
+
+    // Parent installs enforcement
+    yield* installEnforcement(function* (effectId, data, inner) {
+      log.push("parent-enforcement");
+      return yield* inner(effectId, data);
+    });
+
+    // Child installs its own enforcement — shadows parent
+    yield* scoped(function* () {
+      yield* installEnforcement(function* (effectId, data, inner) {
+        log.push("child-enforcement");
+        return yield* inner(effectId, data);
+      });
+
+      yield* dispatch("test.op", null);
+    });
+
+    // Child enforcement ran, not parent enforcement (shadowed)
+    expect(log).toContain("child-enforcement");
+    expect(log).not.toContain("parent-enforcement");
+    expect(log).toContain("core");
   });
 });
