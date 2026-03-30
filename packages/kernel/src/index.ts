@@ -21,7 +21,6 @@ export type {
   EventResult,
   YieldEvent,
   CloseEvent,
-  StartEvent,
   DurableEvent,
   EffectDescriptor,
 } from "./events.js";

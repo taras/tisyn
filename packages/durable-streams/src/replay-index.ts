@@ -10,7 +10,6 @@
 import type {
   DurableEvent,
   CloseEvent,
-  StartEvent,
   EffectDescription,
   EventResult,
 } from "@tisyn/kernel";
@@ -24,13 +23,9 @@ export class ReplayIndex {
   private yields = new Map<string, YieldEntry[]>();
   private cursors = new Map<string, number>();
   private closes = new Map<string, CloseEvent>();
-  private starts = new Map<string, StartEvent>();
 
   constructor(events: DurableEvent[]) {
     for (const event of events) {
-      if (event.type === "start") {
-        this.starts.set(event.coroutineId, event);
-      }
       if (event.type === "yield") {
         let list = this.yields.get(event.coroutineId);
         if (!list) {
@@ -79,8 +74,4 @@ export class ReplayIndex {
     return this.closes.get(coroutineId);
   }
 
-  /** Returns the Start event for this coroutine, or undefined. */
-  getStart(coroutineId: string): StartEvent | undefined {
-    return this.starts.get(coroutineId);
-  }
 }
