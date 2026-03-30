@@ -483,8 +483,8 @@ When a child runtime receives an execute request with a
    dispatch interpretation: any `Eval("dispatch", ...)` the
    kernel yields Suspend for MUST be routed to the child's
    composed middleware chain (see §8).
-4. The runtime MUST record the `Fn` as a durable input to the
-   execution (see §9).
+4. *(Deferred — not implemented in v1.)* The runtime MUST
+   record the `Fn` as a durable input to the execution (see §9).
 
 ### 7.4 Middleware Logic Calling Convention
 
@@ -671,6 +671,11 @@ following mechanism:
 
 ### 9.1 IR Middleware Logic as Durable Input
 
+> **Deferred.** Not implemented in v1. `DurableEvent` is
+> `YieldEvent | CloseEvent` only — no durable-input recording
+> for cross-boundary middleware exists. The semantics below
+> describe the intended future behavior.
+
 Cross-boundary IR middleware logic MUST be treated as a durable
 input to the child execution. The runtime MUST record it
 alongside other durable inputs (workflow arguments and any
@@ -678,6 +683,8 @@ additional replay-relevant inputs defined by the core execution
 model).
 
 ### 9.2 Replay Validation
+
+> **Deferred.** Not implemented in v1 — see §9.1.
 
 On replay, the runtime MUST validate that all durable inputs
 are consistent with the original execution. If the IR
@@ -687,6 +694,8 @@ input mismatch according to the system's existing durable input
 validation model.
 
 ### 9.3 Middleware Re-Installation on Replay
+
+> **Deferred.** Not implemented in v1 — see §9.1.
 
 On replay, the runtime MUST read the stored IR middleware logic
 from the durable inputs and re-install the same enforcement
@@ -826,9 +835,9 @@ The runtime MUST:
    a JavaScript enforcement wrapper with scope-local dispatch
    interpretation (§8). Install outside the child's middleware
    chain per §7.5.
-6. **Record durable inputs.** Store cross-boundary IR middleware
-   logic alongside other execution inputs. Validate consistency
-   on replay (§9).
+6. *(Deferred — not implemented in v1.)* **Record durable inputs.**
+   Store cross-boundary IR middleware logic alongside other
+   execution inputs. Validate consistency on replay (§9).
 7. **Provide the generic effect boundary.** The runtime MUST
    route plain effect IDs, including reserved `tisyn.*` IDs,
    through the same scoped `Effects` boundary.
