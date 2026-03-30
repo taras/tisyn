@@ -1,4 +1,4 @@
-import { type Operation, createContext, useScope } from "effection";
+import { type Operation, createContext } from "effection";
 import type { Val, FnNode } from "@tisyn/ir";
 import { createApi } from "@effectionx/context-api";
 
@@ -18,8 +18,7 @@ export type EnforcementFn = (
 const EnforcementContext = createContext<EnforcementFn | null>("$enforcement", null);
 
 export function* installEnforcement(fn: EnforcementFn): Operation<void> {
-  const scope = yield* useScope();
-  scope.set(EnforcementContext, fn);
+  yield* EnforcementContext.set(fn);
 }
 
 // ---------------------------------------------------------------------------
@@ -37,14 +36,12 @@ const CrossBoundaryMiddlewareContext = createContext<FnNode | null>(
 
 /** Install an IR middleware function to be propagated to remote child executions. */
 export function* installCrossBoundaryMiddleware(fn: FnNode): Operation<void> {
-  const scope = yield* useScope();
-  scope.set(CrossBoundaryMiddlewareContext, fn);
+  yield* CrossBoundaryMiddlewareContext.set(fn);
 }
 
 /** Read the cross-boundary middleware from the current scope (or null if not set). */
 export function* getCrossBoundaryMiddleware(): Operation<FnNode | null> {
-  const scope = yield* useScope();
-  return scope.get(CrossBoundaryMiddlewareContext) ?? null;
+  return (yield* CrossBoundaryMiddlewareContext.get()) ?? null;
 }
 
 // ---------------------------------------------------------------------------
@@ -65,8 +62,7 @@ export const Effects = EffectsApi;
  * non-bypassable by child middleware.
  */
 export function* dispatch(effectId: string, data: Val): Operation<Val> {
-  const scope = yield* useScope();
-  const enforcement = scope.get(EnforcementContext) ?? null;
+  const enforcement = (yield* EnforcementContext.get()) ?? null;
 
   const inner = (eid: string, d: Val): Operation<Val> => EffectsApi.operations.dispatch(eid, d);
 
