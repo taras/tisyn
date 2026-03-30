@@ -8,6 +8,7 @@
  * CBP-2: No middleware in scope → remote operation succeeds normally
  * CBP-3: Parent middleware short-circuits → child returns value without executing handler
  * CBP-4: Malformed middleware IR via direct protocol message → InvalidRequest error
+ * CBP-5: Middleware re-propagates to grandchild on re-delegation
  */
 
 import { describe, it } from "@effectionx/vitest";
@@ -15,7 +16,7 @@ import { expect } from "vitest";
 import { scoped, createChannel, spawn } from "effection";
 import type { Operation } from "effection";
 import type { Val } from "@tisyn/ir";
-import { Fn, Q, Throw } from "@tisyn/ir";
+import { Fn, Q, Throw, If, Eq, Ref, Eval } from "@tisyn/ir";
 import type { OperationSpec } from "@tisyn/agent";
 import {
   agent,
@@ -177,5 +178,68 @@ describe("cross-boundary middleware", () => {
     const errResp = execResponse as { error?: { code: number; message: string } };
     expect(errResp.error).toBeDefined();
     expect(errResp.error!.code).toBe(ProtocolErrorCode.InvalidRequest);
+  });
+
+  // CBP-5: parent middleware re-propagates to grandchild on re-delegation
+  it("parent middleware re-propagates to grandchild on re-delegation", function* () {
+    // Middleware that denies "cbp5.probe" but passes everything else to inner dispatch.
+    // Transparent for child→grandchild routing, but blocks the sentinel in the grandchild.
+    const denyProbe = Fn(
+      ["effectId", "data"],
+      If(
+        Eq(Ref("effectId"), "cbp5.probe"),
+        Throw("denied"),
+        Eval("dispatch", [Ref("effectId"), Ref("data")]),
+      ),
+    );
+
+    const grandchild = agent("grandchild-cbp5", {
+      op: operation<{ a: number; b: number }, number>(),
+    });
+
+    // Grandchild handler probes for enforcement by dispatching the sentinel.
+    // Swallows "No agent registered" (no propagated middleware path);
+    // rethrows anything else (e.g. "denied" from enforcement).
+    const grandchildFactory = inprocessTransport(grandchild, {
+      *op({ a, b }: { a: number; b: number }) {
+        try {
+          yield* dispatch("cbp5.probe", null as Val);
+        } catch (e) {
+          const msg = (e as Error).message ?? "";
+          if (msg.includes("No agent registered")) {
+            // expected when no middleware propagated — continue
+          } else {
+            throw e; // "denied" or other error — re-throw
+          }
+        }
+        return a + b;
+      },
+    });
+
+    const child = agent("child-cbp5", {
+      op: operation<{ a: number; b: number }, number>(),
+    });
+
+    // Child handler installs grandchild transport in its execute scope and delegates.
+    // denyProbe is transparent for "grandchild-cbp5.op" so enforcement does not block here.
+    const childFactory = inprocessTransport(child, {
+      *op({ a, b }: { a: number; b: number }) {
+        yield* installRemoteAgent(grandchild, grandchildFactory);
+        return (yield* dispatch("grandchild-cbp5.op", { a, b } as Val)) as number;
+      },
+    });
+
+    yield* scoped(function* () {
+      yield* installRemoteAgent(child, childFactory);
+      yield* installCrossBoundaryMiddleware(denyProbe);
+
+      try {
+        yield* invoke(child.op({ a: 1, b: 2 }));
+        expect.unreachable("should have thrown");
+      } catch (error) {
+        expect(error).toBeInstanceOf(Error);
+        expect((error as Error).message).toContain("denied");
+      }
+    });
   });
 });

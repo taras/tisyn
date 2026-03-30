@@ -1,7 +1,7 @@
 import type { Operation, Subscription, Task } from "effection";
 import { spawn, scoped } from "effection";
 import type { AgentImplementation, OperationSpec } from "@tisyn/agent";
-import { installEnforcement, evaluateMiddlewareFn } from "@tisyn/agent";
+import { installEnforcement, evaluateMiddlewareFn, installCrossBoundaryMiddleware } from "@tisyn/agent";
 import type { AgentMessage, HostMessage } from "@tisyn/protocol";
 import type { Val } from "@tisyn/ir";
 import { isFnNode } from "@tisyn/ir";
@@ -112,6 +112,7 @@ export function createProtocolServer<Ops extends Record<string, OperationSpec>>(
                 yield* installEnforcement((effectId, data, inner) =>
                   evaluateMiddlewareFn(middlewareFn, effectId, data, inner),
                 );
+                yield* installCrossBoundaryMiddleware(middlewareFn);
 
                 try {
                   const val = yield* (
