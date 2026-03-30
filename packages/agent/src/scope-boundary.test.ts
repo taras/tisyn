@@ -2,13 +2,13 @@ import { describe, it } from "@effectionx/vitest";
 import { expect } from "vitest";
 import { scoped } from "effection";
 import type { Val } from "@tisyn/ir";
-import { Dispatch, dispatch } from "./index.js";
+import { Effects, dispatch } from "./index.js";
 
 // Shared helper: install a catch-all core handler at min priority.
 // Using { at: "min" } ensures it runs AFTER any interceptors installed
 // at the default max priority.
 function* installCoreHandler() {
-  yield* Dispatch.around(
+  yield* Effects.around(
     {
       // biome-ignore lint/correctness/useYield: mock handler
       *dispatch([_e, _d]: [string, Val]) {
@@ -27,7 +27,7 @@ describe("scope boundaries", () => {
     const parentLog: string[] = [];
 
     // Parent middleware
-    yield* Dispatch.around({
+    yield* Effects.around({
       *dispatch([e, d]: [string, Val], next) {
         parentLog.push("parent");
         return yield* next(e, d);
@@ -37,7 +37,7 @@ describe("scope boundaries", () => {
     // Run a child scope that installs additional middleware
     const childLog: string[] = [];
     yield* scoped(function* () {
-      yield* Dispatch.around({
+      yield* Effects.around({
         *dispatch([e, d]: [string, Val], next) {
           childLog.push("child");
           return yield* next(e, d);
@@ -69,7 +69,7 @@ describe("scope boundaries", () => {
 
     // Sibling scope 1 installs M1
     yield* scoped(function* () {
-      yield* Dispatch.around({
+      yield* Effects.around({
         *dispatch([e, d]: [string, Val], next) {
           log1.push("M1");
           return yield* next(e, d);
@@ -82,7 +82,7 @@ describe("scope boundaries", () => {
 
     // Sibling scope 2 installs M2
     yield* scoped(function* () {
-      yield* Dispatch.around({
+      yield* Effects.around({
         *dispatch([e, d]: [string, Val], next) {
           log2.push("M2");
           return yield* next(e, d);
@@ -102,7 +102,7 @@ describe("scope boundaries", () => {
     const log: string[] = [];
 
     function* helperInstallsMiddleware() {
-      yield* Dispatch.around({
+      yield* Effects.around({
         *dispatch([e, d]: [string, Val], next) {
           log.push("helper-mw");
           return yield* next(e, d);
@@ -125,7 +125,7 @@ describe("scope boundaries", () => {
     const log: string[] = [];
 
     function* installM2() {
-      yield* Dispatch.around({
+      yield* Effects.around({
         *dispatch([e, d]: [string, Val], next) {
           log.push("M2");
           return yield* next(e, d);
@@ -151,7 +151,7 @@ describe("scope boundaries", () => {
 
     const log: string[] = [];
 
-    yield* Dispatch.around({
+    yield* Effects.around({
       *dispatch([e, d]: [string, Val], next) {
         log.push("parent-mw");
         return yield* next(e, d);
@@ -173,7 +173,7 @@ describe("scope boundaries", () => {
 
     const log: string[] = [];
 
-    yield* Dispatch.around({
+    yield* Effects.around({
       *dispatch([e, d]: [string, Val], next) {
         log.push("parent-M");
         return yield* next(e, d);

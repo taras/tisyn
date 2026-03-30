@@ -2,7 +2,7 @@ import { describe, it } from "@effectionx/vitest";
 import { expect } from "vitest";
 import { execute } from "./execute.js";
 import { InMemoryStream } from "@tisyn/durable-streams";
-import { Dispatch } from "@tisyn/agent";
+import { Effects } from "@tisyn/agent";
 import type { YieldEvent, CloseEvent, DurableEvent } from "@tisyn/kernel";
 
 // IR that yields a single external effect: agent.op(data)
@@ -53,7 +53,7 @@ describe("Replay", () => {
     const stream = new InMemoryStream(stored);
 
     let agentCalled = false;
-    yield* Dispatch.around({
+    yield* Effects.around({
       // biome-ignore lint/correctness/useYield: mock
       *dispatch([_effectId, _data]: [string, any]) {
         agentCalled = true;
@@ -81,7 +81,7 @@ describe("Replay", () => {
     const stream = new InMemoryStream(stored);
 
     let liveCallCount = 0;
-    yield* Dispatch.around({
+    yield* Effects.around({
       // biome-ignore lint/correctness/useYield: mock
       *dispatch([_effectId, _data]: [string, any]) {
         liveCallCount++;
@@ -165,7 +165,7 @@ describe("Replay", () => {
     const stream = new InMemoryStream(stored);
 
     let agentCalled = false;
-    yield* Dispatch.around({
+    yield* Effects.around({
       // biome-ignore lint/correctness/useYield: mock
       *dispatch([_effectId, _data]: [string, any]) {
         agentCalled = true;

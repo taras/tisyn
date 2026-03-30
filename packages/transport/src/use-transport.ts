@@ -9,7 +9,7 @@ import { installRemoteAgent } from "./install-remote.js";
  * Bind a remote agent to the current scope via a transport factory.
  *
  * Registers the agent ID in the scope-local bound-agents registry and
- * installs Dispatch middleware that routes matching effects through the
+ * installs Effects middleware that routes matching effects through the
  * transport session. The transport connection lifetime is scoped to the
  * current Effection scope.
  */

@@ -7,12 +7,7 @@
  * See Conformance Suite §10.1 for the replay algorithm.
  */
 
-import type {
-  DurableEvent,
-  CloseEvent,
-  EffectDescription,
-  EventResult,
-} from "@tisyn/kernel";
+import type { DurableEvent, CloseEvent, EffectDescription, EventResult } from "@tisyn/kernel";
 
 export interface YieldEntry {
   description: EffectDescription;
@@ -73,5 +68,4 @@ export class ReplayIndex {
   getClose(coroutineId: string): CloseEvent | undefined {
     return this.closes.get(coroutineId);
   }
-
 }

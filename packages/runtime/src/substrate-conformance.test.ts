@@ -11,7 +11,7 @@ import { describe, it } from "@effectionx/vitest";
 import { expect } from "vitest";
 import { spawn, ensure, suspend, scoped, sleep } from "effection";
 import { execute } from "./execute.js";
-import { Dispatch } from "@tisyn/agent";
+import { Effects } from "@tisyn/agent";
 import type { CloseEvent, YieldEvent } from "@tisyn/kernel";
 
 describe("Substrate Conformance", () => {
@@ -42,7 +42,7 @@ describe("Substrate Conformance", () => {
   describe("V2: child close before parent resumes after compound", () => {
     it("child Close events appear in journal before post-compound Yield", function* () {
       let callCount = 0;
-      yield* Dispatch.around({
+      yield* Effects.around({
         // biome-ignore lint/correctness/useYield: mock
         *dispatch([_effectId, _data]: [string, any]) {
           return ++callCount * 10;

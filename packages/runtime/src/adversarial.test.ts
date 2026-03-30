@@ -16,7 +16,7 @@ import { describe, it } from "@effectionx/vitest";
 import { expect } from "vitest";
 import { useScope } from "effection";
 import type { Val } from "@tisyn/ir";
-import { Dispatch, dispatch, installEnforcement, useAgent, BoundAgentsContext } from "@tisyn/agent";
+import { Effects, dispatch, installEnforcement, useAgent, BoundAgentsContext } from "@tisyn/agent";
 import type { AgentDeclaration, OperationSpec } from "@tisyn/agent";
 
 describe("Adversarial / edge cases", () => {
@@ -48,7 +48,7 @@ describe("Adversarial / edge cases", () => {
 
   // NEG-4
   it("enforcement denial error propagates — not swallowed", function* () {
-    yield* Dispatch.around({
+    yield* Effects.around({
       // biome-ignore lint/correctness/useYield: mock
       *dispatch([_e, _d]: [string, Val]) {
         return "core" as Val;
@@ -69,7 +69,7 @@ describe("Adversarial / edge cases", () => {
 
   // NEG-6
   it("enforcement receives correct effectId and data", function* () {
-    yield* Dispatch.around({
+    yield* Effects.around({
       // biome-ignore lint/correctness/useYield: mock
       *dispatch([_e, _d]: [string, Val]) {
         return "core" as Val;
@@ -93,7 +93,7 @@ describe("Adversarial / edge cases", () => {
   // NEG-7
   it("enforcement can modify effectId before forwarding to inner chain", function* () {
     let seenInCore: string | null = null;
-    yield* Dispatch.around({
+    yield* Effects.around({
       // biome-ignore lint/correctness/useYield: mock
       *dispatch([e, _d]: [string, Val]) {
         seenInCore = e;
@@ -112,7 +112,7 @@ describe("Adversarial / edge cases", () => {
   // NEG-8
   it("each dispatch call goes through enforcement", function* () {
     let enforcementCallCount = 0;
-    yield* Dispatch.around({
+    yield* Effects.around({
       // biome-ignore lint/correctness/useYield: mock
       *dispatch([_e, _d]: [string, Val]) {
         return "ok" as Val;
@@ -163,7 +163,7 @@ describe("Adversarial / edge cases", () => {
     scope.set(BoundAgentsContext, new Set(["echo-agent"]));
 
     // Install a handler that echoes data back
-    yield* Dispatch.around({
+    yield* Effects.around({
       // biome-ignore lint/correctness/useYield: mock
       *dispatch([_e, d]: [string, Val]) {
         return d;

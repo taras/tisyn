@@ -4,7 +4,7 @@ import { scoped, spawn, suspend } from "effection";
 import type { Val } from "@tisyn/ir";
 import type { FnNode } from "@tisyn/ir";
 import { Fn, Eval, Ref, Arr, If, Eq, Q, Throw } from "@tisyn/ir";
-import { Dispatch, dispatch, installEnforcement, evaluateMiddlewareFn } from "./index.js";
+import { Effects, dispatch, installEnforcement, evaluateMiddlewareFn } from "./index.js";
 import { ProhibitedEffectError } from "@tisyn/kernel";
 
 // ---------------------------------------------------------------------------
@@ -45,7 +45,7 @@ describe("parent enforcement non-bypassability", () => {
   it("enforcement installed in parent fires for dispatches from child scopes", function* () {
     const log: string[] = [];
 
-    yield* Dispatch.around({
+    yield* Effects.around({
       // biome-ignore lint/correctness/useYield: mock core handler
       *dispatch([_e, _d]: [string, Val]) {
         log.push("core");
@@ -59,7 +59,7 @@ describe("parent enforcement non-bypassability", () => {
       return yield* inner(effectId, data);
     });
 
-    // Dispatch from a child scope — inherited lookup means enforcement DOES run
+    // Effects.around from a child scope — inherited lookup means enforcement DOES run
     yield* scoped(function* () {
       yield* dispatch("test.op", null);
     });
@@ -70,11 +70,11 @@ describe("parent enforcement non-bypassability", () => {
     expect(log.indexOf("enforcement")).toBeLessThan(log.indexOf("core"));
   });
 
-  // PNB-2: enforcement runs before the Dispatch handler in the same scope
-  it("enforcement runs before the Dispatch handler in the same scope where it is installed", function* () {
+  // PNB-2: enforcement runs before the Effects handler in the same scope
+  it("enforcement runs before the Effects handler in the same scope where it is installed", function* () {
     const log: string[] = [];
 
-    yield* Dispatch.around({
+    yield* Effects.around({
       *dispatch([_e, _d]: [string, Val]) {
         log.push("core");
         return "core" as Val;
@@ -86,18 +86,18 @@ describe("parent enforcement non-bypassability", () => {
       return yield* inner(effectId, data);
     });
 
-    // Dispatch in the SAME scope as installEnforcement
+    // Effects.around in the SAME scope as installEnforcement
     yield* dispatch("test.op", null);
 
-    // Enforcement runs first, then the Dispatch handler
+    // Enforcement runs first, then the Effects handler
     expect(log[0]).toBe("enforcement");
     expect(log).toContain("core");
     expect(log.indexOf("enforcement")).toBeLessThan(log.indexOf("core"));
   });
 
-  // PNB-3: enforcement denial is non-bypassable — child Dispatch middleware cannot allow a denied effect
-  it("enforcement denial cannot be bypassed by child Dispatch middleware installed after enforcement", function* () {
-    yield* Dispatch.around({
+  // PNB-3: enforcement denial is non-bypassable — child Effects middleware cannot allow a denied effect
+  it("enforcement denial cannot be bypassed by child Effects middleware installed after enforcement", function* () {
+    yield* Effects.around({
       // biome-ignore lint/correctness/useYield: mock core handler
       *dispatch([_e, _d]: [string, Val]) {
         return "core" as Val;
@@ -110,8 +110,8 @@ describe("parent enforcement non-bypassability", () => {
       return yield* inner(effectId, data);
     });
 
-    // Even if Dispatch middleware is added after enforcement, it runs AFTER enforcement
-    yield* Dispatch.around({
+    // Even if Effects middleware is added after enforcement, it runs AFTER enforcement
+    yield* Effects.around({
       *dispatch([e, d]: [string, Val], next) {
         return yield* next(e, d);
       },
@@ -126,10 +126,10 @@ describe("parent enforcement non-bypassability", () => {
   });
 
   // PNB-4: IR-based enforcement (evaluateMiddlewareFn with allow-all) passes effects through
-  it("IR allow-all enforcement passes effects through to the Dispatch chain", function* () {
+  it("IR allow-all enforcement passes effects through to the Effects chain", function* () {
     let coreReached = false;
 
-    yield* Dispatch.around({
+    yield* Effects.around({
       *dispatch([_e, _d]: [string, Val]) {
         coreReached = true;
         return "core" as Val;
@@ -145,7 +145,7 @@ describe("parent enforcement non-bypassability", () => {
 
   // PNB-5: IR-based enforcement (evaluateMiddlewareFn with denyEffect) denies the target effect
   it("IR denyEffect enforcement denies specific effect", function* () {
-    yield* Dispatch.around({
+    yield* Effects.around({
       // biome-ignore lint/correctness/useYield: mock core handler
       *dispatch([_e, _d]: [string, Val]) {
         return "core" as Val;
@@ -169,7 +169,7 @@ describe("parent enforcement non-bypassability", () => {
 
   // PNB-6: IR enforcement that uses a non-dispatch effect ID throws ProhibitedEffectError
   it("IR middleware that yields non-dispatch effect throws ProhibitedEffectError", function* () {
-    yield* Dispatch.around({
+    yield* Effects.around({
       // biome-ignore lint/correctness/useYield: mock core handler
       *dispatch([_e, _d]: [string, Val]) {
         return "core" as Val;
@@ -197,7 +197,7 @@ describe("parent enforcement non-bypassability", () => {
   it("enforcement installed in one scope does not apply to sibling scope", function* () {
     const log: string[] = [];
 
-    yield* Dispatch.around({
+    yield* Effects.around({
       // biome-ignore lint/correctness/useYield: mock core handler
       *dispatch([_e, _d]: [string, Val]) {
         log.push("core");
@@ -230,7 +230,7 @@ describe("parent enforcement non-bypassability", () => {
   it("child scope can install its own enforcement without affecting parent scope dispatch", function* () {
     const log: string[] = [];
 
-    yield* Dispatch.around({
+    yield* Effects.around({
       // biome-ignore lint/correctness/useYield: mock core handler
       *dispatch([_e, _d]: [string, Val]) {
         log.push("core");
@@ -258,10 +258,10 @@ describe("parent enforcement non-bypassability", () => {
 
   // PNB-9: enforcement allows overriding effectId forwarded to inner
   // (keeping original numbering; new inheritance tests are PNB-10 through PNB-14 below)
-  it("enforcement can transform the effectId before forwarding to the Dispatch chain", function* () {
+  it("enforcement can transform the effectId before forwarding to the Effects chain", function* () {
     let receivedEffectId: string | null = null;
 
-    yield* Dispatch.around({
+    yield* Effects.around({
       *dispatch([e, _d]: [string, Val]) {
         receivedEffectId = e;
         return "core" as Val;
@@ -281,7 +281,7 @@ describe("parent enforcement non-bypassability", () => {
   it("child scoped() task inherits enforcement installed in parent", function* () {
     const log: string[] = [];
 
-    yield* Dispatch.around({
+    yield* Effects.around({
       // biome-ignore lint/correctness/useYield: mock core handler
       *dispatch([_e, _d]: [string, Val]) {
         log.push("core");
@@ -306,7 +306,7 @@ describe("parent enforcement non-bypassability", () => {
   it("spawned task inherits enforcement installed in parent", function* () {
     const log: string[] = [];
 
-    yield* Dispatch.around({
+    yield* Effects.around({
       // biome-ignore lint/correctness/useYield: mock core handler
       *dispatch([_e, _d]: [string, Val]) {
         log.push("core");
@@ -332,7 +332,7 @@ describe("parent enforcement non-bypassability", () => {
   it("child enforcement shadows parent enforcement for that subtree", function* () {
     const log: string[] = [];
 
-    yield* Dispatch.around({
+    yield* Effects.around({
       // biome-ignore lint/correctness/useYield: mock core handler
       *dispatch([_e, _d]: [string, Val]) {
         log.push("core");

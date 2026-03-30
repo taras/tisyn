@@ -2,13 +2,13 @@ import { describe, it } from "@effectionx/vitest";
 import { expect } from "vitest";
 import { scoped } from "effection";
 import type { Val } from "@tisyn/ir";
-import { Dispatch, dispatch } from "./index.js";
+import { Effects, dispatch } from "./index.js";
 
 // Shared helper: install a catch-all core handler at min priority.
 // Using { at: "min" } ensures it runs AFTER any interceptors installed
 // at the default max priority, making it the innermost "base case" layer.
 function* installCoreHandler(label = "core") {
-  yield* Dispatch.around(
+  yield* Effects.around(
     {
       *dispatch([_e, _d]: [string, Val]) {
         return label as Val;
@@ -24,7 +24,7 @@ describe("middleware composition", () => {
     yield* installCoreHandler();
 
     let intercepted = false;
-    yield* Dispatch.around({
+    yield* Effects.around({
       *dispatch([e, d]: [string, Val], next) {
         intercepted = true;
         return yield* next(e, d);
@@ -40,7 +40,7 @@ describe("middleware composition", () => {
   it("middleware can deny by throwing", function* () {
     yield* installCoreHandler();
 
-    yield* Dispatch.around({
+    yield* Effects.around({
       // biome-ignore lint/correctness/useYield: denying middleware
       *dispatch([_e, _d]: [string, Val], _next) {
         throw new Error("denied");
@@ -58,7 +58,7 @@ describe("middleware composition", () => {
   // MW-3: middleware can transform request data
   it("middleware can transform request data", function* () {
     let receivedData: Val = null;
-    yield* Dispatch.around(
+    yield* Effects.around(
       {
         *dispatch([_e, d]: [string, Val]) {
           receivedData = d;
@@ -68,7 +68,7 @@ describe("middleware composition", () => {
       { at: "min" },
     );
 
-    yield* Dispatch.around({
+    yield* Effects.around({
       *dispatch([e, _d]: [string, Val], next) {
         return yield* next(e, { transformed: true } as unknown as Val);
       },
@@ -82,7 +82,7 @@ describe("middleware composition", () => {
   it("max middleware: first installed runs first (M1 before M2)", function* () {
     const log: string[] = [];
 
-    yield* Dispatch.around(
+    yield* Effects.around(
       {
         *dispatch([_e, _d]: [string, Val]) {
           log.push("core");
@@ -92,14 +92,14 @@ describe("middleware composition", () => {
       { at: "min" },
     );
 
-    yield* Dispatch.around({
+    yield* Effects.around({
       *dispatch([e, d]: [string, Val], next) {
         log.push("M1");
         return yield* next(e, d);
       },
     });
 
-    yield* Dispatch.around({
+    yield* Effects.around({
       *dispatch([e, d]: [string, Val], next) {
         log.push("M2");
         return yield* next(e, d);
@@ -114,7 +114,7 @@ describe("middleware composition", () => {
   it("min middleware: most recently installed runs first (m2 before m1)", function* () {
     const log: string[] = [];
 
-    yield* Dispatch.around(
+    yield* Effects.around(
       {
         *dispatch([_e, _d]: [string, Val]) {
           log.push("core");
@@ -124,7 +124,7 @@ describe("middleware composition", () => {
       { at: "min" },
     );
 
-    yield* Dispatch.around(
+    yield* Effects.around(
       {
         *dispatch([e, d]: [string, Val], next) {
           log.push("m1");
@@ -134,7 +134,7 @@ describe("middleware composition", () => {
       { at: "min" },
     );
 
-    yield* Dispatch.around(
+    yield* Effects.around(
       {
         *dispatch([e, d]: [string, Val], next) {
           log.push("m2");
@@ -152,7 +152,7 @@ describe("middleware composition", () => {
   it("max M1 then min m1 → order M1, m1, core", function* () {
     const log: string[] = [];
 
-    yield* Dispatch.around(
+    yield* Effects.around(
       {
         *dispatch([_e, _d]: [string, Val]) {
           log.push("core");
@@ -162,14 +162,14 @@ describe("middleware composition", () => {
       { at: "min" },
     );
 
-    yield* Dispatch.around({
+    yield* Effects.around({
       *dispatch([e, d]: [string, Val], next) {
         log.push("M1");
         return yield* next(e, d);
       },
     });
 
-    yield* Dispatch.around(
+    yield* Effects.around(
       {
         *dispatch([e, d]: [string, Val], next) {
           log.push("m1");
@@ -187,7 +187,7 @@ describe("middleware composition", () => {
   it("max M1, min m1, max M2, min m2 → order M1, M2, m2, m1, core", function* () {
     const log: string[] = [];
 
-    yield* Dispatch.around(
+    yield* Effects.around(
       {
         *dispatch([_e, _d]: [string, Val]) {
           log.push("core");
@@ -197,14 +197,14 @@ describe("middleware composition", () => {
       { at: "min" },
     );
 
-    yield* Dispatch.around({
+    yield* Effects.around({
       *dispatch([e, d]: [string, Val], next) {
         log.push("M1");
         return yield* next(e, d);
       },
     });
 
-    yield* Dispatch.around(
+    yield* Effects.around(
       {
         *dispatch([e, d]: [string, Val], next) {
           log.push("m1");
@@ -214,14 +214,14 @@ describe("middleware composition", () => {
       { at: "min" },
     );
 
-    yield* Dispatch.around({
+    yield* Effects.around({
       *dispatch([e, d]: [string, Val], next) {
         log.push("M2");
         return yield* next(e, d);
       },
     });
 
-    yield* Dispatch.around(
+    yield* Effects.around(
       {
         *dispatch([e, d]: [string, Val], next) {
           log.push("m2");
@@ -239,7 +239,7 @@ describe("middleware composition", () => {
   it("parent max M1 + child max M2 → order M1, M2, core inside child", function* () {
     const log: string[] = [];
 
-    yield* Dispatch.around(
+    yield* Effects.around(
       {
         *dispatch([_e, _d]: [string, Val]) {
           log.push("core");
@@ -249,7 +249,7 @@ describe("middleware composition", () => {
       { at: "min" },
     );
 
-    yield* Dispatch.around({
+    yield* Effects.around({
       *dispatch([e, d]: [string, Val], next) {
         log.push("M1");
         return yield* next(e, d);
@@ -257,7 +257,7 @@ describe("middleware composition", () => {
     });
 
     yield* scoped(function* () {
-      yield* Dispatch.around({
+      yield* Effects.around({
         *dispatch([e, d]: [string, Val], next) {
           log.push("M2");
           return yield* next(e, d);
@@ -274,7 +274,7 @@ describe("middleware composition", () => {
   it("parent min m1 + child min m2 → order m2, m1, core inside child", function* () {
     const log: string[] = [];
 
-    yield* Dispatch.around(
+    yield* Effects.around(
       {
         *dispatch([_e, _d]: [string, Val]) {
           log.push("core");
@@ -284,7 +284,7 @@ describe("middleware composition", () => {
       { at: "min" },
     );
 
-    yield* Dispatch.around(
+    yield* Effects.around(
       {
         *dispatch([e, d]: [string, Val], next) {
           log.push("m1");
@@ -295,7 +295,7 @@ describe("middleware composition", () => {
     );
 
     yield* scoped(function* () {
-      yield* Dispatch.around(
+      yield* Effects.around(
         {
           *dispatch([e, d]: [string, Val], next) {
             log.push("m2");
@@ -315,7 +315,7 @@ describe("middleware composition", () => {
   it("after child scope exits, parent dispatch sees only parent middleware", function* () {
     const log: string[] = [];
 
-    yield* Dispatch.around(
+    yield* Effects.around(
       {
         *dispatch([_e, _d]: [string, Val]) {
           log.push("core");
@@ -325,7 +325,7 @@ describe("middleware composition", () => {
       { at: "min" },
     );
 
-    yield* Dispatch.around({
+    yield* Effects.around({
       *dispatch([e, d]: [string, Val], next) {
         log.push("M1");
         return yield* next(e, d);
@@ -333,7 +333,7 @@ describe("middleware composition", () => {
     });
 
     yield* scoped(function* () {
-      yield* Dispatch.around({
+      yield* Effects.around({
         *dispatch([e, d]: [string, Val], next) {
           log.push("M2");
           return yield* next(e, d);
@@ -355,7 +355,7 @@ describe("middleware composition", () => {
 
     yield* installCoreHandler();
 
-    yield* Dispatch.around({
+    yield* Effects.around({
       *dispatch([e, d]: [string, Val], next) {
         interceptedId = e;
         return yield* next(e, d);
@@ -372,7 +372,7 @@ describe("middleware composition", () => {
 
     yield* installCoreHandler();
 
-    yield* Dispatch.around({
+    yield* Effects.around({
       *dispatch([e, d]: [string, Val], next) {
         interceptedId = e;
         return yield* next(e, d);
@@ -387,7 +387,7 @@ describe("middleware composition", () => {
   it('middleware that denies "tisyn.exec" blocks the effect', function* () {
     let coreReached = false;
 
-    yield* Dispatch.around(
+    yield* Effects.around(
       {
         *dispatch([_e, _d]: [string, Val]) {
           coreReached = true;
@@ -397,7 +397,7 @@ describe("middleware composition", () => {
       { at: "min" },
     );
 
-    yield* Dispatch.around({
+    yield* Effects.around({
       // biome-ignore lint/correctness/useYield: denying middleware
       *dispatch([e, _d]: [string, Val], _next) {
         if (e === "tisyn.exec") {

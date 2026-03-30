@@ -7,7 +7,7 @@ import type {
   OperationSpec,
 } from "./types.js";
 import { parseEffectId } from "@tisyn/kernel";
-import { Dispatch } from "./dispatch.js";
+import { Effects } from "./dispatch.js";
 
 /**
  * Bind implementations to an agent declaration.
@@ -25,7 +25,7 @@ export function implementAgent<Ops extends Record<string, OperationSpec>>(
     id,
     handlers,
     *install() {
-      yield* Dispatch.around({
+      yield* Effects.around({
         *dispatch([effectId, data]: [string, Val], next) {
           const { type, name } = parseEffectId(effectId);
           if (type === id) {

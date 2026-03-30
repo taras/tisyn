@@ -9,7 +9,7 @@
 
 import type { Operation } from "effection";
 import { spawn, ensure, scoped, withResolvers } from "effection";
-import type { TisynExpr as Expr, Val, IrInput } from "@tisyn/ir";
+import type { TisynExpr as Expr, Val, Json, IrInput } from "@tisyn/ir";
 import {
   type DurableEvent,
   type YieldEvent,
@@ -58,12 +58,7 @@ interface DriveContext {
  * 5. Write Close event on completion/error
  */
 export function* execute(options: ExecuteOptions): Operation<ExecuteResult> {
-  const {
-    ir,
-    env: envRecord = {},
-    stream = new InMemoryStream(),
-    coroutineId = "root",
-  } = options;
+  const { ir, env: envRecord = {}, stream = new InMemoryStream(), coroutineId = "root" } = options;
 
   // Phase 1: Validate IR before evaluation
   let validatedIr: Expr;

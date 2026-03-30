@@ -19,7 +19,7 @@ This package sits between authored workflow logic and concrete side effects.
 - `agent(id, operations)` declares a named capability boundary.
 - `operation<Spec>()` declares one typed operation on that boundary.
 - `implementAgent()` binds handlers to a declaration.
-- `dispatch()` / `Dispatch` provide Effection middleware for routing invocations.
+- `dispatch()` / `Effects` provide Effection middleware for routing invocations.
 - `invoke()` executes a declared operation against the current dispatch stack.
 
 Agent declarations are typed metadata plus call helpers. They describe invocations, but do not execute anything by themselves.
@@ -31,7 +31,7 @@ The public surface exported from `src/index.ts` includes:
 - `agent` — declare a named agent boundary and its available operations
 - `operation` — declare the typed input/output contract for one operation
 - `implementAgent` — bind handlers to a declaration so the runtime can dispatch them
-- `Dispatch` — represent the Effection middleware contract for invocation routing
+- `Effects` — represent the Effection middleware contract for invocation routing
 - `dispatch` — install dispatch middleware into the current Effection scope
 - `invoke` — execute a declared operation against the current dispatch stack
 
@@ -116,7 +116,7 @@ An agent declaration gives Tisyn a typed, named capability boundary.
 - **Declarations** define what operations exist and what they accept or return.
 - **Invocations** describe one requested operation call.
 - **Implementations** attach concrete handlers to those declarations.
-- **Dispatch middleware** decides how invocations are routed.
+- **Effects middleware** decides how invocations are routed.
 
 That routing can stay local, or it can be forwarded through another layer such as a worker or network transport. `@tisyn/agent` stays focused on the contract and dispatch shape rather than the transport itself.
 
