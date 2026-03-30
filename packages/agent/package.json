@@ -27,6 +27,8 @@
     "test": "vitest run"
   },
   "dependencies": {
+    "@effectionx/context-api": "^0.5.3",
+    "@effectionx/middleware": "^0.1.1",
     "@tisyn/ir": "workspace:*",
     "@tisyn/kernel": "workspace:*"
   },

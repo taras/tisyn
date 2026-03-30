@@ -13,7 +13,7 @@ import type { DurableEvent, EventResult, EffectDescriptor } from "@tisyn/kernel"
 import { canonical } from "@tisyn/kernel";
 import { execute } from "@tisyn/runtime";
 import { InMemoryStream } from "@tisyn/durable-streams";
-import { Dispatch } from "@tisyn/agent";
+import { Effects } from "@tisyn/agent";
 
 // ── Fixture types ──
 
@@ -199,7 +199,7 @@ function* installMockDispatch(
 ) {
   let effectIndex = 0;
 
-  yield* Dispatch.around({
+  yield* Effects.around({
     // biome-ignore lint/correctness/useYield: synchronous for mock
     *dispatch([_effectId, _data]: [string, any]) {
       if (effectIndex >= effects.length) {

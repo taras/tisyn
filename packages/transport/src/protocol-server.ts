@@ -1,15 +1,23 @@
 import type { Operation, Subscription, Task } from "effection";
-import { spawn } from "effection";
+import { spawn, scoped } from "effection";
 import type { AgentImplementation, OperationSpec } from "@tisyn/agent";
+import {
+  installEnforcement,
+  evaluateMiddlewareFn,
+  installCrossBoundaryMiddleware,
+} from "@tisyn/agent";
 import type { AgentMessage, HostMessage } from "@tisyn/protocol";
 import type { Val } from "@tisyn/ir";
+import { isFnNode } from "@tisyn/ir";
 import {
   initializeResponse,
   initializeProtocolError,
   executeSuccess,
   executeApplicationError,
+  executeProtocolError,
   ProtocolErrorCode,
 } from "@tisyn/protocol";
+import { assertValidIr, MalformedIR } from "@tisyn/validate";
 
 /**
  * IO abstraction for the agent-side protocol server. Callers are responsible
@@ -72,26 +80,79 @@ export function createProtocolServer<Ops extends Record<string, OperationSpec>>(
           }
         } else if (msg.method === "execute") {
           const { id, params } = msg;
-          const { operation: opName, args } = params;
+          const { operation: opName, args, middleware: rawMiddleware } = params;
 
-          const task = yield* spawn(function* () {
+          // Validate middleware IR if provided
+          if (rawMiddleware != null) {
+            let validatedMiddleware;
             try {
-              // Single-arg convention: extract args[0] as the operation payload.
-              const val = yield* (impl as AgentImplementation<Record<string, OperationSpec>>).call(
-                opName,
-                args[0] as Val,
-              );
-              inflight.delete(id);
-              yield* transport.send(executeSuccess(id, val as Val));
-            } catch (error) {
-              inflight.delete(id);
-              const err = error instanceof Error ? error : new Error(String(error));
-              yield* transport.send(
-                executeApplicationError(id, { message: err.message, name: err.name }),
-              );
+              validatedMiddleware = assertValidIr(rawMiddleware);
+            } catch (err) {
+              if (err instanceof MalformedIR) {
+                yield* transport.send(
+                  executeProtocolError(id, {
+                    code: ProtocolErrorCode.InvalidRequest,
+                    message: `Invalid middleware IR: ${err.message}`,
+                  }),
+                );
+                continue;
+              }
+              throw err;
             }
-          });
-          inflight.set(id, task);
+
+            if (!isFnNode(validatedMiddleware)) {
+              yield* transport.send(
+                executeProtocolError(id, {
+                  code: ProtocolErrorCode.InvalidRequest,
+                  message: "middleware must be a function node",
+                }),
+              );
+              continue;
+            }
+
+            const middlewareFn = validatedMiddleware;
+            const task = yield* spawn(function* () {
+              yield* scoped(function* () {
+                yield* installEnforcement((effectId, data, inner) =>
+                  evaluateMiddlewareFn(middlewareFn, effectId, data, inner),
+                );
+                yield* installCrossBoundaryMiddleware(middlewareFn);
+
+                try {
+                  const val = yield* (
+                    impl as AgentImplementation<Record<string, OperationSpec>>
+                  ).call(opName, args[0] as Val);
+                  inflight.delete(id);
+                  yield* transport.send(executeSuccess(id, val as Val));
+                } catch (error) {
+                  inflight.delete(id);
+                  const err = error instanceof Error ? error : new Error(String(error));
+                  yield* transport.send(
+                    executeApplicationError(id, { message: err.message, name: err.name }),
+                  );
+                }
+              });
+            });
+            inflight.set(id, task);
+          } else {
+            const task = yield* spawn(function* () {
+              try {
+                // Single-arg convention: extract args[0] as the operation payload.
+                const val = yield* (
+                  impl as AgentImplementation<Record<string, OperationSpec>>
+                ).call(opName, args[0] as Val);
+                inflight.delete(id);
+                yield* transport.send(executeSuccess(id, val as Val));
+              } catch (error) {
+                inflight.delete(id);
+                const err = error instanceof Error ? error : new Error(String(error));
+                yield* transport.send(
+                  executeApplicationError(id, { message: err.message, name: err.name }),
+                );
+              }
+            });
+            inflight.set(id, task);
+          }
         } else if (msg.method === "cancel") {
           const task = inflight.get(msg.params.id);
           if (task) {

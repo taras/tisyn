@@ -91,6 +91,7 @@ export interface ExecuteRequest {
     args: Val[];
     progressToken?: string;
     deadline?: string;
+    middleware?: Val | null;
   };
 }
 

@@ -65,3 +65,13 @@ export function isCatchable(e: unknown): boolean {
 export function errorToValue(e: unknown): string {
   return e instanceof Error ? e.message : String(e);
 }
+
+export class ProhibitedEffectError extends Error {
+  override name = "ProhibitedEffectError" as const;
+  constructor(effectId: string) {
+    super(
+      `Effect '${effectId}' is not allowed in middleware expressions. ` +
+        `Only 'dispatch' effects may be used.`,
+    );
+  }
+}

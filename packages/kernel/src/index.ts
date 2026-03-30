@@ -14,6 +14,7 @@ export {
   EffectError,
   isCatchable,
   errorToValue,
+  ProhibitedEffectError,
 } from "./errors.js";
 export type {
   EffectDescription,

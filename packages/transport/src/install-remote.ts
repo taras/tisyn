@@ -3,7 +3,7 @@ import type { Val } from "@tisyn/ir";
 import type { OperationSpec, AgentDeclaration } from "@tisyn/agent";
 import type { AgentTransportFactory } from "./transport.js";
 import { parseEffectId } from "@tisyn/kernel";
-import { Dispatch } from "@tisyn/agent";
+import { Effects, getCrossBoundaryMiddleware } from "@tisyn/agent";
 import { executeRequest } from "@tisyn/protocol";
 import { createSession } from "./session.js";
 
@@ -11,7 +11,7 @@ let executionCounter = 0;
 
 /**
  * Install a remote agent via a transport factory. Acquires the transport,
- * performs the initialize handshake, and installs Dispatch middleware that
+ * performs the initialize handshake, and installs Effects middleware that
  * routes matching effects through the protocol session.
  *
  * Transport connect, initialize, and shutdown are all owned by this scope.
@@ -35,11 +35,12 @@ export function* installRemoteAgent<Ops extends Record<string, OperationSpec>>(
     },
   });
 
-  yield* Dispatch.around({
+  yield* Effects.around({
     *dispatch([effectId, data]: [string, Val], next) {
       const { type, name } = parseEffectId(effectId);
       if (type === id) {
         const requestId = `${id}:${requestCounter++}`;
+        const middleware = yield* getCrossBoundaryMiddleware();
 
         const stream = session.execute(
           executeRequest(requestId, {
@@ -47,6 +48,7 @@ export function* installRemoteAgent<Ops extends Record<string, OperationSpec>>(
             taskId: "root",
             operation: name,
             args: [data],
+            ...(middleware != null ? { middleware: middleware as unknown as Val } : {}),
           }),
         );
 

@@ -15,7 +15,7 @@ import { expect } from "vitest";
 import { scoped } from "effection";
 import { execute } from "@tisyn/runtime";
 import { InMemoryStream } from "@tisyn/durable-streams";
-import { Dispatch } from "@tisyn/agent";
+import { Effects } from "@tisyn/agent";
 
 describe("End-to-end crash/replay", () => {
   it("should replay stored effects and continue with live dispatch", function* () {
@@ -72,7 +72,7 @@ describe("End-to-end crash/replay", () => {
 
     const firstResult = yield* scoped(function* () {
       let firstRunCallCount = 0;
-      yield* Dispatch.around({
+      yield* Effects.around({
         // biome-ignore lint/correctness/useYield: mock
         *dispatch([_effectId, _data]: [string, any]) {
           firstRunCallCount++;
@@ -108,7 +108,7 @@ describe("End-to-end crash/replay", () => {
 
     let secondRunCallCount = 0;
     const secondResult = yield* scoped(function* () {
-      yield* Dispatch.around({
+      yield* Effects.around({
         // biome-ignore lint/correctness/useYield: mock
         *dispatch([_effectId, _data]: [string, any]) {
           secondRunCallCount++;

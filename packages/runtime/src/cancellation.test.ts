@@ -8,7 +8,7 @@ import { describe, it } from "@effectionx/vitest";
 import { expect } from "vitest";
 import { execute } from "./execute.js";
 import { InMemoryStream } from "@tisyn/durable-streams";
-import { Dispatch } from "@tisyn/agent";
+import { Effects } from "@tisyn/agent";
 import type { CloseEvent, DurableEvent } from "@tisyn/kernel";
 
 // ── IR helpers ──
@@ -37,7 +37,7 @@ function raceIR(...exprs: unknown[]) {
 
 describe("Cancellation", () => {
   it("normal completion writes Close(ok), not Close(cancelled)", function* () {
-    yield* Dispatch.around({
+    yield* Effects.around({
       // biome-ignore lint/correctness/useYield: mock
       *dispatch([_effectId, _data]: [string, any]) {
         return 42;
@@ -58,7 +58,7 @@ describe("Cancellation", () => {
   });
 
   it("error completion writes Close(err), not Close(cancelled)", function* () {
-    yield* Dispatch.around({
+    yield* Effects.around({
       // biome-ignore lint/correctness/useYield: mock
       *dispatch([_effectId, _data]: [string, any]) {
         throw new Error("boom");
@@ -78,7 +78,7 @@ describe("Cancellation", () => {
   });
 
   it("all children have close events in journal", function* () {
-    yield* Dispatch.around({
+    yield* Effects.around({
       // biome-ignore lint/correctness/useYield: mock
       *dispatch([_effectId, _data]: [string, any]) {
         return 42;
@@ -99,7 +99,7 @@ describe("Cancellation", () => {
   });
 
   it("race losers have close events in journal", function* () {
-    yield* Dispatch.around({
+    yield* Effects.around({
       // biome-ignore lint/correctness/useYield: mock
       *dispatch([_effectId, _data]: [string, any]) {
         return 42;
@@ -122,7 +122,7 @@ describe("Cancellation", () => {
   it("Close(cancelled) is persisted to durable stream, not just in-memory journal", function* () {
     const stream = new InMemoryStream();
 
-    yield* Dispatch.around({
+    yield* Effects.around({
       // biome-ignore lint/correctness/useYield: mock
       *dispatch([_effectId, _data]: [string, any]) {
         return 42;
@@ -148,7 +148,7 @@ describe("Cancellation", () => {
   });
 
   it("child close events precede root close in journal", function* () {
-    yield* Dispatch.around({
+    yield* Effects.around({
       // biome-ignore lint/correctness/useYield: mock
       *dispatch([_effectId, _data]: [string, any]) {
         return 42;

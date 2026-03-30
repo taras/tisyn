@@ -55,6 +55,7 @@ On the remote side, adapters such as `createProtocolServer()` and `createStdioAg
 ### Host-side installation and sessions
 
 - `installRemoteAgent`: Install an agent declaration so invocations are dispatched over a transport session.
+- `useTransport`: Install an agent declaration as a remote capability and register it in the scope-local bound-agent registry, making it accessible to `useAgent()`.
 - `createSession`: Create and manage a host-side protocol session over a concrete transport.
 - `ProtocolSession`: Represent the live session object that manages lifecycle and routing.
 - `CreateSessionOptions`: Describe the options accepted by `createSession()`.
@@ -77,7 +78,7 @@ On the remote side, adapters such as `createProtocolServer()` and `createStdioAg
 
 - `createStdioAgentTransport`: Adapt stdin/stdout streams into an agent-side transport.
 - `createSsePostAgentTransport`: Adapt POST and SSE channels into an agent-side transport.
-- `createProtocolServer`: Create the agent-side protocol loop that serves requests over a transport.
+- `createProtocolServer`: Create the agent-side protocol loop that serves requests over a transport. When an execute request carries a `middleware` IR node, the server validates it and installs it as a non-bypassable enforcement wrapper and cross-boundary carrier for that execution scope.
 - `AgentServerTransport`: Define the server-side transport contract consumed by `createProtocolServer()`.
 - `ProtocolServer`: Represent the running server-side protocol adapter.
 

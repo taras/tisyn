@@ -126,6 +126,12 @@ importers:
 
   packages/agent:
     dependencies:
+      '@effectionx/context-api':
+        specifier: ^0.5.3
+        version: 0.5.3(effection@4.0.2)
+      '@effectionx/middleware':
+        specifier: ^0.1.1
+        version: 0.1.1
       '@tisyn/ir':
         specifier: workspace:*
         version: link:../ir
@@ -351,6 +357,9 @@ importers:
       '@tisyn/protocol':
         specifier: workspace:*
         version: link:../protocol
+      '@tisyn/validate':
+        specifier: workspace:*
+        version: link:../validate
       remeda:
         specifier: ^2.33.6
         version: 2.33.6
@@ -531,6 +540,11 @@ packages:
   '@changesets/write@0.4.0':
     resolution: {integrity: sha512-CdTLvIOPiCNuH71pyDu3rA+Q0n65cmAbXnwWH84rKGiFumFzkmHNT8KHTMEchcxN+Kl8I54xGUhJ7l3E7X396Q==}
 
+  '@effectionx/context-api@0.5.3':
+    resolution: {integrity: sha512-OqS/7RGZtIoiRsL6dwetKLvS8F3NLiVU3iKlBbqxI+NPKXs/ackKn294eGlHUHx49Y89fUVU6YPalj2UbxwBzA==}
+    peerDependencies:
+      effection: ^3 || ^4
+
   '@effectionx/converge@0.1.4':
     resolution: {integrity: sha512-M11KU7jK3gOFGI4RT+Bf6ITMJntzzoGEO2KPx9r8uBoR+Rgwiyeuq+OeIHkuiHLUC+bB1g93KOj7aKR/G0F1/Q==}
     peerDependencies:
@@ -540,6 +554,9 @@ packages:
     resolution: {integrity: sha512-zdBLlgJjf0vxdcvdtbZv41SVjYRl/LAPzmoVf6VjbLCEPMCUO4VXqNklL1sNU+uJxXwfJkH2fYosLuxf8EXNKQ==}
     peerDependencies:
       effection: ^3 || ^4
+
+  '@effectionx/middleware@0.1.1':
+    resolution: {integrity: sha512-ss/bZRkt/xzJNE59r8NR1+0K/xQcIyCm0y9n8FYC8jKdFn51SPe3m3t7EfPcK8zkdjCoTOU7k1UpIXRl26asYA==}
 
   '@effectionx/node@0.2.4':
     resolution: {integrity: sha512-cPnp3fvfBKjGWekmBHdhZr5ScAr3Mg+x5IXpO8uKFe7AZ8EPAT9Di6skuB4kuGFJtRtS0Z1e5G4+2eJyapKhYA==}
@@ -2245,6 +2262,11 @@ snapshots:
       human-id: 4.1.3
       prettier: 2.8.8
 
+  '@effectionx/context-api@0.5.3(effection@4.0.2)':
+    dependencies:
+      '@effectionx/middleware': 0.1.1
+      effection: 4.0.2
+
   '@effectionx/converge@0.1.4(effection@4.0.2)':
     dependencies:
       '@effectionx/timebox': 0.4.3(effection@4.0.2)
@@ -2253,6 +2275,8 @@ snapshots:
   '@effectionx/fetch@0.1.3(effection@4.0.2)':
     dependencies:
       effection: 4.0.2
+
+  '@effectionx/middleware@0.1.1': {}
 
   '@effectionx/node@0.2.4(effection@4.0.2)':
     dependencies:

@@ -9,7 +9,7 @@ import { describe, it } from "@effectionx/vitest";
 import { expect } from "vitest";
 import { execute } from "./execute.js";
 import { EffectError } from "./index.js";
-import { Dispatch } from "@tisyn/agent";
+import { Effects } from "@tisyn/agent";
 import { Try, Ref, Let } from "@tisyn/ir";
 
 // ── IR helpers ──
@@ -23,7 +23,7 @@ function effectIR(agentType: string, opName: string, data: unknown = []) {
 describe("try/catch runtime integration", () => {
   it("catches EffectError from a failing effect", function* () {
     // Effect always fails with an error
-    yield* Dispatch.around({
+    yield* Effects.around({
       *dispatch([_effectId, _data]: [string, unknown]) {
         throw new Error("service unavailable");
       },
@@ -43,7 +43,7 @@ describe("try/catch runtime integration", () => {
 
   it("does not catch when body succeeds — result is body value", function* () {
     // Effect always succeeds
-    yield* Dispatch.around({
+    yield* Effects.around({
       // biome-ignore lint/correctness/useYield: mock
       *dispatch([_effectId, _data]: [string, unknown]) {
         return 42;
@@ -65,7 +65,7 @@ describe("try/catch runtime integration", () => {
     let finallyCalled = false;
 
     // Effect always succeeds; use a second effect as side-channel for "finally ran"
-    yield* Dispatch.around({
+    yield* Effects.around({
       // biome-ignore lint/correctness/useYield: mock
       *dispatch([effectId, _data]: [string, unknown]) {
         if ((effectId as string).includes("finally")) {
@@ -105,7 +105,7 @@ describe("try/catch runtime integration", () => {
   it("finallyPayload: finally env receives body outcome value when body succeeds", function* () {
     let capturedValue: unknown = "NOT_CAPTURED";
 
-    yield* Dispatch.around({
+    yield* Effects.around({
       *dispatch([effectId, data]: [string, unknown]) {
         if (effectId === "cap.capture") {
           capturedValue = data;
@@ -132,7 +132,7 @@ describe("try/catch runtime integration", () => {
   it("finallyPayload: finally env receives catch outcome value when body throws", function* () {
     let capturedValue: unknown = "NOT_CAPTURED";
 
-    yield* Dispatch.around({
+    yield* Effects.around({
       *dispatch([effectId, data]: [string, unknown]) {
         if (effectId === "cap.capture") {
           capturedValue = data;
@@ -164,7 +164,7 @@ describe("try/catch runtime integration", () => {
     // This test hand-authors that emitted IR shape to verify the kernel contract holds.
     let capturedValue: unknown = "NOT_CAPTURED";
 
-    yield* Dispatch.around({
+    yield* Effects.around({
       *dispatch([effectId, data]: [string, unknown]) {
         if (effectId === "cap.capture") {
           capturedValue = data;
@@ -204,7 +204,7 @@ describe("try/catch runtime integration", () => {
   it("regression: no finallyPayload — finally still runs in pre-try env", function* () {
     let finallyCalled = false;
 
-    yield* Dispatch.around({
+    yield* Effects.around({
       // biome-ignore lint/correctness/useYield: mock
       *dispatch([effectId]: [string, unknown]) {
         if (effectId === "cap.finally") {

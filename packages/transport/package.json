@@ -41,6 +41,7 @@
     "@tisyn/ir": "workspace:*",
     "@tisyn/kernel": "workspace:*",
     "@tisyn/protocol": "workspace:*",
+    "@tisyn/validate": "workspace:*",
     "remeda": "^2.33.6"
   },
   "devDependencies": {

@@ -8,7 +8,7 @@ import { describe, it } from "@effectionx/vitest";
 import { expect } from "vitest";
 import { execute } from "./execute.js";
 import { InMemoryStream } from "@tisyn/durable-streams";
-import { Dispatch } from "@tisyn/agent";
+import { Effects } from "@tisyn/agent";
 import { parseEffectId } from "@tisyn/kernel";
 import type { CloseEvent, DurableEvent, YieldEvent } from "@tisyn/kernel";
 
@@ -40,7 +40,7 @@ describe("all", () => {
   it("results in exprs order", function* () {
     const values = [10, 20, 30];
     let callIndex = 0;
-    yield* Dispatch.around({
+    yield* Effects.around({
       // biome-ignore lint/correctness/useYield: mock
       *dispatch([_effectId, _data]: [string, any]) {
         const val = values[callIndex++];
@@ -69,7 +69,7 @@ describe("all", () => {
   });
 
   it("child failure propagates error", function* () {
-    yield* Dispatch.around({
+    yield* Effects.around({
       // biome-ignore lint/correctness/useYield: mock
       *dispatch([effectId, _data]: [string, any]) {
         const { name } = parseEffectId(effectId);
@@ -91,7 +91,7 @@ describe("all", () => {
   });
 
   it("lowest-index error wins when multiple children fail", function* () {
-    yield* Dispatch.around({
+    yield* Effects.around({
       // biome-ignore lint/correctness/useYield: mock
       *dispatch([effectId, _data]: [string, any]) {
         const { name } = parseEffectId(effectId);
@@ -112,7 +112,7 @@ describe("all", () => {
   });
 
   it("child close events appear in journal", function* () {
-    yield* Dispatch.around({
+    yield* Effects.around({
       // biome-ignore lint/correctness/useYield: mock
       *dispatch([effectId, _data]: [string, any]) {
         const { name } = parseEffectId(effectId);
@@ -137,7 +137,7 @@ describe("all", () => {
 
 describe("race", () => {
   it("first complete wins", function* () {
-    yield* Dispatch.around({
+    yield* Effects.around({
       // biome-ignore lint/correctness/useYield: mock
       *dispatch([effectId, _data]: [string, any]) {
         const { name } = parseEffectId(effectId);
@@ -158,7 +158,7 @@ describe("race", () => {
   });
 
   it("all children have close events in journal", function* () {
-    yield* Dispatch.around({
+    yield* Effects.around({
       // biome-ignore lint/correctness/useYield: mock
       *dispatch([_effectId, _data]: [string, any]) {
         return 42;
@@ -179,7 +179,7 @@ describe("race", () => {
   });
 
   it("failure does not win", function* () {
-    yield* Dispatch.around({
+    yield* Effects.around({
       // biome-ignore lint/correctness/useYield: mock
       *dispatch([effectId, _data]: [string, any]) {
         const { name } = parseEffectId(effectId);
@@ -199,7 +199,7 @@ describe("race", () => {
   });
 
   it("all fail -> lowest-index error", function* () {
-    yield* Dispatch.around({
+    yield* Effects.around({
       // biome-ignore lint/correctness/useYield: mock
       *dispatch([effectId, _data]: [string, any]) {
         const { name } = parseEffectId(effectId);

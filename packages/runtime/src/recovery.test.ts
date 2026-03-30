@@ -9,7 +9,7 @@ import { expect } from "vitest";
 import { scoped } from "effection";
 import { execute } from "./execute.js";
 import { InMemoryStream } from "@tisyn/durable-streams";
-import { Dispatch } from "@tisyn/agent";
+import { Effects } from "@tisyn/agent";
 import type { YieldEvent, CloseEvent, DurableEvent } from "@tisyn/kernel";
 
 // ── IR helpers ──
@@ -84,7 +84,7 @@ describe("Recovery", () => {
     const stream = new InMemoryStream(stored);
 
     let agentCalled = false;
-    yield* Dispatch.around({
+    yield* Effects.around({
       // biome-ignore lint/correctness/useYield: mock
       *dispatch([_effectId, _data]: [string, any]) {
         agentCalled = true;
@@ -113,7 +113,7 @@ describe("Recovery", () => {
     const stream = new InMemoryStream(stored);
 
     let liveCallCount = 0;
-    yield* Dispatch.around({
+    yield* Effects.around({
       // biome-ignore lint/correctness/useYield: mock
       *dispatch([_effectId, _data]: [string, any]) {
         liveCallCount++;
@@ -141,7 +141,7 @@ describe("Recovery", () => {
     const stream = new InMemoryStream();
 
     let liveCallCount = 0;
-    yield* Dispatch.around({
+    yield* Effects.around({
       // biome-ignore lint/correctness/useYield: mock
       *dispatch([_effectId, _data]: [string, any]) {
         liveCallCount++;
@@ -167,7 +167,7 @@ describe("Recovery", () => {
     // Run 1: fresh execution
     const { journal: journal1 } = yield* scoped(function* () {
       let callCount = 0;
-      yield* Dispatch.around({
+      yield* Effects.around({
         // biome-ignore lint/correctness/useYield: mock
         *dispatch([_effectId, _data]: [string, any]) {
           return ++callCount * 10;
@@ -179,7 +179,7 @@ describe("Recovery", () => {
     // Run 2: fresh execution with same IR
     const { journal: journal2 } = yield* scoped(function* () {
       let callCount = 0;
-      yield* Dispatch.around({
+      yield* Effects.around({
         // biome-ignore lint/correctness/useYield: mock
         *dispatch([_effectId, _data]: [string, any]) {
           return ++callCount * 10;
@@ -209,7 +209,7 @@ describe("Recovery", () => {
     const stream = new InMemoryStream(stored);
 
     let agentCalled = false;
-    yield* Dispatch.around({
+    yield* Effects.around({
       // biome-ignore lint/correctness/useYield: mock
       *dispatch([_effectId, _data]: [string, any]) {
         agentCalled = true;
