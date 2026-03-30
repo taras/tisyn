@@ -133,6 +133,8 @@ function resultMatches(actual: EventResult, expected: EventResult): boolean {
  * so that canonical comparison passes.
  */
 function applySentinel(actual: DurableEvent, expected: DurableEvent): DurableEvent {
+  // StartEvent has no `result` field — nothing to sentinel-replace
+  if (expected.type === "start" || actual.type === "start") return expected;
   if (
     expected.result.status === "err" &&
     expected.result.error.message === "<any>" &&

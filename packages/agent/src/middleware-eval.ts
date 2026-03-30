@@ -6,7 +6,7 @@
  * throws ProhibitedEffectError (§10.2 constraint).
  */
 import type { Operation } from "effection";
-import type { FnNode, Val } from "@tisyn/ir";
+import type { TisynExpr, Val } from "@tisyn/ir";
 import { evaluate, EMPTY_ENV, extendMulti, ProhibitedEffectError } from "@tisyn/kernel";
 
 /**
@@ -15,9 +15,12 @@ import { evaluate, EMPTY_ENV, extendMulti, ProhibitedEffectError } from "@tisyn/
  * The function body is driven as a kernel generator. When it suspends
  * with id="dispatch", the [effectId, data] payload is forwarded to `next`.
  * Any other effect id throws ProhibitedEffectError.
+ *
+ * Accepts any object with `params` and `body` — compatible with both
+ * `FnNode` (tagged node format) and `TisynFn<A,R>` (typed expression format).
  */
 export function evaluateMiddlewareFn(
-  fn: FnNode,
+  fn: { readonly params: readonly string[]; readonly body: unknown },
   effectId: string,
   data: Val,
   next: (eid: string, d: Val) => Operation<Val>,
@@ -25,7 +28,7 @@ export function evaluateMiddlewareFn(
   return {
     *[Symbol.iterator]() {
       const env = extendMulti(EMPTY_ENV, [...fn.params], [effectId, data] as Val[]);
-      const gen = evaluate(fn.body, env);
+      const gen = evaluate(fn.body as TisynExpr, env);
 
       let nextVal: Val = null as Val;
 
