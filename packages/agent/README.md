@@ -19,8 +19,10 @@ This package sits between authored workflow logic and concrete side effects.
 - `agent(id, operations)` declares a named capability boundary.
 - `operation<Spec>()` declares one typed operation on that boundary.
 - `implementAgent()` binds handlers to a declaration.
-- `dispatch()` / `Effects` provide Effection middleware for routing invocations.
+- `Effects.around()` installs Effection middleware layers that intercept or route effect invocations.
+- `dispatch()` performs an effect call through the current `Effects` middleware boundary.
 - `invoke()` executes a declared operation against the current dispatch stack.
+- `useAgent()` retrieves a typed handle for an agent bound in the current scope via `useTransport()`.
 
 Agent declarations are typed metadata plus call helpers. They describe invocations, but do not execute anything by themselves.
 
@@ -31,9 +33,14 @@ The public surface exported from `src/index.ts` includes:
 - `agent` — declare a named agent boundary and its available operations
 - `operation` — declare the typed input/output contract for one operation
 - `implementAgent` — bind handlers to a declaration so the runtime can dispatch them
-- `Effects` — represent the Effection middleware contract for invocation routing
-- `dispatch` — install dispatch middleware into the current Effection scope
+- `Effects` — the Effection middleware context for invocation routing; use `Effects.around()` to install intercept layers
+- `dispatch` — perform an effect call through the current `Effects` middleware boundary
 - `invoke` — execute a declared operation against the current dispatch stack
+- `useAgent` — retrieve a typed handle for an agent previously bound via `useTransport()`
+- `installEnforcement` — install a non-bypassable enforcement wrapper that runs before the `Effects` middleware chain
+- `installCrossBoundaryMiddleware` — install an IR function node as the cross-boundary middleware carrier for further remote delegation
+- `getCrossBoundaryMiddleware` — read the current cross-boundary middleware carrier from scope (returns `null` if not set)
+- `evaluateMiddlewareFn` — drive an IR function node as a middleware function with scope-local dispatch semantics
 
 Important exported types:
 
@@ -46,6 +53,8 @@ Important exported types:
 - `ArgsOf` — extract the input shape from an operation declaration
 - `ResultOf` — extract the result type from an operation declaration
 - `Workflow` — represent the authored workflow return type used in ambient declarations
+- `AgentHandle` — typed operation handle returned by `useAgent()`
+- `EnforcementFn` — function type for enforcement wrappers installed via `installEnforcement()`
 
 ## Declare an Agent
 
@@ -77,10 +86,9 @@ const ordersImpl = implementAgent(orders, {
   *cancel() {},
 });
 
-yield* ordersImpl.install();
 ```
 
-`install()` registers dispatch middleware in the current Effection scope. Once installed, `invoke()` and the Tisyn runtime can route matching invocations to these handlers.
+The implementation exposes `call(opName, payload)` for use by protocol servers. To make the handlers reachable at the dispatch layer, pass the implementation to a transport (see `@tisyn/transport`).
 
 ## Invoke an Operation
 

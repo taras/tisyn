@@ -83,8 +83,8 @@ That lets transports stay small and predictable: parse incoming bytes into JSON,
 - `InitializeResponse`  
   Agent response to initialization, including protocol success or failure.
 
-- `ExecuteRequest`  
-  Request to invoke a single remote operation.
+- `ExecuteRequest`
+  Request to invoke a single remote operation. The optional `middleware` field carries a cross-boundary IR function node that the child agent installs as a non-bypassable enforcement wrapper for that execution.
 
 - `ExecuteResponse`  
   Response carrying either a successful result or an execution failure.
@@ -159,6 +159,9 @@ const request = executeRequest("req-1", {
   taskId: "root",
   operation: "double",
   args: [{ value: 21 }],
+  // Optional: attach a cross-boundary IR middleware function to constrain
+  // the child execution. The child agent installs it as enforcement.
+  middleware: middlewareFnNode,
 });
 
 const incoming = parseAgentMessage(JSON.parse(rawLine));
