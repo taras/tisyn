@@ -1,4 +1,4 @@
-export { installRemoteAgent } from "./install-remote.js";
+export { installRemoteAgent, installAgentTransport } from "./install-remote.js";
 export { useTransport } from "./use-transport.js";
 export { inprocessTransport } from "./transports/inprocess.js";
 export { createSession } from "./session.js";

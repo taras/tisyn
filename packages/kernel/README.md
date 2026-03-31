@@ -85,7 +85,7 @@ The public surface exported from `src/index.ts` includes the following:
 - `evaluate` — evaluate structural IR until a value, yield, or close result is produced
 - `classify` — classify an eval id as structural or external
 - `isStructural` — check whether an eval id is handled directly by kernel semantics
-- `isCompoundExternal` — check whether an eval id is a compound external form such as `all` or `race`
+- `isCompoundExternal` — check whether an eval id is a compound external form such as `all`, `race`, or `scope`
 
 ### Environment and reference resolution
 

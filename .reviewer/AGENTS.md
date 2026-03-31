@@ -4,62 +4,75 @@ This directory is a small tracked note cache for Codex's recoverability.
 
 Purpose:
 
-- preserve active review context across sessions
+- preserve durable review and implementation workflow guidance
 - keep follow-up topics close to the repo
-- record implementation completeness without scattering scratch notes elsewhere
+- avoid scattering process notes across scratch files and old plans
 
 Usage rules:
 
 - keep notes short and factual
-- prefer stable follow-up topics over long narrative logs
-- update this file when the overall implementation picture changes materially
-- keep code-changing plans in worktrees when possible; keep only durable reminders here
+- prefer durable process guidance over point-in-time status snapshots
+- keep feature-specific plans and handoff prompts in dedicated worktrees while they are active
+- keep only durable reminders and follow-up topics in `.reviewer/`
 
-## Current Implementation Summary
+## Standard Process
 
-Last reviewed: 2026-03-22
+### 1. Worktree-first workflow
 
-Verification baseline from the latest completeness pass on `main`:
+- use `main` as the stable base
+- create a dedicated worktree for each substantial feature, spec import, or review track
+- keep imported source specs, test plans, handoff prompts, and implementation notes inside that worktree while the effort is active
+- avoid doing substantial feature work directly on `main`
 
-- `pnpm build` passed
-- `pnpm --filter @tisyn/conformance test` passed
-- `pnpm --filter @tisyn/runtime test` failed
-- `pnpm --filter @tisyn/agent test` failed to launch `vitest`
+### 2. Spec import and scoping
 
-Current caution:
+- when external or draft specs drive the work, import them into the feature worktree first
+- keep imported source docs separate from derived implementation plans
+- distinguish clearly between:
+  - runtime/package API support
+  - compiler/authored syntax support
+  - speculative/provisional surface
 
-- PRs #8, #9, and #10 are merged.
-- The repo now has declaration-based agents, contextual dispatch, `invoke()`, `executeRemote()`, and protocol types.
-- `main` still has a runtime regression in the over-the-wire named-operation path.
-- `@tisyn/agent` still needs a package-local test script that launches cleanly.
+### 3. Planning workflow
 
-## Package Status
+- iterate on concise implementation plans until they are decision-complete
+- review plans with verdict-style prompts that remove ambiguity instead of expanding scope
+- keep plans narrow when fixing PR follow-ups; do not restart the whole feature for a small correction
+- prefer implementation-ready plans over long exploratory notes
 
-| Package                  | Status        | Notes                                                                                              |
-| ------------------------ | ------------- | -------------------------------------------------------------------------------------------------- |
-| `@tisyn/ir`              | `implemented` | Types, constructors, traversal, print, decompile, classify                                         |
-| `@tisyn/kernel`          | `implemented` | Eval, env, resolve, unquote, canonical, errors, validation                                         |
-| `@tisyn/runtime`         | `implemented` | Execute loop, replay/live dispatch, journaling, cancellation                                       |
-| `@tisyn/compiler`        | `implemented` | Parse + emit + validation flow                                                                     |
-| `@tisyn/agent`           | `partial`     | Declarations, implementations, contextual dispatch, `invoke()`; no transport runtime on `main` yet |
-| `@tisyn/protocol`        | `implemented` | Types-only JSON-RPC/protocol package landed                                                        |
-| `@tisyn/validate`        | `missing`     | Validation exists in kernel, not as a standalone boundary package                                  |
-| `@tisyn/durable-streams` | `partial`     | In-memory stream/replay support only                                                               |
-| `@tisyn/conformance`     | `implemented` | Conformance tests present                                                                          |
-| `@tisyn/cli`             | `missing`     | No standalone CLI package                                                                          |
+### 4. Implementation handoff
 
-## Major Gaps
+- hand implementation agents one bounded prompt at a time
+- if the agent reports a blocker, verify whether it is real before changing scope
+- if a blocker is only partial, issue a corrective prompt that narrows the remaining work rather than reopening completed phases
+- keep temporary handoff docs in the worktree, not here
 
-- standalone `@tisyn/validate`
-- transport/session implementation on `main`
-- richer agent runtime aligned with protocol lifecycle
-- persistent durable backend beyond in-memory streams
-- standalone CLI package
+### 5. PR review workflow
 
-## Active Regression
+- review the live PR head, not just local `main`
+- findings come first; summaries are secondary
+- when a correction is needed, give a prompt that is:
+  - narrow
+  - mechanical
+  - grounded in the current diff
+  - backed by a concrete missing test or semantic mismatch
+- if no blocking findings remain, say so explicitly and note any residual risk such as pending CI
 
-- `packages/runtime/src/over-the-wire.test.ts:50` fails at `yield* invoke(invocation)` with `TypeError: yield* ... is not iterable`
-- `packages/agent/src/invoke.ts` is intended to be the invocation-to-dispatch bridge for that path
+### 6. Documentation and spec hygiene
+
+- update README, spec, and changeset text when the public surface changes
+- keep examples honest about what is:
+  - package/runtime API
+  - protocol/wire support
+  - compiler-supported workflow syntax
+- do not let release notes or examples imply authored workflow support if the compiler does not actually support it yet
+
+### 7. Cleanup workflow
+
+- remove disposable worktrees after the task or PR cycle is complete
+- verify worktree state before deletion
+- by default, remove worktree directories without deleting named branches unless explicitly requested
+- use `git worktree prune` after forced removals so Git's registry matches the filesystem
 
 ## Follow-Up Topics
 
@@ -71,10 +84,10 @@ Current caution:
 - [sse-post-transport-topic.md](/Users/tarasmankovski/Repositories/cowboyd/tisyn/.reviewer/sse-post-transport-topic.md)
 - [compiler-while-case-a-bindings-topic.md](/Users/tarasmankovski/Repositories/cowboyd/tisyn/.reviewer/compiler-while-case-a-bindings-topic.md)
 - [multi-agent-chat-spec-alignment-topic.md](/Users/tarasmankovski/Repositories/cowboyd/tisyn/.reviewer/multi-agent-chat-spec-alignment-topic.md)
+- [multi-agent-chat-workflow-boundary-topic.md](/Users/tarasmankovski/Repositories/cowboyd/tisyn/.reviewer/multi-agent-chat-workflow-boundary-topic.md)
 
 ## Update Rule
 
-- update `Last reviewed`
-- rerun the narrowest meaningful verification set
-- keep the package-status table and major-gaps list current
-- add new follow-up topics as separate files instead of overloading this one
+- keep this file process-oriented, not status-oriented
+- add durable follow-up topics as separate files instead of overloading this document
+- if the workflow changes materially, update the relevant section here instead of appending a dated log

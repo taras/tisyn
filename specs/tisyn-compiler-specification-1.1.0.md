@@ -34,6 +34,7 @@ This document specifies a compiler that transforms a restricted subset of JavaSc
 | --------------- | ------------------------------------------ | ---------------------------------------- |
 | Effect          | `yield* Agent().method(args)`              | External Eval                            |
 | Concurrency     | `yield* all([...])` / `yield* race([...])` | Compound Eval                            |
+| Blocking scope  | `yield* scoped(function* () { ... })`      | Compound Eval (`id: "scope"`)            |
 | Sleep           | `yield* sleep(ms)`                         | External Eval                            |
 | Sub-workflow    | `yield* otherWorkflow(args)`               | Inlined or `call`                        |
 | Variable        | `const x = <expr>`                         | `let`                                    |
@@ -55,7 +56,7 @@ This document specifies a compiler that transforms a restricted subset of JavaSc
 
 ### 2.2 Effects and the Durability Boundary
 
-An **effect** is a `yield*` targeting an Agent method, `all`, `race`, `sleep`, or a sub-workflow containing effects. Each agent method call produces one Yield event.
+An **effect** is a `yield*` targeting an Agent method, `all`, `race`, `scoped`, `sleep`, or a sub-workflow containing effects. Each agent method call produces one Yield event.
 
 **Rule:** `yield*` MUST appear only in statement position — as the RHS of `const x = yield* ...` or as a bare statement. It MUST NOT appear in condition expressions, short-circuit operands, function arguments, or array/object literals.
 
@@ -89,6 +90,7 @@ Compiler names: `__discard_0`, `__all_0`, `__loop_0`, `__sub_0`. User variables 
 | ------------ | ----------------------------- | ----------------------------- |
 | Agent effect | `yield* Agent().method(args)` | External Eval (unquoted data) |
 | Concurrency  | `yield* all/race([...])`      | Compound Eval (quoted data)   |
+| Blocking scope | `yield* scoped(function*(){ ... })` | Compound Eval (quoted data) |
 | Built-in     | `yield* sleep(ms)`            | External Eval (unquoted data) |
 
 ### 4.2 Agent Effect

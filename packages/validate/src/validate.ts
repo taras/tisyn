@@ -220,6 +220,23 @@ function walkSemantic(value: unknown, path: string[], errors: ValidationError[])
           }
         }
       }
+
+      if (id === "scope") {
+        if (!isPlainObject(data) || (data as Record<string, unknown>)["tisyn"] !== "quote") {
+          errors.push({
+            level: 2,
+            path,
+            message: `Scope node requires data to be a Quote node`,
+            code: MALFORMED_EVAL,
+          });
+          return;
+        }
+        const fields = (data as Record<string, unknown>)["expr"];
+        if (isPlainObject(fields)) {
+          checkPositions("scope", fields as Record<string, unknown>, path, errors);
+          checkScopeConstraints(fields as Record<string, unknown>, path, errors);
+        }
+      }
       break;
     }
     case "quote": {
@@ -310,6 +327,58 @@ function checkTryConstraints(
   }
 }
 
+function checkScopeConstraints(
+  fields: Record<string, unknown>,
+  path: string[],
+  errors: ValidationError[],
+): void {
+  // body is required
+  if (!("body" in fields)) {
+    errors.push({
+      level: 2,
+      path,
+      message: `Scope node requires a "body" field`,
+      code: MALFORMED_EVAL,
+    });
+    return;
+  }
+  // handler must be null or a fn node
+  if (fields["handler"] !== null && fields["handler"] !== undefined) {
+    const h = fields["handler"];
+    if (!isPlainObject(h) || (h as Record<string, unknown>)["tisyn"] !== "fn") {
+      errors.push({
+        level: 2,
+        path,
+        message: `Scope node "handler" must be null or a Fn node`,
+        code: MALFORMED_EVAL,
+      });
+    }
+  }
+  // bindings must be a plain object whose values are all Ref nodes
+  if ("bindings" in fields) {
+    const bindings = fields["bindings"];
+    if (!isPlainObject(bindings)) {
+      errors.push({
+        level: 2,
+        path,
+        message: `Scope node "bindings" must be a plain object`,
+        code: MALFORMED_EVAL,
+      });
+    } else {
+      for (const [key, val] of Object.entries(bindings as Record<string, unknown>)) {
+        if (!isPlainObject(val) || (val as Record<string, unknown>)["tisyn"] !== "ref") {
+          errors.push({
+            level: 2,
+            path,
+            message: `Scope binding "${key}" must be a Ref node`,
+            code: MALFORMED_EVAL,
+          });
+        }
+      }
+    }
+  }
+}
+
 /**
  * Evaluation positions table — ported from kernel validate.ts.
  * See Kernel Spec §5 and Conformance Suite §10.5.
@@ -377,6 +446,9 @@ function getEvaluationPositions(id: string, fields: Record<string, unknown>): un
       if (fields["finally"] !== undefined) p.push(fields["finally"]);
       return p;
     }
+    case "scope":
+      // body is the single evaluation position; handler and bindings are not
+      return fields["body"] !== undefined ? [fields["body"]] : [];
     default:
       return [];
   }

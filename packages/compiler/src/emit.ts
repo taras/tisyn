@@ -43,6 +43,7 @@ import {
   ExternalEval,
   AllEval,
   RaceEval,
+  ScopeEval,
 } from "./ir-builders.js";
 import { toAgentId } from "./agent-id.js";
 import { Counter } from "./counter.js";
@@ -63,8 +64,18 @@ interface EmitContext {
   counter: Counter;
   sourceFile: ts.SourceFile;
   contracts?: Map<string, DiscoveredContract>;
+  /**
+   * When true, agent factory calls whose name is not in `contracts` throw an error.
+   * When false/absent, unknown factories fall through to the legacy positional-array path.
+   * Set by generateWorkflowModule (strict); left unset by compile/compileOne (lenient).
+   */
+  strictContracts?: boolean;
   /** SSA binding scope stack. Innermost frame is last. */
   scopeStack: ScopeFrame[];
+  /** Set only during scoped body compilation. varName → agentPrefix. */
+  handleBindings?: Map<string, string>;
+  /** Set only during scoped body compilation. agentPrefix → DiscoveredContract. */
+  scopedContracts?: Map<string, DiscoveredContract>;
 }
 
 // ── Scope helpers ──
@@ -172,6 +183,24 @@ export function createContext(
   contracts?: Map<string, DiscoveredContract>,
 ): EmitContext {
   return { counter: new Counter(), sourceFile, contracts, scopeStack: [new Map()] };
+}
+
+/**
+ * Like createContext, but marks the context as strict: agent factory calls whose
+ * name is not in `contracts` throw an error instead of falling through to legacy mode.
+ * Used by generateWorkflowModule where every contract must be declared.
+ */
+export function createStrictContext(
+  sourceFile: ts.SourceFile,
+  contracts: Map<string, DiscoveredContract>,
+): EmitContext {
+  return {
+    counter: new Counter(),
+    sourceFile,
+    contracts,
+    strictContracts: true,
+    scopeStack: [new Map()],
+  };
 }
 
 // ── Statement compilation (Spec §5.1) ──
@@ -342,6 +371,35 @@ function emitVariableStatement(
 
     if (!decl.initializer) {
       throw error("E999", "Variables must have initializers", decl, ctx);
+    }
+
+    // ── useAgent erasure ──
+    // Inside a scoped() body: const handle = yield* useAgent(Contract) is erased.
+    // The variable name is recorded in handleBindings and no Let is emitted.
+    if (
+      ts.isYieldExpression(decl.initializer) &&
+      decl.initializer.asteriskToken &&
+      decl.initializer.expression &&
+      ts.isCallExpression(decl.initializer.expression) &&
+      ts.isIdentifier(decl.initializer.expression.expression) &&
+      decl.initializer.expression.expression.text === "useAgent"
+    ) {
+      if (!ctx.handleBindings) {
+        throw error("UA1", "useAgent can only be used inside scoped()", decl, ctx);
+      }
+      if (!isConst) {
+        throw error("UA2", "useAgent binding must be declared with 'const'", decl, ctx);
+      }
+      const contractArg = decl.initializer.expression.arguments[0];
+      if (!contractArg || !ts.isIdentifier(contractArg)) {
+        throw error("UA2", "useAgent argument must be a contract identifier", decl, ctx);
+      }
+      const prefix = toAgentId(contractArg.text);
+      if (!ctx.scopedContracts?.has(prefix)) {
+        throw error("UA3", `No useTransport for '${contractArg.text}' in this scope`, decl, ctx);
+      }
+      ctx.handleBindings.set(name, prefix);
+      return processDecl(i + 1); // erase: no Let emitted
     }
 
     // Emit initializer BEFORE declaring (so x = x + 1 sees old x)
@@ -2411,6 +2469,11 @@ function emitYieldStar(target: ts.Expression, ctx: EmitContext): Expr {
   if (ts.isCallExpression(target)) {
     const callee = target.expression;
     if (ts.isIdentifier(callee)) {
+      // yield* scoped(function* () { ... })
+      if (callee.text === "scoped") {
+        return emitScoped(target, ctx);
+      }
+
       if (callee.text === "all" || callee.text === "race") {
         return emitConcurrency(callee.text, target, ctx);
       }
@@ -2426,7 +2489,16 @@ function emitYieldStar(target: ts.Expression, ctx: EmitContext): Expr {
       return Call(Ref(callee.text), args);
     }
 
-    // Case 2: yield* Agent().method(args) — agent effect
+    // Case 2: yield* handle.method(args) — handle method call inside scoped body
+    if (
+      ts.isPropertyAccessExpression(callee) &&
+      ts.isIdentifier(callee.expression) &&
+      ctx.handleBindings?.has(callee.expression.text)
+    ) {
+      return emitHandleCall(callee, target.arguments, ctx);
+    }
+
+    // Case 3: yield* Agent().method(args) — agent effect
     if (ts.isPropertyAccessExpression(callee)) {
       return emitAgentEffect(callee, target.arguments, ctx);
     }
@@ -2465,64 +2537,67 @@ function emitAgentEffect(
   if (ctx.contracts) {
     const contract = ctx.contracts.get(agentFactory.text);
     if (!contract) {
-      throw error("E999", `Unknown contract: '${agentFactory.text}'`, agentFactory, ctx);
-    }
+      if (ctx.strictContracts) {
+        throw error("E999", `Unknown contract: '${agentFactory.text}'`, agentFactory, ctx);
+      }
+      // Lenient mode (compile/compileOne): fall through to legacy positional-array path
+    } else {
+      // Instance handling
+      const factoryArgs = receiver.arguments;
+      let agentId = baseAgentId;
 
-    // Instance handling
-    const factoryArgs = receiver.arguments;
-    let agentId = baseAgentId;
-
-    if (factoryArgs.length > 1) {
-      throw error(
-        "E999",
-        `Contract factory '${agentFactory.text}' accepts at most one argument (instance)`,
-        receiver,
-        ctx,
-      );
-    }
-
-    if (factoryArgs.length === 1) {
-      const instanceArg = factoryArgs[0]!;
-      if (!ts.isStringLiteral(instanceArg)) {
+      if (factoryArgs.length > 1) {
         throw error(
           "E999",
-          `Contract factory instance argument must be a string literal (dynamic instance routing is not supported in v1)`,
-          instanceArg,
+          `Contract factory '${agentFactory.text}' accepts at most one argument (instance)`,
+          receiver,
           ctx,
         );
       }
-      agentId = `${baseAgentId}:${instanceArg.text}`;
-    }
 
-    // Validate method exists
-    const method = contract.methods.find((m) => m.name === methodName);
-    if (!method) {
-      throw error(
-        "E999",
-        `Unknown method '${methodName}' on contract '${agentFactory.text}'`,
-        propAccess.name,
-        ctx,
-      );
-    }
+      if (factoryArgs.length === 1) {
+        const instanceArg = factoryArgs[0]!;
+        if (!ts.isStringLiteral(instanceArg)) {
+          throw error(
+            "E999",
+            `Contract factory instance argument must be a string literal (dynamic instance routing is not supported in v1)`,
+            instanceArg,
+            ctx,
+          );
+        }
+        agentId = `${baseAgentId}:${instanceArg.text}`;
+      }
 
-    // Validate arity
-    if (args.length !== method.params.length) {
-      throw error(
-        "E999",
-        `Method '${agentFactory.text}.${methodName}' expects ${method.params.length} argument(s) but got ${args.length}`,
-        propAccess,
-        ctx,
-      );
-    }
+      // Validate method exists
+      const method = contract.methods.find((m) => m.name === methodName);
+      if (!method) {
+        throw error(
+          "E999",
+          `Unknown method '${methodName}' on contract '${agentFactory.text}'`,
+          propAccess.name,
+          ctx,
+        );
+      }
 
-    // Build Construct node with named parameters
-    const effectId = `${agentId}.${methodName}`;
-    const fields: Record<string, Expr> = {};
-    for (let i = 0; i < method.params.length; i++) {
-      fields[method.params[i]!.name] = emitExpression(args[i]!, ctx);
-    }
-    return ExternalEval(effectId, Construct(fields));
-  }
+      // Validate arity
+      if (args.length !== method.params.length) {
+        throw error(
+          "E999",
+          `Method '${agentFactory.text}.${methodName}' expects ${method.params.length} argument(s) but got ${args.length}`,
+          propAccess,
+          ctx,
+        );
+      }
+
+      // Build Construct node with named parameters
+      const effectId = `${agentId}.${methodName}`;
+      const fields: Record<string, Expr> = {};
+      for (let i = 0; i < method.params.length; i++) {
+        fields[method.params[i]!.name] = emitExpression(args[i]!, ctx);
+      }
+      return ExternalEval(effectId, Construct(fields));
+    } // end else (contract found)
+  } // end if (ctx.contracts)
 
   // Legacy mode: positional array (preserves backward compat for compile/compileOne)
   const effectId = `${baseAgentId}.${methodName}`;
@@ -2573,6 +2648,545 @@ function emitConcurrency(
     return AllEval(children);
   }
   return RaceEval(children);
+}
+
+// ── Handle method call (inside scoped body) ──
+
+/**
+ * Lower `yield* handle.method(args)` → ExternalEval(`${prefix}.${method}`, Construct({...})).
+ * Only called when `handle` is known to be a useAgent binding.
+ */
+function emitHandleCall(
+  callee: ts.PropertyAccessExpression,
+  args: ts.NodeArray<ts.Expression>,
+  ctx: EmitContext,
+): Expr {
+  const receiverName = (callee.expression as ts.Identifier).text;
+  const methodName = callee.name.text;
+  const prefix = ctx.handleBindings!.get(receiverName)!;
+  const contract = ctx.scopedContracts!.get(prefix)!;
+  const method = contract.methods.find((m) => m.name === methodName);
+  if (!method) {
+    throw error("H4", `Unknown method '${methodName}' on handle '${receiverName}'`, callee, ctx);
+  }
+  if (args.length !== method.params.length) {
+    throw error(
+      "H4",
+      `'${methodName}' expects ${method.params.length} arg(s), got ${args.length}`,
+      callee,
+      ctx,
+    );
+  }
+  const fields: Record<string, Expr> = {};
+  for (let i = 0; i < method.params.length; i++) {
+    fields[method.params[i]!.name] = emitExpression(args[i]!, ctx);
+  }
+  return ExternalEval(`${prefix}.${methodName}`, Construct(fields));
+}
+
+// ── scoped() compilation ──
+
+/**
+ * Compile `yield* scoped(function* () { ... })` → ScopeEval(handler, bindings, bodyExpr).
+ *
+ * The generator body is partitioned into:
+ * - Setup: `yield* useTransport(Contract, factory)` and `yield* Effects.around({dispatch*...})`
+ * - Body: all remaining statements
+ */
+function emitScoped(callExpr: ts.CallExpression, ctx: EmitContext): Expr {
+  if (!ctx.contracts) {
+    throw error(
+      "S0",
+      "scoped() can only be used in a workflow (contracts not available)",
+      callExpr,
+      ctx,
+    );
+  }
+
+  const arg = callExpr.arguments[0];
+  if (!arg || !ts.isFunctionExpression(arg) || !arg.asteriskToken) {
+    throw error("S0", "scoped() requires a single generator function argument", callExpr, ctx);
+  }
+
+  const stmts = Array.from(arg.body.statements);
+
+  // Partition statements into setup and body
+  const bindings: Record<string, import("@tisyn/ir").RefNode> = {};
+  const scopedContracts: Map<string, DiscoveredContract> = new Map();
+  const seenContracts = new Set<string>();
+  let sawEffectsAround = false;
+  let handlerFn: import("@tisyn/ir").FnNode | null = null;
+  let bodyStart = 0;
+
+  for (let i = 0; i < stmts.length; i++) {
+    const stmt = stmts[i]!;
+    const useTransportCall = tryExtractUseTransportCall(stmt);
+    const effectsAroundCall = tryExtractEffectsAroundCall(stmt);
+
+    if (useTransportCall) {
+      if (bodyStart > 0) {
+        throw error("S1", "useTransport() must precede body statements", stmt, ctx);
+      }
+      const [contractIdent, factoryIdent] = useTransportCall;
+      const contractName = contractIdent.text;
+      if (seenContracts.has(contractName)) {
+        throw error("S5", `Duplicate useTransport for '${contractName}'`, stmt, ctx);
+      }
+      seenContracts.add(contractName);
+      const contract = ctx.contracts.get(contractName);
+      if (!contract) {
+        throw error("UT1", `Unknown contract: '${contractName}'`, stmt, ctx);
+      }
+      if (!ts.isIdentifier(factoryIdent)) {
+        throw error("UT2", "useTransport factory argument must be a bare identifier", stmt, ctx);
+      }
+      if (!lookupBinding(factoryIdent.text, ctx)) {
+        throw error("UT3", `'${factoryIdent.text}' is not in scope`, stmt, ctx);
+      }
+      const prefix = toAgentId(contractName);
+      bindings[prefix] = { tisyn: "ref", name: factoryIdent.text };
+      scopedContracts.set(prefix, contract);
+      bodyStart = i + 1;
+    } else if (effectsAroundCall) {
+      if (bodyStart > 0) {
+        throw error("S1", "Effects.around() must precede body statements", stmt, ctx);
+      }
+      if (sawEffectsAround) {
+        throw error("S6", "Only one Effects.around() is allowed per scoped()", stmt, ctx);
+      }
+      sawEffectsAround = true;
+      handlerFn = emitEffectsAround(effectsAroundCall, ctx);
+      bodyStart = i + 1;
+    } else {
+      // First non-setup statement — remaining stmts are body
+      bodyStart = i;
+      break;
+    }
+    bodyStart = i + 1;
+  }
+
+  const bodyStmts = stmts.slice(bodyStart);
+
+  // Compile body in scoped context (emitBlock handles push/pop frame)
+  const bodyCtx: EmitContext = {
+    ...ctx,
+    handleBindings: new Map(),
+    scopedContracts,
+  };
+  const bodyExpr = emitBlock(bodyStmts, bodyCtx);
+
+  return ScopeEval(handlerFn, bindings, bodyExpr);
+}
+
+/** Extract (contractIdent, factoryIdent) from `yield* useTransport(Contract, factory)` stmt. */
+function tryExtractUseTransportCall(stmt: ts.Statement): [ts.Identifier, ts.Expression] | null {
+  if (!ts.isExpressionStatement(stmt)) return null;
+  const expr = stmt.expression;
+  if (!ts.isYieldExpression(expr) || !expr.asteriskToken || !expr.expression) return null;
+  if (!ts.isCallExpression(expr.expression)) return null;
+  const callee = expr.expression.expression;
+  if (!ts.isIdentifier(callee) || callee.text !== "useTransport") return null;
+  const args = expr.expression.arguments;
+  if (args.length !== 2 || !args[0] || !args[1]) return null;
+  if (!ts.isIdentifier(args[0])) return null;
+  return [args[0], args[1]];
+}
+
+/** Extract the CallExpression from `yield* Effects.around({...})` stmt. */
+function tryExtractEffectsAroundCall(stmt: ts.Statement): ts.CallExpression | null {
+  if (!ts.isExpressionStatement(stmt)) return null;
+  const expr = stmt.expression;
+  if (!ts.isYieldExpression(expr) || !expr.asteriskToken || !expr.expression) return null;
+  if (!ts.isCallExpression(expr.expression)) return null;
+  const callee = expr.expression.expression;
+  if (
+    !ts.isPropertyAccessExpression(callee) ||
+    !ts.isIdentifier(callee.expression) ||
+    callee.expression.text !== "Effects" ||
+    callee.name.text !== "around"
+  )
+    return null;
+  return expr.expression;
+}
+
+// ── Effects.around handler compilation ──
+
+/**
+ * Compile `Effects.around({ *dispatch([id, data], next) { ... } })` → FnNode.
+ *
+ * The resulting FnNode has params [p1Name, p2Name] (from the array destructuring
+ * of the first parameter) and body compiled by emitMiddlewareBody.
+ */
+function emitEffectsAround(
+  callExpr: ts.CallExpression,
+  ctx: EmitContext,
+): import("@tisyn/ir").FnNode {
+  const arg = callExpr.arguments[0];
+  if (!arg || !ts.isObjectLiteralExpression(arg)) {
+    throw error("EA1", "Effects.around() requires an object literal argument", callExpr, ctx);
+  }
+  if (arg.properties.length !== 1) {
+    throw error("EA1", "Effects.around() object must have exactly one property", arg, ctx);
+  }
+  const prop = arg.properties[0]!;
+  if (
+    !ts.isMethodDeclaration(prop) ||
+    !prop.asteriskToken ||
+    !ts.isIdentifier(prop.name) ||
+    prop.name.text !== "dispatch"
+  ) {
+    throw error(
+      "EA2",
+      "Effects.around() property must be a generator method named 'dispatch'",
+      prop,
+      ctx,
+    );
+  }
+
+  const params = prop.parameters;
+  if (params.length < 2) {
+    throw error("EA2", "dispatch must have at least 2 parameters", prop, ctx);
+  }
+
+  // First param: destructuring [id, data]
+  const firstParam = params[0]!;
+  if (!ts.isArrayBindingPattern(firstParam.name) || firstParam.name.elements.length !== 2) {
+    throw error(
+      "EA2",
+      "dispatch first parameter must be an array destructuring [id, data]",
+      firstParam,
+      ctx,
+    );
+  }
+  const el0 = firstParam.name.elements[0]!;
+  const el1 = firstParam.name.elements[1]!;
+  if (
+    !ts.isBindingElement(el0) ||
+    !ts.isIdentifier(el0.name) ||
+    !ts.isBindingElement(el1) ||
+    !ts.isIdentifier(el1.name)
+  ) {
+    throw error(
+      "EA2",
+      "dispatch array destructuring elements must be simple identifiers",
+      firstParam,
+      ctx,
+    );
+  }
+  const p1Name = el0.name.text;
+  const p2Name = el1.name.text;
+
+  // Second param: next
+  const secondParam = params[1]!;
+  if (!ts.isIdentifier(secondParam.name)) {
+    throw error("EA2", "dispatch second parameter must be a simple identifier", secondParam, ctx);
+  }
+  const nextName = secondParam.name.text;
+
+  if (!prop.body) {
+    throw error("EA2", "dispatch method must have a body", prop, ctx);
+  }
+
+  const allowedRefs = new Set([p1Name, p2Name, nextName]);
+  const body = emitMiddlewareBody(
+    Array.from(prop.body.statements),
+    0,
+    allowedRefs,
+    nextName,
+    0,
+    ctx,
+  );
+  return Fn([p1Name, p2Name], body);
+}
+
+// ── Middleware body compiler ──
+
+/**
+ * Index-based recursive compiler for dispatch handler bodies.
+ * Supports: return, const, if (with/without else), throw new Error, yield* next(a,b).
+ */
+function emitMiddlewareBody(
+  stmts: ts.Statement[],
+  index: number,
+  allowedRefs: Set<string>,
+  nextName: string,
+  nextCallCount: number,
+  ctx: EmitContext,
+): Expr {
+  if (index >= stmts.length) {
+    return null as unknown as Expr;
+  }
+
+  const stmt = stmts[index]!;
+
+  // ── return yield* next(a, b) ──
+  if (
+    ts.isReturnStatement(stmt) &&
+    stmt.expression &&
+    ts.isYieldExpression(stmt.expression) &&
+    stmt.expression.asteriskToken &&
+    stmt.expression.expression &&
+    ts.isCallExpression(stmt.expression.expression) &&
+    ts.isIdentifier(stmt.expression.expression.expression) &&
+    stmt.expression.expression.expression.text === nextName
+  ) {
+    if (nextCallCount + 1 > 1) {
+      throw error("EA5", "next() can only be called once per dispatch handler", stmt, ctx);
+    }
+    const args = stmt.expression.expression.arguments;
+    if (args.length !== 2 || !args[0] || !args[1]) {
+      throw error("EA4", "next() must be called with exactly 2 arguments", stmt, ctx);
+    }
+    return ExternalEval(
+      "dispatch",
+      ArrayNode([emitMExpr(args[0], allowedRefs, ctx), emitMExpr(args[1], allowedRefs, ctx)]),
+    );
+  }
+
+  // ── const name = yield* next(a, b); ...rest ──
+  if (
+    ts.isVariableStatement(stmt) &&
+    !!(stmt.declarationList.flags & ts.NodeFlags.Const) &&
+    stmt.declarationList.declarations.length === 1
+  ) {
+    const decl = stmt.declarationList.declarations[0]!;
+    if (
+      ts.isIdentifier(decl.name) &&
+      decl.initializer &&
+      ts.isYieldExpression(decl.initializer) &&
+      decl.initializer.asteriskToken &&
+      decl.initializer.expression &&
+      ts.isCallExpression(decl.initializer.expression) &&
+      ts.isIdentifier(decl.initializer.expression.expression) &&
+      decl.initializer.expression.expression.text === nextName
+    ) {
+      if (nextCallCount + 1 > 1) {
+        throw error("EA5", "next() can only be called once per dispatch handler", stmt, ctx);
+      }
+      const name = decl.name.text;
+      const args = decl.initializer.expression.arguments;
+      if (args.length !== 2 || !args[0] || !args[1]) {
+        throw error("EA4", "next() must be called with exactly 2 arguments", stmt, ctx);
+      }
+      const newAllowedRefs = new Set([...allowedRefs, name]);
+      return Let(
+        name,
+        ExternalEval(
+          "dispatch",
+          ArrayNode([emitMExpr(args[0], allowedRefs, ctx), emitMExpr(args[1], allowedRefs, ctx)]),
+        ),
+        emitMiddlewareBody(stmts, index + 1, newAllowedRefs, nextName, nextCallCount + 1, ctx),
+      );
+    }
+
+    // ── const name = mExpr; ...rest ──
+    if (ts.isIdentifier(decl.name) && decl.initializer) {
+      const name = decl.name.text;
+      const newAllowedRefs = new Set([...allowedRefs, name]);
+      return Let(
+        name,
+        emitMExpr(decl.initializer, allowedRefs, ctx),
+        emitMiddlewareBody(stmts, index + 1, newAllowedRefs, nextName, nextCallCount, ctx),
+      );
+    }
+  }
+
+  // ── return mExpr ──
+  if (ts.isReturnStatement(stmt) && stmt.expression) {
+    return emitMExpr(stmt.expression, allowedRefs, ctx);
+  }
+
+  // ── if (cond) { ... } [else { ... }] ──
+  if (ts.isIfStatement(stmt)) {
+    const cond = emitMExpr(stmt.expression, allowedRefs, ctx);
+    const thenStmts = ts.isBlock(stmt.thenStatement)
+      ? Array.from(stmt.thenStatement.statements)
+      : [stmt.thenStatement];
+    const thenBody = emitMiddlewareBody(thenStmts, 0, allowedRefs, nextName, nextCallCount, ctx);
+
+    if (stmt.elseStatement) {
+      // With else: terminal — any stmts after are dead code
+      if (index + 1 < stmts.length) {
+        throw error("EA3", "Unreachable code after if-else statement", stmts[index + 1]!, ctx);
+      }
+      const elseStmts = ts.isBlock(stmt.elseStatement)
+        ? Array.from(stmt.elseStatement.statements)
+        : [stmt.elseStatement];
+      const elseBody = emitMiddlewareBody(elseStmts, 0, allowedRefs, nextName, nextCallCount, ctx);
+      return If(cond, thenBody, elseBody);
+    } else {
+      // No else: continuation is implicit else
+      const continuation = emitMiddlewareBody(
+        stmts,
+        index + 1,
+        allowedRefs,
+        nextName,
+        nextCallCount,
+        ctx,
+      );
+      return If(cond, thenBody, continuation);
+    }
+  }
+
+  // ── throw new Error(msg) ──
+  if (
+    ts.isThrowStatement(stmt) &&
+    stmt.expression &&
+    ts.isNewExpression(stmt.expression) &&
+    ts.isIdentifier(stmt.expression.expression) &&
+    stmt.expression.expression.text === "Error"
+  ) {
+    const args = stmt.expression.arguments;
+    if (!args || args.length !== 1 || !args[0]) {
+      throw error("EA3", "throw new Error() must have exactly one argument", stmt, ctx);
+    }
+    return Throw(emitMExpr(args[0], allowedRefs, ctx));
+  }
+
+  // ── yield* as bare expression statement (not return/const) ──
+  if (
+    ts.isExpressionStatement(stmt) &&
+    ts.isYieldExpression(stmt.expression) &&
+    stmt.expression.asteriskToken
+  ) {
+    throw error("EA6", "Bare yield* in dispatch handler is not allowed", stmt, ctx);
+  }
+
+  // ── yield* anything else as value ──
+  if (ts.isExpressionStatement(stmt) && ts.isYieldExpression(stmt.expression)) {
+    throw error("EA7", "yield in dispatch handler must use yield*", stmt, ctx);
+  }
+
+  throw error("EA3", "Unsupported statement in dispatch handler body", stmt, ctx);
+}
+
+/**
+ * Compile a middleware expression (restricted subset of full emitExpression).
+ * Only references in `allowedRefs` are permitted; no effects or external calls.
+ */
+function emitMExpr(node: ts.Expression, allowedRefs: Set<string>, ctx: EmitContext): Expr {
+  // Literals
+  if (ts.isStringLiteral(node)) return node.text;
+  if (ts.isNumericLiteral(node)) return Number(node.text);
+  if (node.kind === ts.SyntaxKind.TrueKeyword) return true;
+  if (node.kind === ts.SyntaxKind.FalseKeyword) return false;
+  if (node.kind === ts.SyntaxKind.NullKeyword) return null as unknown as Expr;
+
+  // Identifier — must be in allowedRefs
+  if (ts.isIdentifier(node)) {
+    if (!allowedRefs.has(node.text)) {
+      throw error("EA8", `'${node.text}' is not in scope in dispatch handler`, node, ctx);
+    }
+    return Ref(node.text);
+  }
+
+  // Property access: a.prop
+  if (ts.isPropertyAccessExpression(node)) {
+    return Get(emitMExpr(node.expression, allowedRefs, ctx), node.name.text);
+  }
+
+  // Object literal: { k: v }
+  if (ts.isObjectLiteralExpression(node)) {
+    const fields: Record<string, Expr> = {};
+    for (const prop of node.properties) {
+      if (ts.isPropertyAssignment(prop) && ts.isIdentifier(prop.name)) {
+        fields[prop.name.text] = emitMExpr(prop.initializer, allowedRefs, ctx);
+      } else {
+        throw error(
+          "EA3",
+          "Object literal in dispatch handler must use simple property assignments",
+          prop,
+          ctx,
+        );
+      }
+    }
+    return Construct(fields);
+  }
+
+  // Array literal: [e, ...]
+  if (ts.isArrayLiteralExpression(node)) {
+    return ArrayNode(node.elements.map((e) => emitMExpr(e, allowedRefs, ctx)));
+  }
+
+  // Template literal: `...${e}...`
+  if (ts.isTemplateExpression(node)) {
+    const parts: Expr[] = [];
+    if (node.head.text) parts.push(node.head.text);
+    for (const span of node.templateSpans) {
+      parts.push(emitMExpr(span.expression, allowedRefs, ctx));
+      if (span.literal.text) parts.push(span.literal.text);
+    }
+    return Concat(parts);
+  }
+
+  // No-template (just a string): `hello`
+  if (ts.isNoSubstitutionTemplateLiteral(node)) {
+    return node.text;
+  }
+
+  // Binary expressions
+  if (ts.isBinaryExpression(node)) {
+    const left = emitMExpr(node.left, allowedRefs, ctx);
+    const right = emitMExpr(node.right, allowedRefs, ctx);
+    switch (node.operatorToken.kind) {
+      case ts.SyntaxKind.PlusToken:
+        return Add(left, right);
+      case ts.SyntaxKind.MinusToken:
+        return Sub(left, right);
+      case ts.SyntaxKind.AsteriskToken:
+        return Mul(left, right);
+      case ts.SyntaxKind.SlashToken:
+        return Div(left, right);
+      case ts.SyntaxKind.PercentToken:
+        return Mod(left, right);
+      case ts.SyntaxKind.GreaterThanToken:
+        return Gt(left, right);
+      case ts.SyntaxKind.GreaterThanEqualsToken:
+        return Gte(left, right);
+      case ts.SyntaxKind.LessThanToken:
+        return Lt(left, right);
+      case ts.SyntaxKind.LessThanEqualsToken:
+        return Lte(left, right);
+      case ts.SyntaxKind.EqualsEqualsEqualsToken:
+        return Eq(left, right);
+      case ts.SyntaxKind.ExclamationEqualsEqualsToken:
+        return Neq(left, right);
+      case ts.SyntaxKind.AmpersandAmpersandToken:
+        return And(left, right);
+      case ts.SyntaxKind.BarBarToken:
+        return Or(left, right);
+      default:
+        throw error("EA3", "Unsupported binary operator in dispatch handler", node, ctx);
+    }
+  }
+
+  // Prefix unary: ! or -
+  if (ts.isPrefixUnaryExpression(node)) {
+    const operand = emitMExpr(node.operand, allowedRefs, ctx);
+    if (node.operator === ts.SyntaxKind.ExclamationToken) return Not(operand);
+    if (node.operator === ts.SyntaxKind.MinusToken) return Neg(operand);
+    throw error("EA3", "Unsupported prefix operator in dispatch handler", node, ctx);
+  }
+
+  // Ternary: c ? a : b
+  if (ts.isConditionalExpression(node)) {
+    return If(
+      emitMExpr(node.condition, allowedRefs, ctx),
+      emitMExpr(node.whenTrue, allowedRefs, ctx),
+      emitMExpr(node.whenFalse, allowedRefs, ctx),
+    );
+  }
+
+  // new Error(...) at expression level — only valid at statement level in throw
+  if (
+    ts.isNewExpression(node) &&
+    ts.isIdentifier(node.expression) &&
+    node.expression.text === "Error"
+  ) {
+    throw error("EA3", "new Error() can only be used in a throw statement", node, ctx);
+  }
+
+  throw error("EA3", "Unsupported expression in dispatch handler", node, ctx);
 }
 
 // ── Expression compilation (§7) ──

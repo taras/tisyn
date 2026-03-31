@@ -190,3 +190,11 @@ export function AllEval(exprs: Expr[]): EvalNode {
 export function RaceEval(exprs: Expr[]): EvalNode {
   return { tisyn: "eval", id: "race", data: Q({ exprs }) };
 }
+
+export function ScopeEval(
+  handler: FnNode | null,
+  bindings: Record<string, RefNode>,
+  body: Expr,
+): EvalNode {
+  return { tisyn: "eval", id: "scope", data: Q({ handler, bindings, body }) };
+}

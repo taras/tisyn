@@ -297,7 +297,7 @@ The kernel resumes and returns the result.
 
 ### 4.4 External Execution — Compound
 
-When `ID ∈ COMPOUND_EXTERNAL = { "all", "race" }` or `ID = "spawn"`:
+When `ID ∈ COMPOUND_EXTERNAL = { "all", "race", "scope" }` or `ID = "spawn"`:
 
 ```
 eval_external(ID, D, E):
@@ -324,6 +324,7 @@ For compound external:
 ```
 { id: "all", data: { exprs: [Expr, Expr, ...] } }
 { id: "race", data: { exprs: [Expr, Expr, ...] } }
+{ id: "scope", data: { handler, bindings, body } }
 { id: "spawn", data: Expr }
 ```
 
@@ -648,7 +649,7 @@ evaluates on demand. The unchosen branch is never evaluated.
 
 ### 6.3 Quote and Concurrency
 
-Concurrency nodes (`all`, `race`) use Quote to preserve child
+Compound external nodes (`all`, `race`, `scope`) use Quote to preserve child
 expressions:
 
 ```json
@@ -672,7 +673,7 @@ at positions the operation evaluates (see §10.4). This ensures
 
 External effect data is NOT wrapped in Quote (standard effects
 use `resolve`, not `unquote`). Exception: compound external
-operations (`all`, `race`, `spawn`) use Quote because they need
+operations (`all`, `race`, `scope`, `spawn`) use Quote because they need
 `unquote` to preserve child expressions.
 
 ---
@@ -682,7 +683,7 @@ operations (`all`, `race`, `spawn`) use Quote because they need
 ### 7.1 No Concurrency in the IR
 
 The IR is sequential. Concurrency is introduced by the execution
-layer when it encounters `all`, `race`, or `spawn` effect
+layer when it encounters `all`, `race`, `scope`, or `spawn` effect
 descriptors.
 
 ### 7.2 `all` Execution

@@ -21,9 +21,17 @@ import {
 } from "@tisyn/kernel";
 import { DivergenceError, EffectError, RuntimeBugError } from "./errors.js";
 import { assertValidIr } from "@tisyn/validate";
-import { evaluate, type Env, envFromRecord } from "@tisyn/kernel";
+import { evaluate, type Env, envFromRecord, lookup } from "@tisyn/kernel";
 import { type DurableStream, InMemoryStream, ReplayIndex } from "@tisyn/durable-streams";
-import { dispatch } from "@tisyn/agent";
+import {
+  dispatch,
+  installEnforcement,
+  evaluateMiddlewareFn,
+  BoundAgentsContext,
+} from "@tisyn/agent";
+import { installAgentTransport, type AgentTransportFactory } from "@tisyn/transport";
+import { useScope } from "effection";
+import type { FnNode, RefNode } from "@tisyn/ir";
 
 export interface ExecuteOptions {
   /** The IR tree to evaluate. */
@@ -46,6 +54,12 @@ interface DriveContext {
   replayIndex: ReplayIndex;
   stream: DurableStream;
   journal: DurableEvent[];
+}
+
+interface ScopeInner {
+  handler: FnNode | null;
+  bindings: Record<string, RefNode>;
+  body: Expr;
 }
 
 /**
@@ -161,6 +175,8 @@ function* driveKernel(
   // When kernel.throw() yields a new effect (e.g., from catch/finally bodies),
   // we store it here so the next loop iteration processes it without calling kernel.next().
   let pendingStep: IteratorResult<EffectDescriptor, Val> | null = null;
+  // Unified counter for all compound-external children (scope, all, race) — replay-safe.
+  let childSpawnCount = 0;
 
   try {
     for (;;) {
@@ -186,17 +202,48 @@ function* driveKernel(
       // ── Compound effect interception ──
       if (isCompoundExternal(descriptor.id)) {
         // Strip wrapper immediately — must not escape orchestration boundary
-        const compoundData = descriptor.data as {
-          __tisyn_inner: { exprs: Expr[] };
-          __tisyn_env: Env;
-        };
+        const compoundData = descriptor.data as { __tisyn_inner: unknown; __tisyn_env: Env };
         const childEnv = compoundData.__tisyn_env;
-        const exprs = compoundData.__tisyn_inner.exprs;
 
-        if (descriptor.id === "all") {
-          nextValue = yield* orchestrateAll(exprs, coroutineId, childEnv, ctx);
+        if (descriptor.id === "scope") {
+          const inner = compoundData.__tisyn_inner as ScopeInner;
+          const childId = `${coroutineId}.${childSpawnCount++}`;
+          let scopeValue: Val = null;
+          let scopeErr: Error | null = null;
+          try {
+            scopeValue = yield* orchestrateScope(inner, childId, childEnv, ctx);
+          } catch (e) {
+            scopeErr = e instanceof Error ? e : new Error(String(e));
+          }
+          if (scopeErr === null) {
+            nextValue = scopeValue;
+          } else {
+            // T14: route through parent kernel so parent try/catch can intercept
+            const throwResult = kernel.throw(scopeErr);
+            if (throwResult.done) {
+              closed = true;
+              const closeEvent: CloseEvent = {
+                type: "close",
+                coroutineId,
+                result: { status: "ok", value: throwResult.value as Json },
+              };
+              yield* ctx.stream.append(closeEvent);
+              ctx.journal.push(closeEvent);
+              return { status: "ok", value: throwResult.value as Json };
+            }
+            pendingStep = throwResult;
+            nextValue = null;
+          }
         } else {
-          nextValue = yield* orchestrateRace(exprs, coroutineId, childEnv, ctx);
+          const inner = compoundData.__tisyn_inner as { exprs: Expr[] };
+          const exprs = inner.exprs;
+          const startIndex = childSpawnCount;
+          childSpawnCount += exprs.length;
+          if (descriptor.id === "all") {
+            nextValue = yield* orchestrateAll(exprs, coroutineId, startIndex, childEnv, ctx);
+          } else {
+            nextValue = yield* orchestrateRace(exprs, coroutineId, startIndex, childEnv, ctx);
+          }
         }
         // Compound effects do NOT advance parent yieldIndex
         continue;
@@ -361,6 +408,7 @@ function* driveKernel(
 function* orchestrateAll(
   exprs: Expr[],
   parentId: string,
+  startIndex: number,
   env: Env,
   ctx: DriveContext,
 ): Operation<Val> {
@@ -374,7 +422,7 @@ function* orchestrateAll(
     let completed = 0;
 
     for (let i = 0; i < N; i++) {
-      const childId = `${parentId}.${i}`;
+      const childId = `${parentId}.${startIndex + i}`;
       const childKernel = evaluate(exprs[i]!, env);
       yield* spawn(function* () {
         const result = yield* driveKernel(childKernel, childId, env, ctx);
@@ -415,6 +463,7 @@ function* orchestrateAll(
 function* orchestrateRace(
   exprs: Expr[],
   parentId: string,
+  startIndex: number,
   env: Env,
   ctx: DriveContext,
 ): Operation<Val> {
@@ -431,7 +480,7 @@ function* orchestrateRace(
     let completed = 0;
 
     for (let i = 0; i < N; i++) {
-      const childId = `${parentId}.${i}`;
+      const childId = `${parentId}.${startIndex + i}`;
       const childKernel = evaluate(exprs[i]!, env);
       yield* spawn(function* () {
         const result = yield* driveKernel(childKernel, childId, env, ctx);
@@ -460,4 +509,62 @@ function* orchestrateRace(
   });
 
   return yield* operation;
+}
+
+/**
+ * Orchestrate `scope` — run body in an isolated Effection scope with
+ * bound agent transports and an optional enforcement handler.
+ *
+ * Mirrors the authored `yield* useTransport(Contract, factory)` + scoped() pattern:
+ * 1. BoundAgentsContext mutation
+ * 2. installAgentTransport (opens transport, runs session, installs Effects.around middleware)
+ * 3. Optional enforcement handler via installEnforcement
+ * 4. Drive child kernel for the body
+ * All transport sessions and the enforcement middleware are owned by this scoped() block
+ * and torn down when it exits.
+ */
+function* orchestrateScope(
+  inner: ScopeInner,
+  childId: string,
+  env: Env,
+  ctx: DriveContext,
+): Operation<Val> {
+  return yield* scoped(function* () {
+    const scope = yield* useScope();
+    const current = scope.get(BoundAgentsContext) ?? null;
+    const next = new Set(current ?? []);
+
+    for (const [prefix, ref] of Object.entries(inner.bindings)) {
+      let factory: Val;
+      try {
+        factory = lookup(ref.name, env) as Val;
+      } catch (e) {
+        const err = e instanceof Error ? e : new Error(String(e));
+        const closeEvent: CloseEvent = {
+          type: "close",
+          coroutineId: childId,
+          result: { status: "err", error: { message: err.message, name: err.name } },
+        };
+        yield* ctx.stream.append(closeEvent);
+        ctx.journal.push(closeEvent);
+        throw err;
+      }
+      next.add(prefix);
+      yield* installAgentTransport(prefix, factory as unknown as AgentTransportFactory);
+    }
+    scope.set(BoundAgentsContext, next);
+
+    if (inner.handler !== null) {
+      yield* installEnforcement((effectId, data, innerNext) =>
+        evaluateMiddlewareFn(inner.handler!, effectId, data, innerNext),
+      );
+    }
+
+    const childKernel = evaluate(inner.body, env);
+    const result = yield* driveKernel(childKernel, childId, env, ctx);
+
+    if (result.status === "ok") return result.value as Val;
+    const errResult = result as { status: "err"; error: { message: string; name?: string } };
+    throw new EffectError(errResult.error.message, errResult.error.name);
+  });
 }

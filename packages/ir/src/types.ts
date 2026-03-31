@@ -108,6 +108,12 @@ export interface RaceShape {
   readonly exprs: readonly TisynExpr[];
 }
 
+export interface ScopeShape {
+  readonly handler: FnNode | null;
+  readonly bindings: { readonly [key: string]: RefNode };
+  readonly body: TisynExpr;
+}
+
 // ── Narrowed Structural Eval Types ──
 
 export interface LetNode {
@@ -270,6 +276,12 @@ export interface RaceNode {
   readonly tisyn: "eval";
   readonly id: "race";
   readonly data: QuoteNode<RaceShape>;
+}
+
+export interface ScopeNode {
+  readonly tisyn: "eval";
+  readonly id: "scope";
+  readonly data: QuoteNode<ScopeShape>;
 }
 
 export interface ConcatArraysShape {

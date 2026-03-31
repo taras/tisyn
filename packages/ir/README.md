@@ -22,7 +22,7 @@ Almost every other Tisyn package depends on this one, directly or indirectly.
 
 This package provides the core building blocks for working with Tisyn programs as data:
 
-- expression and value types such as `TisynExpr`, `Val`, `Json`, and `TisynFn`
+- expression and value types such as `TisynExpr`, `Val`, `Json`, `TisynFn`, `ScopeNode`, and `ScopeShape`
 - constructor helpers such as `Fn`, `Ref`, `Let`, `Call`, `Try`, `Eval`, `All`, and `Race`
 - traversal and transformation utilities such as `walk()`, `fold()`, and `transform()`
 - inspection and developer tooling such as `classifyNode()`, `collectRefs()`, `print()`, and `decompile()`
@@ -57,6 +57,8 @@ The API surface is broad, but it falls into a few clear groups.
 - `Expr` — typed expression input accepted by constructor helpers
 - `TisynFn` — a function-shaped IR value with parameters and a body
 - `IrInput` — validated input shapes accepted by IR-consuming APIs
+- `ScopeShape` — the payload shape for a `scope` eval node: `{ handler, bindings, body }`
+- `ScopeNode` — an eval node with `id: "scope"` carrying a `ScopeShape` in a Quote
 
 ### Constructors
 

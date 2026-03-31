@@ -428,3 +428,86 @@ describe("Return-in-try: E — SSA join propagation", () => {
     }
   });
 });
+
+// ── Scope teardown across while-loop iterations ──
+
+describe("compileOne with scoped()", () => {
+  it("compiles and executes a minimal scoped block via compileOne()", function* () {
+    // Regression: compileOne() was not passing a contracts map to createContext(),
+    // causing emitScoped to throw S0 even for valid authored scoped() usage.
+    // This test must use compileOne() directly — not generateWorkflowModule().
+    const ir = compileOne(`
+      function* test(): Workflow<unknown> {
+        return yield* scoped(function* () {
+          yield* Effects.around({
+            *dispatch([id, data], next) {
+              return 42;
+            },
+          });
+          return yield* sleep(1);
+        });
+      }
+    `);
+    const { result } = yield* execute({ ir: Call(ir) });
+    // The Effects.around handler intercepts the sleep dispatch and returns 42.
+    expect(result).toEqual({ status: "ok", value: 42 });
+  });
+});
+
+describe("scope teardown across while-loop iterations", () => {
+  it("each scoped() iteration installs a fresh handler and tears it down on exit", function* () {
+    // Each scope installs an Effects.around handler (compiled to a FnNode) via
+    // installEnforcement, which sets EnforcementContext for that Effection scope.
+    // orchestrateScope wraps each body inside Effection's scoped(), so when it
+    // exits, EnforcementContext reverts to null.
+    //
+    // Why this detects teardown failure:
+    //   After the while loop, `yield* sleep(5)` fires dispatch("sleep", [5]).
+    //   With correct teardown: EnforcementContext is null → Effects chain → throws
+    //   "No agent registered" → catch block returns "clean".
+    //   If scoped() were removed from orchestrateScope: iter 2's handler (returns 100)
+    //   would remain set → sleep(5) returns 100 → try returns 100, not "clean".
+    //
+    // The handler returns a constant (100) rather than data+1 because sleep passes
+    // data as an array [ms], not a scalar, so arithmetic on raw data would fail.
+    // The constant-return approach is sufficient: "clean" vs 100 is unambiguous.
+    //
+    // Per-iteration assertions (nice-to-have):
+    //   The journal must have exactly two child Close events with IDs "root.0" and
+    //   "root.1", proving each loop iteration created a distinct Tisyn scope.
+
+    const ir = compileOne(`
+      function* test(): Workflow<unknown> {
+        let i = 0;
+        while (i < 2) {
+          yield* scoped(function* () {
+            yield* Effects.around({
+              *dispatch([id, data], next) {
+                return 100;
+              }
+            });
+            return yield* sleep(10);
+          });
+          i = i + 1;
+        }
+        try {
+          return yield* sleep(5);
+        } catch (e) {
+          return "clean";
+        }
+      }
+    `);
+    const { result, journal } = yield* execute({ ir: Call(ir) });
+
+    // Main assertion: enforcement was torn down after the loop.
+    // With correct teardown: sleep(5) throws → catch returns "clean".
+    // With leaked enforcement (no scoped()): sleep(5) returns 100 → try returns 100.
+    expect(result).toEqual({ status: "ok", value: "clean" });
+
+    // Structural assertion: two distinct child scope IDs were produced.
+    const scopeCloses = journal.filter(
+      (e) => e.type === "close" && (e as any).coroutineId !== "root",
+    );
+    expect(scopeCloses.map((e) => (e as any).coroutineId)).toEqual(["root.0", "root.1"]);
+  });
+});
