@@ -1,5 +1,31 @@
 # @tisyn/transport
 
+## 0.5.0
+
+### Minor Changes
+
+- e71915d: Extract `installAgentTransport` as a low-level transport primitive.
+
+  - New `installAgentTransport(agentId, factory)` takes a plain agent-ID string and factory instead of a typed `AgentDeclaration`; sends empty capabilities (`methods: []`)
+  - Used by the runtime scope orchestrator where only the agent-ID string and factory value are available from the IR environment
+  - `installRemoteAgent` is unchanged; `installAgentTransport` is an independent addition
+
+### Patch Changes
+
+- Updated dependencies [e71915d]
+- Updated dependencies [e71915d]
+- Updated dependencies [e71915d]
+- Updated dependencies [9786a15]
+- Updated dependencies [9786a15]
+- Updated dependencies [9786a15]
+- Updated dependencies [d4a051a]
+- Updated dependencies [d4a051a]
+  - @tisyn/ir@0.5.0
+  - @tisyn/kernel@0.5.0
+  - @tisyn/validate@0.5.0
+  - @tisyn/agent@0.5.0
+  - @tisyn/protocol@0.5.0
+
 ## 0.4.0
 
 ### Minor Changes
