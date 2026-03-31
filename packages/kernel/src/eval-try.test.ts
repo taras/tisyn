@@ -7,11 +7,7 @@
 
 import { describe, it, expect } from "vitest";
 import { evaluate } from "./eval.js";
-import {
-  ExplicitThrow,
-  EffectError,
-  isCatchable,
-} from "./errors.js";
+import { ExplicitThrow, EffectError, isCatchable } from "./errors.js";
 import { EMPTY_ENV, extend } from "./environment.js";
 
 // ── IR helpers ──
