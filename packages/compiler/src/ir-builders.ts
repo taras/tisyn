@@ -193,7 +193,7 @@ export function RaceEval(exprs: Expr[]): EvalNode {
 
 export function ScopeEval(
   handler: FnNode | null,
-  bindings: Record<string, RefNode>,
+  bindings: Record<string, Expr>,
   body: Expr,
 ): EvalNode {
   return { tisyn: "eval", id: "scope", data: Q({ handler, bindings, body }) };

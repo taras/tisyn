@@ -110,7 +110,7 @@ export interface RaceShape {
 
 export interface ScopeShape {
   readonly handler: FnNode | null;
-  readonly bindings: { readonly [key: string]: RefNode };
+  readonly bindings: { readonly [key: string]: TisynExpr };
   readonly body: TisynExpr;
 }
 

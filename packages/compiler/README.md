@@ -219,7 +219,7 @@ A scoped block has two regions: a **setup region** followed by a **body region**
 
 **Setup region** (optional, before any body statements):
 
-- `yield* useTransport(Contract, factory)` — connect a remote agent. Each contract may appear at most once per `scoped()` block. The factory is an `AgentTransportFactory` value from the current environment.
+- `yield* useTransport(Contract, factoryExpr)` — connect a remote agent. Each contract may appear at most once per `scoped()` block. The second argument may be any expression that evaluates to an `AgentTransportFactory` without performing effects (bare identifier, property access, call expression, ternary, etc.).
 - `yield* Effects.around({ *dispatch([id, data], next) { ... } })` — install an enforcement handler that intercepts all dispatch inside the body. At most one per `scoped()` block.
 
 **Body region**:
@@ -504,8 +504,6 @@ Contract validation errors use `E999`, including:
 | S5   | Duplicate `useTransport` for the same contract in one `scoped()` block                |
 | S6   | At most one `Effects.around` per `scoped()` block                                     |
 | UT1  | `useTransport` first argument must be a known contract identifier                     |
-| UT2  | `useTransport` second argument must be a plain identifier                             |
-| UT3  | `useTransport` factory variable must be declared in scope                             |
 | EA1  | `Effects.around` argument must have exactly one property                              |
 | EA2  | `Effects.around` property must be `*dispatch([id, data], next) { ... }`              |
 | UA1  | `useAgent` can only be used inside `scoped()`                                         |

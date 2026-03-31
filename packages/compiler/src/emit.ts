@@ -2673,7 +2673,7 @@ function emitScoped(callExpr: ts.CallExpression, ctx: EmitContext): Expr {
   const stmts = Array.from(arg.body.statements);
 
   // Partition statements into setup and body
-  const bindings: Record<string, import("@tisyn/ir").RefNode> = {};
+  const bindings: Record<string, import("@tisyn/ir").TisynExpr> = {};
   const scopedContracts: Map<string, DiscoveredContract> = new Map();
   const seenContracts = new Set<string>();
   let sawEffectsAround = false;
@@ -2689,7 +2689,7 @@ function emitScoped(callExpr: ts.CallExpression, ctx: EmitContext): Expr {
       if (bodyStart > 0) {
         throw error("S1", "useTransport() must precede body statements", stmt, ctx);
       }
-      const [contractIdent, factoryIdent] = useTransportCall;
+      const [contractIdent, factoryExpr] = useTransportCall;
       const contractName = contractIdent.text;
       if (seenContracts.has(contractName)) {
         throw error("S5", `Duplicate useTransport for '${contractName}'`, stmt, ctx);
@@ -2699,14 +2699,8 @@ function emitScoped(callExpr: ts.CallExpression, ctx: EmitContext): Expr {
       if (!contract) {
         throw error("UT1", `Unknown contract: '${contractName}'`, stmt, ctx);
       }
-      if (!ts.isIdentifier(factoryIdent)) {
-        throw error("UT2", "useTransport factory argument must be a bare identifier", stmt, ctx);
-      }
-      if (!lookupBinding(factoryIdent.text, ctx)) {
-        throw error("UT3", `'${factoryIdent.text}' is not in scope`, stmt, ctx);
-      }
       const prefix = toAgentId(contractName);
-      bindings[prefix] = { tisyn: "ref", name: factoryIdent.text };
+      bindings[prefix] = emitExpression(factoryExpr, ctx);
       scopedContracts.set(prefix, contract);
       bodyStart = i + 1;
     } else if (effectsAroundCall) {

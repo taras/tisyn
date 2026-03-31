@@ -7,9 +7,11 @@
 
 import { describe, it } from "@effectionx/vitest";
 import { expect } from "vitest";
-import { Call } from "@tisyn/ir";
+import { Call, Ref } from "@tisyn/ir";
 import { execute } from "@tisyn/runtime";
 import { compileOne } from "./index.js";
+import { agent, operation } from "@tisyn/agent";
+import { inprocessTransport } from "@tisyn/transport";
 
 describe("while loop expression value", () => {
   it("returns the last body result when the condition becomes false", function* () {
@@ -509,5 +511,39 @@ describe("scope teardown across while-loop iterations", () => {
       (e) => e.type === "close" && (e as any).coroutineId !== "root",
     );
     expect(scopeCloses.map((e) => (e as any).coroutineId)).toEqual(["root.0", "root.1"]);
+  });
+});
+
+describe("useTransport with property-access factory expression", () => {
+  it("compiles property-access factory, installs transport, method invocation succeeds", function* () {
+    // toAgentId("GreetService") = "greet-service"
+    const greetAgent = agent("greet-service", {
+      greet: operation<{ name: string }, string>(),
+    });
+    const factory = inprocessTransport(greetAgent, {
+      *greet({ name }: { name: string }) {
+        return `hello ${name}`;
+      },
+    });
+
+    const ir = compileOne(`
+      declare function GreetService(): {
+        greet(name: string): Workflow<string>;
+      }
+      function* test(config: { factory: AgentTransportFactory }): Workflow<string> {
+        return yield* scoped(function* () {
+          yield* useTransport(GreetService, config.factory);
+          const h = yield* useAgent(GreetService);
+          return yield* h.greet("world");
+        });
+      }
+    `);
+
+    const { result } = yield* execute({
+      ir: Call(ir, Ref("cfg")),
+      env: { cfg: { factory } },
+    });
+
+    expect(result).toEqual({ status: "ok", value: "hello world" });
   });
 });
