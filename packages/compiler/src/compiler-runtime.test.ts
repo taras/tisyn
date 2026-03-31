@@ -456,10 +456,6 @@ describe("compileOne with scoped()", () => {
 
 describe("scope teardown across while-loop iterations", () => {
   it("each scoped() iteration installs a fresh handler and tears it down on exit", function* () {
-    // SUT: the Tisyn blocking-scope implementation — generateWorkflowModule compiles
-    // the authored source to scope IR, execute() runs orchestrateScope() per loop
-    // iteration.
-    //
     // Each scope installs an Effects.around handler (compiled to a FnNode) via
     // installEnforcement, which sets EnforcementContext for that Effection scope.
     // orchestrateScope wraps each body inside Effection's scoped(), so when it
@@ -480,11 +476,8 @@ describe("scope teardown across while-loop iterations", () => {
     //   The journal must have exactly two child Close events with IDs "root.0" and
     //   "root.1", proving each loop iteration created a distinct Tisyn scope.
 
-    // generateWorkflowModule is required for scoped() — it provides the contract-aware
-    // emit context (ctx.contracts). compileOne() does not pass contracts to the context,
-    // so scoped() compilation fails with S0 when called from compileOne().
-    const { workflows } = generateWorkflowModule(`
-      export function* test(): Workflow<unknown> {
+    const ir = compileOne(`
+      function* test(): Workflow<unknown> {
         let i = 0;
         while (i < 2) {
           yield* scoped(function* () {
@@ -504,8 +497,6 @@ describe("scope teardown across while-loop iterations", () => {
         }
       }
     `);
-
-    const ir = workflows["test"]!;
     const { result, journal } = yield* execute({ ir: Call(ir) });
 
     // Main assertion: enforcement was torn down after the loop.
