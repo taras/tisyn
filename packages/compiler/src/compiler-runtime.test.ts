@@ -431,6 +431,29 @@ describe("Return-in-try: E — SSA join propagation", () => {
 
 // ── Scope teardown across while-loop iterations ──
 
+describe("compileOne with scoped()", () => {
+  it("compiles and executes a minimal scoped block via compileOne()", function* () {
+    // Regression: compileOne() was not passing a contracts map to createContext(),
+    // causing emitScoped to throw S0 even for valid authored scoped() usage.
+    // This test must use compileOne() directly — not generateWorkflowModule().
+    const ir = compileOne(`
+      function* test(): Workflow<unknown> {
+        return yield* scoped(function* () {
+          yield* Effects.around({
+            *dispatch([id, data], next) {
+              return 42;
+            },
+          });
+          return yield* sleep(1);
+        });
+      }
+    `);
+    const { result } = yield* execute({ ir: Call(ir) });
+    // The Effects.around handler intercepts the sleep dispatch and returns 42.
+    expect(result).toEqual({ status: "ok", value: 42 });
+  });
+});
+
 describe("scope teardown across while-loop iterations", () => {
   it("each scoped() iteration installs a fresh handler and tears it down on exit", function* () {
     // SUT: the Tisyn blocking-scope implementation — generateWorkflowModule compiles

@@ -14,6 +14,8 @@ import type { TisynExpr as Expr, TisynFn } from "@tisyn/ir";
 import { assertValidIr } from "@tisyn/validate";
 import { parseSource } from "./parse.js";
 import { emitBlock, createContext } from "./emit.js";
+import { discoverContracts } from "./discover.js";
+import type { DiscoveredContract } from "./discover.js";
 import { Fn } from "./ir-builders.js";
 import { CompileError } from "./errors.js";
 
@@ -57,10 +59,17 @@ export function compile(source: string, options: CompileOptions = {}): CompileRe
     ts.ScriptKind.TS,
   );
 
+  // Discover ambient contracts so scoped() can resolve useTransport() references
+  const { contracts } = discoverContracts(sourceFile);
+  const contractsMap = new Map<string, DiscoveredContract>();
+  for (const contract of contracts) {
+    contractsMap.set(contract.name, contract);
+  }
+
   const result: Record<string, Expr> = {};
 
   for (const fn of functions) {
-    const ctx = createContext(sourceFile);
+    const ctx = createContext(sourceFile, contractsMap);
 
     // Phase 2-3: Emit (includes discover and transform)
     const body = emitBlock(fn.body.statements, ctx);

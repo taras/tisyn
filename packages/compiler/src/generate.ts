@@ -14,7 +14,7 @@ import ts from "typescript";
 import type { TisynExpr as Expr } from "@tisyn/ir";
 import { assertValidIr } from "@tisyn/validate";
 import { parseSource } from "./parse.js";
-import { emitBlock, createContext } from "./emit.js";
+import { emitBlock, createStrictContext } from "./emit.js";
 import { Fn } from "./ir-builders.js";
 import { CompileError } from "./errors.js";
 import {
@@ -108,7 +108,7 @@ export function generateWorkflowModule(
   const workflowInfos: Record<string, WorkflowInfo> = {};
 
   for (const fn of exportedFunctions) {
-    const ctx = createContext(sourceFile, contractsMap);
+    const ctx = createStrictContext(sourceFile, contractsMap);
     const body = emitBlock(fn.body.statements, ctx);
     const irFn = Fn(fn.params, body);
 

@@ -64,6 +64,12 @@ interface EmitContext {
   counter: Counter;
   sourceFile: ts.SourceFile;
   contracts?: Map<string, DiscoveredContract>;
+  /**
+   * When true, agent factory calls whose name is not in `contracts` throw an error.
+   * When false/absent, unknown factories fall through to the legacy positional-array path.
+   * Set by generateWorkflowModule (strict); left unset by compile/compileOne (lenient).
+   */
+  strictContracts?: boolean;
   /** SSA binding scope stack. Innermost frame is last. */
   scopeStack: ScopeFrame[];
   /** Set only during scoped body compilation. varName → agentPrefix. */
@@ -177,6 +183,24 @@ export function createContext(
   contracts?: Map<string, DiscoveredContract>,
 ): EmitContext {
   return { counter: new Counter(), sourceFile, contracts, scopeStack: [new Map()] };
+}
+
+/**
+ * Like createContext, but marks the context as strict: agent factory calls whose
+ * name is not in `contracts` throw an error instead of falling through to legacy mode.
+ * Used by generateWorkflowModule where every contract must be declared.
+ */
+export function createStrictContext(
+  sourceFile: ts.SourceFile,
+  contracts: Map<string, DiscoveredContract>,
+): EmitContext {
+  return {
+    counter: new Counter(),
+    sourceFile,
+    contracts,
+    strictContracts: true,
+    scopeStack: [new Map()],
+  };
 }
 
 // ── Statement compilation (Spec §5.1) ──
@@ -2513,64 +2537,67 @@ function emitAgentEffect(
   if (ctx.contracts) {
     const contract = ctx.contracts.get(agentFactory.text);
     if (!contract) {
-      throw error("E999", `Unknown contract: '${agentFactory.text}'`, agentFactory, ctx);
-    }
+      if (ctx.strictContracts) {
+        throw error("E999", `Unknown contract: '${agentFactory.text}'`, agentFactory, ctx);
+      }
+      // Lenient mode (compile/compileOne): fall through to legacy positional-array path
+    } else {
+      // Instance handling
+      const factoryArgs = receiver.arguments;
+      let agentId = baseAgentId;
 
-    // Instance handling
-    const factoryArgs = receiver.arguments;
-    let agentId = baseAgentId;
-
-    if (factoryArgs.length > 1) {
-      throw error(
-        "E999",
-        `Contract factory '${agentFactory.text}' accepts at most one argument (instance)`,
-        receiver,
-        ctx,
-      );
-    }
-
-    if (factoryArgs.length === 1) {
-      const instanceArg = factoryArgs[0]!;
-      if (!ts.isStringLiteral(instanceArg)) {
+      if (factoryArgs.length > 1) {
         throw error(
           "E999",
-          `Contract factory instance argument must be a string literal (dynamic instance routing is not supported in v1)`,
-          instanceArg,
+          `Contract factory '${agentFactory.text}' accepts at most one argument (instance)`,
+          receiver,
           ctx,
         );
       }
-      agentId = `${baseAgentId}:${instanceArg.text}`;
-    }
 
-    // Validate method exists
-    const method = contract.methods.find((m) => m.name === methodName);
-    if (!method) {
-      throw error(
-        "E999",
-        `Unknown method '${methodName}' on contract '${agentFactory.text}'`,
-        propAccess.name,
-        ctx,
-      );
-    }
+      if (factoryArgs.length === 1) {
+        const instanceArg = factoryArgs[0]!;
+        if (!ts.isStringLiteral(instanceArg)) {
+          throw error(
+            "E999",
+            `Contract factory instance argument must be a string literal (dynamic instance routing is not supported in v1)`,
+            instanceArg,
+            ctx,
+          );
+        }
+        agentId = `${baseAgentId}:${instanceArg.text}`;
+      }
 
-    // Validate arity
-    if (args.length !== method.params.length) {
-      throw error(
-        "E999",
-        `Method '${agentFactory.text}.${methodName}' expects ${method.params.length} argument(s) but got ${args.length}`,
-        propAccess,
-        ctx,
-      );
-    }
+      // Validate method exists
+      const method = contract.methods.find((m) => m.name === methodName);
+      if (!method) {
+        throw error(
+          "E999",
+          `Unknown method '${methodName}' on contract '${agentFactory.text}'`,
+          propAccess.name,
+          ctx,
+        );
+      }
 
-    // Build Construct node with named parameters
-    const effectId = `${agentId}.${methodName}`;
-    const fields: Record<string, Expr> = {};
-    for (let i = 0; i < method.params.length; i++) {
-      fields[method.params[i]!.name] = emitExpression(args[i]!, ctx);
-    }
-    return ExternalEval(effectId, Construct(fields));
-  }
+      // Validate arity
+      if (args.length !== method.params.length) {
+        throw error(
+          "E999",
+          `Method '${agentFactory.text}.${methodName}' expects ${method.params.length} argument(s) but got ${args.length}`,
+          propAccess,
+          ctx,
+        );
+      }
+
+      // Build Construct node with named parameters
+      const effectId = `${agentId}.${methodName}`;
+      const fields: Record<string, Expr> = {};
+      for (let i = 0; i < method.params.length; i++) {
+        fields[method.params[i]!.name] = emitExpression(args[i]!, ctx);
+      }
+      return ExternalEval(effectId, Construct(fields));
+    } // end else (contract found)
+  } // end if (ctx.contracts)
 
   // Legacy mode: positional array (preserves backward compat for compile/compileOne)
   const effectId = `${baseAgentId}.${methodName}`;
