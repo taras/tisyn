@@ -44,6 +44,8 @@ import {
   AllEval,
   RaceEval,
   ScopeEval,
+  SpawnEval,
+  JoinEval,
 } from "./ir-builders.js";
 import { toAgentId } from "./agent-id.js";
 import { Counter } from "./counter.js";
@@ -56,6 +58,8 @@ import type { DiscoveredContract } from "./discover.js";
 interface BindingInfo {
   kind: "let" | "const";
   version: number;
+  isSpawnHandle?: boolean;
+  isForbiddenCapture?: boolean;
 }
 
 type ScopeFrame = Map<string, BindingInfo>;
@@ -104,9 +108,14 @@ function lookupBinding(
 }
 
 /** Declare a new binding in the current (innermost) frame. */
-function declareBinding(name: string, kind: "let" | "const", ctx: EmitContext): void {
+function declareBinding(
+  name: string,
+  kind: "let" | "const",
+  ctx: EmitContext,
+  isSpawnHandle?: boolean,
+): void {
   const frame = ctx.scopeStack[ctx.scopeStack.length - 1]!;
-  frame.set(name, { kind, version: 0 });
+  frame.set(name, { kind, version: 0, isSpawnHandle });
 }
 
 /** Get the versioned IR name for a binding (e.g. "x_0", "x_1"). */
@@ -125,6 +134,16 @@ function bumpVersion(name: string, ctx: EmitContext): string {
 }
 
 /** Resolve a reference: return versioned name if it's a tracked let binding. */
+function isSpawnHandleBinding(name: string, ctx: EmitContext): boolean {
+  const found = lookupBinding(name, ctx);
+  return found?.info.isSpawnHandle === true;
+}
+
+function isForbiddenCaptureBinding(name: string, ctx: EmitContext): boolean {
+  const found = lookupBinding(name, ctx);
+  return found?.info.isForbiddenCapture === true;
+}
+
 function resolveRef(name: string, ctx: EmitContext): string {
   const found = lookupBinding(name, ctx);
   if (found) return versionedName(name, found.info);
@@ -136,7 +155,22 @@ function cloneScopeStack(stack: ScopeFrame[]): ScopeFrame[] {
   return stack.map((frame) => {
     const newFrame = new Map<string, BindingInfo>();
     for (const [k, v] of frame) {
-      newFrame.set(k, { kind: v.kind, version: v.version });
+      newFrame.set(k, { ...v });
+    }
+    return newFrame;
+  });
+}
+
+/** Clone scope stack with spawn-handle bindings downgraded to forbidden captures (SP11). */
+function cloneScopeStackForSpawnBody(stack: ScopeFrame[]): ScopeFrame[] {
+  return stack.map((frame) => {
+    const newFrame = new Map<string, BindingInfo>();
+    for (const [k, v] of frame) {
+      if (v.isSpawnHandle) {
+        newFrame.set(k, { ...v, isSpawnHandle: undefined, isForbiddenCapture: true });
+      } else {
+        newFrame.set(k, { ...v });
+      }
     }
     return newFrame;
   });
@@ -400,6 +434,24 @@ function emitVariableStatement(
       }
       ctx.handleBindings.set(name, prefix);
       return processDecl(i + 1); // erase: no Let emitted
+    }
+
+    // ── Spawn handle binding ──
+    // const task = yield* spawn(function* () { ... }) → Let(task, SpawnEval(body), rest)
+    if (
+      ts.isYieldExpression(decl.initializer) &&
+      decl.initializer.asteriskToken &&
+      decl.initializer.expression &&
+      ts.isCallExpression(decl.initializer.expression) &&
+      ts.isIdentifier(decl.initializer.expression.expression) &&
+      decl.initializer.expression.expression.text === "spawn"
+    ) {
+      if (!isConst) {
+        throw error("SP2", "Spawn handle must be declared with 'const', not 'let'", decl, ctx);
+      }
+      const spawnExpr = emitSpawn(decl.initializer.expression, ctx);
+      declareBinding(name, kind, ctx, true);
+      return Let(name, spawnExpr, processDecl(i + 1));
     }
 
     // Emit initializer BEFORE declaring (so x = x + 1 sees old x)
@@ -2427,6 +2479,21 @@ function emitThrowStatement(stmt: ts.ThrowStatement, ctx: EmitContext): Expr {
 // ── yield* dispatch (§4) ──
 
 function emitYieldStar(target: ts.Expression, ctx: EmitContext): Expr {
+  // yield* <identifier> — check for spawn handle join
+  if (ts.isIdentifier(target)) {
+    if (isForbiddenCaptureBinding(target.text, ctx)) {
+      throw error(
+        "SP11",
+        `Parent spawn handle '${target.text}' is not visible inside spawned body`,
+        target,
+        ctx,
+      );
+    }
+    if (isSpawnHandleBinding(target.text, ctx)) {
+      return JoinEval(Ref(resolveRef(target.text, ctx)));
+    }
+  }
+
   // Case 1: yield* all([...]) or yield* race([...])
   if (ts.isCallExpression(target)) {
     const callee = target.expression;
@@ -2434,6 +2501,11 @@ function emitYieldStar(target: ts.Expression, ctx: EmitContext): Expr {
       // yield* scoped(function* () { ... })
       if (callee.text === "scoped") {
         return emitScoped(target, ctx);
+      }
+
+      // yield* spawn(function* () { ... })
+      if (callee.text === "spawn") {
+        return emitSpawn(target, ctx);
       }
 
       if (callee.text === "all" || callee.text === "race") {
@@ -2610,6 +2682,35 @@ function emitConcurrency(
     return AllEval(children);
   }
   return RaceEval(children);
+}
+
+// ── Spawn ──
+
+/**
+ * Compile `yield* spawn(function* () { ... })` → SpawnEval(bodyExpr).
+ *
+ * The spawned body compiles with:
+ * - preserved scopeStack with parent spawn handles downgraded (SP11)
+ * - preserved scopedContracts (SP11(C): inherited contract availability)
+ * - cleared handleBindings (SP11(B): parent useAgent handles NOT inherited)
+ */
+function emitSpawn(callExpr: ts.CallExpression, ctx: EmitContext): Expr {
+  const arg = callExpr.arguments[0];
+  if (!arg || !ts.isFunctionExpression(arg) || !arg.asteriskToken) {
+    throw error("SP1", "spawn() requires a single generator function argument", callExpr, ctx);
+  }
+  if (callExpr.arguments.length > 1) {
+    throw error("SP1", "spawn() takes exactly one argument", callExpr, ctx);
+  }
+
+  const bodyCtx: EmitContext = {
+    ...ctx,
+    scopeStack: cloneScopeStackForSpawnBody(ctx.scopeStack),
+    handleBindings: undefined,
+  };
+  const bodyExpr = emitBlock(Array.from(arg.body.statements), bodyCtx);
+
+  return SpawnEval(bodyExpr);
 }
 
 // ── Handle method call (inside scoped body) ──
@@ -3174,6 +3275,22 @@ export function emitExpression(node: ts.Expression, ctx: EmitContext): Expr {
 
   // ── Identifiers → Ref (versioned if SSA-tracked) ──
   if (ts.isIdentifier(node)) {
+    if (isForbiddenCaptureBinding(node.text, ctx)) {
+      throw error(
+        "SP11",
+        `Parent spawn handle '${node.text}' is not visible inside spawned body`,
+        node,
+        ctx,
+      );
+    }
+    if (isSpawnHandleBinding(node.text, ctx)) {
+      throw error(
+        "SP4",
+        `Spawn handle '${node.text}' can only be used as 'yield* ${node.text}'`,
+        node,
+        ctx,
+      );
+    }
     return Ref(resolveRef(node.text, ctx));
   }
 

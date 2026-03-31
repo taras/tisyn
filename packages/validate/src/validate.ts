@@ -237,6 +237,34 @@ function walkSemantic(value: unknown, path: string[], errors: ValidationError[])
           checkScopeConstraints(fields as Record<string, unknown>, path, errors);
         }
       }
+
+      if (id === "spawn") {
+        if (!isPlainObject(data) || (data as Record<string, unknown>)["tisyn"] !== "quote") {
+          errors.push({
+            level: 2,
+            path,
+            message: `Spawn node requires data to be a Quote node`,
+            code: MALFORMED_EVAL,
+          });
+          return;
+        }
+        const fields = (data as Record<string, unknown>)["expr"];
+        if (isPlainObject(fields)) {
+          checkPositions("spawn", fields as Record<string, unknown>, path, errors);
+          checkSpawnConstraints(fields as Record<string, unknown>, path, errors);
+        }
+      }
+
+      if (id === "join") {
+        if (!isPlainObject(data) || (data as Record<string, unknown>)["tisyn"] !== "ref") {
+          errors.push({
+            level: 2,
+            path,
+            message: `Join node requires data to be a Ref node`,
+            code: MALFORMED_EVAL,
+          });
+        }
+      }
       break;
     }
     case "quote": {
@@ -324,6 +352,21 @@ function checkTryConstraints(
         code: MALFORMED_EVAL,
       });
     }
+  }
+}
+
+function checkSpawnConstraints(
+  fields: Record<string, unknown>,
+  path: string[],
+  errors: ValidationError[],
+): void {
+  if (!("body" in fields)) {
+    errors.push({
+      level: 2,
+      path,
+      message: `Spawn node requires a "body" field`,
+      code: MALFORMED_EVAL,
+    });
   }
 }
 
@@ -444,6 +487,10 @@ function getEvaluationPositions(id: string, fields: Record<string, unknown>): un
       }
       return positions;
     }
+    case "spawn":
+      return fields["body"] !== undefined ? [fields["body"]] : [];
+    case "join":
+      return [];
     default:
       return [];
   }

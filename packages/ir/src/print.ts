@@ -263,6 +263,18 @@ function printCompoundExternal(
     const bodyStr = printNode(s.body, depth + 1, opts);
     return formatCall("ScopeEval", [handlerStr, bindingsStr, bodyStr], depth, opts);
   }
+  if (id === "spawn") {
+    const s = shape as { body: TisynExpr };
+    const bodyStr = printNode(s.body, depth + 1, opts);
+    return formatCall("Spawn", [bodyStr], depth, opts);
+  }
+
+  if (id === "join") {
+    // join data is a Ref, not a Quote — print the raw data node
+    const refStr = printNode(data, depth + 1, opts);
+    return formatCall("Join", [refStr], depth, opts);
+  }
+
   const s = shape as { exprs: TisynExpr[] };
   const name = constructorName(id);
   const args = s.exprs.map((e) => printNode(e, depth + 1, opts));
@@ -331,6 +343,10 @@ function constructorName(id: string): string {
       return "All";
     case "race":
       return "Race";
+    case "spawn":
+      return "Spawn";
+    case "join":
+      return "Join";
     default:
       return id;
   }

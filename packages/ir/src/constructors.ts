@@ -255,3 +255,19 @@ export function Race<T>(...exprs: Expr<T>[]): EvalT<T> {
     data: { tisyn: "quote", expr: { exprs } },
   } as EvalT<T>;
 }
+
+export function Spawn<T>(body: Expr<T>): EvalT<{ __tisyn_task: string }> {
+  return {
+    tisyn: "eval",
+    id: "spawn",
+    data: { tisyn: "quote", expr: { body } },
+  } as EvalT<{ __tisyn_task: string }>;
+}
+
+export function Join<T>(ref: RefT<{ __tisyn_task: string }>): EvalT<T> {
+  return {
+    tisyn: "eval",
+    id: "join",
+    data: ref,
+  } as EvalT<T>;
+}

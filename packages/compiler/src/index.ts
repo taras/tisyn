@@ -37,4 +37,6 @@ export {
   AllEval,
   RaceEval,
   ScopeEval,
+  SpawnEval,
+  JoinEval,
 } from "./ir-builders.js";

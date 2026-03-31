@@ -180,51 +180,197 @@ function* driveKernel(
   // When kernel.throw() yields a new effect (e.g., from catch/finally bodies),
   // we store it here so the next loop iteration processes it without calling kernel.next().
   let pendingStep: IteratorResult<EffectDescriptor, Val> | null = null;
-  // Unified counter for all compound-external children (scope, all, race) — replay-safe.
+  // Unified counter for all compound-external children (scope, all, race, spawn) — replay-safe.
   let childSpawnCount = 0;
+  // Spawn/join tracking
+  const spawnedTasks = new Map<string, { operation: Operation<EventResult> }>();
+  const joinedTasks = new Set<string>();
 
-  try {
-    for (;;) {
-      const step = pendingStep ?? kernel.next(nextValue);
-      pendingStep = null;
+  // scoped() binds spawned children to the parent's lifetime:
+  // children are alive while the parent runs, torn down when the parent exits.
+  return yield* scoped(function* () {
+    try {
+      for (;;) {
+        const step = pendingStep ?? kernel.next(nextValue);
+        pendingStep = null;
 
-      if (step.done) {
-        closed = true;
-        const closeEvent: CloseEvent = {
-          type: "close",
-          coroutineId,
-          result: { status: "ok", value: step.value as Json },
-        };
-        yield* ctx.stream.append(closeEvent);
-        ctx.journal.push(closeEvent);
+        if (step.done) {
+          closed = true;
+          const closeEvent: CloseEvent = {
+            type: "close",
+            coroutineId,
+            result: { status: "ok", value: step.value as Json },
+          };
+          yield* ctx.stream.append(closeEvent);
+          ctx.journal.push(closeEvent);
 
-        return { status: "ok", value: step.value as Json };
-      }
+          return { status: "ok", value: step.value as Json };
+        }
 
-      // Kernel yielded an effect descriptor
-      const descriptor = step.value as EffectDescriptor;
+        // Kernel yielded an effect descriptor
+        const descriptor = step.value as EffectDescriptor;
 
-      // ── Compound effect interception ──
-      if (isCompoundExternal(descriptor.id)) {
-        // Strip wrapper immediately — must not escape orchestration boundary
-        const compoundData = descriptor.data as { __tisyn_inner: unknown; __tisyn_env: Env };
-        const childEnv = compoundData.__tisyn_env;
+        // ── Compound effect interception ──
+        if (isCompoundExternal(descriptor.id)) {
+          // Strip wrapper immediately — must not escape orchestration boundary
+          const compoundData = descriptor.data as { __tisyn_inner: unknown; __tisyn_env: Env };
+          const childEnv = compoundData.__tisyn_env;
 
-        if (descriptor.id === "scope") {
-          const inner = compoundData.__tisyn_inner as ScopeInner;
-          const childId = `${coroutineId}.${childSpawnCount++}`;
-          let scopeValue: Val = null;
-          let scopeErr: Error | null = null;
-          try {
-            scopeValue = yield* orchestrateScope(inner, childId, childEnv, ctx);
-          } catch (e) {
-            scopeErr = e instanceof Error ? e : new Error(String(e));
-          }
-          if (scopeErr === null) {
-            nextValue = scopeValue;
+          if (descriptor.id === "scope") {
+            const inner = compoundData.__tisyn_inner as ScopeInner;
+            const childId = `${coroutineId}.${childSpawnCount++}`;
+            let scopeValue: Val = null;
+            let scopeErr: Error | null = null;
+            try {
+              scopeValue = yield* orchestrateScope(inner, childId, childEnv, ctx);
+            } catch (e) {
+              scopeErr = e instanceof Error ? e : new Error(String(e));
+            }
+            if (scopeErr === null) {
+              nextValue = scopeValue;
+            } else {
+              // T14: route through parent kernel so parent try/catch can intercept
+              const throwResult = kernel.throw(scopeErr);
+              if (throwResult.done) {
+                closed = true;
+                const closeEvent: CloseEvent = {
+                  type: "close",
+                  coroutineId,
+                  result: { status: "ok", value: throwResult.value as Json },
+                };
+                yield* ctx.stream.append(closeEvent);
+                ctx.journal.push(closeEvent);
+                return { status: "ok", value: throwResult.value as Json };
+              }
+              pendingStep = throwResult;
+              nextValue = null;
+            }
+          } else if (descriptor.id === "spawn") {
+            // R1: deterministic child ID
+            const childId = `${coroutineId}.${childSpawnCount++}`;
+            const inner = compoundData.__tisyn_inner as { body: Expr };
+            const childKernel = evaluate(inner.body, childEnv);
+
+            const {
+              operation: joinOp,
+              resolve: joinResolve,
+              reject: joinReject,
+            } = withResolvers<EventResult>();
+            spawnedTasks.set(childId, { operation: joinOp });
+
+            // Background task — drives child kernel concurrently
+            yield* spawn(function* () {
+              try {
+                const result = yield* driveKernel(childKernel, childId, childEnv, ctx);
+                joinResolve(result);
+                if (result.status === "err") {
+                  // R12: child failure tears down parent scope unconditionally
+                  const errResult = result as {
+                    status: "err";
+                    error: { message: string; name?: string };
+                  };
+                  throw new EffectError(errResult.error.message, errResult.error.name);
+                }
+              } catch (e) {
+                const err = e instanceof Error ? e : new Error(String(e));
+                joinReject(err);
+                throw err; // R12: propagate to tear down parent Effection scope
+              }
+            });
+
+            // R4: resume parent immediately with task handle
+            nextValue = { __tisyn_task: childId } as Val;
+          } else if (descriptor.id === "join") {
+            // Join data is the resolved Ref value (task handle)
+            const taskHandle = compoundData.__tisyn_inner as Val;
+
+            // Runtime invariant: verify task handle shape
+            if (
+              taskHandle === null ||
+              typeof taskHandle !== "object" ||
+              typeof (taskHandle as Record<string, unknown>).__tisyn_task !== "string"
+            ) {
+              throw new RuntimeBugError("join: inner value is not a valid task handle");
+            }
+
+            const childId = (taskHandle as { __tisyn_task: string }).__tisyn_task;
+
+            // R8: double-join check
+            if (joinedTasks.has(childId)) {
+              throw new RuntimeBugError(`join: task '${childId}' has already been joined`);
+            }
+            joinedTasks.add(childId);
+
+            // Look up the spawned task's join operation
+            const entry = spawnedTasks.get(childId);
+            if (!entry) {
+              throw new RuntimeBugError(`join: no spawned task found for '${childId}'`);
+            }
+
+            // R6: wait for child completion
+            const childResult = yield* entry.operation;
+
+            // R7: resume parent with child's return value
+            if (childResult.status === "ok") {
+              nextValue = (childResult.value ?? null) as Val;
+            } else {
+              const errResult = childResult as {
+                status: "err";
+                error: { message: string; name?: string };
+              };
+              throw new EffectError(errResult.error.message, errResult.error.name);
+            }
           } else {
-            // T14: route through parent kernel so parent try/catch can intercept
-            const throwResult = kernel.throw(scopeErr);
+            const inner = compoundData.__tisyn_inner as { exprs: Expr[] };
+            const exprs = inner.exprs;
+            const startIndex = childSpawnCount;
+            childSpawnCount += exprs.length;
+            if (descriptor.id === "all") {
+              nextValue = yield* orchestrateAll(exprs, coroutineId, startIndex, childEnv, ctx);
+            } else {
+              nextValue = yield* orchestrateRace(exprs, coroutineId, startIndex, childEnv, ctx);
+            }
+          }
+          // Compound effects do NOT advance parent yieldIndex
+          continue;
+        }
+
+        // ── Standard effect dispatch ──
+        const description = parseEffectId(descriptor.id);
+
+        // Check replay index first
+        const stored = ctx.replayIndex.peekYield(coroutineId);
+
+        if (stored) {
+          // CASE 1: Replay entry exists — check description match
+          if (
+            stored.description.type !== description.type ||
+            stored.description.name !== description.name
+          ) {
+            const cursor = ctx.replayIndex.getCursor(coroutineId);
+            throw new DivergenceError(
+              `Divergence at ${coroutineId}[${cursor}]: ` +
+                `expected ${stored.description.type}.${stored.description.name}, ` +
+                `got ${description.type}.${description.name}`,
+            );
+          }
+
+          // Match — consume entry, feed stored result
+          ctx.replayIndex.consumeYield(coroutineId);
+
+          const replayedEvent: YieldEvent = {
+            type: "yield",
+            coroutineId,
+            description: stored.description,
+            result: stored.result,
+          };
+          ctx.journal.push(replayedEvent);
+
+          if (stored.result.status === "ok") {
+            nextValue = (stored.result.value ?? null) as Val;
+          } else if (stored.result.status === "err") {
+            const err = new EffectError(stored.result.error.message, stored.result.error.name);
+            const throwResult = kernel.throw(err);
             if (throwResult.done) {
               closed = true;
               const closeEvent: CloseEvent = {
@@ -236,59 +382,51 @@ function* driveKernel(
               ctx.journal.push(closeEvent);
               return { status: "ok", value: throwResult.value as Json };
             }
+            // kernel.throw() yielded a new effect (e.g., from catch/finally body)
             pendingStep = throwResult;
             nextValue = null;
-          }
-        } else {
-          const inner = compoundData.__tisyn_inner as { exprs: Expr[] };
-          const exprs = inner.exprs;
-          const startIndex = childSpawnCount;
-          childSpawnCount += exprs.length;
-          if (descriptor.id === "all") {
-            nextValue = yield* orchestrateAll(exprs, coroutineId, startIndex, childEnv, ctx);
+            continue;
           } else {
-            nextValue = yield* orchestrateRace(exprs, coroutineId, startIndex, childEnv, ctx);
+            throw new Error("Cannot replay cancelled result");
           }
+
+          continue;
         }
-        // Compound effects do NOT advance parent yieldIndex
-        continue;
-      }
 
-      // ── Standard effect dispatch ──
-      const description = parseEffectId(descriptor.id);
-
-      // Check replay index first
-      const stored = ctx.replayIndex.peekYield(coroutineId);
-
-      if (stored) {
-        // CASE 1: Replay entry exists — check description match
-        if (
-          stored.description.type !== description.type ||
-          stored.description.name !== description.name
-        ) {
-          const cursor = ctx.replayIndex.getCursor(coroutineId);
+        // Check for D2: continue past close
+        if (ctx.replayIndex.hasClose(coroutineId)) {
           throw new DivergenceError(
-            `Divergence at ${coroutineId}[${cursor}]: ` +
-              `expected ${stored.description.type}.${stored.description.name}, ` +
-              `got ${description.type}.${description.name}`,
+            `Divergence: journal shows ${coroutineId} closed, but generator continues to yield effects`,
           );
         }
 
-        // Match — consume entry, feed stored result
-        ctx.replayIndex.consumeYield(coroutineId);
+        // CASE 3: No replay entry, no close — LIVE dispatch
+        let effectResult: EventResult;
+        try {
+          const resultValue = yield* dispatch(descriptor.id, descriptor.data as Val);
+          effectResult = { status: "ok", value: resultValue as Json };
+        } catch (error) {
+          const err = error instanceof Error ? error : new Error(String(error));
+          effectResult = {
+            status: "err",
+            error: { message: err.message, name: err.name },
+          };
+        }
 
-        const replayedEvent: YieldEvent = {
+        // Persist-before-resume: write Yield event BEFORE resuming kernel
+        const yieldEvent: YieldEvent = {
           type: "yield",
           coroutineId,
-          description: stored.description,
-          result: stored.result,
+          description,
+          result: effectResult,
         };
-        ctx.journal.push(replayedEvent);
+        yield* ctx.stream.append(yieldEvent);
+        ctx.journal.push(yieldEvent);
 
-        if (stored.result.status === "ok") {
-          nextValue = (stored.result.value ?? null) as Val;
-        } else if (stored.result.status === "err") {
-          const err = new EffectError(stored.result.error.message, stored.result.error.name);
+        if (effectResult.status === "ok") {
+          nextValue = (effectResult.value ?? null) as Val;
+        } else {
+          const err = new EffectError(effectResult.error.message, effectResult.error.name);
           const throwResult = kernel.throw(err);
           if (throwResult.done) {
             closed = true;
@@ -305,100 +443,44 @@ function* driveKernel(
           pendingStep = throwResult;
           nextValue = null;
           continue;
-        } else {
-          throw new Error("Cannot replay cancelled result");
         }
-
-        continue;
       }
-
-      // Check for D2: continue past close
-      if (ctx.replayIndex.hasClose(coroutineId)) {
-        throw new DivergenceError(
-          `Divergence: journal shows ${coroutineId} closed, but generator continues to yield effects`,
-        );
-      }
-
-      // CASE 3: No replay entry, no close — LIVE dispatch
-      let effectResult: EventResult;
-      try {
-        const resultValue = yield* dispatch(descriptor.id, descriptor.data as Val);
-        effectResult = { status: "ok", value: resultValue as Json };
-      } catch (error) {
-        const err = error instanceof Error ? error : new Error(String(error));
-        effectResult = {
-          status: "err",
-          error: { message: err.message, name: err.name },
+    } catch (error) {
+      // DivergenceError = journal corruption — persist Close(err) then propagate fatally
+      if (error instanceof DivergenceError) {
+        closed = true;
+        const closeEvent: CloseEvent = {
+          type: "close",
+          coroutineId,
+          result: {
+            status: "err",
+            error: { message: error.message, name: error.name },
+          },
         };
+        yield* ctx.stream.append(closeEvent);
+        ctx.journal.push(closeEvent);
+        throw error;
       }
 
-      // Persist-before-resume: write Yield event BEFORE resuming kernel
-      const yieldEvent: YieldEvent = {
-        type: "yield",
-        coroutineId,
-        description,
-        result: effectResult,
-      };
-      yield* ctx.stream.append(yieldEvent);
-      ctx.journal.push(yieldEvent);
-
-      if (effectResult.status === "ok") {
-        nextValue = (effectResult.value ?? null) as Val;
-      } else {
-        const err = new EffectError(effectResult.error.message, effectResult.error.name);
-        const throwResult = kernel.throw(err);
-        if (throwResult.done) {
-          closed = true;
-          const closeEvent: CloseEvent = {
-            type: "close",
-            coroutineId,
-            result: { status: "ok", value: throwResult.value as Json },
-          };
-          yield* ctx.stream.append(closeEvent);
-          ctx.journal.push(closeEvent);
-          return { status: "ok", value: throwResult.value as Json };
-        }
-        // kernel.throw() yielded a new effect (e.g., from catch/finally body)
-        pendingStep = throwResult;
-        nextValue = null;
-        continue;
-      }
-    }
-  } catch (error) {
-    // DivergenceError = journal corruption — persist Close(err) then propagate fatally
-    if (error instanceof DivergenceError) {
       closed = true;
+      const err = error instanceof Error ? error : new Error(String(error));
       const closeEvent: CloseEvent = {
         type: "close",
         coroutineId,
         result: {
           status: "err",
-          error: { message: error.message, name: error.name },
+          error: { message: err.message, name: err.name },
         },
       };
       yield* ctx.stream.append(closeEvent);
       ctx.journal.push(closeEvent);
-      throw error;
-    }
 
-    closed = true;
-    const err = error instanceof Error ? error : new Error(String(error));
-    const closeEvent: CloseEvent = {
-      type: "close",
-      coroutineId,
-      result: {
+      return {
         status: "err",
         error: { message: err.message, name: err.name },
-      },
-    };
-    yield* ctx.stream.append(closeEvent);
-    ctx.journal.push(closeEvent);
-
-    return {
-      status: "err",
-      error: { message: err.message, name: err.name },
-    };
-  }
+      };
+    }
+  }); // end scoped — tears down unjoined spawned children
 }
 
 // ── Compound orchestration ──

@@ -29,6 +29,7 @@ export type {
   AllShape,
   RaceShape,
   ScopeShape,
+  SpawnShape,
   ConcatArraysShape,
   MergeObjectsShape,
   TryShape,
@@ -63,6 +64,8 @@ export type {
   AllNode,
   RaceNode,
   ScopeNode,
+  SpawnNode,
+  JoinNode,
   ConcatArraysNode,
   MergeObjectsNode,
   TryNode,
@@ -128,6 +131,8 @@ export {
   MergeObjects,
   All,
   Race,
+  Spawn,
+  Join,
 } from "./constructors.js";
 
 export type { Walker } from "./walk.js";

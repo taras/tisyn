@@ -50,6 +50,8 @@ const ALL_IR_CONSTRUCTORS = [
   "Throw",
   "All",
   "Race",
+  "Spawn",
+  "Join",
 ];
 
 /** Scan printed constructor-form sources and return only the constructor names actually used. */
