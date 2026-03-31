@@ -19,9 +19,14 @@ import {
   parseEffectId,
   isCompoundExternal,
 } from "@tisyn/kernel";
-import { DivergenceError, EffectError, RuntimeBugError } from "./errors.js";
+import {
+  DivergenceError,
+  EffectError,
+  RuntimeBugError,
+  ScopeBindingEffectError,
+} from "./errors.js";
 import { assertValidIr } from "@tisyn/validate";
-import { evaluate, type Env, envFromRecord, lookup } from "@tisyn/kernel";
+import { evaluate, type Env, envFromRecord } from "@tisyn/kernel";
 import { type DurableStream, InMemoryStream, ReplayIndex } from "@tisyn/durable-streams";
 import {
   dispatch,
@@ -31,7 +36,7 @@ import {
 } from "@tisyn/agent";
 import { installAgentTransport, type AgentTransportFactory } from "@tisyn/transport";
 import { useScope } from "effection";
-import type { FnNode, RefNode } from "@tisyn/ir";
+import type { FnNode } from "@tisyn/ir";
 
 export interface ExecuteOptions {
   /** The IR tree to evaluate. */
@@ -58,7 +63,7 @@ interface DriveContext {
 
 interface ScopeInner {
   handler: FnNode | null;
-  bindings: Record<string, RefNode>;
+  bindings: Record<string, Expr>;
   body: Expr;
 }
 
@@ -532,10 +537,10 @@ function* orchestrateScope(
     const current = scope.get(BoundAgentsContext) ?? null;
     const next = new Set(current ?? []);
 
-    for (const [prefix, ref] of Object.entries(inner.bindings)) {
+    for (const [prefix, binding] of Object.entries(inner.bindings)) {
       let factory: Val;
       try {
-        factory = lookup(ref.name, env) as Val;
+        factory = evaluateScopeBinding(binding, env);
       } catch (e) {
         const err = e instanceof Error ? e : new Error(String(e));
         const closeEvent: CloseEvent = {
@@ -545,7 +550,7 @@ function* orchestrateScope(
         };
         yield* ctx.stream.append(closeEvent);
         ctx.journal.push(closeEvent);
-        throw err;
+        throw new EffectError(err.message, err.name);
       }
       next.add(prefix);
       yield* installAgentTransport(prefix, factory as unknown as AgentTransportFactory);
@@ -565,4 +570,19 @@ function* orchestrateScope(
     const errResult = result as { status: "err"; error: { message: string; name?: string } };
     throw new EffectError(errResult.error.message, errResult.error.name);
   });
+}
+
+/**
+ * Evaluate a scope binding expression purely — no effects allowed.
+ *
+ * Drives the kernel evaluator structurally. If the expression yields
+ * any effect descriptor, throws ScopeBindingEffectError.
+ */
+function evaluateScopeBinding(expr: Expr, env: Env): Val {
+  const gen = evaluate(expr, env);
+  for (;;) {
+    const step = gen.next(null as Val);
+    if (step.done) return step.value as Val;
+    throw new ScopeBindingEffectError(step.value.id);
+  }
 }

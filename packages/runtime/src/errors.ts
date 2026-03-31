@@ -13,3 +13,12 @@ export class RuntimeBugError extends Error {
     super(message);
   }
 }
+
+export class ScopeBindingEffectError extends Error {
+  override name = "ScopeBindingEffectError" as const;
+  constructor(effectId: string) {
+    super(
+      `Effect '${effectId}' is not allowed in scope binding expressions. Binding expressions must be pure.`,
+    );
+  }
+}

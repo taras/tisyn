@@ -1477,7 +1477,103 @@ describe("Return-in-try: H — Negative cases", () => {
   });
 });
 
+// ── useTransport factory expression widening ──
+
+const CONTRACT_PREAMBLE = `
+  declare function MyAgent(): {
+    run(input: string): Workflow<string>;
+  }
+`;
+
+describe("useTransport factory expression widening", () => {
+  it("call expression: binding lowers to a Call IR node", () => {
+    const ir = compileOne(`
+      ${CONTRACT_PREAMBLE}
+      function* test(makeFactory: () => AgentTransportFactory): Workflow<string> {
+        return yield* scoped(function* () {
+          yield* useTransport(MyAgent, makeFactory());
+          return "ok";
+        });
+      }
+    `);
+    const scope = findScopeNode(ir);
+    expect(scope).toBeDefined();
+    const binding = scope!.data.expr.bindings["my-agent"];
+    expect(binding).toMatchObject({ tisyn: "eval", id: "call" });
+  });
+
+  it("property access: binding lowers to a Get IR node", () => {
+    const ir = compileOne(`
+      ${CONTRACT_PREAMBLE}
+      function* test(config: { factory: AgentTransportFactory }): Workflow<string> {
+        return yield* scoped(function* () {
+          yield* useTransport(MyAgent, config.factory);
+          return "ok";
+        });
+      }
+    `);
+    const scope = findScopeNode(ir);
+    expect(scope).toBeDefined();
+    const binding = scope!.data.expr.bindings["my-agent"];
+    expect(binding).toMatchObject({ tisyn: "eval", id: "get" });
+  });
+
+  it("conditional expression: binding lowers to an If IR node", () => {
+    const ir = compileOne(`
+      ${CONTRACT_PREAMBLE}
+      function* test(
+        useMock: boolean,
+        mockFactory: AgentTransportFactory,
+        realFactory: AgentTransportFactory
+      ): Workflow<string> {
+        return yield* scoped(function* () {
+          yield* useTransport(MyAgent, useMock ? mockFactory : realFactory);
+          return "ok";
+        });
+      }
+    `);
+    const scope = findScopeNode(ir);
+    expect(scope).toBeDefined();
+    const binding = scope!.data.expr.bindings["my-agent"];
+    expect(binding).toMatchObject({ tisyn: "eval", id: "if" });
+  });
+
+  it("bare identifier: binding still lowers to a Ref IR node", () => {
+    const ir = compileOne(`
+      ${CONTRACT_PREAMBLE}
+      function* test(factory: AgentTransportFactory): Workflow<string> {
+        return yield* scoped(function* () {
+          yield* useTransport(MyAgent, factory);
+          return "ok";
+        });
+      }
+    `);
+    const scope = findScopeNode(ir);
+    expect(scope).toBeDefined();
+    const binding = scope!.data.expr.bindings["my-agent"];
+    expect(binding).toMatchObject({ tisyn: "ref" });
+    expect((binding as any).name).toContain("factory");
+  });
+});
+
 // ── Helpers ──
+
+function findScopeNode(node: unknown): Record<string, any> | undefined {
+  if (typeof node !== "object" || node === null) return undefined;
+  const obj = node as Record<string, unknown>;
+  if (obj["tisyn"] === "eval" && obj["id"] === "scope") return obj as Record<string, any>;
+  for (const value of Object.values(obj)) {
+    const found = findScopeNode(value);
+    if (found) return found;
+    if (Array.isArray(value)) {
+      for (const item of value) {
+        const found = findScopeNode(item);
+        if (found) return found;
+      }
+    }
+  }
+  return undefined;
+}
 
 function findWhileNode(node: unknown): Record<string, any> | undefined {
   if (typeof node !== "object" || node === null) return undefined;

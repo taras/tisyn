@@ -354,7 +354,7 @@ function checkScopeConstraints(
       });
     }
   }
-  // bindings must be a plain object whose values are all Ref nodes
+  // bindings must be a plain object (values may be any TisynExpr)
   if ("bindings" in fields) {
     const bindings = fields["bindings"];
     if (!isPlainObject(bindings)) {
@@ -364,17 +364,6 @@ function checkScopeConstraints(
         message: `Scope node "bindings" must be a plain object`,
         code: MALFORMED_EVAL,
       });
-    } else {
-      for (const [key, val] of Object.entries(bindings as Record<string, unknown>)) {
-        if (!isPlainObject(val) || (val as Record<string, unknown>)["tisyn"] !== "ref") {
-          errors.push({
-            level: 2,
-            path,
-            message: `Scope binding "${key}" must be a Ref node`,
-            code: MALFORMED_EVAL,
-          });
-        }
-      }
     }
   }
 }
@@ -446,9 +435,15 @@ function getEvaluationPositions(id: string, fields: Record<string, unknown>): un
       if (fields["finally"] !== undefined) p.push(fields["finally"]);
       return p;
     }
-    case "scope":
-      // body is the single evaluation position; handler and bindings are not
-      return fields["body"] !== undefined ? [fields["body"]] : [];
+    case "scope": {
+      const positions: unknown[] = [];
+      if (fields["body"] !== undefined) positions.push(fields["body"]);
+      const bindings = fields["bindings"];
+      if (isPlainObject(bindings)) {
+        positions.push(...Object.values(bindings));
+      }
+      return positions;
+    }
     default:
       return [];
   }

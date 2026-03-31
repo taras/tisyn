@@ -33,7 +33,9 @@
   },
   "devDependencies": {
     "@effectionx/vitest": "^0.3.0",
+    "@tisyn/agent": "workspace:*",
     "@tisyn/runtime": "workspace:*",
+    "@tisyn/transport": "workspace:*",
     "effection": "^3 || ^4",
     "vitest": "^4"
   }

@@ -67,7 +67,7 @@ it("rejects scope when handler is not null/fn", () => {
   expect(validateIr(node).ok).toBe(false);
 });
 
-it("rejects scope when a binding value is not a Ref", () => {
+it("accepts scope with a Call node as a binding value", () => {
   const node = {
     tisyn: "eval",
     id: "scope",
@@ -75,12 +75,39 @@ it("rejects scope when a binding value is not a Ref", () => {
       tisyn: "quote",
       expr: {
         handler: null,
-        bindings: { "my-agent": 42 },
+        bindings: {
+          "my-agent": {
+            tisyn: "eval",
+            id: "call",
+            data: {
+              tisyn: "quote",
+              expr: { fn: { tisyn: "ref", name: "makeFactory" }, args: [] },
+            },
+          },
+        },
         body: 42,
       },
     },
   };
-  expect(validateIr(node).ok).toBe(false);
+  expect(validateIr(node).ok).toBe(true);
+});
+
+it("rejects scope when a binding value is a Quote node (eval-position violation)", () => {
+  const node = {
+    tisyn: "eval",
+    id: "scope",
+    data: {
+      tisyn: "quote",
+      expr: {
+        handler: null,
+        bindings: { "my-agent": { tisyn: "quote", expr: 42 } },
+        body: 42,
+      },
+    },
+  };
+  const result = validateIr(node);
+  expect(result.ok).toBe(false);
+  expect((result as any).errors[0].code).toBe("QUOTE_AT_EVAL_POSITION");
 });
 
 // ── assertValidIr used by execute() ──
