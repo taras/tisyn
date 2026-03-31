@@ -198,3 +198,11 @@ export function ScopeEval(
 ): EvalNode {
   return { tisyn: "eval", id: "scope", data: Q({ handler, bindings, body }) };
 }
+
+export function SpawnEval(body: Expr): EvalNode {
+  return { tisyn: "eval", id: "spawn", data: Q({ body }) };
+}
+
+export function JoinEval(ref: RefNode): EvalNode {
+  return { tisyn: "eval", id: "join", data: ref };
+}

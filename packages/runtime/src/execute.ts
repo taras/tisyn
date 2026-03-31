@@ -180,9 +180,15 @@ function* driveKernel(
   // When kernel.throw() yields a new effect (e.g., from catch/finally bodies),
   // we store it here so the next loop iteration processes it without calling kernel.next().
   let pendingStep: IteratorResult<EffectDescriptor, Val> | null = null;
-  // Unified counter for all compound-external children (scope, all, race) — replay-safe.
+  // Unified counter for all compound-external children (scope, all, race, spawn) — replay-safe.
   let childSpawnCount = 0;
+  // Spawn/join tracking
+  const spawnedTasks = new Map<string, { operation: Operation<EventResult> }>();
+  const joinedTasks = new Set<string>();
 
+  // scoped() binds spawned children to the parent's lifetime:
+  // children are alive while the parent runs, torn down when the parent exits.
+  return yield* scoped(function* () {
   try {
     for (;;) {
       const step = pendingStep ?? kernel.next(nextValue);
@@ -238,6 +244,84 @@ function* driveKernel(
             }
             pendingStep = throwResult;
             nextValue = null;
+          }
+        } else if (descriptor.id === "spawn") {
+          // R1: deterministic child ID
+          const childId = `${coroutineId}.${childSpawnCount++}`;
+          const inner = compoundData.__tisyn_inner as { body: Expr };
+          const childKernel = evaluate(inner.body, childEnv);
+
+          const { operation: joinOp, resolve: joinResolve, reject: joinReject } =
+            withResolvers<EventResult>();
+          spawnedTasks.set(childId, { operation: joinOp });
+
+          // Background task — drives child kernel concurrently
+          yield* spawn(function* () {
+            try {
+              const result = yield* driveKernel(childKernel, childId, childEnv, ctx);
+              joinResolve(result);
+              if (result.status === "err") {
+                // R12: child failure tears down parent scope unconditionally
+                const errResult = result as {
+                  status: "err";
+                  error: { message: string; name?: string };
+                };
+                throw new EffectError(errResult.error.message, errResult.error.name);
+              }
+            } catch (e) {
+              const err = e instanceof Error ? e : new Error(String(e));
+              joinReject(err);
+              throw err; // R12: propagate to tear down parent Effection scope
+            }
+          });
+
+          // R4: resume parent immediately with task handle
+          nextValue = { __tisyn_task: childId } as Val;
+        } else if (descriptor.id === "join") {
+          // Join data is the resolved Ref value (task handle)
+          const taskHandle = compoundData.__tisyn_inner as Val;
+
+          // Runtime invariant: verify task handle shape
+          if (
+            taskHandle === null ||
+            typeof taskHandle !== "object" ||
+            typeof (taskHandle as Record<string, unknown>).__tisyn_task !== "string"
+          ) {
+            throw new RuntimeBugError(
+              "join: inner value is not a valid task handle",
+            );
+          }
+
+          const childId = (taskHandle as { __tisyn_task: string }).__tisyn_task;
+
+          // R8: double-join check
+          if (joinedTasks.has(childId)) {
+            throw new RuntimeBugError(
+              `join: task '${childId}' has already been joined`,
+            );
+          }
+          joinedTasks.add(childId);
+
+          // Look up the spawned task's join operation
+          const entry = spawnedTasks.get(childId);
+          if (!entry) {
+            throw new RuntimeBugError(
+              `join: no spawned task found for '${childId}'`,
+            );
+          }
+
+          // R6: wait for child completion
+          const childResult = yield* entry.operation;
+
+          // R7: resume parent with child's return value
+          if (childResult.status === "ok") {
+            nextValue = (childResult.value ?? null) as Val;
+          } else {
+            const errResult = childResult as {
+              status: "err";
+              error: { message: string; name?: string };
+            };
+            throw new EffectError(errResult.error.message, errResult.error.name);
           }
         } else {
           const inner = compoundData.__tisyn_inner as { exprs: Expr[] };
@@ -399,6 +483,7 @@ function* driveKernel(
       error: { message: err.message, name: err.name },
     };
   }
+  }); // end scoped — tears down unjoined spawned children
 }
 
 // ── Compound orchestration ──

@@ -114,6 +114,10 @@ export interface ScopeShape {
   readonly body: TisynExpr;
 }
 
+export interface SpawnShape {
+  readonly body: TisynExpr;
+}
+
 // ── Narrowed Structural Eval Types ──
 
 export interface LetNode {
@@ -282,6 +286,18 @@ export interface ScopeNode {
   readonly tisyn: "eval";
   readonly id: "scope";
   readonly data: QuoteNode<ScopeShape>;
+}
+
+export interface SpawnNode {
+  readonly tisyn: "eval";
+  readonly id: "spawn";
+  readonly data: QuoteNode<SpawnShape>;
+}
+
+export interface JoinNode {
+  readonly tisyn: "eval";
+  readonly id: "join";
+  readonly data: RefNode;
 }
 
 export interface ConcatArraysShape {
