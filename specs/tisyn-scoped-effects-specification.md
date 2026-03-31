@@ -34,6 +34,11 @@ useTransport(Agent, transport(...))  → transport binding
 useAgent(Agent)                      → agent handle
 ````
 
+The blocking single-child authored `scoped(function* () { ... })`
+surface with setup/body partitioning is specified separately in
+the blocking-scope specification. This document defines the
+underlying scoped-effects semantics that surface builds on.
+
 The specification also defines:
 
 - a dispatch boundary through which all effects flow,
@@ -53,6 +58,10 @@ The **semantic model** described in this specification —
 scope boundaries, middleware composition, scope-local dispatch,
 transport binding, agent handle resolution, cross-boundary
 middleware protocol, and durability requirements — is normative.
+
+The blocking single-child authored `scoped(...)` form, its
+compiler lowering, and its runtime teardown/replay rules are
+specified separately in the blocking-scope specification.
 
 The **exact API names** (`scoped`, `Effects.around`,
 `useTransport`, `useAgent`) are the current reference surface.
