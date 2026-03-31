@@ -13,6 +13,7 @@ It takes validated IR, replays previously recorded execution from a durable even
 - `@tisyn/kernel` defines evaluation behavior and event semantics.
 - `@tisyn/durable-streams` provides the durable event log used for replay and continuation.
 - `@tisyn/agent` provides the installed effect handlers used for live dispatch.
+- `@tisyn/transport` provides scope-local remote transport installation used during scope orchestration.
 
 If you want to **run** a Tisyn program rather than compile, inspect, or validate it, this is the package you use.
 
@@ -25,6 +26,7 @@ If you want to **run** a Tisyn program rather than compile, inspect, or validate
 - reconstructing runtime state from the durable stream
 - continuing evaluation from the correct point
 - dispatching live effects through installed agents
+- orchestrating compound external scope nodes, including scope-local transport and middleware lifecycle
 - appending new yield and close events before resuming execution
 - exposing local and remote execution entrypoints
 

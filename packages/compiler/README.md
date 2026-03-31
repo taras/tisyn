@@ -249,7 +249,7 @@ export function* run(factory: AgentTransportFactory) {
 
 Rules:
 
-- `scoped()` may only be used inside an exported workflow function (contract context required).
+- `scoped()` may only be used inside a workflow function compiled with contract context available.
 - All `useTransport` and `Effects.around` calls must precede any body statements.
 - `useAgent` may only be used inside a `scoped()` body and requires a matching `useTransport` in the same block.
 - `yield* handle.method(args)` argument count must match the contract method signature.
