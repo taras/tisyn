@@ -36,9 +36,7 @@ it("validates join with ref data", () => {
 // ── Rejection ──
 
 it("rejects spawn when data is not a Quote", () => {
-  expect(
-    validateIr({ tisyn: "eval", id: "spawn", data: 42 }).ok,
-  ).toBe(false);
+  expect(validateIr({ tisyn: "eval", id: "spawn", data: 42 }).ok).toBe(false);
 });
 
 it("rejects spawn without body", () => {
@@ -73,7 +71,5 @@ it("rejects join when data is not a Ref", () => {
 });
 
 it("rejects join when data is a literal", () => {
-  expect(
-    validateIr({ tisyn: "eval", id: "join", data: 42 }).ok,
-  ).toBe(false);
+  expect(validateIr({ tisyn: "eval", id: "join", data: 42 }).ok).toBe(false);
 });

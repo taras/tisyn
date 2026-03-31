@@ -98,11 +98,7 @@ describe("spawn orchestration", () => {
 
   // R8: duplicate join
   it("duplicate join throws RuntimeBugError", function* () {
-    const ir = letIR(
-      "task",
-      spawnIR(42),
-      Seq(joinIR("task"), joinIR("task")),
-    );
+    const ir = letIR("task", spawnIR(42), Seq(joinIR("task"), joinIR("task")));
     const { result } = yield* execute({ ir });
     expect(result.status).toBe("err");
     expect((result as any).error.message).toContain("already been joined");
@@ -110,11 +106,7 @@ describe("spawn orchestration", () => {
 
   // R12: child failure tears down parent
   it("child failure tears down parent scope", function* () {
-    const ir = letIR(
-      "task",
-      spawnIR(Throw("child failed")),
-      joinIR("task"),
-    );
+    const ir = letIR("task", spawnIR(Throw("child failed")), joinIR("task"));
     const { result } = yield* execute({ ir });
     expect(result.status).toBe("err");
     expect((result as any).error.message).toContain("child failed");
@@ -122,18 +114,13 @@ describe("spawn orchestration", () => {
 
   // R13a: outer catch catches child failure
   it("outer try/catch catches spawned child failure", function* () {
-    const scope = (body: unknown) =>
-      ({
-        tisyn: "eval",
-        id: "scope",
-        data: { tisyn: "quote", expr: { handler: null, bindings: {}, body } },
-      });
+    const scope = (body: unknown) => ({
+      tisyn: "eval",
+      id: "scope",
+      data: { tisyn: "quote", expr: { handler: null, bindings: {}, body } },
+    });
 
-    const innerIR = letIR(
-      "task",
-      spawnIR(Throw("child boom")),
-      joinIR("task"),
-    );
+    const innerIR = letIR("task", spawnIR(Throw("child boom")), joinIR("task"));
 
     const ir = Try(scope(innerIR), "e", Ref("e"));
     const { result } = yield* execute({ ir });
@@ -170,11 +157,7 @@ describe("spawn orchestration", () => {
       },
     });
 
-    const ir = letIR(
-      "task",
-      spawnIR(effectIR("test", "op")),
-      joinIR("task"),
-    );
+    const ir = letIR("task", spawnIR(effectIR("test", "op")), joinIR("task"));
     const { result } = yield* execute({ ir });
     expect(result).toEqual({ status: "ok", value: "result" });
     expect(childDispatched).toBe(true);
