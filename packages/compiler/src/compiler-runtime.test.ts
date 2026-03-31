@@ -9,7 +9,7 @@ import { describe, it } from "@effectionx/vitest";
 import { expect } from "vitest";
 import { Call } from "@tisyn/ir";
 import { execute } from "@tisyn/runtime";
-import { compileOne, generateWorkflowModule } from "./index.js";
+import { compileOne } from "./index.js";
 
 describe("while loop expression value", () => {
   it("returns the last body result when the condition becomes false", function* () {
