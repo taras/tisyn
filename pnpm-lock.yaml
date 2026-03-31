@@ -311,6 +311,9 @@ importers:
       '@tisyn/kernel':
         specifier: workspace:*
         version: link:../kernel
+      '@tisyn/transport':
+        specifier: workspace:*
+        version: link:../transport
       '@tisyn/validate':
         specifier: workspace:*
         version: link:../validate

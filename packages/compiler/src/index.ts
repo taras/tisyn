@@ -36,4 +36,5 @@ export {
   ExternalEval,
   AllEval,
   RaceEval,
+  ScopeEval,
 } from "./ir-builders.js";

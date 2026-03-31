@@ -27,6 +27,7 @@ import type {
   ThrowNode,
   AllNode,
   RaceNode,
+  ScopeNode,
   ConcatArraysNode,
   MergeObjectsNode,
   TryNode,
@@ -69,7 +70,7 @@ export type StructuralId = (typeof STRUCTURAL_IDS)[number];
 
 // ── Compound External IDs ──
 
-export const COMPOUND_EXTERNAL_IDS = ["all", "race"] as const;
+export const COMPOUND_EXTERNAL_IDS = ["all", "race", "scope"] as const;
 
 export type CompoundExternalId = (typeof COMPOUND_EXTERNAL_IDS)[number];
 
@@ -105,7 +106,7 @@ export type StructuralNode =
   | MergeObjectsNode
   | TryNode;
 
-export type CompoundExternalNode = AllNode | RaceNode;
+export type CompoundExternalNode = AllNode | RaceNode | ScopeNode;
 
 export interface StandardExternalEvalNode {
   readonly tisyn: "eval";

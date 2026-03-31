@@ -10,6 +10,56 @@ import { createSession } from "./session.js";
 let executionCounter = 0;
 
 /**
+ * Low-level variant of installRemoteAgent. Takes agentId string directly
+ * instead of a typed AgentDeclaration. Sends empty capabilities (no method list).
+ * Used by the runtime scope orchestrator where only the agent-ID string and
+ * factory value are available from the IR environment.
+ */
+export function* installAgentTransport(
+  agentId: string,
+  factory: AgentTransportFactory,
+): Operation<void> {
+  const transport = yield* factory();
+  let requestCounter = 0;
+  const executionId = `exec-${agentId}-${executionCounter++}`;
+
+  const session = yield* createSession({
+    transport,
+    agentId,
+    capabilities: { methods: [] },
+  });
+
+  yield* Effects.around({
+    *dispatch([effectId, data]: [string, Val], next) {
+      const { type, name } = parseEffectId(effectId);
+      if (type === agentId) {
+        const requestId = `${agentId}:${requestCounter++}`;
+        const middleware = yield* getCrossBoundaryMiddleware();
+        const stream = session.execute(
+          executeRequest(requestId, {
+            executionId,
+            taskId: "root",
+            operation: name,
+            args: [data],
+            ...(middleware != null ? { middleware: middleware as unknown as Val } : {}),
+          }),
+        );
+        const sub = yield* stream;
+        for (;;) {
+          const item = yield* sub.next();
+          if (item.done) {
+            const result = item.value;
+            if (result.ok) return result.value as Val;
+            throw new Error(result.error.message);
+          }
+        }
+      }
+      return yield* next(effectId, data);
+    },
+  });
+}
+
+/**
  * Install a remote agent via a transport factory. Acquires the transport,
  * performs the initialize handshake, and installs Effects middleware that
  * routes matching effects through the protocol session.

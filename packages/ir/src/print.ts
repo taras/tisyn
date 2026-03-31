@@ -248,6 +248,17 @@ function printCompoundExternal(
     qdata && typeof qdata === "object" && "tisyn" in qdata && qdata["tisyn"] === "quote"
       ? (qdata as { expr: Record<string, unknown> }).expr
       : qdata;
+  if (id === "scope") {
+    const s = shape as { handler: TisynExpr | null; bindings: Record<string, TisynExpr>; body: TisynExpr };
+    const handlerStr = s.handler !== null ? printNode(s.handler, depth + 1, opts) : "null";
+    const bindingsEntries = Object.entries(s.bindings ?? {});
+    const bindingsStr =
+      bindingsEntries.length === 0
+        ? "{}"
+        : `{ ${bindingsEntries.map(([k, v]) => `${JSON.stringify(k)}: ${printNode(v, depth + 2, opts)}`).join(", ")} }`;
+    const bodyStr = printNode(s.body, depth + 1, opts);
+    return formatCall("ScopeEval", [handlerStr, bindingsStr, bodyStr], depth, opts);
+  }
   const s = shape as { exprs: TisynExpr[] };
   const name = constructorName(id);
   const args = s.exprs.map((e) => printNode(e, depth + 1, opts));
