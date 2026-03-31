@@ -44,11 +44,7 @@ describe("scope orchestration", () => {
   // SC-B-001: unbound ref in binding fails scope before body executes
   it("unbound Ref binding fails scope before body executes", function* () {
     const { result } = yield* execute({
-      ir: Try(
-        scope(42, null, { "my-agent": { tisyn: "ref", name: "noSuchVar" } }),
-        "e",
-        Ref("e"),
-      ),
+      ir: Try(scope(42, null, { "my-agent": { tisyn: "ref", name: "noSuchVar" } }), "e", Ref("e")),
     });
     // The Try catches the scope failure; the caught error value contains the message
     expect(result.status).toBe("ok");

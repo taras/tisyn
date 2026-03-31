@@ -19,7 +19,12 @@ import {
   parseEffectId,
   isCompoundExternal,
 } from "@tisyn/kernel";
-import { DivergenceError, EffectError, RuntimeBugError, ScopeBindingEffectError } from "./errors.js";
+import {
+  DivergenceError,
+  EffectError,
+  RuntimeBugError,
+  ScopeBindingEffectError,
+} from "./errors.js";
 import { assertValidIr } from "@tisyn/validate";
 import { evaluate, type Env, envFromRecord } from "@tisyn/kernel";
 import { type DurableStream, InMemoryStream, ReplayIndex } from "@tisyn/durable-streams";
