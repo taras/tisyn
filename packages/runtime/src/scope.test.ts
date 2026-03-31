@@ -6,7 +6,11 @@ import { Seq, Try, Throw, Ref } from "@tisyn/ir";
 
 // Convenience constructor for scope IR — raw plain objects (no @tisyn/compiler dependency).
 const scope = (body: unknown, handler: unknown = null, bindings: unknown = {}) =>
-  ({ tisyn: "eval", id: "scope", data: { tisyn: "quote", expr: { handler, bindings, body } } } as unknown as import("@tisyn/ir").IrInput);
+  ({
+    tisyn: "eval",
+    id: "scope",
+    data: { tisyn: "quote", expr: { handler, bindings, body } },
+  }) as unknown as import("@tisyn/ir").IrInput;
 
 describe("scope orchestration", () => {
   syncIt("scope is compound external", () => {
@@ -30,11 +34,7 @@ describe("scope orchestration", () => {
 
   // SC-T-005: scope error is catchable by parent try/catch
   it("scope error is catchable by parent try", function* () {
-    const ir = Try(
-      scope(Throw("scope failed")),
-      "e",
-      Ref("e"),
-    );
+    const ir = Try(scope(Throw("scope failed")), "e", Ref("e"));
     const result = yield* execute({ ir });
     expect(result.result.status).toBe("ok");
   });

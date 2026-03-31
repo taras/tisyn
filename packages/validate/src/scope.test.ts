@@ -4,7 +4,11 @@ import { it, expect } from "vitest";
 // ── Acceptance ──
 it("validates scope with null handler and literal body", () => {
   expect(
-    validateIr({ tisyn: "eval", id: "scope", data: { tisyn: "quote", expr: { handler: null, bindings: {}, body: 42 } } }).ok,
+    validateIr({
+      tisyn: "eval",
+      id: "scope",
+      data: { tisyn: "quote", expr: { handler: null, bindings: {}, body: 42 } },
+    }).ok,
   ).toBe(true);
 });
 

@@ -23,7 +23,12 @@ import { DivergenceError, EffectError, RuntimeBugError } from "./errors.js";
 import { assertValidIr } from "@tisyn/validate";
 import { evaluate, type Env, envFromRecord, lookup } from "@tisyn/kernel";
 import { type DurableStream, InMemoryStream, ReplayIndex } from "@tisyn/durable-streams";
-import { dispatch, installEnforcement, evaluateMiddlewareFn, BoundAgentsContext } from "@tisyn/agent";
+import {
+  dispatch,
+  installEnforcement,
+  evaluateMiddlewareFn,
+  BoundAgentsContext,
+} from "@tisyn/agent";
 import { installAgentTransport, type AgentTransportFactory } from "@tisyn/transport";
 import { useScope } from "effection";
 import type { FnNode, RefNode } from "@tisyn/ir";

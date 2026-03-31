@@ -249,7 +249,11 @@ function printCompoundExternal(
       ? (qdata as { expr: Record<string, unknown> }).expr
       : qdata;
   if (id === "scope") {
-    const s = shape as { handler: TisynExpr | null; bindings: Record<string, TisynExpr>; body: TisynExpr };
+    const s = shape as {
+      handler: TisynExpr | null;
+      bindings: Record<string, TisynExpr>;
+      body: TisynExpr;
+    };
     const handlerStr = s.handler !== null ? printNode(s.handler, depth + 1, opts) : "null";
     const bindingsEntries = Object.entries(s.bindings ?? {});
     const bindingsStr =

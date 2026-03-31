@@ -372,12 +372,7 @@ function emitVariableStatement(
       }
       const prefix = toAgentId(contractArg.text);
       if (!ctx.scopedContracts?.has(prefix)) {
-        throw error(
-          "UA3",
-          `No useTransport for '${contractArg.text}' in this scope`,
-          decl,
-          ctx,
-        );
+        throw error("UA3", `No useTransport for '${contractArg.text}' in this scope`, decl, ctx);
       }
       ctx.handleBindings.set(name, prefix);
       return processDecl(i + 1); // erase: no Let emitted
@@ -2673,15 +2668,16 @@ function emitHandleCall(
  */
 function emitScoped(callExpr: ts.CallExpression, ctx: EmitContext): Expr {
   if (!ctx.contracts) {
-    throw error("S0", "scoped() can only be used in a workflow (contracts not available)", callExpr, ctx);
+    throw error(
+      "S0",
+      "scoped() can only be used in a workflow (contracts not available)",
+      callExpr,
+      ctx,
+    );
   }
 
   const arg = callExpr.arguments[0];
-  if (
-    !arg ||
-    !ts.isFunctionExpression(arg) ||
-    !arg.asteriskToken
-  ) {
+  if (!arg || !ts.isFunctionExpression(arg) || !arg.asteriskToken) {
     throw error("S0", "scoped() requires a single generator function argument", callExpr, ctx);
   }
 
@@ -2756,9 +2752,7 @@ function emitScoped(callExpr: ts.CallExpression, ctx: EmitContext): Expr {
 }
 
 /** Extract (contractIdent, factoryIdent) from `yield* useTransport(Contract, factory)` stmt. */
-function tryExtractUseTransportCall(
-  stmt: ts.Statement,
-): [ts.Identifier, ts.Expression] | null {
+function tryExtractUseTransportCall(stmt: ts.Statement): [ts.Identifier, ts.Expression] | null {
   if (!ts.isExpressionStatement(stmt)) return null;
   const expr = stmt.expression;
   if (!ts.isYieldExpression(expr) || !expr.asteriskToken || !expr.expression) return null;
@@ -2796,7 +2790,10 @@ function tryExtractEffectsAroundCall(stmt: ts.Statement): ts.CallExpression | nu
  * The resulting FnNode has params [p1Name, p2Name] (from the array destructuring
  * of the first parameter) and body compiled by emitMiddlewareBody.
  */
-function emitEffectsAround(callExpr: ts.CallExpression, ctx: EmitContext): import("@tisyn/ir").FnNode {
+function emitEffectsAround(
+  callExpr: ts.CallExpression,
+  ctx: EmitContext,
+): import("@tisyn/ir").FnNode {
   const arg = callExpr.arguments[0];
   if (!arg || !ts.isObjectLiteralExpression(arg)) {
     throw error("EA1", "Effects.around() requires an object literal argument", callExpr, ctx);
@@ -2826,10 +2823,7 @@ function emitEffectsAround(callExpr: ts.CallExpression, ctx: EmitContext): impor
 
   // First param: destructuring [id, data]
   const firstParam = params[0]!;
-  if (
-    !ts.isArrayBindingPattern(firstParam.name) ||
-    firstParam.name.elements.length !== 2
-  ) {
+  if (!ts.isArrayBindingPattern(firstParam.name) || firstParam.name.elements.length !== 2) {
     throw error(
       "EA2",
       "dispatch first parameter must be an array destructuring [id, data]",
@@ -2840,10 +2834,17 @@ function emitEffectsAround(callExpr: ts.CallExpression, ctx: EmitContext): impor
   const el0 = firstParam.name.elements[0]!;
   const el1 = firstParam.name.elements[1]!;
   if (
-    !ts.isBindingElement(el0) || !ts.isIdentifier(el0.name) ||
-    !ts.isBindingElement(el1) || !ts.isIdentifier(el1.name)
+    !ts.isBindingElement(el0) ||
+    !ts.isIdentifier(el0.name) ||
+    !ts.isBindingElement(el1) ||
+    !ts.isIdentifier(el1.name)
   ) {
-    throw error("EA2", "dispatch array destructuring elements must be simple identifiers", firstParam, ctx);
+    throw error(
+      "EA2",
+      "dispatch array destructuring elements must be simple identifiers",
+      firstParam,
+      ctx,
+    );
   }
   const p1Name = el0.name.text;
   const p2Name = el1.name.text;
@@ -2860,7 +2861,14 @@ function emitEffectsAround(callExpr: ts.CallExpression, ctx: EmitContext): impor
   }
 
   const allowedRefs = new Set([p1Name, p2Name, nextName]);
-  const body = emitMiddlewareBody(Array.from(prop.body.statements), 0, allowedRefs, nextName, 0, ctx);
+  const body = emitMiddlewareBody(
+    Array.from(prop.body.statements),
+    0,
+    allowedRefs,
+    nextName,
+    0,
+    ctx,
+  );
   return Fn([p1Name, p2Name], body);
 }
 
@@ -2981,7 +2989,14 @@ function emitMiddlewareBody(
       return If(cond, thenBody, elseBody);
     } else {
       // No else: continuation is implicit else
-      const continuation = emitMiddlewareBody(stmts, index + 1, allowedRefs, nextName, nextCallCount, ctx);
+      const continuation = emitMiddlewareBody(
+        stmts,
+        index + 1,
+        allowedRefs,
+        nextName,
+        nextCallCount,
+        ctx,
+      );
       return If(cond, thenBody, continuation);
     }
   }
@@ -3050,7 +3065,12 @@ function emitMExpr(node: ts.Expression, allowedRefs: Set<string>, ctx: EmitConte
       if (ts.isPropertyAssignment(prop) && ts.isIdentifier(prop.name)) {
         fields[prop.name.text] = emitMExpr(prop.initializer, allowedRefs, ctx);
       } else {
-        throw error("EA3", "Object literal in dispatch handler must use simple property assignments", prop, ctx);
+        throw error(
+          "EA3",
+          "Object literal in dispatch handler must use simple property assignments",
+          prop,
+          ctx,
+        );
       }
     }
     return Construct(fields);
@@ -3082,19 +3102,32 @@ function emitMExpr(node: ts.Expression, allowedRefs: Set<string>, ctx: EmitConte
     const left = emitMExpr(node.left, allowedRefs, ctx);
     const right = emitMExpr(node.right, allowedRefs, ctx);
     switch (node.operatorToken.kind) {
-      case ts.SyntaxKind.PlusToken: return Add(left, right);
-      case ts.SyntaxKind.MinusToken: return Sub(left, right);
-      case ts.SyntaxKind.AsteriskToken: return Mul(left, right);
-      case ts.SyntaxKind.SlashToken: return Div(left, right);
-      case ts.SyntaxKind.PercentToken: return Mod(left, right);
-      case ts.SyntaxKind.GreaterThanToken: return Gt(left, right);
-      case ts.SyntaxKind.GreaterThanEqualsToken: return Gte(left, right);
-      case ts.SyntaxKind.LessThanToken: return Lt(left, right);
-      case ts.SyntaxKind.LessThanEqualsToken: return Lte(left, right);
-      case ts.SyntaxKind.EqualsEqualsEqualsToken: return Eq(left, right);
-      case ts.SyntaxKind.ExclamationEqualsEqualsToken: return Neq(left, right);
-      case ts.SyntaxKind.AmpersandAmpersandToken: return And(left, right);
-      case ts.SyntaxKind.BarBarToken: return Or(left, right);
+      case ts.SyntaxKind.PlusToken:
+        return Add(left, right);
+      case ts.SyntaxKind.MinusToken:
+        return Sub(left, right);
+      case ts.SyntaxKind.AsteriskToken:
+        return Mul(left, right);
+      case ts.SyntaxKind.SlashToken:
+        return Div(left, right);
+      case ts.SyntaxKind.PercentToken:
+        return Mod(left, right);
+      case ts.SyntaxKind.GreaterThanToken:
+        return Gt(left, right);
+      case ts.SyntaxKind.GreaterThanEqualsToken:
+        return Gte(left, right);
+      case ts.SyntaxKind.LessThanToken:
+        return Lt(left, right);
+      case ts.SyntaxKind.LessThanEqualsToken:
+        return Lte(left, right);
+      case ts.SyntaxKind.EqualsEqualsEqualsToken:
+        return Eq(left, right);
+      case ts.SyntaxKind.ExclamationEqualsEqualsToken:
+        return Neq(left, right);
+      case ts.SyntaxKind.AmpersandAmpersandToken:
+        return And(left, right);
+      case ts.SyntaxKind.BarBarToken:
+        return Or(left, right);
       default:
         throw error("EA3", "Unsupported binary operator in dispatch handler", node, ctx);
     }
@@ -3118,7 +3151,11 @@ function emitMExpr(node: ts.Expression, allowedRefs: Set<string>, ctx: EmitConte
   }
 
   // new Error(...) at expression level — only valid at statement level in throw
-  if (ts.isNewExpression(node) && ts.isIdentifier(node.expression) && node.expression.text === "Error") {
+  if (
+    ts.isNewExpression(node) &&
+    ts.isIdentifier(node.expression) &&
+    node.expression.text === "Error"
+  ) {
     throw error("EA3", "new Error() can only be used in a throw statement", node, ctx);
   }
 
