@@ -10,6 +10,7 @@
     { "path": "../kernel" },
     { "path": "../durable-streams" },
     { "path": "../agent" },
-    { "path": "../validate" }
+    { "path": "../validate" },
+    { "path": "../transport" }
   ]
 }
