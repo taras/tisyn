@@ -124,7 +124,7 @@ For the detailed agent model and API examples, see [`@tisyn/agent`](./packages/a
 | [Kernel Specification](./specs/tisyn-kernel-specification.md) | Kernel semantics, environments, and effect dispatch |
 | [Agent Specification 1.1.0](./specs/tisyn-agent-specification-1.1.0.md) | Typed agent declarations, implementations, and invocation |
 | [Compiler Specification 1.1.0](./specs/tisyn-compiler-specification-1.1.0.md) | TypeScript-to-IR compilation rules and restrictions |
-| [Compound Concurrency Spec](./specs/tisyn-compound-concurrency-spec.md) | `all` and `race` orchestration semantics |
+| [Compound Concurrency Spec](./specs/tisyn-compound-concurrency-spec.md) | `all`, `race`, `spawn`, and `join` orchestration semantics |
 | [Authoring Layer Spec](./specs/tisyn-authoring-layer-spec.md) | Generator-based authoring format and contract declarations |
 | [Constructor DSL Specification](./specs/tisyn-constructor-dsl-specification.md) | Grammar, constructor table, and recovery semantics for the DSL parser |
 | [Architecture](./specs/tisyn-architecture.md) | System architecture and package relationships |

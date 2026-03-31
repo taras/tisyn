@@ -96,7 +96,7 @@ The public API from `src/index.ts` includes:
 - `CompileError`: structured compiler error with location and code
 - `ErrorCodes`: stable error-code catalog for tooling and tests
 
-The package also re-exports IR builder helpers such as `Q`, `Ref`, `Fn`, `Let`, `Call`, `ExternalEval`, `AllEval`, `RaceEval`, and `ScopeEval`. These are primarily useful for compiler internals and low-level tooling, not the main entrypoint most consumers should start with.
+The package also re-exports IR builder helpers such as `Q`, `Ref`, `Fn`, `Let`, `Call`, `ExternalEval`, `AllEval`, `RaceEval`, `ScopeEval`, `SpawnEval`, and `JoinEval`. These are primarily useful for compiler internals and low-level tooling, not the main entrypoint most consumers should start with.
 
 ## Authoring Model
 
@@ -253,6 +253,38 @@ Rules:
 - All `useTransport` and `Effects.around` calls must precede any body statements.
 - `useAgent` may only be used inside a `scoped()` body and requires a matching `useTransport` in the same block.
 - `yield* handle.method(args)` argument count must match the contract method signature.
+
+### Structured Child Tasks
+
+`yield* spawn(function* () { ... })` starts a child task under the current workflow and returns a task handle. That handle may later be joined with `yield* task`.
+
+Example:
+
+```typescript
+export function* run(flag: boolean) {
+  const task = yield* spawn(function* () {
+    if (flag) return 42;
+    return 0;
+  });
+
+  return yield* task;
+}
+```
+
+Lowering shape:
+
+- `yield* spawn(function* () { ... })` lowers to `SpawnEval(Q(Fn(...)))`
+- `yield* task` lowers to `JoinEval(Ref("task"))`
+
+Rules:
+
+- `spawn()` takes exactly one inline generator-function expression.
+- A spawn handle must be declared with `const`, not `let`.
+- Spawn handles are join-only authored values. They are not ordinary data and may not be returned, stored in objects or arrays, or passed through general expression positions.
+- Inside a spawned body, ordinary lexical bindings from the parent remain visible.
+- Inside a spawned body, parent `useAgent(...)` handles are not visible.
+- Inside a spawned body, parent spawn handles are not visible. Nested spawned bodies must create and join their own task handles.
+- A joined task handle should be treated as single-use. The runtime rejects duplicate joins of the same task.
 
 ## Workflow Calls and Lowering
 
@@ -510,6 +542,10 @@ Contract validation errors use `E999`, including:
 | UA2  | `useAgent` argument must be a contract identifier                                     |
 | UA3  | `useAgent` contract must have a matching `useTransport` in the same `scoped()` block  |
 | H4   | Unknown method on handle, or wrong argument count                                     |
+| SP1  | `spawn()` requires exactly one inline generator-function argument                     |
+| SP2  | Spawn handle bindings must use `const`, not `let`                                    |
+| SP4  | Spawn handles are join-only and cannot be used as ordinary values                    |
+| SP11 | Spawned bodies do not inherit parent spawn handles                                   |
 
 ### Validation errors
 

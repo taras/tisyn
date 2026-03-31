@@ -26,7 +26,7 @@ If you want to **run** a Tisyn program rather than compile, inspect, or validate
 - reconstructing runtime state from the durable stream
 - continuing evaluation from the correct point
 - dispatching live effects through installed agents
-- orchestrating compound external scope nodes, including scope-local transport and middleware lifecycle
+- orchestrating compound external nodes such as `scope`, `all`, `race`, `spawn`, and `join`, including scope-local transport and middleware lifecycle
 - appending new yield and close events before resuming execution
 - exposing local and remote execution entrypoints
 
@@ -45,6 +45,10 @@ Prior events are read from the stream and used to rebuild execution state. This 
 ### Dispatch
 
 When evaluation reaches a live effect that is not already satisfied by replay, the runtime routes that effect through the installed agents.
+
+### Structured concurrency
+
+The runtime also supervises child tasks created by `spawn` and resumed by `join`. Child work remains tied to its parent execution boundary rather than escaping into detached background activity.
 
 ### Remote execution
 
