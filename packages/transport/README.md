@@ -22,6 +22,7 @@ Use `@tisyn/transport` when a Tisyn operation should run somewhere other than th
 - opening and managing host-side protocol sessions
 - adapting protocol traffic onto concrete transports
 - serving agent requests on the remote side
+- providing a low-level transport installation primitive for runtime use
 - providing transport conformance helpers
 
 In practice, this lets you treat an agent declaration the same way whether it is backed by a subprocess, worker, network endpoint, or local in-process adapter.
@@ -55,6 +56,7 @@ On the remote side, adapters such as `createProtocolServer()` and `createStdioAg
 ### Host-side installation and sessions
 
 - `installRemoteAgent`: Install an agent declaration so invocations are dispatched over a transport session.
+- `installAgentTransport`: Low-level variant of `installRemoteAgent`. Takes a plain agent-ID string and `AgentTransportFactory` directly, without a typed `AgentDeclaration`. Sends empty capabilities. Used by the runtime scope orchestrator where only the agent-ID string and factory value are available from the IR environment.
 - `useTransport`: Install an agent declaration as a remote capability and register it in the scope-local bound-agent registry, making it accessible to `useAgent()`.
 - `createSession`: Create and manage a host-side protocol session over a concrete transport.
 - `ProtocolSession`: Represent the live session object that manages lifecycle and routing.

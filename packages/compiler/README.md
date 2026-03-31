@@ -96,7 +96,7 @@ The public API from `src/index.ts` includes:
 - `CompileError`: structured compiler error with location and code
 - `ErrorCodes`: stable error-code catalog for tooling and tests
 
-The package also re-exports IR builder helpers such as `Q`, `Ref`, `Fn`, `Let`, `Call`, `ExternalEval`, `AllEval`, and `RaceEval`. These are primarily useful for compiler internals and low-level tooling, not the main entrypoint most consumers should start with.
+The package also re-exports IR builder helpers such as `Q`, `Ref`, `Fn`, `Let`, `Call`, `ExternalEval`, `AllEval`, `RaceEval`, and `ScopeEval`. These are primarily useful for compiler internals and low-level tooling, not the main entrypoint most consumers should start with.
 
 ## Authoring Model
 
@@ -210,6 +210,49 @@ while (x < target) {
 }
 return x;   // returns the final value of x after the loop
 ```
+
+### Scoped Blocks
+
+`yield* scoped(function* () { ... })` declares a lifecycle-bounded scope inside a workflow. The scoped block establishes transport connections and an optional enforcement handler for the duration of its body, then tears everything down when the body exits.
+
+A scoped block has two regions: a **setup region** followed by a **body region**. Setup statements must come first.
+
+**Setup region** (optional, before any body statements):
+
+- `yield* useTransport(Contract, factory)` — connect a remote agent. Each contract may appear at most once per `scoped()` block. The factory is an `AgentTransportFactory` value from the current environment.
+- `yield* Effects.around({ *dispatch([id, data], next) { ... } })` — install an enforcement handler that intercepts all dispatch inside the body. At most one per `scoped()` block.
+
+**Body region**:
+
+- `const handle = yield* useAgent(Contract)` — declare a handle variable for a connected contract. This declaration is erased at compile time; the variable is recorded for method-call lowering only.
+- `yield* handle.method(args)` — invoke a method on a connected contract. Lowered to `ExternalEval("prefix.method", Construct({ param: value, ... }))` using the contract's method signature.
+
+Example:
+
+```typescript
+export function* run(factory: AgentTransportFactory) {
+  return yield* scoped(function* () {
+    yield* useTransport(MyService, factory);
+    yield* Effects.around({
+      *dispatch([id, data], next) {
+        if (id === "my-service.doWork") {
+          return yield* next(id, data);
+        }
+        throw new Error(`Unexpected effect: ${id}`);
+      },
+    });
+    const handle = yield* useAgent(MyService);
+    return yield* handle.doWork({ input: "hello" });
+  });
+}
+```
+
+Rules:
+
+- `scoped()` may only be used inside an exported workflow function (contract context required).
+- All `useTransport` and `Effects.around` calls must precede any body statements.
+- `useAgent` may only be used inside a `scoped()` body and requires a matching `useTransport` in the same block.
+- `yield* handle.method(args)` argument count must match the contract method signature.
 
 ## Workflow Calls and Lowering
 
@@ -452,6 +495,24 @@ Contract validation errors use `E999`, including:
 - source-local or unresolved type references
 - unsupported type operators in contract signatures
 
+### Scope errors
+
+| Code | Restriction                                                                           |
+| ---- | ------------------------------------------------------------------------------------- |
+| S0   | `scoped()` can only be used in a workflow (contract context required)                 |
+| S1   | Setup statements (`useTransport`, `Effects.around`) must precede body statements      |
+| S5   | Duplicate `useTransport` for the same contract in one `scoped()` block                |
+| S6   | At most one `Effects.around` per `scoped()` block                                     |
+| UT1  | `useTransport` first argument must be a known contract identifier                     |
+| UT2  | `useTransport` second argument must be a plain identifier                             |
+| UT3  | `useTransport` factory variable must be declared in scope                             |
+| EA1  | `Effects.around` argument must have exactly one property                              |
+| EA2  | `Effects.around` property must be `*dispatch([id, data], next) { ... }`              |
+| UA1  | `useAgent` can only be used inside `scoped()`                                         |
+| UA2  | `useAgent` argument must be a contract identifier                                     |
+| UA3  | `useAgent` contract must have a matching `useTransport` in the same `scoped()` block  |
+| H4   | Unknown method on handle, or wrong argument count                                     |
+
 ### Validation errors
 
 If IR validation is enabled, malformed IR produces code `V001`.
@@ -544,7 +605,7 @@ Re-exported for programmatic IR construction:
 ```typescript
 Q, Ref, Fn, Let, Seq, If, While, Call, Get, Add, Sub, Mul, Div, Mod, Gt, Gte,
 Lt, Lte, Eq, Neq, And, Or, Not, Neg, Construct, ArrayNode, Concat, Throw, Try,
-ExternalEval, AllEval, RaceEval
+ExternalEval, AllEval, RaceEval, ScopeEval
 ```
 
 ## Using the Generated Module
