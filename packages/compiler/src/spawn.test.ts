@@ -5,7 +5,7 @@
  */
 
 import { describe, it, expect } from "vitest";
-import { compileOne, CompileError } from "./index.js";
+import { compileOne } from "./index.js";
 
 // ── Helpers ──
 
