@@ -26,6 +26,13 @@ Usage rules:
 
 ### 2. Spec import and scoping
 
+- before creating a new worktree, fetch `origin`, switch to
+  `main`, and fast-forward local `main` to `origin/main`
+- create the worktree from that updated `main` tip, not from a
+  stale local branch state
+- if reusing an existing worktree, sync its base first and
+  rebase or recreate the worktree before starting new work
+
 - when external or draft specs drive the work, import them into the feature worktree first
 - keep imported source docs separate from derived implementation plans
 - distinguish clearly between:
