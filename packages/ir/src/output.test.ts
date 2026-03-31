@@ -2,7 +2,7 @@ import { describe, it, expect } from "vitest";
 import type { TisynExpr } from "./types.js";
 import { print } from "./print.js";
 import { decompile } from "./decompile.js";
-import { Ref, Let, Add, Eval, Fn, If, Eq, Get, Throw, Call } from "./constructors.js";
+import { Ref, Let, Add, Eval, Fn, If, Eq, Call } from "./constructors.js";
 
 describe("print", () => {
   it("print literal", () => {

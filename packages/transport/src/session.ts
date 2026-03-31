@@ -1,11 +1,6 @@
 import type { Operation, Stream } from "effection";
 import { resource, spawn, createSignal, withResolvers } from "effection";
-import type {
-  AgentCapabilities,
-  ExecuteRequest,
-  ResultPayload,
-  AgentMessage,
-} from "@tisyn/protocol";
+import type { AgentCapabilities, ExecuteRequest, ResultPayload } from "@tisyn/protocol";
 import { initializeRequest, cancelNotification, shutdownNotification } from "@tisyn/protocol";
 import type { Val } from "@tisyn/ir";
 import type { AgentTransport } from "./transport.js";

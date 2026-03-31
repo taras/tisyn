@@ -53,14 +53,6 @@ function closeOk(value: unknown, coroutineId: string): CloseEvent {
   };
 }
 
-function closeErr(message: string, coroutineId: string): CloseEvent {
-  return {
-    type: "close",
-    coroutineId,
-    result: { status: "err", error: { message } },
-  };
-}
-
 function closeCancelled(coroutineId: string): CloseEvent {
   return {
     type: "close",

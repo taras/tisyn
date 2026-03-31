@@ -12,7 +12,7 @@ import { expect } from "vitest";
 import { spawn, ensure, suspend, scoped, sleep } from "effection";
 import { execute } from "./execute.js";
 import { Effects } from "@tisyn/agent";
-import type { CloseEvent, YieldEvent } from "@tisyn/kernel";
+import type { YieldEvent } from "@tisyn/kernel";
 
 describe("Substrate Conformance", () => {
   describe("V1: child close ordering on scope teardown", () => {

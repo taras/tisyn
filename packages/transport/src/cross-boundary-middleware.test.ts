@@ -13,11 +13,10 @@
 
 import { describe, it } from "@effectionx/vitest";
 import { expect } from "vitest";
-import { scoped, createChannel, spawn } from "effection";
+import { scoped } from "effection";
 import type { Operation } from "effection";
 import type { Val } from "@tisyn/ir";
 import { Fn, Q, Throw, If, Eq, Ref, Eval } from "@tisyn/ir";
-import type { OperationSpec } from "@tisyn/agent";
 import {
   agent,
   operation,
@@ -29,7 +28,6 @@ import {
 import { installRemoteAgent } from "./install-remote.js";
 import { createProtocolServer } from "./protocol-server.js";
 import { inprocessTransport } from "./transports/inprocess.js";
-import type { AgentDeclaration, ImplementationHandlers } from "@tisyn/agent";
 import type {
   HostMessage as ProtoHostMessage,
   AgentMessage as ProtoAgentMessage,

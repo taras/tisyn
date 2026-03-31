@@ -49,7 +49,7 @@ export function* getCrossBoundaryMiddleware(): Operation<FnNode | null> {
 // ---------------------------------------------------------------------------
 
 const EffectsApi = createApi("Effects", {
-  *dispatch(effectId: string, data: Val): Operation<Val> {
+  *dispatch(effectId: string, _data: Val): Operation<Val> {
     throw new Error(`No agent registered for effect: ${effectId}`);
   },
 });

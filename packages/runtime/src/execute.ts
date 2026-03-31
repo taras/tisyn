@@ -418,7 +418,7 @@ function* orchestrateAll(
   const { operation, resolve, reject } = withResolvers<Val>();
 
   yield* scoped(function* () {
-    const results: (EventResult | undefined)[] = new Array(N);
+    const results: (EventResult | undefined)[] = Array.from({ length: N });
     let completed = 0;
 
     for (let i = 0; i < N; i++) {
@@ -477,14 +477,12 @@ function* orchestrateRace(
   yield* scoped(function* () {
     const errors: Map<number, { message: string; name?: string }> = new Map();
     let hasWinner = false;
-    let completed = 0;
 
     for (let i = 0; i < N; i++) {
       const childId = `${parentId}.${startIndex + i}`;
       const childKernel = evaluate(exprs[i]!, env);
       yield* spawn(function* () {
         const result = yield* driveKernel(childKernel, childId, env, ctx);
-        completed++;
 
         if (result.status === "ok" && !hasWinner) {
           hasWinner = true;

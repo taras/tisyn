@@ -3,7 +3,7 @@
   "scripts": {
     "build": "tsc --build",
     "test": "pnpm -r run test",
-    "lint": "pnpm exec oxlint .",
+    "lint": "pnpm exec oxlint . --deny-warnings",
     "format": "npx oxfmt . --write",
     "format:check": "npx oxfmt . --check",
     "changeset": "changeset",

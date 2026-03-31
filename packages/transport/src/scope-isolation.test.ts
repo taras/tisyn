@@ -14,7 +14,6 @@ import { expect } from "vitest";
 import { scoped } from "effection";
 import type { Val } from "@tisyn/ir";
 import { Fn, Throw } from "@tisyn/ir";
-import type { OperationSpec } from "@tisyn/agent";
 import {
   agent,
   operation,

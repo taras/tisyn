@@ -334,7 +334,6 @@ function decompileLoop(
 ): string {
   if (!isFnNode(fnExpr)) return decompileExpr(fnExpr, depth, opts);
   const pad = " ".repeat(depth * opts.indent);
-  const innerPad = " ".repeat((depth + 1) * opts.indent);
   const body = decompileLoopBody(fnExpr.body as TisynExpr, depth + 1, opts);
   return `${pad}while (true) {\n${body}\n${pad}}`;
 }

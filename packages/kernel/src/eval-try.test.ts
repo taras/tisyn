@@ -7,16 +7,7 @@
 
 import { describe, it, expect } from "vitest";
 import { evaluate } from "./eval.js";
-import {
-  UnboundVariable,
-  NotCallable,
-  ArityMismatch,
-  TypeError,
-  DivisionByZero,
-  ExplicitThrow,
-  EffectError,
-  isCatchable,
-} from "./errors.js";
+import { ExplicitThrow, EffectError, isCatchable } from "./errors.js";
 import { EMPTY_ENV, extend } from "./environment.js";
 
 // ── IR helpers ──
@@ -29,10 +20,6 @@ function ref(name: string) {
   return { tisyn: "ref", name };
 }
 
-function letNode(name: string, value: unknown, body: unknown) {
-  return { tisyn: "eval", id: "let", data: { tisyn: "quote", expr: { name, value, body } } };
-}
-
 function throwNode(message: unknown) {
   return { tisyn: "eval", id: "throw", data: { tisyn: "quote", expr: { message } } };
 }
@@ -43,10 +30,6 @@ function tryNode(body: unknown, catchParam?: string, catchBody?: unknown, finall
   if (catchBody !== undefined) expr["catchBody"] = catchBody;
   if (finallyBody !== undefined) expr["finally"] = finallyBody;
   return { tisyn: "eval", id: "try", data: { tisyn: "quote", expr } };
-}
-
-function seqNode(...exprs: unknown[]) {
-  return { tisyn: "eval", id: "seq", data: { tisyn: "quote", expr: { exprs } } };
 }
 
 // ── Driver ──

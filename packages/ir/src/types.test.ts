@@ -26,7 +26,6 @@ import {
   And,
   Or,
   Seq,
-  While,
   Ref as RefCtor,
   Q,
 } from "./constructors.js";
