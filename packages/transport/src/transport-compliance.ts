@@ -284,15 +284,12 @@ export function transportComplianceSuite(name: string, createFactory: TransportF
     describe("Cancel", () => {
       it("cancel on interruption", function* () {
         const messages: HostMessage[] = [];
-        let handlerStarted = false;
-
         const slow = agent("slow-cancel", {
           work: operation<void, void>(),
         });
 
         const innerFactory = createFactory(slow, {
           *work() {
-            handlerStarted = true;
             // Simulate long-running work
             yield* suspend();
           },

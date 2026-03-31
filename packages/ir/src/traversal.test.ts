@@ -1,10 +1,10 @@
 import { describe, it, expect } from "vitest";
 import type { TisynExpr } from "./types.js";
 import { walk } from "./walk.js";
-import { fold, defaultAlgebra, foldWith } from "./fold.js";
+import { fold, defaultAlgebra } from "./fold.js";
 import { transform } from "./transform.js";
 import { collectRefs, collectExternalIds, collectFreeRefs } from "./collect.js";
-import { Ref, Let, Add, Q, Fn, Eval, If, Seq } from "./constructors.js";
+import { Ref, Let, Add, Q, Fn, Eval, If } from "./constructors.js";
 import { isRefNode, isEvalNode } from "./guards.js";
 
 describe("walk", () => {
@@ -80,7 +80,7 @@ describe("fold", () => {
     const calls: string[] = [];
     const alg = {
       ...defaultAlgebra(() => 0),
-      literal(v: TisynExpr) {
+      literal(_v: TisynExpr) {
         calls.push("literal");
         return 0;
       },
@@ -92,11 +92,11 @@ describe("fold", () => {
         calls.push("add");
         return a + b;
       },
-      quote(expr: TisynExpr) {
+      quote(_expr: TisynExpr) {
         calls.push("quote");
         return 0;
       },
-      eval(id: string, data: TisynExpr) {
+      eval(id: string, _data: TisynExpr) {
         calls.push(`eval:${id}`);
         return 0;
       },
@@ -104,7 +104,7 @@ describe("fold", () => {
         calls.push("let");
         return body;
       },
-      if(cond: number, then_: number, else_: number | null) {
+      if(cond: number, then_: number, _else_: number | null) {
         calls.push("if");
         return then_;
       },

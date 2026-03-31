@@ -21,7 +21,7 @@ describe("Worker transport", () => {
 
     // Install local Browser agent
     const browserImpl = implementAgent(App(), {
-      *waitForUser(args) {
+      *waitForUser(_args) {
         if (userMessageIndex >= userMessages.length) {
           done.resolve();
           throw new Error("done");

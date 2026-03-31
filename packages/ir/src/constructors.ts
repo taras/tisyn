@@ -1,4 +1,3 @@
-import type { TisynExpr } from "./types.js";
 import type { Expr, Eval as EvalT, Quote as QuoteT, Ref as RefT, TisynFn } from "./expr.js";
 
 function binary<T>(id: string, a: Expr<unknown>, b: Expr<unknown>): EvalT<T> {

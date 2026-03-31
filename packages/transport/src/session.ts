@@ -4,7 +4,6 @@ import type {
   AgentCapabilities,
   ExecuteRequest,
   ResultPayload,
-  AgentMessage,
 } from "@tisyn/protocol";
 import { initializeRequest, cancelNotification, shutdownNotification } from "@tisyn/protocol";
 import type { Val } from "@tisyn/ir";

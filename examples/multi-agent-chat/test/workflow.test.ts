@@ -60,7 +60,7 @@ describe("Compiled workflow", () => {
     yield* llmImpl.install();
 
     // Run the compiled workflow in a spawned task so we can cancel it
-    const task = yield* spawn(function* () {
+    const _task = yield* spawn(function* () {
       yield* execute({ ir: Call(chat) });
     });
 

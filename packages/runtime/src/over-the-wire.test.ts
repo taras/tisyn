@@ -1,7 +1,6 @@
 import { describe, it } from "@effectionx/vitest";
 import { expect } from "vitest";
 import { agent, operation, implementAgent, invoke } from "@tisyn/agent";
-import { execute } from "./execute.js";
 import { executeRemote } from "./execute-remote.js";
 import type { Json } from "@tisyn/ir";
 
@@ -22,7 +21,7 @@ describe("Over the wire", () => {
       // Install GraphQL capability (mock)
       const graphqlImpl = implementAgent(graphql, {
         // biome-ignore lint/correctness/useYield: mock
-        *execute({ document, variables }) {
+        *execute({ document: _document, variables }) {
           return { orderId: "order-1", status: "created", input: variables ?? null };
         },
       });

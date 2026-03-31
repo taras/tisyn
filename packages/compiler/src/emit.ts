@@ -1110,9 +1110,6 @@ function emitTryStatementPacked(
   catchBlock: ts.Block | undefined,
   joinVars: string[],
 ): Expr {
-  const hasMore = index < stmts.length - 1;
-  const rest = () => emitStatementList(stmts, index + 1, ctx);
-
   if (joinVars.length === 0) {
     // ── Packing, J_bc empty ──
     const bodyCtxP: EmitContext = { ...ctx, scopeStack: cloneScopeStack(ctx.scopeStack) };
@@ -1886,26 +1883,6 @@ function compileBranchBodyToJoin(
   return emitStatementList(stmts, 0, branchCtx);
 }
 
-/** Build a join expression from snapshot versions (else-less case: vars stay at snapshot). */
-function buildJoinExpr(
-  vars: string[],
-  snapshot: Map<string, number>,
-  _: Map<string, number>,
-): Expr {
-  if (vars.length === 0) return null as unknown as Expr;
-  if (vars.length === 1) {
-    const v = vars[0]!;
-    const version = snapshot.get(v) ?? 0;
-    return Ref(`${v}_${version}`);
-  }
-  const fields: Record<string, Expr> = {};
-  for (const v of vars) {
-    const version = snapshot.get(v) ?? 0;
-    fields[v] = Ref(`${v}_${version}`);
-  }
-  return Construct(fields);
-}
-
 /** Build a join expression using snapshot versions (for the "no else" case). */
 function buildJoinExprFromSnapshot(vars: string[], snapshot: Map<string, number>): Expr {
   if (vars.length === 0) return null as unknown as Expr;
@@ -1926,21 +1903,6 @@ function buildJoinExprFromSnapshot(vars: string[], snapshot: Map<string, number>
 function applyJoinVersions(joinVars: string[], ctx: EmitContext): void {
   for (const v of joinVars) {
     bumpVersion(v, ctx);
-  }
-}
-
-/** Copy versions from a branch context back into the main context. */
-function mergeStackVersions(ctx: EmitContext, branchCtx: EmitContext): void {
-  // For each let binding in branchCtx, update the version in ctx
-  for (let i = 0; i < branchCtx.scopeStack.length && i < ctx.scopeStack.length; i++) {
-    const branchFrame = branchCtx.scopeStack[i]!;
-    const mainFrame = ctx.scopeStack[i]!;
-    for (const [name, info] of branchFrame) {
-      const mainInfo = mainFrame.get(name);
-      if (mainInfo && mainInfo.kind === "let") {
-        mainInfo.version = info.version;
-      }
-    }
   }
 }
 

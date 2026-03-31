@@ -9,7 +9,7 @@ import { expect } from "vitest";
 import { execute } from "./execute.js";
 import { InMemoryStream } from "@tisyn/durable-streams";
 import { Effects } from "@tisyn/agent";
-import type { CloseEvent, DurableEvent } from "@tisyn/kernel";
+import type { CloseEvent } from "@tisyn/kernel";
 
 // ── IR helpers ──
 

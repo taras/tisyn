@@ -116,7 +116,7 @@ describe("websocket transport specific", () => {
     });
 
     yield* scoped(function* () {
-      const scope = yield* useScope();
+      const _scope = yield* useScope();
       const httpServer = createServer();
       const wss = new WebSocketServer({ server: httpServer });
 

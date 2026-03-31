@@ -1,4 +1,4 @@
-import { call, withResolvers } from "effection";
+import { withResolvers } from "effection";
 import type { Operation } from "effection";
 import { createServer } from "node:net";
 
