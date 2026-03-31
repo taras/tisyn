@@ -1,10 +1,8 @@
 # Tisyn
 
-**Tisyn** (pronounced like the chicken) is a system for building agents that can coordinate predictably across boundaries.
+**Tisyn** (pronounced like the chicken) is a runtime for AI agent workflows where execution is deterministic, journaled, and replayable by construction.
 
-It represents work as explicit, serializable program structure so agents can hand off tasks safely, stream progress, bound concurrent work, and continue after interruption without losing the execution story.
-
-Tisyn is organized as a set of small packages with clear boundaries. Some packages define the program model, some define semantics, some handle execution and continuation, and some provide the agent and transport layers needed to move work across processes or machines.
+Workflows are defined in a structured DSL, compiled to a serializable intermediate representation, validated before execution, and run against an append-only event journal. The kernel guarantees crash recovery via exact replay. Agents operate within scoped, supervised execution boundaries with explicit contracts. The system separates non-deterministic planning from constrained execution: the plan is a program, not a prompt.
 
 ## What Tisyn is for
 
