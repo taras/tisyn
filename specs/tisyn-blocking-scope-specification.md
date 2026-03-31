@@ -145,7 +145,7 @@ regardless of their form.
 
 **Setup statements** are:
 
-- `yield* useTransport(Contract, identifier)`
+- `yield* useTransport(Contract, expr)`
 - `yield* Effects.around({ *dispatch([p1, p2], next) { ... } })`
 
 **Body statements** are all other statements, including:
@@ -177,7 +177,7 @@ S6. At most one `Effects.around` call is permitted per scope
 ### 3.4 `useTransport` Constraints
 
 ````typescript
-yield* useTransport(Contract, identifier);
+yield* useTransport(Contract, expr);
 ````
 
 UT1. The first argument MUST be an identifier referencing an
@@ -185,25 +185,22 @@ UT1. The first argument MUST be an identifier referencing an
      compiler MUST resolve this to an agent identity prefix
      via the existing `toAgentId` transform.
 
-UT2. The second argument MUST be a bare identifier. The
-     compiler MUST reject call expressions, property access
-     expressions, literals, and other non-identifier forms in
-     this position.
+UT2. The second argument MUST be any authored expression that
+     the compiler already accepts in ordinary expression
+     position. Bare identifiers, property access expressions,
+     call expressions, and conditional expressions are all
+     permitted examples. No transport-specific expression
+     subset is defined beyond the existing authored expression
+     subset.
 
-UT3. The compiler MUST verify that the identifier in the
-     second position is lexically in scope at the point of
-     the `useTransport` call — that is, it is a parameter of
-     the enclosing workflow, an imported binding, or a `const`
-     binding in an enclosing scope. This is a compile-time
-     lexical check. It does NOT verify that the identifier
-     will resolve to a transport value at runtime.
-
-UT4. The compiler MUST lower this statement to a binding entry
-     in the scope node metadata (§4.3), emitting
-     `{ [agentPrefix]: Ref(identifier) }`. Whether the `Ref`
-     resolves successfully against the execution environment
-     at runtime is a runtime obligation (§6.1 R2), not a
-     compile-time guarantee.
+UT3. The compiler MUST lower the second argument via the
+     existing expression compilation pipeline, producing an
+     `Expr` in scope metadata. A bare identifier still lowers
+     to `Ref(identifier)`. General expression compilation may
+     still produce unresolved `Ref`s; whether the resulting
+     binding expression evaluates successfully at runtime is a
+     runtime obligation (§6.1 R2), not a compile-time
+     guarantee.
 
 ### 3.5 `Effects.around` Constraints
 
@@ -390,7 +387,7 @@ have distinguished semantics defined in separate specifications.
 ````
 Eval("scope", Quote({
   handler:  Fn | null,
-  bindings: { [agentPrefix: string]: Ref },
+  bindings: { [agentPrefix: string]: Expr },
   body:     Expr
 }))
 ````
@@ -401,8 +398,8 @@ with three fields.
 ### 4.3 Binding Entries
 
 Each entry in `bindings` maps an agent identity prefix (string)
-to a `Ref` node referencing a transport value in the execution
-environment.
+to an `Expr` that evaluates to a transport value in the
+execution environment.
 
 ````json
 {
@@ -414,7 +411,8 @@ environment.
 
 The key MUST be the agent identity prefix produced by the
 compiler's `toAgentId` transform applied to the contract name.
-The value MUST be a valid `Ref` node.
+The value MUST be a valid `Expr`. A bare identifier is encoded
+as `Ref(name)`, but richer expression trees are permitted.
 
 ### 4.4 Handler Fn
 
@@ -461,13 +459,19 @@ The scope node MUST pass standard IR validation. In particular:
 
 V1. The `handler` Fn (if present) MUST be a valid IR `Fn` node.
 
-V2. Binding `Ref` validity is a runtime obligation, not an IR
-    validation check. IR validation MUST NOT reject scope nodes
-    based on whether binding `Ref` names are present in the
-    execution environment. Missing bindings are detected at
+V2. Binding-expression evaluation is a runtime obligation, not
+    an IR validation check. IR validation MUST NOT reject scope
+    nodes based on whether binding expressions will resolve
+    successfully against the execution environment. Missing
+    bindings and other evaluation failures are detected at
     scope entry time (§6.1 R2).
 
 V3. The `body` MUST be a valid IR expression.
+
+V3a. Binding values occupy evaluation positions within the
+     scope node. A `Quote` node appearing directly as a binding
+     value MUST be rejected by standard IR validation, just as
+     a `Quote` in any other evaluation position is rejected.
 
 V4. No `Ref` in the handler `Fn` body may be free (unbound by
     the Fn's parameters or internal Let bindings).
@@ -535,14 +539,18 @@ R1. The runtime MUST establish a structured scope boundary
     (Effection `scoped()` or equivalent). All scope-local
     state MUST be bound to this scope's lifetime.
 
-R2. The runtime MUST resolve all transport binding `Ref`s
-    against the execution environment before body execution
-    begins. Resolution MUST use the `lookup` function from
-    `@tisyn/kernel`. If any `Ref` name is not bound in the
-    environment, the runtime MUST fail with a descriptive
-    error before body execution begins. Resolved transport
-    values MUST be registered in the scope-local bound-agents
-    registry.
+R2. The runtime MUST evaluate all transport binding
+    expressions against the execution environment before body
+    execution begins. Evaluation MUST use the kernel
+    evaluator, not ad hoc host-language expression
+    interpretation. If any binding expression fails
+    structurally (for example due to an unbound `Ref`), the
+    runtime MUST fail with a descriptive error before body
+    execution begins. Binding expressions MUST be structural
+    only: if evaluation yields an external effect descriptor,
+    the runtime MUST fail before body execution begins.
+    Successful binding values MUST be registered in the
+    scope-local bound-agents registry.
 
 R3. If the scope descriptor's handler is not null, the runtime
     MUST install it as an enforcement wrapper before body
@@ -583,10 +591,11 @@ R8. **Resume parent kernel.** The runtime resumes the parent
 
 ### 6.3 Binding Resolution Errors
 
-If a binding `Ref` cannot be resolved (the name is not bound
-in the environment), the runtime MUST fail the scope before
-body execution begins. The failure MUST be treated as a scope
-body error: a `Close(err)` event is written for the body
+If a binding expression cannot be evaluated successfully
+(because an inner `Ref` is unbound or because evaluation
+attempts an external effect), the runtime MUST fail the scope
+before body execution begins. The failure MUST be treated as a
+scope body error: a `Close(err)` event is written for the body
 coroutineId, and the error propagates to the parent kernel.
 
 ---
@@ -705,8 +714,8 @@ from the immutable IR, property P5). The runtime:
 
 RR1. Reinstalls the handler from the IR (same `Fn`).
 
-RR2. Resolves bindings from the environment (same `Ref`s
-     against the same execution environment).
+RR2. Re-evaluates bindings from the environment (same binding
+     `Expr`s against the same execution environment).
 
 RR3. Allocates the same child coroutineId (deterministic
      allocation, invariant I-ID).
@@ -719,8 +728,9 @@ RR4. Drives the child kernel, which replays the body's stored
 The following determinism argument applies:
 
 - Same IR (immutable, P5) → same scope structure, same handler
-  `Fn`, same binding `Ref`s, same body expression.
-- Same execution environment → same transport resolution.
+  `Fn`, same binding `Expr`s, same body expression.
+- Same execution environment → same binding-expression
+  evaluation results.
 - Same journal → same effect results replayed.
 - Same handler `Fn` + same effect descriptors → same middleware
   decisions (deny, allow, transform).
@@ -751,13 +761,14 @@ structural, not journaled.
 
 ### 8.6 Environment Consistency
 
-The binding `Ref`s are in the IR (immutable). On replay, they
-resolve against the execution environment. If the host provides
-a different environment on replay (different transport values),
-that is an input mismatch — the same category as providing
-different workflow arguments or a different IR. Input
-validation, when implemented per scoped effects specification
-§9, handles this uniformly.
+The binding expressions are in the IR (immutable). On replay,
+they are re-evaluated against the execution environment. If
+the host provides a different environment on replay (different
+transport values or different intermediate values referenced by
+the expression), that is an input mismatch — the same category
+as providing different workflow arguments or a different IR.
+Input validation, when implemented per scoped effects
+specification §9, handles this uniformly.
 
 ---
 
@@ -785,13 +796,14 @@ C5. Emit a scope node: `Eval("scope", Quote({ handler, bindings,
 
 ### 9.2 `useTransport` Compilation
 
-For each `yield* useTransport(Contract, identifier)` in the
+For each `yield* useTransport(Contract, expr)` in the
 setup prefix, the compiler MUST:
 
 C6. Resolve the contract name to an agent identity prefix via
     the existing `toAgentId` transform.
 
-C7. Emit a binding entry: `{ [agentPrefix]: Ref(identifier) }`.
+C7. Emit a binding entry:
+    `{ [agentPrefix]: emitExpression(expr) }`.
 
 C8. Reject duplicate bindings for the same contract.
 
@@ -845,7 +857,7 @@ C20. Emit `Eval("agentPrefix.method", compiledArgs)` using the
 ### 9.6 Acceptance and Rejection
 
 The compiler MUST reject authored source that violates any
-constraint defined in §3 (S1–S6, UT1–UT4, EA1–EA9, UA1–UA5,
+constraint defined in §3 (S1–S6, UT1–UT3, EA1–EA9, UA1–UA5,
 H1–H4) with a diagnostic that identifies the violated
 constraint.
 
@@ -908,9 +920,11 @@ a single scope is deferred.
 
 ### 10.6 Dynamic Transport Expressions
 
-Transport binding arguments are restricted to bare identifiers.
-Call expressions, property access, and other dynamic expressions
-as transport arguments are deferred.
+Transport binding arguments are expression-valued in this
+specification version. Property access, call expressions, and
+other authored expressions are allowed, provided they are
+accepted by the ordinary expression compiler and evaluate
+structurally at scope entry.
 
 ### 10.7 Conditional or Interleaved Setup
 
@@ -976,6 +990,7 @@ export function* secureCoding(spec: Spec): Workflow<Patch> {
 | Statement | Classification | Extracted metadata |
 |---|---|---|
 | `yield* useTransport(Coder, coderTransport)` | Setup | Binding: `{ "coder": Ref("coderTransport") }` |
+| `yield* useTransport(Coder, config.coderTransport)` | Setup | Binding: `{ "coder": Get(Ref("config"), "coderTransport") }` |
 | `yield* Effects.around({...})` | Setup | Handler: `Fn(["effectId", "data"], ...)` |
 | `const coder = yield* useAgent(Coder)` | Body | Handle binding: `coder → Coder` contract (compile-time only) |
 | `return yield* coder.implement(spec)` | Body | Agent effect: `Eval("coder.implement", ...)` |

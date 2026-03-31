@@ -151,6 +151,9 @@ inputs.
 | SC-C-011 | Extended | §3.5 EA3 | Middleware body using string template | `` throw new Error(`denied: ${effectId}`) `` | Accepted |
 | SC-C-012 | Extended | §3.5 EA3 | Middleware body using ternary expression | `return yield* next(eid, cond ? a : b)` | Accepted |
 | SC-C-013 | Core | UA1, §3.2 | useAgent as first body statement after setup | `useTransport(A, t); Effects.around({...}); const h = yield* useAgent(A);` | Accepted; useAgent classified as body, not setup; handle binding created |
+| SC-C-014 | Core | §3.4 | useTransport with call expression | `useTransport(A, createTransport())` | Accepted; binding entry contains compiled call expression |
+| SC-C-015 | Core | §3.4 | useTransport with property access | `useTransport(A, config.transport)` | Accepted; binding entry contains compiled property-access expression |
+| SC-C-016 | Extended | §3.4 | useTransport with string literal | `useTransport(A, "stdio")` | Accepted; transport-factory validity remains a runtime obligation |
 
 ### 3.2 `scoped(...)` Form Rejection
 
@@ -177,9 +180,6 @@ inputs.
 
 | ID | Tier | Rule | Description | Source shape | Violated |
 |---|---|---|---|---|---|
-| SC-C-040 | Core | UT2 | Transport argument is call expression | `useTransport(A, createTransport())` | UT2 |
-| SC-C-041 | Core | UT2 | Transport argument is property access | `useTransport(A, config.transport)` | UT2 |
-| SC-C-042 | Core | UT2 | Transport argument is string literal | `useTransport(A, "stdio")` | UT2 |
 | SC-C-043 | Extended | UT1 | First argument is not a contract identifier | `useTransport(42, t)` | UT1 |
 
 ### 3.5 `Effects.around` Shape Rejection
@@ -241,7 +241,7 @@ of the full tree.
 | ID | Tier | Rule | Description | What is checked |
 |---|---|---|---|---|
 | SC-L-001 | Core | §4.2, C5 | scoped lowers to Eval("scope", Quote(...)) | Output node: tisyn="eval", id="scope", data.tisyn="quote" |
-| SC-L-002 | Core | §4.3, C7 | useTransport lowers to binding Ref | `bindings` has key matching toAgentId(contract), value is Ref with correct name |
+| SC-L-002 | Core | §4.3, C7 | bare-identifier useTransport lowers to binding Ref | `bindings` has key matching toAgentId(contract), value is Ref with correct name |
 | SC-L-003 | Core | §4.4, C13 | Effects.around lowers to handler Fn | `handler` is Fn with two params matching the authored names |
 | SC-L-004 | Core | §4.4 | Handler Fn body contains dispatch Eval for next(...) | Fn body tree contains Eval with id="dispatch" |
 | SC-L-005 | Core | UA5, C17 | useAgent produces no IR node | useAgent does not appear anywhere in scope node; body begins with the first post-useAgent statement |
@@ -249,10 +249,25 @@ of the full tree.
 | SC-L-007 | Core | §4.4 | Middleware deny lowers to Throw in Fn body | `throw new Error("denied")` in middleware becomes Throw node in handler Fn |
 | SC-L-008 | Extended | §4.2 | Scope with no setup has null handler and empty bindings | `handler: null`, `bindings: {}` |
 | SC-L-009 | Extended | §4.4 | Result-transform pattern lowers to Let + dispatch + body | `const r = yield* next(...)` becomes Let with Eval("dispatch", ...) as value |
+| SC-L-010 | Core | §4.3, C7 | call-expression useTransport lowers to binding Expr | `bindings` entry value is a `Call` expression tree |
+| SC-L-011 | Core | §4.3, C7 | property-access useTransport lowers to binding Expr | `bindings` entry value is a `Get` expression tree |
 
 ---
 
-## 4A. Kernel Evaluation Tests
+## 4A. Validation Tests
+
+These tests verify IR validation behavior for scope binding
+values independently of compiler acceptance and runtime
+execution.
+
+| ID | Tier | Rule | Description | Setup | Expected |
+|---|---|---|---|---|---|
+| SC-V-001 | Core | §4.6 V3a | Quote node rejected in binding value | Scope IR with binding value = `Quote(42)` | `QUOTE_AT_EVAL_POSITION` |
+| SC-V-002 | Core | §4.6 V2 | Expression binding accepted by validator | Scope IR with binding value = `Call(Ref("makeFactory"), [])` | Valid IR |
+
+---
+
+## 4B. Kernel Evaluation Tests
 
 These tests verify kernel behavior for `scope` nodes in
 isolation, independent of runtime scope lifecycle. They use
@@ -290,12 +305,14 @@ mock effects, compare result and journal.
 | ID | Tier | Rule | Description | Setup | Expected |
 |---|---|---|---|---|---|
 | SC-R-001 | Core | R5 | Scope body executes and returns value | Scope with null handler, empty bindings, body = literal 42 | result: ok(42); journal: Close(ok, 42) under child coroutineId |
-| SC-R-002 | Core | R2 | Binding resolves from environment | Scope with binding `{a: Ref("t")}`, env `{t: "transport"}`, body = Ref("t") via agent call | Agent call dispatched; binding "a" registered |
+| SC-R-002 | Core | R2 | Binding expression evaluates from environment | Scope with binding `{a: Get(Ref("cfg"), "transport")}`, env `{cfg: { transport: factory }}` | Agent call dispatched; binding "a" registered |
 | SC-R-003 | Core | R4 | Child coroutineId is deterministic | Scope body performs one effect | YieldEvent coroutineId = child_id(parent, 0) |
-| SC-R-004 | Core | R2 | Missing binding fails before body | Scope with binding `{a: Ref("missing")}`, env `{}` | result: err; Close(err) under child coroutineId; no YieldEvents |
+| SC-R-004 | Core | R2 | Failed binding expression fails before body | Scope with binding expression containing unresolved `Ref("missing")`, env `{}` | result: err; Close(err) under child coroutineId; no YieldEvents |
 | SC-R-005 | Core | R3 | Handler installed before body effects | Scope with deny-all handler Fn, body calls agent | result: err (denied); no YieldEvent (handler blocked before dispatch) |
 | SC-R-006 | Core | R3 | Handler Fn allows effect pass-through | Scope with pass-through handler, body calls agent | YieldEvent dispatched; result returned |
 | SC-R-007 | Core | R3 | Handler Fn transforms request data | Scope with handler that modifies data, body calls agent | YieldEvent data matches transformed value |
+| SC-R-008 | Core | R2 | Effectful binding expression fails before body | Scope with binding expression that yields external effect | result: err; no body execution |
+| SC-R-009 | Core | R2 | Non-Ref binding expression succeeds | Scope with binding value = property access or call expression evaluating to factory | body executes normally; binding installed |
 
 ### 5.2 Handler Fn Evaluation
 
@@ -310,8 +327,8 @@ mock effects, compare result and journal.
 
 | ID | Tier | Rule | Description | Setup | Expected |
 |---|---|---|---|---|---|
-| SC-R-020 | Core | R2 | Multiple bindings all resolved | Scope with two binding entries, both present in env | Both agent prefixes dispatch correctly |
-| SC-R-021 | Core | R2, §6.3 | Second binding missing fails scope | Scope with two bindings, second missing from env | err; no body execution |
+| SC-R-020 | Core | R2 | Multiple bindings all resolved | Scope with two binding entries, both evaluable in env | Both agent prefixes dispatch correctly |
+| SC-R-021 | Core | R2, §6.3 | Second binding expression fails scope | Scope with two bindings, second failing to evaluate | err; no body execution |
 
 ---
 
@@ -357,7 +374,6 @@ specification §10.
 | SC-X-003 | Closure capture in middleware | §10.3 | Violates Fn §9.4; not accepted |
 | SC-X-004 | Multiple next calls per branch | §10.4 | Rejected by EA5 total-count rule |
 | SC-X-005 | Multiple Effects.around per scope | §10.5 | Rejected by S6 |
-| SC-X-006 | Dynamic transport expression | §10.6 | Rejected by UT2 |
 | SC-X-007 | Conditional setup | §10.7 | Rejected by S2 |
 | SC-X-008 | let in middleware body | §10.8 | Rejected by EA3 closed set |
 | SC-X-009 | while in middleware body | §10.8 | Rejected by EA3 closed set |
@@ -383,16 +399,16 @@ specification §10.
 | §3.1 Accepted form | Compiler acceptance + rejection | SC-C-001, SC-C-020–023 | Covered |
 | §3.2 Setup/body partitioning | Compiler rejection | SC-C-030–036 | Covered |
 | §3.3 Setup restrictions (S1–S6) | Compiler rejection | SC-C-030–036 | Covered |
-| §3.4 useTransport (UT1–UT4) | Compiler acceptance + rejection | SC-C-003, SC-C-010, SC-C-040–043 | Covered |
+| §3.4 useTransport (UT1–UT3) | Compiler acceptance + rejection | SC-C-003, SC-C-010, SC-C-014–016, SC-C-043 | Covered |
 | §3.5 Effects.around (EA1–EA9) | Compiler acceptance + rejection | SC-C-004–012, SC-C-050–072 | Covered |
 | §3.6 useAgent (UA1–UA5) | Compiler acceptance + rejection | SC-C-007, SC-C-013, SC-C-081–083 | Covered |
 | §3.7 Handle restrictions (H1–H4) | Compiler rejection | SC-C-090–094 | Covered |
-| §4.2–4.4 IR shape | IR lowering | SC-L-001–009 | Covered |
-| §4.6 Validation | Runtime lifecycle | SC-R-004 (V2 via R2) | Covered |
+| §4.2–4.4 IR shape | IR lowering | SC-L-001–011 | Covered |
+| §4.6 Validation | Validation + runtime lifecycle | SC-V-001–002, SC-R-004 | Covered |
 | §5.1–5.3 Kernel evaluation | Kernel evaluation | SC-K-001–005 | Covered |
-| §6.1 Scope entry (R1–R5) | Runtime lifecycle | SC-R-001–007 | Covered |
+| §6.1 Scope entry (R1–R5) | Runtime lifecycle | SC-R-001–009 | Covered |
 | §6.2 Scope exit (R6–R8) | Teardown | SC-T-001–002 | Covered |
-| §6.3 Binding resolution errors | Runtime lifecycle | SC-R-004, SC-R-021 | Covered |
+| §6.3 Binding resolution errors | Runtime lifecycle | SC-R-004, SC-R-008, SC-R-021 | Covered |
 | §7.1 Success (T1–T3) | Teardown | SC-T-001 | Covered |
 | §7.2 Failure (T4–T6) | Teardown | SC-T-002 | Covered |
 | §7.3 Cancellation (T7–T11) | Teardown | SC-T-003 | Covered |
