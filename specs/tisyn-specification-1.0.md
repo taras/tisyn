@@ -51,10 +51,10 @@ a computation. Expressions are evaluated to produce values.
 Expr = Literal | Eval | Quote | Ref | Fn
 ```
 
-An expression is NOT a value until it has been evaluated. A `Ref`
-is an instruction to look up a value. An `Eval` is an instruction
-to perform a computation. A `Quote` is a container holding an
-unevaluated expression.
+A `Ref` is an instruction to look up a value. An `Eval` is an
+instruction to perform a computation. A `Quote` is a container
+holding an unevaluated expression. Whether a JSON object is an
+expression or a value depends on context, not structure (see §2.3).
 
 ### 2.2 Val (Value)
 
@@ -95,20 +95,23 @@ Implementations MUST NOT inspect `tisyn` fields to determine
 whether a value is "really" an IR node. The origin determines
 classification.
 
-| Origin                                        | Classification |
-| --------------------------------------------- | -------------- |
-| Node in IR tree being walked                  | Expr           |
-| Result of `lookup(name, E)`                   | Val            |
-| Result of `eval(expr, E)` (except Rule QUOTE) | Val            |
-| Agent response `result.value`                 | Val            |
-| Journal `result.value`                        | Val            |
+| Origin                                                        | Classification |
+| ------------------------------------------------------------- | -------------- |
+| Node in IR tree being walked                                  | Expr           |
+| Result of `lookup(name, E)`                                   | Val            |
+| Result of `eval(expr, E)` (except Rule QUOTE)                 | Val            |
+| Agent response `result.value`                                 | Val            |
+| Journal `result.value`                                        | Val            |
+| Quoted payload position after `resolve()` strips one quote layer | Val         |
 
 There is no `is_val` predicate. Implementations do not need a
 function that inspects a value's structure to determine if it is
 a Val. The code paths guarantee it: `lookup` returns Val (by
 environment invariant), `eval` returns Val (by evaluation rules),
 agent responses are Val (by protocol), `resolve` returns Val for
-terminal positions (by the opaque value rule).
+terminal positions (by the opaque value rule) and for quoted
+positions (by the opaque payload rule — quoted contents are
+returned as-is after stripping one quote layer).
 
 ### 2.4 Serialization Guarantee
 
@@ -708,8 +711,9 @@ eval_external(ID, D, E):
   return result                         // Step 3: resume
 ```
 
-**Step 1 — Resolve.** Call `resolve(D, E)` to produce a fully
-resolved Val. See §9 for the `resolve` algorithm.
+**Step 1 — Resolve.** Call `resolve(D, E)` to produce resolved
+data. Unquoted positions are fully resolved. Quoted positions
+are preserved as opaque data. See §9 for the `resolve` algorithm.
 
 **Step 2 — Yield.** Hand the descriptor to the execution layer.
 Task state → SUSPENDED.
@@ -897,7 +901,7 @@ resolve(node, E):
   // ── UNWRAP: Quote removes one layer ──
 
   if node.tisyn = "quote":
-    return resolve(node.expr, E)
+    return node.expr                       // return as opaque data
 
   // ── TRAVERSABLE: plain arrays and objects ──
 
@@ -920,7 +924,7 @@ resolve(node, E):
 | Category        | Behavior                              | Examples                                          |
 | --------------- | ------------------------------------- | ------------------------------------------------- |
 | **Terminal**    | Return as-is. No traversal.           | Results of `lookup`, `eval`; Fn nodes; primitives |
-| **Unwrap**      | Remove Quote layer, resolve contents. | Quote nodes                                       |
+| **Unwrap**      | Strip Quote, return contents as opaque data. No further traversal. | Quote nodes                |
 | **Traversable** | Recurse into children.                | Plain arrays; objects without matching `tisyn`    |
 
 Only plain arrays and objects without a matching `tisyn`
@@ -928,8 +932,10 @@ discriminant are traversable.
 
 ### 9.5 Postcondition
 
-After `resolve(data, E)`, the result contains no `Ref`, `Eval`,
-or `Quote` nodes. Only Val (primitives, arrays, objects, Fn).
+After `resolve(data, E)`, unquoted positions contain no `Ref`,
+`Eval`, or `Quote` nodes. Quoted positions are returned as opaque
+data and may structurally contain IR nodes, but these are values
+by origin/context at the external boundary.
 
 ### 9.6 Enforcement Criterion
 
