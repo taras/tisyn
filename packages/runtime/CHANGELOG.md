@@ -1,5 +1,19 @@
 # @tisyn/runtime
 
+## 0.6.0
+
+### Patch Changes
+
+- e4dc3d9: Add tests for built-in sleep effect: compiled sleep succeeds, replay works, dispatch middleware intercepts, unknown effects still fail, `Effects.sleep(ms)` works directly.
+- Updated dependencies [e4dc3d9]
+- Updated dependencies [1f58703]
+  - @tisyn/agent@0.6.0
+  - @tisyn/kernel@0.6.0
+  - @tisyn/transport@0.6.0
+  - @tisyn/durable-streams@0.6.0
+  - @tisyn/ir@0.6.0
+  - @tisyn/validate@0.6.0
+
 ## 0.5.2
 
 ### Patch Changes

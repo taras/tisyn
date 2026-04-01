@@ -1,5 +1,16 @@
 # @tisyn/kernel
 
+## 0.6.0
+
+### Patch Changes
+
+- 1f58703: Fix quoted-payload execution bug where `resolve()` traversed into Quote contents, dispatching nested effects that should remain inert data.
+
+  - Quote now strips one layer and returns contents as opaque data without further traversal
+  - Nested Eval, Ref, or Quote nodes inside quoted payloads are preserved as values by origin/context
+  - @tisyn/ir@0.6.0
+  - @tisyn/validate@0.6.0
+
 ## 0.5.2
 
 ### Patch Changes

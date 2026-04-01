@@ -1,5 +1,13 @@
 # @tisyn/compiler
 
+## 0.6.0
+
+### Patch Changes
+
+- e4dc3d9: Update scope teardown test to reflect built-in sleep handler — assert `null` (built-in) instead of `"clean"` (caught error) after scoped middleware tears down.
+  - @tisyn/ir@0.6.0
+  - @tisyn/validate@0.6.0
+
 ## 0.5.2
 
 ### Patch Changes
