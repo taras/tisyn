@@ -33,7 +33,7 @@ function Eval(id: string, data: unknown) {
  * (i.e. tries to dispatch an effect).
  */
 function run(node: unknown, env: Env = EMPTY_ENV): unknown {
-  const evalFn = function* (expr: Expr, e: Env): Generator<EffectDescriptor, Val, Val> {
+  const evalFn = function* (expr: Expr, _env: Env): Generator<EffectDescriptor, Val, Val> {
     throw new Error(`Unexpected eval call for: ${JSON.stringify(expr)}`);
   };
   const gen = resolve(node as Expr, env, evalFn);
@@ -49,7 +49,7 @@ function run(node: unknown, env: Env = EMPTY_ENV): unknown {
  * Returns the first yielded descriptor (does not resume).
  */
 function runUntilYield(node: unknown, env: Env = EMPTY_ENV): EffectDescriptor {
-  const evalFn = function* (expr: Expr, e: Env): Generator<EffectDescriptor, Val, Val> {
+  const evalFn = function* (expr: Expr, _env: Env): Generator<EffectDescriptor, Val, Val> {
     // For EvalNode, yield the descriptor like the real evaluator would
     const evalNode = expr as unknown as { tisyn: "eval"; id: string; data: unknown };
     const descriptor: EffectDescriptor = { id: evalNode.id, data: evalNode.data as Val };
