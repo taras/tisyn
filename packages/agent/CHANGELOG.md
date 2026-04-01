@@ -1,5 +1,21 @@
 # @tisyn/agent
 
+## 0.6.0
+
+### Minor Changes
+
+- e4dc3d9: Add `sleep` as a first-class Effects operation alongside `dispatch`.
+
+  - `Effects.sleep(ms)` calls Effection's `sleep` directly
+  - Core `dispatch` handler routes `effectId === "sleep"` to the built-in sleep operation
+  - `Effects.around({ *dispatch })` middleware can still intercept sleep before the built-in runs
+
+### Patch Changes
+
+- Updated dependencies [1f58703]
+  - @tisyn/kernel@0.6.0
+  - @tisyn/ir@0.6.0
+
 ## 0.5.2
 
 ### Patch Changes

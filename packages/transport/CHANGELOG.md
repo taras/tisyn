@@ -1,5 +1,17 @@
 # @tisyn/transport
 
+## 0.6.0
+
+### Patch Changes
+
+- Updated dependencies [e4dc3d9]
+- Updated dependencies [1f58703]
+  - @tisyn/agent@0.6.0
+  - @tisyn/kernel@0.6.0
+  - @tisyn/ir@0.6.0
+  - @tisyn/protocol@0.6.0
+  - @tisyn/validate@0.6.0
+
 ## 0.5.2
 
 ### Patch Changes
