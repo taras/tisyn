@@ -38,10 +38,7 @@ describe("Quoted payload in standard external effects", () => {
     });
 
     // outer-effect receives quoted data containing a nested Eval node
-    const ir = Eval(
-      "outer-effect",
-      Q({ nested: Eval("inner-effect", Q({ value: 42 })) }),
-    );
+    const ir = Eval("outer-effect", Q({ nested: Eval("inner-effect", Q({ value: 42 })) }));
 
     const { result } = yield* execute({ ir: ir as never });
 
@@ -67,10 +64,7 @@ describe("Quoted payload in standard external effects", () => {
       },
     });
 
-    const ir = Eval(
-      "outer-effect",
-      Q({ ref: { tisyn: "ref", name: "x" } }),
-    );
+    const ir = Eval("outer-effect", Q({ ref: { tisyn: "ref", name: "x" } }));
 
     const { result } = yield* execute({ ir: ir as never });
 
