@@ -1,5 +1,11 @@
 # @tisyn/cli
 
+## 0.1.4
+
+### Patch Changes
+
+- @tisyn/compiler@0.5.1
+
 ## 0.1.3
 
 ### Patch Changes

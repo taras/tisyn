@@ -1,5 +1,11 @@
 # @tisyn/dsl
 
+## 0.3.3
+
+### Patch Changes
+
+- @tisyn/ir@0.5.1
+
 ## 0.3.2
 
 ### Patch Changes
