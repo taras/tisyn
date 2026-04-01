@@ -1,5 +1,12 @@
 # @tisyn/agent
 
+## 0.5.2
+
+### Patch Changes
+
+- @tisyn/ir@0.5.2
+- @tisyn/kernel@0.5.2
+
 ## 0.5.1
 
 ### Patch Changes

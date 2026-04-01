@@ -1,5 +1,17 @@
 # @tisyn/runtime
 
+## 0.5.2
+
+### Patch Changes
+
+- Updated dependencies [f47f4ca]
+  - @tisyn/transport@0.5.2
+  - @tisyn/agent@0.5.2
+  - @tisyn/ir@0.5.2
+  - @tisyn/kernel@0.5.2
+  - @tisyn/validate@0.5.2
+  - @tisyn/durable-streams@0.5.2
+
 ## 0.5.1
 
 ### Patch Changes
