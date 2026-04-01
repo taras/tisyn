@@ -1,5 +1,29 @@
 # @tisyn/ir
 
+## 0.5.0
+
+### Minor Changes
+
+- e71915d: Add `ScopeNode` and `ScopeShape` types for the blocking scope IR construct.
+
+  - Add `ScopeShape` interface (`handler: FnNode | null`, `bindings: Record<string, RefNode>`, `body: TisynExpr`) and `ScopeNode` type to the IR type system
+  - Add `"scope"` to `COMPOUND_EXTERNAL_IDS` so `isCompoundExternal("scope")` returns `true`
+  - Export `ScopeNode` and `ScopeShape` from the package index
+  - Fix `printCompoundExternal` to handle scope's `{handler, bindings, body}` shape (previously only handled `{exprs}` for `all`/`race`)
+
+- 9786a15: Add `SpawnNode`, `JoinNode`, and `SpawnShape` types for the spawn/join IR construct.
+
+  - Add `SpawnShape` interface (`body: TisynExpr`), `SpawnNode` type (Quote data), and `JoinNode` type (Ref data)
+  - Add `Spawn()` and `Join()` typed constructors
+  - Add `"spawn"` and `"join"` to `COMPOUND_EXTERNAL_IDS`
+  - Add printer support for spawn/join in `printCompoundExternal` and `constructorName`
+
+### Patch Changes
+
+- d4a051a: Widen `ScopeShape.bindings` from `RefNode` to `TisynExpr`.
+
+  Binding values in a scope node can now be any IR expression, not just a `RefNode`. This enables the compiler to lower `yield* useTransport(Contract, expr)` where `expr` is a property access, call, ternary, or any other expression.
+
 ## 0.4.0
 
 ## 0.3.0

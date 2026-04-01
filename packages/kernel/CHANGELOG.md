@@ -1,5 +1,28 @@
 # @tisyn/kernel
 
+## 0.5.0
+
+### Minor Changes
+
+- e71915d: Recognize `"scope"` as a compound-external operation in the kernel classifier.
+
+  - Add `"scope"` to `COMPOUND_EXTERNAL_IDS` set in `classify.ts` so the kernel routes scope eval nodes through the compound-external path rather than the standard external-eval dispatch path
+
+- 9786a15: Classify `spawn` and `join` as compound-external operations.
+
+  - Add `"spawn"` and `"join"` to `COMPOUND_EXTERNAL_IDS` in `classify.ts`
+
+### Patch Changes
+
+- Updated dependencies [e71915d]
+- Updated dependencies [e71915d]
+- Updated dependencies [9786a15]
+- Updated dependencies [9786a15]
+- Updated dependencies [d4a051a]
+- Updated dependencies [d4a051a]
+  - @tisyn/ir@0.5.0
+  - @tisyn/validate@0.5.0
+
 ## 0.4.0
 
 ### Minor Changes

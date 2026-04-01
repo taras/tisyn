@@ -1,5 +1,17 @@
 # @tisyn/agent
 
+## 0.5.0
+
+### Patch Changes
+
+- Updated dependencies [e71915d]
+- Updated dependencies [e71915d]
+- Updated dependencies [9786a15]
+- Updated dependencies [9786a15]
+- Updated dependencies [d4a051a]
+  - @tisyn/ir@0.5.0
+  - @tisyn/kernel@0.5.0
+
 ## 0.4.0
 
 ### Minor Changes

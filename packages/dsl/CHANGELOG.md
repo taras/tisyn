@@ -1,5 +1,14 @@
 # @tisyn/dsl
 
+## 0.3.2
+
+### Patch Changes
+
+- Updated dependencies [e71915d]
+- Updated dependencies [9786a15]
+- Updated dependencies [d4a051a]
+  - @tisyn/ir@0.5.0
+
 ## 0.3.1
 
 ### Patch Changes

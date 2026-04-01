@@ -1,5 +1,45 @@
 # @tisyn/compiler
 
+## 0.5.0
+
+### Minor Changes
+
+- e71915d: Add compiler support for `yield* scoped(function* () { ... })`.
+
+  - New `emitScoped` compiles the scoped generator function: partitions statements into setup (`yield* useTransport(...)`, `yield* Effects.around(...)`) and body; emits `ScopeEval(handler, bindings, bodyExpr)`
+  - New `emitEffectsAround` compiles `Effects.around({ *dispatch([id, data], next) { ... } })` to a `FnNode` for use as the scope's enforcement handler
+  - New `emitMiddlewareBody` compiles the dispatch handler body (supports `return`, `const`, `if`/`if-else`, `throw new Error`, `yield* next(a, b)`)
+  - `useAgent(Contract)` declarations inside a scoped body are erased at compile time; the variable name is recorded in `handleBindings` for method-call lowering
+  - `yield* handle.method(args)` inside a scoped body is lowered to `ExternalEval("prefix.method", Construct(fields))` using the contract's method signature
+  - New `ScopeEval(handler, bindings, body)` IR builder added to `ir-builders.ts` and exported from the package index
+
+- 9786a15: Compile `yield* spawn(function*() { ... })` and `yield* task` (join).
+
+  - `yield* spawn(fn)` lowers to `SpawnEval(bodyExpr)`; `yield* task` lowers to `JoinEval(Ref("task"))`
+  - Scope-aware spawn-handle tracking via `BindingInfo.isSpawnHandle` / `isForbiddenCapture`
+  - Enforce SP1 (generator arg), SP2 (const binding), SP4 (handle expression restriction), SP11 (parent handle not capturable)
+  - Add `SpawnEval` and `JoinEval` IR builders; add `"Spawn"` and `"Join"` to codegen constructor list
+
+### Patch Changes
+
+- d4a051a: Widen `useTransport` second argument to accept any expression.
+
+  Previously the factory argument was restricted to a bare identifier (enforced by compile-time UT2/UT3 checks). It now accepts any expression that evaluates to an `AgentTransportFactory` without performing effects — property accesses, call expressions, ternaries, etc.
+
+  - Remove UT2 (bare-identifier) and UT3 (must be in scope) error checks
+  - Emit the factory argument via `emitExpression()` instead of constructing a `RefNode` directly
+  - Update `ScopeEval()` builder signature to accept `Record<string, Expr>` bindings
+  - Remove UT2 and UT3 from the compiler README error-code table
+
+- Updated dependencies [e71915d]
+- Updated dependencies [e71915d]
+- Updated dependencies [9786a15]
+- Updated dependencies [9786a15]
+- Updated dependencies [d4a051a]
+- Updated dependencies [d4a051a]
+  - @tisyn/ir@0.5.0
+  - @tisyn/validate@0.5.0
+
 ## 0.4.0
 
 ### Patch Changes
