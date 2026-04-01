@@ -21,6 +21,10 @@
     "./protocol-server": {
       "types": "./dist/protocol-server.d.ts",
       "import": "./dist/protocol-server.js"
+    },
+    "./compliance": {
+      "types": "./dist/transport-compliance.d.ts",
+      "import": "./dist/transport-compliance.js"
     }
   },
   "publishConfig": {

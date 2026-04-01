@@ -84,7 +84,7 @@ On the remote side, adapters such as `createProtocolServer()` and `createStdioAg
 - `AgentServerTransport`: Define the server-side transport contract consumed by `createProtocolServer()`.
 - `ProtocolServer`: Represent the running server-side protocol adapter.
 
-### Verification helpers
+### Verification helpers (via `@tisyn/transport/compliance`)
 
 - `transportComplianceSuite`: Run the shared conformance checks against a transport implementation.
 - `TransportFactoryBuilder`: Type the helper shape used to construct transports for compliance tests.
