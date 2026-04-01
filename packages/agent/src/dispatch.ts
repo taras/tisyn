@@ -52,13 +52,13 @@ const EffectsApi = createApi("Effects", {
   *dispatch(effectId: string, _data: Val): Operation<Val> {
     if (effectId === "sleep") {
       const ms = (_data as unknown[])[0] as number;
-      yield* EffectsApi.operations.sleep(ms);
+      yield* effectionSleep(ms);
       return null as Val;
     }
     throw new Error(`No agent registered for effect: ${effectId}`);
   },
-  *sleep(ms: number): Operation<void> {
-    yield* effectionSleep(ms);
+  *sleep(ms: number): Operation<Val> {
+    return yield* dispatch("sleep", [ms] as unknown as Val);
   },
 });
 

@@ -67,4 +67,21 @@ describe("Built-in sleep effect", () => {
   it("Effects.sleep(ms) works directly", function* () {
     yield* Effects.sleep(1);
   });
+
+  it("Effects.around({ *dispatch }) intercepts direct Effects.sleep()", function* () {
+    let intercepted = false;
+    yield* Effects.around({
+      // biome-ignore lint/correctness/useYield: mock
+      *dispatch([effectId, _data]: [string, Val], _next) {
+        if (effectId === "sleep") {
+          intercepted = true;
+          return null;
+        }
+        return yield* _next(effectId, _data);
+      },
+    });
+
+    yield* Effects.sleep(100);
+    expect(intercepted).toBe(true);
+  });
 });
