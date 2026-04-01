@@ -1,5 +1,19 @@
 # @tisyn/transport
 
+## 0.5.2
+
+### Patch Changes
+
+- f47f4ca: Move Node.js-specific transports to subpath exports to fix browser bundling.
+
+  - Main entry no longer re-exports `stdioTransport`, `websocketTransport`, `workerTransport`, `ssePostTransport`, `createStdioAgentTransport`, or `createSsePostAgentTransport`
+  - Each transport is now available via its own subpath: `@tisyn/transport/stdio`, `@tisyn/transport/websocket`, `@tisyn/transport/worker`, `@tisyn/transport/sse-post`, `@tisyn/transport/stdio-agent`, `@tisyn/transport/sse-post-agent`
+  - @tisyn/agent@0.5.2
+  - @tisyn/ir@0.5.2
+  - @tisyn/kernel@0.5.2
+  - @tisyn/protocol@0.5.2
+  - @tisyn/validate@0.5.2
+
 ## 0.5.1
 
 ### Patch Changes
