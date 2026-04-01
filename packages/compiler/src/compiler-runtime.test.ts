@@ -465,14 +465,14 @@ describe("scope teardown across while-loop iterations", () => {
     //
     // Why this detects teardown failure:
     //   After the while loop, `yield* sleep(5)` fires dispatch("sleep", [5]).
-    //   With correct teardown: EnforcementContext is null → Effects chain → throws
-    //   "No agent registered" → catch block returns "clean".
+    //   With correct teardown: the scoped handler is gone → built-in sleep runs →
+    //   returns null.
     //   If scoped() were removed from orchestrateScope: iter 2's handler (returns 100)
-    //   would remain set → sleep(5) returns 100 → try returns 100, not "clean".
+    //   would remain set → sleep(5) returns 100, not null.
     //
     // The handler returns a constant (100) rather than data+1 because sleep passes
     // data as an array [ms], not a scalar, so arithmetic on raw data would fail.
-    // The constant-return approach is sufficient: "clean" vs 100 is unambiguous.
+    // The constant-return approach is sufficient: null vs 100 is unambiguous.
     //
     // Per-iteration assertions (nice-to-have):
     //   The journal must have exactly two child Close events with IDs "root.0" and
@@ -492,19 +492,15 @@ describe("scope teardown across while-loop iterations", () => {
           });
           i = i + 1;
         }
-        try {
-          return yield* sleep(5);
-        } catch (e) {
-          return "clean";
-        }
+        return yield* sleep(5);
       }
     `);
     const { result, journal } = yield* execute({ ir: Call(ir) });
 
     // Main assertion: enforcement was torn down after the loop.
-    // With correct teardown: sleep(5) throws → catch returns "clean".
-    // With leaked enforcement (no scoped()): sleep(5) returns 100 → try returns 100.
-    expect(result).toEqual({ status: "ok", value: "clean" });
+    // With correct teardown: sleep(5) returns null (built-in handler).
+    // With leaked enforcement (no scoped()): sleep(5) returns 100.
+    expect(result).toEqual({ status: "ok", value: null });
 
     // Structural assertion: two distinct child scope IDs were produced.
     const scopeCloses = journal.filter(
