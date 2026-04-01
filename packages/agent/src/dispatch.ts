@@ -1,4 +1,4 @@
-import { type Operation, createContext } from "effection";
+import { type Operation, createContext, sleep as effectionSleep } from "effection";
 import type { Val, FnNode } from "@tisyn/ir";
 import { createApi } from "@effectionx/context-api";
 
@@ -50,11 +50,21 @@ export function* getCrossBoundaryMiddleware(): Operation<FnNode | null> {
 
 const EffectsApi = createApi("Effects", {
   *dispatch(effectId: string, _data: Val): Operation<Val> {
+    if (effectId === "sleep") {
+      const ms = (_data as unknown[])[0] as number;
+      yield* EffectsApi.operations.sleep(ms);
+      return null as Val;
+    }
     throw new Error(`No agent registered for effect: ${effectId}`);
+  },
+  *sleep(ms: number): Operation<void> {
+    yield* effectionSleep(ms);
   },
 });
 
-export const Effects = EffectsApi;
+export const Effects = Object.assign(EffectsApi, {
+  sleep: EffectsApi.operations.sleep,
+});
 
 /**
  * Dispatch an effect. Runs the enforcement wrapper (if installed) before
