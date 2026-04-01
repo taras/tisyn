@@ -1,5 +1,19 @@
 # @tisyn/transport
 
+## 0.5.1
+
+### Patch Changes
+
+- c35a0c9: Remove `transportComplianceSuite` from main entry to avoid requiring vitest at runtime.
+
+  - The compliance suite (which imports vitest) is no longer re-exported from `@tisyn/transport`
+  - Added `@tisyn/transport/compliance` subpath export for test authors who need it
+  - @tisyn/agent@0.5.1
+  - @tisyn/ir@0.5.1
+  - @tisyn/kernel@0.5.1
+  - @tisyn/protocol@0.5.1
+  - @tisyn/validate@0.5.1
+
 ## 0.5.0
 
 ### Minor Changes
