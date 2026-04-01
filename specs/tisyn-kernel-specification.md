@@ -43,12 +43,17 @@ A **Val** is the result of evaluating an expression:
 Val = JsonPrimitive | JsonArray | JsonObject | FnVal
 ```
 
-Every Val is also a valid Expr. But Eval, Quote, and Ref are
-Expr but NOT Val — they must be evaluated to produce a Val.
+Every Val is also a valid Expr. Eval, Quote, and Ref are
+expressions when encountered during IR tree traversal. The same
+JSON objects are values when they appear as opaque data by
+origin/context — returned by `lookup()`, returned by `eval()`,
+or obtained from a quoted payload position after `resolve()`
+strips one quote layer.
 
-Context determines classification: a JSON object with
-`tisyn: "eval"` is an Expr when encountered during tree traversal,
-and a Val when returned by `lookup()` or `eval()`.
+Context determines classification. A JSON object with
+`tisyn: "eval"` is an Expr when the evaluator or `resolve()`
+encounters it during tree traversal, and a Val when it appears
+as opaque data by origin/context.
 
 ### 1.4 Evaluation Rules
 
@@ -203,7 +208,7 @@ resolve(node, E):
     return node                          // TERMINAL
 
   if node.tisyn = "quote":
-    return resolve(node.expr, E)         // unwrap, recurse
+    return node.expr                     // unwrap, return as opaque data
 
   if node is array:
     return [resolve(item, E) for item in node]   // TRAVERSABLE
@@ -222,13 +227,15 @@ resolve(node, E):
 | Category        | Behavior                                                                               |
 | --------------- | -------------------------------------------------------------------------------------- |
 | **Terminal**    | Return as-is. No further traversal. Results of `lookup`, `eval`; Fn nodes; primitives. |
-| **Unwrap**      | Strip Quote, resolve contents.                                                         |
+| **Unwrap**      | Strip Quote, return contents as opaque data. No further traversal.                      |
 | **Traversable** | Recurse into children. Plain arrays; plain objects without matching `tisyn`.           |
 
 ### 3.5 Postcondition
 
-After `resolve(data, E)`, the result contains no Ref, Eval, or
-Quote nodes. Only Val.
+After `resolve(data, E)`, unquoted positions contain no Ref,
+Eval, or Quote nodes. Quoted positions are returned as opaque
+data and may structurally contain IR nodes, but these are values
+by origin/context at the external boundary.
 
 ### 3.6 Where `resolve` Is Applied
 
@@ -286,8 +293,9 @@ eval_external(ID, D, E):
   return result                          // Step 3: resume with result
 ```
 
-**Step 1 — Resolve.** Call `resolve(D, E)` to produce a fully
-resolved Val. No Ref, Eval, or Quote nodes remain.
+**Step 1 — Resolve.** Call `resolve(D, E)` to produce resolved
+data. Unquoted positions are fully resolved. Quoted positions
+are preserved as opaque data.
 
 **Step 2 — Suspend.** Hand the descriptor to the execution layer.
 The kernel pauses. The task enters SUSPENDED state.

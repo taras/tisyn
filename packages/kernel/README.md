@@ -46,7 +46,7 @@ At this layer, effects are described, not executed.
 
 ### `resolve()`
 
-Looks up a named reference in a lexical environment.
+Prepares standard external effect data by resolving unquoted expression positions. Quoted payloads are preserved as opaque data.
 
 ### `unquote()`
 
@@ -89,7 +89,7 @@ The public surface exported from `src/index.ts` includes the following:
 
 ### Environment and reference resolution
 
-- `resolve` — look up a named reference in an environment
+- `resolve` — resolve expression positions in external effect data; quoted payloads are preserved as opaque data
 - `unquote` — convert quoted values back into executable expressions where kernel rules allow it
 - `Env` — lexical environment abstraction used during evaluation
 - `EMPTY_ENV` — canonical empty environment

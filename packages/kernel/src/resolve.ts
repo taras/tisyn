@@ -1,5 +1,7 @@
 /**
- * The resolve function — produces fully resolved Val from Expr.
+ * The resolve function — prepares standard external effect data
+ * by resolving unquoted expression positions. Quoted payloads are
+ * preserved as opaque data.
  *
  * See Kernel Specification §3.
  *
@@ -9,6 +11,11 @@
  * THE OPAQUE VALUE RULE (§3.2):
  * resolve() MUST NOT recurse into any value returned by lookup()
  * or eval(). Such values are terminal — returned without inspection.
+ *
+ * THE OPAQUE PAYLOAD RULE:
+ * Quote strips one layer and returns the inner expression as opaque
+ * data. Nested Ref, Eval, or Quote nodes within quoted contents are
+ * values by origin/context and MUST NOT be traversed or evaluated.
  *
  * resolve() is a generator because it may need to eval() sub-expressions
  * which may themselves yield external effects.
@@ -31,7 +38,7 @@ import type { Env } from "./environment.js";
  *
  * Categories:
  * - Terminal: Results of lookup/eval; Fn nodes; primitives → return as-is
- * - Unwrap: Quote → strip layer, resolve contents
+ * - Unwrap: Quote → strip layer, return contents as opaque data
  * - Traversable: Plain arrays; plain objects without matching tisyn → recurse
  */
 export function* resolve(
@@ -54,9 +61,9 @@ export function* resolve(
     return node as unknown as Val;
   }
 
-  // UNWRAP: Quote → strip layer, resolve contents
+  // UNWRAP: Quote → strip layer, return contents as opaque data
   if (isQuoteNode(node)) {
-    return yield* resolve(node.expr, env, evalFn);
+    return node.expr as unknown as Val;
   }
 
   // TRAVERSABLE: Array → recurse into each element

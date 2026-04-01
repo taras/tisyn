@@ -358,12 +358,14 @@ fields. Used by structural operations to access their data
 without evaluating it. The result may contain unevaluated
 expressions that the operation evaluates selectively.
 
-**`resolve(node, E)`** recursively resolves all Expr nodes to
-produce a fully resolved Val. Used exclusively at the external
-effect boundary for standard (non-compound) effects. The **opaque
-value rule** ensures `resolve` never re-enters values returned by
-`lookup` or `eval`, preventing agent-returned data from being
-re-interpreted as code.
+**`resolve(node, E)`** prepares standard external effect data by
+resolving unquoted expression positions. Quoted payloads are
+preserved as opaque data — nested IR nodes within quoted contents
+are values by origin/context and are not traversed or evaluated.
+Used exclusively at the external effect boundary for standard
+(non-compound) effects. The **opaque value rule** ensures `resolve`
+never re-enters values returned by `lookup` or `eval`, preventing
+agent-returned data from being re-interpreted as code.
 
 **Compound external operations** (`all`, `race`, `spawn`) use
 `unquote` instead of `resolve`, preserving child expressions for
