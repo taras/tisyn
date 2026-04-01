@@ -25,7 +25,8 @@
 import { implementAgent } from "@tisyn/agent";
 import { execute } from "@tisyn/runtime";
 import { InMemoryStream } from "@tisyn/durable-streams";
-import { installRemoteAgent, workerTransport } from "@tisyn/transport";
+import { installRemoteAgent } from "@tisyn/transport";
+import { workerTransport } from "@tisyn/transport/worker";
 import { Call } from "@tisyn/ir";
 import { App, chat, Llm } from "./workflow.generated.js";
 import { useWebSocketServer } from "./browser-transport.js";

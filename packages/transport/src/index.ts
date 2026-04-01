@@ -10,16 +10,5 @@ export type {
   HostMessage,
   AgentMessage,
 } from "./transport.js";
-export { stdioTransport } from "./transports/stdio.js";
-export type { StdioTransportOptions } from "./transports/stdio.js";
-export { websocketTransport } from "./transports/websocket.js";
-export type { WebSocketTransportOptions } from "./transports/websocket.js";
-export { workerTransport } from "./transports/worker.js";
-export type { WorkerTransportOptions } from "./transports/worker.js";
-export { createStdioAgentTransport } from "./stdio-agent.js";
-export { ssePostTransport } from "./transports/sse-post.js";
-export type { SsePostTransportOptions } from "./transports/sse-post.js";
-export { createSsePostAgentTransport } from "./sse-post-agent.js";
-export type { SsePostAgentTransport } from "./sse-post-agent.js";
 export { createProtocolServer } from "./protocol-server.js";
 export type { AgentServerTransport, ProtocolServer } from "./protocol-server.js";

@@ -68,19 +68,19 @@ On the remote side, adapters such as `createProtocolServer()` and `createStdioAg
 - `AgentTransport`: Define the agent-side transport contract used by protocol servers.
 - `AgentTransportFactory`: Define a factory that creates agent-side transports on demand.
 
-### Concrete transports
+### Concrete transports (subpath imports)
 
-- `inprocessTransport`: Create an in-process reference transport with no real IO boundary.
-- `stdioTransport`: Create a transport that communicates with a child process over stdin/stdout.
-- `websocketTransport`: Create a transport that speaks the protocol over WebSocket.
-- `workerTransport`: Create a transport that crosses a worker boundary.
-- `ssePostTransport`: Create an HTTP transport that combines POST requests with SSE responses.
+- `inprocessTransport`: Create an in-process reference transport with no real IO boundary. _(main entry)_
+- `stdioTransport`: Create a transport that communicates with a child process over stdin/stdout. _(via `@tisyn/transport/stdio`)_
+- `websocketTransport`: Create a transport that speaks the protocol over WebSocket. _(via `@tisyn/transport/websocket`)_
+- `workerTransport`: Create a transport that crosses a worker boundary. _(via `@tisyn/transport/worker`)_
+- `ssePostTransport`: Create an HTTP transport that combines POST requests with SSE responses. _(via `@tisyn/transport/sse-post`)_
 
 ### Agent-side adapters
 
-- `createStdioAgentTransport`: Adapt stdin/stdout streams into an agent-side transport.
-- `createSsePostAgentTransport`: Adapt POST and SSE channels into an agent-side transport.
-- `createProtocolServer`: Create the agent-side protocol loop that serves requests over a transport. When an execute request carries a `middleware` IR node, the server validates it and installs it as a non-bypassable enforcement wrapper and cross-boundary carrier for that execution scope.
+- `createStdioAgentTransport`: Adapt stdin/stdout streams into an agent-side transport. _(via `@tisyn/transport/stdio-agent`)_
+- `createSsePostAgentTransport`: Adapt POST and SSE channels into an agent-side transport. _(via `@tisyn/transport/sse-post-agent`)_
+- `createProtocolServer`: Create the agent-side protocol loop that serves requests over a transport. When an execute request carries a `middleware` IR node, the server validates it and installs it as a non-bypassable enforcement wrapper and cross-boundary carrier for that execution scope. _(main entry or `@tisyn/transport/protocol-server`)_
 - `AgentServerTransport`: Define the server-side transport contract consumed by `createProtocolServer()`.
 - `ProtocolServer`: Represent the running server-side protocol adapter.
 
@@ -93,7 +93,8 @@ On the remote side, adapters such as `createProtocolServer()` and `createStdioAg
 
 ```ts
 import { agent, operation, invoke } from "@tisyn/agent";
-import { installRemoteAgent, websocketTransport } from "@tisyn/transport";
+import { installRemoteAgent } from "@tisyn/transport";
+import { websocketTransport } from "@tisyn/transport/websocket";
 
 const math = agent("math", {
   double: operation<{ input: { value: number } }, number>(),

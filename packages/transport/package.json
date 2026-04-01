@@ -25,6 +25,30 @@
     "./compliance": {
       "types": "./dist/transport-compliance.d.ts",
       "import": "./dist/transport-compliance.js"
+    },
+    "./stdio": {
+      "types": "./dist/transports/stdio.d.ts",
+      "import": "./dist/transports/stdio.js"
+    },
+    "./websocket": {
+      "types": "./dist/transports/websocket.d.ts",
+      "import": "./dist/transports/websocket.js"
+    },
+    "./worker": {
+      "types": "./dist/transports/worker.d.ts",
+      "import": "./dist/transports/worker.js"
+    },
+    "./sse-post": {
+      "types": "./dist/transports/sse-post.d.ts",
+      "import": "./dist/transports/sse-post.js"
+    },
+    "./stdio-agent": {
+      "types": "./dist/stdio-agent.d.ts",
+      "import": "./dist/stdio-agent.js"
+    },
+    "./sse-post-agent": {
+      "types": "./dist/sse-post-agent.d.ts",
+      "import": "./dist/sse-post-agent.js"
     }
   },
   "publishConfig": {
