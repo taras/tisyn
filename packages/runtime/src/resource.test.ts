@@ -125,9 +125,7 @@ describe("resource orchestration", () => {
       },
     });
 
-    const body = Seq(
-      letIR("conn", effectIR("db", "connect"), provideIR(Ref("conn"))),
-    );
+    const body = Seq(letIR("conn", effectIR("db", "connect"), provideIR(Ref("conn"))));
     const ir = resourceIR(body);
     const { result, journal } = yield* execute({ ir });
     expect(result).toEqual({ status: "ok", value: "conn-handle" });
@@ -182,9 +180,7 @@ describe("resource orchestration", () => {
     // Two sequential resources with cleanup effects
     const body1 = Try(provideIR("first"), undefined, undefined, effectIR("cleanup", "first"));
     const body2 = Try(provideIR("second"), undefined, undefined, effectIR("cleanup", "second"));
-    const ir = Seq(
-      letIR("a", resourceIR(body1), letIR("b", resourceIR(body2), "done")),
-    );
+    const ir = Seq(letIR("a", resourceIR(body1), letIR("b", resourceIR(body2), "done")));
     const { result } = yield* execute({ ir });
     expect(result).toEqual({ status: "ok", value: "done" });
     // Reverse order: second created = first torn down
@@ -231,8 +227,7 @@ describe("resource orchestration", () => {
   // R22: spawned grandchildren torn down before cleanup effects
   it("R22: grandchildren torn down before cleanup effects", function* () {
     const order: string[] = [];
-    const { operation: grandchildStarted, resolve: signalStarted } =
-      withResolvers<void>();
+    const { operation: grandchildStarted, resolve: signalStarted } = withResolvers<void>();
 
     yield* Effects.around({
       *dispatch([effectId, _data]: [string, unknown]) {

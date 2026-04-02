@@ -40,7 +40,15 @@ const STRUCTURAL_IDS = new Set([
 ]);
 
 /** Compound external operations — use unquote, not resolve. */
-const COMPOUND_EXTERNAL_IDS = new Set(["all", "race", "scope", "spawn", "join", "resource", "provide"]);
+const COMPOUND_EXTERNAL_IDS = new Set([
+  "all",
+  "race",
+  "scope",
+  "spawn",
+  "join",
+  "resource",
+  "provide",
+]);
 
 export type Classification = "STRUCTURAL" | "EXTERNAL";
 

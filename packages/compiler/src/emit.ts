@@ -2795,7 +2795,12 @@ function validateProvideInResourceBody(body: ts.Block, ctx: EmitContext): void {
       provideFound = true;
       // P6: no code after provide at same level
       if (i < stmts.length - 1) {
-        throw error("P6", "No code may follow provide at the same nesting level", stmts[i + 1]!, ctx);
+        throw error(
+          "P6",
+          "No code may follow provide at the same nesting level",
+          stmts[i + 1]!,
+          ctx,
+        );
       }
       continue;
     }
@@ -2812,7 +2817,12 @@ function validateProvideInResourceBody(body: ts.Block, ctx: EmitContext): void {
         // P6: no code after the try at same level (except it IS the try, so
         // only code after the entire try statement matters)
         if (i < stmts.length - 1) {
-          throw error("P6", "No code may follow the try/provide block at the same nesting level", stmts[i + 1]!, ctx);
+          throw error(
+            "P6",
+            "No code may follow the try/provide block at the same nesting level",
+            stmts[i + 1]!,
+            ctx,
+          );
         }
         // Verify provide is the last statement in the try body
         validateProvideLastInTryBody(stmt.tryBlock, ctx);
@@ -2862,7 +2872,12 @@ function validateProvideLastInTryBody(block: ts.Block, ctx: EmitContext): void {
 /** Recursively check for provide in positions where it's forbidden (P5) */
 function checkForProvideInInvalidPosition(node: ts.Node, ctx: EmitContext): void {
   if (isProvideStatement(node as ts.Statement)) {
-    throw error("P5", "provide must not appear inside control flow, scoped, spawn, or nested generators", node, ctx);
+    throw error(
+      "P5",
+      "provide must not appear inside control flow, scoped, spawn, or nested generators",
+      node,
+      ctx,
+    );
   }
   // Don't recurse into generator functions — they are opaque boundaries
   if (ts.isFunctionExpression(node) || ts.isFunctionDeclaration(node) || ts.isArrowFunction(node)) {
