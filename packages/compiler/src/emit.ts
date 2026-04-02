@@ -2604,12 +2604,7 @@ function validateForOfEach(
 
   // each() must have exactly 1 argument
   if (yieldTarget.arguments.length !== 1) {
-    throw error(
-      "E-STREAM-004",
-      "each() requires exactly one argument",
-      yieldTarget,
-      ctx,
-    );
+    throw error("E-STREAM-004", "each() requires exactly one argument", yieldTarget, ctx);
   }
 
   const sourceExpr = yieldTarget.arguments[0]!;
@@ -2626,11 +2621,7 @@ function validateForOfEach(
 function bodyContainsBreakOrContinue(node: ts.Node): boolean {
   if (ts.isBreakStatement(node) || ts.isContinueStatement(node)) return true;
   // Do not descend into function expressions / arrow functions / generators
-  if (
-    ts.isFunctionExpression(node) ||
-    ts.isArrowFunction(node) ||
-    ts.isFunctionDeclaration(node)
-  ) {
+  if (ts.isFunctionExpression(node) || ts.isArrowFunction(node) || ts.isFunctionDeclaration(node)) {
     return false;
   }
   let found = false;
@@ -2659,7 +2650,16 @@ function emitForOfEach(
   const loopCarriedVars = detectForOfCarriedLetVars(stmt, ctx);
 
   if (hasReturn || loopCarriedVars.length > 0) {
-    return emitForOfEachCaseB(stmt, compiledSource, bindingName, rest, isLast, ctx, loopCarriedVars, hasReturn);
+    return emitForOfEachCaseB(
+      stmt,
+      compiledSource,
+      bindingName,
+      rest,
+      isLast,
+      ctx,
+      loopCarriedVars,
+      hasReturn,
+    );
   }
 
   // Case A: No return, no loop-carried state — simple recursive loop
@@ -2772,13 +2772,7 @@ function emitForOfEachCaseB(
   if (needsPack) {
     // Compile body statements with terminal-packed for early return packing
     const joinVars = loopCarriedVars;
-    compiledBody = emitForOfLoopBodyPacked(
-      bodyStmts,
-      loopName,
-      loopCarriedVars,
-      fnCtx,
-      joinVars,
-    );
+    compiledBody = emitForOfLoopBodyPacked(bodyStmts, loopName, loopCarriedVars, fnCtx, joinVars);
   } else {
     compiledBody = emitForOfLoopBody(bodyStmts, loopName, loopCarriedVars, fnCtx);
   }
@@ -2967,7 +2961,14 @@ function emitForOfEachPacked(
 
   if (!hasReturn && loopCarriedVars.length === 0) {
     // Case A in packed context: simple loop then packed continuation
-    const loopExpr = emitForOfEachCaseA(stmt, compiledSource, bindingName, () => null as unknown as Expr, true, ctx);
+    const loopExpr = emitForOfEachCaseA(
+      stmt,
+      compiledSource,
+      bindingName,
+      () => null as unknown as Expr,
+      true,
+      ctx,
+    );
     const loopDiscard = ctx.counter.next("discard");
     return Let(loopDiscard, loopExpr, isLast ? terminal() : rest());
   }

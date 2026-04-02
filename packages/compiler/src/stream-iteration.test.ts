@@ -333,11 +333,13 @@ describe("stream iteration lowering invariants", () => {
       }
     `);
     // Find a call node where fn is Ref("__loop_0")
-    const recursiveCall = findIR(ir, (n: any) =>
-      n?.tisyn === "eval" &&
-      n?.id === "call" &&
-      n?.data?.expr?.fn?.tisyn === "ref" &&
-      n?.data?.expr?.fn?.name?.startsWith("__loop_"),
+    const recursiveCall = findIR(
+      ir,
+      (n: any) =>
+        n?.tisyn === "eval" &&
+        n?.id === "call" &&
+        n?.data?.expr?.fn?.tisyn === "ref" &&
+        n?.data?.expr?.fn?.name?.startsWith("__loop_"),
     );
     expect(recursiveCall).toBeDefined();
   });
@@ -403,13 +405,15 @@ describe("stream iteration lowering invariants", () => {
       }
     `);
     // Find Let where name is "myItem" and value is Get(__item_N, "value")
-    const binding = findIR(ir, (n: any) =>
-      n?.tisyn === "eval" &&
-      n?.id === "let" &&
-      n?.data?.expr?.name === "myItem" &&
-      n?.data?.expr?.value?.tisyn === "eval" &&
-      n?.data?.expr?.value?.id === "get" &&
-      n?.data?.expr?.value?.data?.expr?.key === "value",
+    const binding = findIR(
+      ir,
+      (n: any) =>
+        n?.tisyn === "eval" &&
+        n?.id === "let" &&
+        n?.data?.expr?.name === "myItem" &&
+        n?.data?.expr?.value?.tisyn === "eval" &&
+        n?.data?.expr?.value?.id === "get" &&
+        n?.data?.expr?.value?.data?.expr?.key === "value",
     );
     expect(binding).toBeDefined();
   });
@@ -421,11 +425,13 @@ describe("stream iteration lowering invariants", () => {
       }
     `);
     // The __loop_ Let's body should be a Call (not wrapped in another Let)
-    const loopLet = findIR(ir, (n: any) =>
-      n?.tisyn === "eval" &&
-      n?.id === "let" &&
-      typeof n?.data?.expr?.name === "string" &&
-      n?.data?.expr?.name.startsWith("__loop_"),
+    const loopLet = findIR(
+      ir,
+      (n: any) =>
+        n?.tisyn === "eval" &&
+        n?.id === "let" &&
+        typeof n?.data?.expr?.name === "string" &&
+        n?.data?.expr?.name.startsWith("__loop_"),
     ) as any;
     expect(loopLet).toBeDefined();
     const body = loopLet.data.expr.body;
@@ -441,11 +447,13 @@ describe("stream iteration lowering invariants", () => {
       }
     `);
     // The __loop_ Let's body should be a Let(__discard, Call, continuation)
-    const loopLet = findIR(ir, (n: any) =>
-      n?.tisyn === "eval" &&
-      n?.id === "let" &&
-      typeof n?.data?.expr?.name === "string" &&
-      n?.data?.expr?.name.startsWith("__loop_"),
+    const loopLet = findIR(
+      ir,
+      (n: any) =>
+        n?.tisyn === "eval" &&
+        n?.id === "let" &&
+        typeof n?.data?.expr?.name === "string" &&
+        n?.data?.expr?.name.startsWith("__loop_"),
     ) as any;
     expect(loopLet).toBeDefined();
     const body = loopLet.data.expr.body;
@@ -467,11 +475,13 @@ describe("stream iteration lowering invariants", () => {
       }
     `);
     // Find the Fn node for the loop — it should have params for carried state
-    const loopFn = findIR(ir, (n: any) =>
-      n?.tisyn === "fn" &&
-      Array.isArray(n?.params) &&
-      n?.params.length > 0 &&
-      n?.params.some((p: string) => p.startsWith("n_")),
+    const loopFn = findIR(
+      ir,
+      (n: any) =>
+        n?.tisyn === "fn" &&
+        Array.isArray(n?.params) &&
+        n?.params.length > 0 &&
+        n?.params.some((p: string) => p.startsWith("n_")),
     ) as any;
     expect(loopFn).toBeDefined();
     expect(loopFn.params.length).toBeGreaterThan(0);

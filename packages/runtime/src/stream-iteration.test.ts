@@ -420,8 +420,7 @@ describe("stream journal invariants", () => {
       env: { source: stream as unknown as Val },
     });
     const subEvents = journal.filter(
-      (e) =>
-        e.type === "yield" && (e as YieldEvent).description.name === "subscribe",
+      (e) => e.type === "yield" && (e as YieldEvent).description.name === "subscribe",
     );
     expect(subEvents).toHaveLength(1);
   });
@@ -434,8 +433,7 @@ describe("stream journal invariants", () => {
       env: { source: stream as unknown as Val },
     });
     const nextEvents = journal.filter(
-      (e) =>
-        e.type === "yield" && (e as YieldEvent).description.name === "next",
+      (e) => e.type === "yield" && (e as YieldEvent).description.name === "next",
     );
     // 3 items + 1 done signal = 4 stream.next events
     expect(nextEvents).toHaveLength(4);
@@ -541,11 +539,7 @@ describe("stream replay", () => {
     ];
     const durableStream = new InMemoryStream(stored);
 
-    const ir = LetIR(
-      "sub",
-      StreamSubscribe(Ref("source")),
-      Ref("sub"),
-    );
+    const ir = LetIR("sub", StreamSubscribe(Ref("source")), Ref("sub"));
     const stream = mockStream(["a"] as Val[]);
     const { result } = yield* execute({
       ir: ir as unknown as IrInput,

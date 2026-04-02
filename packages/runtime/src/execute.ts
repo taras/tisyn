@@ -526,13 +526,19 @@ function* driveKernel(
             const sourceData = descriptor.data as unknown[];
             const source = sourceData[0];
             // Subscribe to the Effection stream
-            const sub = yield* (source as Operation<{ next(): Operation<IteratorResult<Val, unknown>> }>);
+            const sub = yield* source as Operation<{
+              next(): Operation<IteratorResult<Val, unknown>>;
+            }>;
             ctx.subscriptions.set(token, { subscription: sub, sourceDefinition: source });
             resultValue = { __tisyn_subscription: token } as unknown as Val;
           } else if (descriptor.id === "stream.next") {
             const nextData = descriptor.data as unknown[];
             const handle = nextData[0] as Record<string, unknown> | null;
-            if (!handle || typeof handle !== "object" || typeof handle.__tisyn_subscription !== "string") {
+            if (
+              !handle ||
+              typeof handle !== "object" ||
+              typeof handle.__tisyn_subscription !== "string"
+            ) {
               throw new RuntimeBugError("stream.next: argument is not a valid subscription handle");
             }
             const token = handle.__tisyn_subscription as string;
@@ -548,7 +554,9 @@ function* driveKernel(
             if (entry && !entry.subscription) {
               const src = entry.sourceDefinition as unknown[];
               const srcStream = src[0];
-              entry.subscription = yield* (srcStream as Operation<{ next(): Operation<IteratorResult<Val, unknown>> }>);
+              entry.subscription = yield* srcStream as Operation<{
+                next(): Operation<IteratorResult<Val, unknown>>;
+              }>;
             }
             if (!entry?.subscription) {
               throw new RuntimeBugError(`stream.next: no subscription for token '${token}'`);
@@ -1100,13 +1108,19 @@ function* orchestrateResourceChild(
             const token = `sub:${childId}:${subscriptionCounter++}`;
             const sourceData = descriptor.data as unknown[];
             const source = sourceData[0];
-            const sub = yield* (source as Operation<{ next(): Operation<IteratorResult<Val, unknown>> }>);
+            const sub = yield* source as Operation<{
+              next(): Operation<IteratorResult<Val, unknown>>;
+            }>;
             ctx.subscriptions.set(token, { subscription: sub, sourceDefinition: source });
             resultValue = { __tisyn_subscription: token } as unknown as Val;
           } else if (descriptor.id === "stream.next") {
             const nextData = descriptor.data as unknown[];
             const handle = nextData[0] as Record<string, unknown> | null;
-            if (!handle || typeof handle !== "object" || typeof handle.__tisyn_subscription !== "string") {
+            if (
+              !handle ||
+              typeof handle !== "object" ||
+              typeof handle.__tisyn_subscription !== "string"
+            ) {
               throw new RuntimeBugError("stream.next: argument is not a valid subscription handle");
             }
             const token = handle.__tisyn_subscription as string;
@@ -1120,7 +1134,9 @@ function* orchestrateResourceChild(
             if (entry && !entry.subscription) {
               const src = entry.sourceDefinition as unknown[];
               const srcStream = src[0];
-              entry.subscription = yield* (srcStream as Operation<{ next(): Operation<IteratorResult<Val, unknown>> }>);
+              entry.subscription = yield* srcStream as Operation<{
+                next(): Operation<IteratorResult<Val, unknown>>;
+              }>;
             }
             if (!entry?.subscription) {
               throw new RuntimeBugError(`stream.next: no subscription for token '${token}'`);
@@ -1425,13 +1441,19 @@ function* orchestrateResourceChild(
             const token = `sub:${childId}:${subscriptionCounter++}`;
             const sourceData = descriptor.data as unknown[];
             const source = sourceData[0];
-            const sub = yield* (source as Operation<{ next(): Operation<IteratorResult<Val, unknown>> }>);
+            const sub = yield* source as Operation<{
+              next(): Operation<IteratorResult<Val, unknown>>;
+            }>;
             ctx.subscriptions.set(token, { subscription: sub, sourceDefinition: source });
             resultValue = { __tisyn_subscription: token } as unknown as Val;
           } else if (descriptor.id === "stream.next") {
             const nextData = descriptor.data as unknown[];
             const handle = nextData[0] as Record<string, unknown> | null;
-            if (!handle || typeof handle !== "object" || typeof handle.__tisyn_subscription !== "string") {
+            if (
+              !handle ||
+              typeof handle !== "object" ||
+              typeof handle.__tisyn_subscription !== "string"
+            ) {
               throw new RuntimeBugError("stream.next: argument is not a valid subscription handle");
             }
             const token = handle.__tisyn_subscription as string;
@@ -1445,7 +1467,9 @@ function* orchestrateResourceChild(
             if (entry && !entry.subscription) {
               const src = entry.sourceDefinition as unknown[];
               const srcStream = src[0];
-              entry.subscription = yield* (srcStream as Operation<{ next(): Operation<IteratorResult<Val, unknown>> }>);
+              entry.subscription = yield* srcStream as Operation<{
+                next(): Operation<IteratorResult<Val, unknown>>;
+              }>;
             }
             if (!entry?.subscription) {
               throw new RuntimeBugError(`stream.next: no subscription for token '${token}'`);
