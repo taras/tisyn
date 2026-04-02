@@ -60,7 +60,11 @@ function findEvalNodes(node: unknown, prefix: string): Record<string, any>[] {
   function walk(n: unknown) {
     if (typeof n !== "object" || n === null) return;
     const obj = n as Record<string, unknown>;
-    if (obj["tisyn"] === "eval" && typeof obj["id"] === "string" && (obj["id"] as string).startsWith(prefix)) {
+    if (
+      obj["tisyn"] === "eval" &&
+      typeof obj["id"] === "string" &&
+      (obj["id"] as string).startsWith(prefix)
+    ) {
       results.push(obj as Record<string, any>);
     }
     for (const value of Object.values(obj)) {

@@ -3,7 +3,6 @@ import { expect, vi, beforeEach } from "vitest";
 import { scoped } from "effection";
 import { invoke } from "@tisyn/agent";
 import { installRemoteAgent } from "../install-remote.js";
-import type { HostMessage } from "../transport.js";
 import { Browser, browserTransport } from "./browser.js";
 
 // ── Mock Playwright ──
@@ -90,9 +89,7 @@ describe("browser transport", () => {
 
       yield* scoped(function* () {
         yield* installRemoteAgent(Browser, factory);
-        const result = yield* invoke(
-          Browser.content({ format: "text" }),
-        );
+        const result = yield* invoke(Browser.content({ format: "text" }));
         // Default page exists and responds
         expect(result).toHaveProperty("text");
         expect(result).toHaveProperty("url");
@@ -135,9 +132,7 @@ describe("browser transport", () => {
 
         yield* scoped(function* () {
           yield* installRemoteAgent(Browser, factory);
-          const result = yield* invoke(
-            Browser.navigate({ url: "https://example.com" }),
-          );
+          const result = yield* invoke(Browser.navigate({ url: "https://example.com" }));
           expect(result).toMatchObject({
             page: "page:0",
             status: 200,
@@ -169,9 +164,7 @@ describe("browser transport", () => {
 
         yield* scoped(function* () {
           yield* installRemoteAgent(Browser, factory);
-          const result = yield* invoke(
-            Browser.click({ selector: "#btn" }),
-          );
+          const result = yield* invoke(Browser.click({ selector: "#btn" }));
           expect(result).toEqual({ ok: true });
         });
       });
@@ -197,9 +190,7 @@ describe("browser transport", () => {
 
         yield* scoped(function* () {
           yield* installRemoteAgent(Browser, factory);
-          const result = yield* invoke(
-            Browser.fill({ selector: "#input", value: "hello" }),
-          );
+          const result = yield* invoke(Browser.fill({ selector: "#input", value: "hello" }));
           expect(result).toEqual({ ok: true });
         });
       });
@@ -277,9 +268,7 @@ describe("browser transport", () => {
 
       yield* scoped(function* () {
         yield* installRemoteAgent(Browser, factory);
-        const result = yield* invoke(
-          Browser.navigate({ url: "https://example.com" }),
-        );
+        const result = yield* invoke(Browser.navigate({ url: "https://example.com" }));
         expect(result.page).toBe("page:0");
       });
     });
@@ -363,9 +352,7 @@ describe("browser transport", () => {
         yield* installRemoteAgent(Browser, factory);
         yield* invoke(Browser.navigate({ url: "https://example.com" }));
 
-        const navResult = yield* invoke(
-          Browser.navigate({ url: "https://example.com" }),
-        );
+        const navResult = yield* invoke(Browser.navigate({ url: "https://example.com" }));
         expect(JSON.parse(JSON.stringify(navResult))).toEqual(navResult);
 
         const clickResult = yield* invoke(Browser.click({ selector: "#btn" }));
@@ -384,9 +371,7 @@ describe("browser transport", () => {
 
       yield* scoped(function* () {
         yield* installRemoteAgent(Browser, factory);
-        const result = yield* invoke(
-          Browser.navigate({ url: "https://example.com" }),
-        );
+        const result = yield* invoke(Browser.navigate({ url: "https://example.com" }));
         expect(typeof result.page).toBe("string");
       });
     });

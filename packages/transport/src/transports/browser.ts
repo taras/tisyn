@@ -162,15 +162,13 @@ export function browserTransport(config?: BrowserTransportConfig): AgentTranspor
     });
 
     // Create context + default page
-    const context: BrowserContext = yield* call(() =>
-      browser.newContext({ viewport }),
-    );
+    const context: BrowserContext = yield* call(() => browser.newContext({ viewport }));
     const defaultPage: Page = yield* call(() => context.newPage());
 
     // Page registry
     const pages = new Map<string, Page>([["page:0", defaultPage]]);
     let activePage = "page:0";
-    let pageCounter = 0;
+    let _pageCounter = 0;
 
     // Resolve target page from optional page param
     function resolvePage(pageId?: string): Page {
@@ -200,9 +198,7 @@ export function browserTransport(config?: BrowserTransportConfig): AgentTranspor
 
       *click(params: ClickParams): Operation<ClickResult> {
         const page = resolvePage(params.page);
-        yield* call(() =>
-          page.click(params.selector, { timeout: params.timeout ?? 30000 }),
-        );
+        yield* call(() => page.click(params.selector, { timeout: params.timeout ?? 30000 }));
         return { ok: true as const };
       },
 
@@ -239,9 +235,7 @@ export function browserTransport(config?: BrowserTransportConfig): AgentTranspor
           page.screenshot({
             fullPage: params.fullPage ?? false,
             type: format,
-            ...(format === "jpeg" && params.quality != null
-              ? { quality: params.quality }
-              : {}),
+            ...(format === "jpeg" && params.quality != null ? { quality: params.quality } : {}),
           }),
         );
         const data = buffer.toString("base64");

@@ -16,7 +16,7 @@ import { InMemoryStream } from "@tisyn/durable-streams";
 import { Ref, Get, Let } from "@tisyn/ir";
 import { agent, operation } from "@tisyn/agent";
 import { inprocessTransport } from "@tisyn/transport";
-import type { YieldEvent, CloseEvent, DurableEvent } from "@tisyn/kernel";
+import type { YieldEvent, DurableEvent } from "@tisyn/kernel";
 
 // ── Agent + IR helpers ──
 
@@ -42,14 +42,6 @@ function yieldEvent(type: string, name: string, value: unknown, coroutineId: str
     type: "yield",
     coroutineId,
     description: { type, name },
-    result: { status: "ok", value: value as never },
-  };
-}
-
-function closeOk(value: unknown, coroutineId: string): CloseEvent {
-  return {
-    type: "close",
-    coroutineId,
     result: { status: "ok", value: value as never },
   };
 }
@@ -111,7 +103,11 @@ describe("Browser scope — fresh execution", () => {
     expect(navigateCalled).toBe(true);
     expect(result.status).toBe("ok");
     if (result.status === "ok") {
-      expect(result.value).toMatchObject({ page: "page:0", status: 200, url: "https://example.com" });
+      expect(result.value).toMatchObject({
+        page: "page:0",
+        status: 200,
+        url: "https://example.com",
+      });
     }
   });
 
@@ -297,7 +293,12 @@ describe("Browser scope — replay", () => {
     // Construct a partial journal: scope child has a YieldEvent but no CloseEvent
     // The scope itself is "root.0", so child effects have coroutineId "root.0"
     const stored: DurableEvent[] = [
-      yieldEvent("browser", "navigate", { page: "page:0", status: 200, url: "https://example.com" }, "root.0"),
+      yieldEvent(
+        "browser",
+        "navigate",
+        { page: "page:0", status: 200, url: "https://example.com" },
+        "root.0",
+      ),
       // No closeOk for root.0 — scope is incomplete
     ];
 
