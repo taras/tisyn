@@ -84,6 +84,8 @@ interface EmitContext {
   scopedContracts?: Map<string, DiscoveredContract>;
   /** Set only during resource body compilation. */
   inResourceBody?: boolean;
+  /** Set only during for...of yield* each(...) body compilation. */
+  inStreamLoop?: boolean;
 }
 
 // ── Scope helpers ──
@@ -323,6 +325,16 @@ function emitStatementList(stmts: ts.Statement[], index: number, ctx: EmitContex
     if (isLast) return blockResult;
     const name = ctx.counter.next("discard");
     return Let(name, blockResult, rest());
+  }
+
+  // ── ForOfStatement: stream iteration ──
+  if (ts.isForOfStatement(stmt)) {
+    return emitForOfEach(stmt, rest, isLast, ctx);
+  }
+
+  // ── ForInStatement: always rejected ──
+  if (ts.isForInStatement(stmt)) {
+    throw error("E013", "for...in is not allowed", stmt, ctx);
   }
 
   throw error("E999", `Unsupported statement: ${ts.SyntaxKind[stmt.kind]}`, stmt, ctx);
@@ -668,6 +680,16 @@ function emitStatementListWithTerminal(
   // If statement in branch
   if (ts.isIfStatement(stmt)) {
     return emitIfStatementInList(stmt, stmts, index, ctx, terminal);
+  }
+
+  // ForOfStatement in branch
+  if (ts.isForOfStatement(stmt)) {
+    return emitForOfEach(stmt, rest, isLast, ctx);
+  }
+
+  // ForInStatement: always rejected
+  if (ts.isForInStatement(stmt)) {
+    throw new CompileError("E013", "for...in is not allowed", 0, 0);
   }
 
   throw new CompileError(
@@ -1420,6 +1442,16 @@ function emitStatementListWithTerminalPacked(
   // Nested try statement in packed branch
   if (ts.isTryStatement(stmt)) {
     return emitTryStatementInPackedBranch(stmt, stmts, index, ctx, joinVars, terminal);
+  }
+
+  // ForOfStatement in packed branch
+  if (ts.isForOfStatement(stmt)) {
+    return emitForOfEachPacked(stmt, stmts, index, ctx, joinVars, terminal);
+  }
+
+  // ForInStatement: always rejected
+  if (ts.isForInStatement(stmt)) {
+    throw new CompileError("E013", "for...in is not allowed", 0, 0);
   }
 
   throw new CompileError(
@@ -2460,6 +2492,500 @@ function bodyContainsReturn(stmt: ts.Statement): boolean {
   return false;
 }
 
+// ── Stream iteration: for (const x of yield* each(expr)) { ... } ──
+
+/**
+ * Detect loop-carried let variables for a ForOfStatement body.
+ * Same logic as detectLoopCarriedLetVars but for ForOfStatement.
+ */
+function detectForOfCarriedLetVars(stmt: ts.ForOfStatement, ctx: EmitContext): string[] {
+  const assigned = new Set<string>();
+  collectAssignedIdents(stmt.statement, assigned);
+  return Array.from(assigned).filter((name) => {
+    const found = lookupBinding(name, ctx);
+    return found !== undefined && found.info.kind === "let";
+  });
+}
+
+/**
+ * Validate the constrained for...of form and extract components.
+ * Returns { bindingName, sourceExpr } or throws a CompileError.
+ */
+function validateForOfEach(
+  stmt: ts.ForOfStatement,
+  ctx: EmitContext,
+): { bindingName: string; sourceExpr: ts.Expression } {
+  // 1. Nesting check
+  if (ctx.inStreamLoop) {
+    throw error(
+      "E-STREAM-006",
+      "Nested for...of stream iteration is not supported in this version",
+      stmt,
+      ctx,
+    );
+  }
+
+  // 2. Must be a variable declaration list with `const`
+  const init = stmt.initializer;
+  if (!ts.isVariableDeclarationList(init)) {
+    throw error(
+      "E-STREAM-001",
+      "for...of stream iteration requires 'const', not 'let' or 'var'",
+      stmt,
+      ctx,
+    );
+  }
+  if (!(init.flags & ts.NodeFlags.Const)) {
+    throw error(
+      "E-STREAM-001",
+      "for...of stream iteration requires 'const', not 'let' or 'var'",
+      stmt,
+      ctx,
+    );
+  }
+
+  // 3. Single non-destructured identifier binding
+  if (init.declarations.length !== 1) {
+    throw error(
+      "E-STREAM-002",
+      "Destructuring in for...of stream iteration is not supported",
+      stmt,
+      ctx,
+    );
+  }
+  const decl = init.declarations[0]!;
+  if (!ts.isIdentifier(decl.name)) {
+    throw error(
+      "E-STREAM-002",
+      "Destructuring in for...of stream iteration is not supported",
+      decl.name,
+      ctx,
+    );
+  }
+  const bindingName = decl.name.text;
+
+  // 4. __ prefix check
+  if (bindingName.startsWith("__")) {
+    throw error("E028", "Variable names must not start with '__'", decl.name, ctx);
+  }
+
+  // 5. Expression must be `yield* each(expr)`
+  const expr = stmt.expression;
+
+  // Check for `each(expr)` without yield* → E-STREAM-003
+  if (
+    ts.isCallExpression(expr) &&
+    ts.isIdentifier(expr.expression) &&
+    expr.expression.text === "each"
+  ) {
+    throw error(
+      "E-STREAM-003",
+      "for...of with each() requires 'yield*': use 'yield* each(expr)'",
+      expr,
+      ctx,
+    );
+  }
+
+  // Must be yield* <something>
+  if (!ts.isYieldExpression(expr) || !expr.asteriskToken || !expr.expression) {
+    throw error("E013", "for...in/for...of is not allowed", stmt, ctx);
+  }
+
+  const yieldTarget = expr.expression;
+
+  // The yield* target must be each(...)
+  if (
+    !ts.isCallExpression(yieldTarget) ||
+    !ts.isIdentifier(yieldTarget.expression) ||
+    yieldTarget.expression.text !== "each"
+  ) {
+    throw error("E013", "for...in/for...of is not allowed", stmt, ctx);
+  }
+
+  // each() must have exactly 1 argument
+  if (yieldTarget.arguments.length !== 1) {
+    throw error(
+      "E-STREAM-004",
+      "each() requires exactly one argument",
+      yieldTarget,
+      ctx,
+    );
+  }
+
+  const sourceExpr = yieldTarget.arguments[0]!;
+
+  // 6. Body must not contain break/continue
+  if (bodyContainsBreakOrContinue(stmt.statement)) {
+    throw error("E020", "break/continue is not allowed", stmt.statement, ctx);
+  }
+
+  return { bindingName, sourceExpr };
+}
+
+/** Check if a statement body contains break or continue (not descending into nested functions). */
+function bodyContainsBreakOrContinue(node: ts.Node): boolean {
+  if (ts.isBreakStatement(node) || ts.isContinueStatement(node)) return true;
+  // Do not descend into function expressions / arrow functions / generators
+  if (
+    ts.isFunctionExpression(node) ||
+    ts.isArrowFunction(node) ||
+    ts.isFunctionDeclaration(node)
+  ) {
+    return false;
+  }
+  let found = false;
+  ts.forEachChild(node, (child) => {
+    if (!found && bodyContainsBreakOrContinue(child)) found = true;
+  });
+  return found;
+}
+
+/**
+ * Emit for (const x of yield* each(expr)) { ... }
+ *
+ * Lowers to recursive Fn + Call with stream.subscribe / stream.next.
+ * Handles loop-carried let state and early return packing.
+ */
+function emitForOfEach(
+  stmt: ts.ForOfStatement,
+  rest: () => Expr,
+  isLast: boolean,
+  ctx: EmitContext,
+): Expr {
+  const { bindingName, sourceExpr } = validateForOfEach(stmt, ctx);
+  const compiledSource = emitExpression(sourceExpr, ctx);
+
+  const hasReturn = bodyContainsReturn(stmt.statement);
+  const loopCarriedVars = detectForOfCarriedLetVars(stmt, ctx);
+
+  if (hasReturn || loopCarriedVars.length > 0) {
+    return emitForOfEachCaseB(stmt, compiledSource, bindingName, rest, isLast, ctx, loopCarriedVars, hasReturn);
+  }
+
+  // Case A: No return, no loop-carried state — simple recursive loop
+  return emitForOfEachCaseA(stmt, compiledSource, bindingName, rest, isLast, ctx);
+}
+
+/** Case A: Simple stream iteration — no return, no loop-carried state. */
+function emitForOfEachCaseA(
+  stmt: ts.ForOfStatement,
+  compiledSource: Expr,
+  bindingName: string,
+  rest: () => Expr,
+  isLast: boolean,
+  ctx: EmitContext,
+): Expr {
+  const subName = ctx.counter.next("sub");
+  const loopName = ctx.counter.next("loop");
+  const itemName = ctx.counter.next("item");
+
+  // Compile body with inStreamLoop flag set
+  const bodyStmts = getBodyStatements(stmt.statement);
+  const bodyCtx: EmitContext = {
+    ...ctx,
+    scopeStack: cloneScopeStack(ctx.scopeStack),
+    inStreamLoop: true,
+  };
+  pushFrame(bodyCtx);
+  declareBinding(bindingName, "const", bodyCtx);
+  const compiledBody = emitStatementList(bodyStmts, 0, bodyCtx);
+  popFrame(bodyCtx);
+
+  const discardName = ctx.counter.next("discard");
+
+  // Build the Fn body:
+  //   Let(__item, stream.next([Ref(__sub)]),
+  //     If(Get(__item, "done"), null,
+  //       Let(binding, Get(__item, "value"),
+  //         Let(__discard, body, Call(__loop, [])))))
+  const loopFnBody = Let(
+    itemName,
+    ExternalEval("stream.next", [Ref(subName)] as unknown as Expr),
+    If(
+      Get(Ref(itemName), "done") as Expr,
+      null as unknown as Expr,
+      Let(
+        bindingName,
+        Get(Ref(itemName), "value") as Expr,
+        Let(discardName, compiledBody, Call(Ref(loopName), [])),
+      ),
+    ),
+  );
+
+  const loopFn = Fn([], loopFnBody);
+
+  // Call site
+  const callExpr = Call(Ref(loopName), []);
+  let callSiteExpr: Expr;
+  if (isLast) {
+    callSiteExpr = callExpr;
+  } else {
+    callSiteExpr = Let(ctx.counter.next("discard"), callExpr, rest());
+  }
+
+  return Let(
+    subName,
+    ExternalEval("stream.subscribe", [compiledSource] as unknown as Expr),
+    Let(loopName, loopFn, callSiteExpr),
+  );
+}
+
+/**
+ * Case B: Stream iteration with return and/or loop-carried state.
+ * Mirrors emitWhileCaseB — the Fn takes params for carried vars,
+ * the done branch returns carried values, and the call site dispatches.
+ */
+function emitForOfEachCaseB(
+  stmt: ts.ForOfStatement,
+  compiledSource: Expr,
+  bindingName: string,
+  rest: () => Expr,
+  isLast: boolean,
+  ctx: EmitContext,
+  loopCarriedVars: string[],
+  hasReturn: boolean,
+  outerPack?: { joinVars: string[]; fallthroughCont: () => Expr },
+): Expr {
+  const subName = ctx.counter.next("sub");
+  const loopName = ctx.counter.next("loop");
+  const itemName = ctx.counter.next("item");
+
+  // Loop-carried var params: current versioned names become Fn param names
+  const loopCarriedParams = loopCarriedVars.map((v) => resolveRef(v, ctx));
+  const initArgs: Expr[] = loopCarriedParams.map((pn) => Ref(pn) as Expr);
+
+  const needsRebind = loopCarriedVars.length > 0;
+  const needsPack = hasReturn && (!isLast || needsRebind);
+
+  // Build the Fn body
+  const bodyStmts = getBodyStatements(stmt.statement);
+  const fnCtx: EmitContext = {
+    ...ctx,
+    scopeStack: cloneScopeStack(ctx.scopeStack),
+    inStreamLoop: true,
+  };
+  pushFrame(fnCtx);
+  declareBinding(bindingName, "const", fnCtx);
+
+  // Build recursive call args (will use bumped versions after body compilation)
+  let compiledBody: Expr;
+  if (needsPack) {
+    // Compile body statements with terminal-packed for early return packing
+    const joinVars = loopCarriedVars;
+    compiledBody = emitForOfLoopBodyPacked(
+      bodyStmts,
+      loopName,
+      loopCarriedVars,
+      fnCtx,
+      joinVars,
+    );
+  } else {
+    compiledBody = emitForOfLoopBody(bodyStmts, loopName, loopCarriedVars, fnCtx);
+  }
+
+  popFrame(fnCtx);
+
+  // Done branch: return carried values (or null if no carried state)
+  let doneBranch: Expr;
+  if (needsPack || needsRebind) {
+    const fields: Record<string, Expr> = {};
+    if (needsPack) {
+      fields.__tag = "exit" as unknown as Expr;
+    }
+    fields.__value = null as unknown as Expr;
+    if (needsRebind) {
+      loopCarriedVars.forEach((v, i) => {
+        fields[v] = Ref(loopCarriedParams[i]!) as Expr;
+      });
+    }
+    doneBranch = Construct(fields as any) as Expr;
+  } else {
+    doneBranch = null as unknown as Expr;
+  }
+
+  const loopFnBody = Let(
+    itemName,
+    ExternalEval("stream.next", [Ref(subName)] as unknown as Expr),
+    If(
+      Get(Ref(itemName), "done") as Expr,
+      doneBranch,
+      Let(bindingName, Get(Ref(itemName), "value") as Expr, compiledBody),
+    ),
+  );
+
+  const loopFn = Fn(loopCarriedParams, loopFnBody);
+  const callExpr = Call(Ref(loopName), initArgs);
+
+  if (needsPack || needsRebind) {
+    const resultName = ctx.counter.next("loop_result");
+    const resultRef = Ref(resultName);
+
+    // Bump each carried var in outer ctx BEFORE building rest()
+    const newIrNames = needsRebind ? loopCarriedVars.map((v) => bumpVersion(v, ctx)) : [];
+
+    const buildRebindChain = (cont: Expr): Expr => {
+      let chain = cont;
+      for (let i = loopCarriedVars.length - 1; i >= 0; i--) {
+        chain = Let(newIrNames[i]!, Get(resultRef, loopCarriedVars[i]!) as Expr, chain);
+      }
+      return chain;
+    };
+
+    if (outerPack) {
+      const outerReturnFields: Record<string, Expr> = {
+        __tag: "return" as unknown as Expr,
+        __value: Get(resultRef, "__value") as Expr,
+      };
+      for (const v of outerPack.joinVars) {
+        outerReturnFields[v] = Ref(resolveRef(v, ctx));
+      }
+      const outerReturnExpr = Construct(outerReturnFields) as Expr;
+      const fallthroughCont: Expr = needsRebind
+        ? buildRebindChain(outerPack.fallthroughCont())
+        : outerPack.fallthroughCont();
+      return Let(
+        subName,
+        ExternalEval("stream.subscribe", [compiledSource] as unknown as Expr),
+        Let(
+          loopName,
+          loopFn,
+          Let(
+            resultName,
+            callExpr,
+            If(
+              Eq(Get(resultRef, "__tag") as Expr, "return" as unknown as Expr) as Expr,
+              outerReturnExpr,
+              fallthroughCont,
+            ),
+          ),
+        ),
+      );
+    }
+
+    if (isLast) {
+      return Let(
+        subName,
+        ExternalEval("stream.subscribe", [compiledSource] as unknown as Expr),
+        Let(loopName, loopFn, Let(resultName, callExpr, Get(resultRef, "__value") as Expr)),
+      );
+    }
+
+    if (needsPack) {
+      const continuation: Expr = needsRebind ? buildRebindChain(rest()) : rest();
+      return Let(
+        subName,
+        ExternalEval("stream.subscribe", [compiledSource] as unknown as Expr),
+        Let(
+          loopName,
+          loopFn,
+          Let(
+            resultName,
+            callExpr,
+            If(
+              Eq(Get(resultRef, "__tag") as Expr, "return" as unknown as Expr) as Expr,
+              Get(resultRef, "__value") as Expr,
+              continuation,
+            ),
+          ),
+        ),
+      );
+    }
+
+    // !needsPack && needsRebind && !isLast
+    return Let(
+      subName,
+      ExternalEval("stream.subscribe", [compiledSource] as unknown as Expr),
+      Let(loopName, loopFn, Let(resultName, callExpr, buildRebindChain(rest()))),
+    );
+  }
+
+  // Simple case: no pack, no rebind
+  if (isLast) {
+    return Let(
+      subName,
+      ExternalEval("stream.subscribe", [compiledSource] as unknown as Expr),
+      Let(loopName, loopFn, callExpr),
+    );
+  }
+  return Let(
+    subName,
+    ExternalEval("stream.subscribe", [compiledSource] as unknown as Expr),
+    Let(loopName, loopFn, Let(ctx.counter.next("discard"), callExpr, rest())),
+  );
+}
+
+/** Emit body statements for Case B stream loop (no packing). Terminal is recursive Call. */
+function emitForOfLoopBody(
+  stmts: ts.Statement[],
+  loopName: string,
+  loopCarriedVars: string[],
+  ctx: EmitContext,
+): Expr {
+  // Build the body using emitStatementListWithTerminal where terminal = recursive call
+  const recursiveCall = () => {
+    const args = loopCarriedVars.map((v) => Ref(resolveRef(v, ctx)) as Expr);
+    return Call(Ref(loopName), args);
+  };
+  return emitStatementListWithTerminal(stmts, 0, ctx, recursiveCall);
+}
+
+/** Emit body statements for Case B stream loop with return packing. */
+function emitForOfLoopBodyPacked(
+  stmts: ts.Statement[],
+  loopName: string,
+  loopCarriedVars: string[],
+  ctx: EmitContext,
+  joinVars: string[],
+): Expr {
+  const recursiveCall = () => {
+    const args = loopCarriedVars.map((v) => Ref(resolveRef(v, ctx)) as Expr);
+    return Call(Ref(loopName), args);
+  };
+  return emitStatementListWithTerminalPacked(stmts, 0, ctx, joinVars, recursiveCall);
+}
+
+/**
+ * Emit for...of each in a packed branch context (inside while-with-return or similar).
+ * Delegates to emitForOfEachCaseB with outer packing info.
+ */
+function emitForOfEachPacked(
+  stmt: ts.ForOfStatement,
+  stmts: ts.Statement[],
+  index: number,
+  ctx: EmitContext,
+  outerJoinVars: string[],
+  terminal: () => Expr,
+): Expr {
+  const { bindingName, sourceExpr } = validateForOfEach(stmt, ctx);
+  const compiledSource = emitExpression(sourceExpr, ctx);
+
+  const rest = () =>
+    emitStatementListWithTerminalPacked(stmts, index + 1, ctx, outerJoinVars, terminal);
+  const isLast = index === stmts.length - 1;
+  const hasReturn = bodyContainsReturn(stmt.statement);
+  const loopCarriedVars = detectForOfCarriedLetVars(stmt, ctx);
+
+  if (!hasReturn && loopCarriedVars.length === 0) {
+    // Case A in packed context: simple loop then packed continuation
+    const loopExpr = emitForOfEachCaseA(stmt, compiledSource, bindingName, () => null as unknown as Expr, true, ctx);
+    const loopDiscard = ctx.counter.next("discard");
+    return Let(loopDiscard, loopExpr, isLast ? terminal() : rest());
+  }
+
+  const outerPackCont = isLast ? terminal : rest;
+  return emitForOfEachCaseB(
+    stmt,
+    compiledSource,
+    bindingName,
+    rest,
+    false,
+    ctx,
+    loopCarriedVars,
+    hasReturn,
+    { joinVars: outerJoinVars, fallthroughCont: outerPackCont },
+  );
+}
+
 // ── Throw (§7.9) ──
 
 function emitThrowStatement(stmt: ts.ThrowStatement, ctx: EmitContext): Expr {
@@ -2540,9 +3066,34 @@ function emitYieldStar(target: ts.Expression, ctx: EmitContext): Expr {
         return ExternalEval("sleep", args as unknown as Expr);
       }
 
+      // yield* each(...) outside for...of → E-STREAM-004
+      if (callee.text === "each") {
+        throw error(
+          "E-STREAM-004",
+          "each() can only be used as the iterable in 'for (const x of yield* each(expr))'",
+          target,
+          ctx,
+        );
+      }
+
       // Sub-workflow: yield* fn(args)
       const args = target.arguments.map((a) => emitExpression(a, ctx));
       return Call(Ref(callee.text), args);
+    }
+
+    // yield* each.next(...) → E-STREAM-005
+    if (
+      ts.isPropertyAccessExpression(callee) &&
+      ts.isIdentifier(callee.expression) &&
+      callee.expression.text === "each" &&
+      callee.name.text === "next"
+    ) {
+      throw error(
+        "E-STREAM-005",
+        "each.next() is not part of the Tisyn authored language",
+        target,
+        ctx,
+      );
     }
 
     // Case 2: yield* handle.method(args) — handle method call inside scoped body
@@ -3804,6 +4355,16 @@ function emitArrowFunction(node: ts.ArrowFunction, ctx: EmitContext): Expr {
 function emitCallExpression(node: ts.CallExpression, ctx: EmitContext): Expr {
   const callee = node.expression;
 
+  // each(...) in call position → E-STREAM-004
+  if (ts.isIdentifier(callee) && callee.text === "each") {
+    throw error(
+      "E-STREAM-004",
+      "each() can only be used as the iterable in 'for (const x of yield* each(expr))'",
+      node,
+      ctx,
+    );
+  }
+
   // f(args) → Call(Ref("f"), [args])
   if (ts.isIdentifier(callee)) {
     const args = node.arguments.map((a) => emitExpression(a, ctx));
@@ -3901,12 +4462,34 @@ function checkUnsupportedExpression(node: ts.Expression, ctx: EmitContext): void
   if (ts.isCallExpression(node)) {
     const callee = node.expression;
     if (ts.isIdentifier(callee)) {
+      if (callee.text === "each") {
+        throw error(
+          "E-STREAM-004",
+          "each() can only be used as the iterable in 'for (const x of yield* each(expr))'",
+          node,
+          ctx,
+        );
+      }
       if (callee.text === "eval") {
         throw error("E014", "eval() is not allowed", node, ctx);
       }
       if (callee.text === "Promise") {
         throw error("E021", "Promise is not allowed", node, ctx);
       }
+    }
+    // each.next() → E-STREAM-005
+    if (
+      ts.isPropertyAccessExpression(callee) &&
+      ts.isIdentifier(callee.expression) &&
+      callee.expression.text === "each" &&
+      callee.name.text === "next"
+    ) {
+      throw error(
+        "E-STREAM-005",
+        "each.next() is not part of the Tisyn authored language",
+        node,
+        ctx,
+      );
     }
     // new Function() → E014
     if (ts.isPropertyAccessExpression(callee)) {
