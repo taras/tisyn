@@ -20,17 +20,6 @@ function expectCompileError(source: string, expectedCode: string) {
   }
 }
 
-/** Walk an IR tree, collecting all Eval ids encountered. */
-function collectEvalIds(ir: unknown): string[] {
-  const ids: string[] = [];
-  walkIR(ir, (node: any) => {
-    if (node && typeof node === "object" && node.tisyn === "eval" && typeof node.id === "string") {
-      ids.push(node.id);
-    }
-  });
-  return ids;
-}
-
 function walkIR(node: unknown, visitor: (n: unknown) => void): void {
   if (node === null || node === undefined || typeof node !== "object") return;
   visitor(node);

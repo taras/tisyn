@@ -10,8 +10,7 @@
 
 import { describe, it } from "@effectionx/vitest";
 import { expect } from "vitest";
-import { spawn, createChannel, sleep } from "effection";
-import type { Operation, Channel } from "effection";
+import type { Operation } from "effection";
 import { execute } from "./execute.js";
 import { Effects } from "@tisyn/agent";
 import type { Val, IrInput } from "@tisyn/ir";
@@ -67,14 +66,6 @@ function GetIR(obj: unknown, key: string) {
     tisyn: "eval" as const,
     id: "get",
     data: { tisyn: "quote" as const, expr: { obj, key } },
-  };
-}
-
-function SeqIR(...exprs: unknown[]) {
-  return {
-    tisyn: "eval" as const,
-    id: "seq",
-    data: { tisyn: "quote" as const, expr: { exprs } },
   };
 }
 
