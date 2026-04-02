@@ -12,8 +12,9 @@ import type {
   AgentMessage,
 } from "../transport.js";
 import { createProtocolServer } from "../protocol-server.js";
+
+// Playwright types only — erased at runtime, no module load
 import type { Browser as PWBrowser, BrowserContext, Page } from "playwright-core";
-import { chromium, firefox, webkit } from "playwright-core";
 
 // ── Capability composition ──
 
@@ -88,17 +89,14 @@ export interface BrowserTransportConfig {
    * The bundle must be built using createBrowserExecutor() with
    * the desired capabilities.
    *
-   * When provided: real-browser mode — IR crosses page.evaluate.
-   * When omitted: in-process mode — IR executed directly with capabilities.
+   * When provided: real-browser mode — requires playwright-core,
+   * launches browser, injects executor, sends IR via page.evaluate.
+   *
+   * When omitted: in-process mode — no Playwright dependency,
+   * executes IR directly with configured capabilities.
    */
   executor?: string;
 }
-
-const ENGINE_MAP = {
-  chromium,
-  firefox,
-  webkit,
-} as const;
 
 const DEFAULT_VIEWPORT = { width: 1280, height: 720 };
 
@@ -106,70 +104,74 @@ const DEFAULT_VIEWPORT = { width: 1280, height: 720 };
  * Create a transport factory for a browser agent.
  *
  * Supports two execution modes:
- * - **In-process** (executor omitted): executes IR directly using @tisyn/runtime
- *   with the configured capabilities. Good for testing and Node.js execution.
- * - **Real-browser** (executor provided): injects the executor IIFE into a
- *   Playwright page and sends IR via page.evaluate. The executor bundle must
- *   be built using createBrowserExecutor() with the desired capabilities.
+ * - **In-process** (executor omitted): executes IR directly using the kernel
+ *   evaluator with the configured capabilities. No Playwright dependency.
+ * - **Real-browser** (executor provided): launches a Playwright browser,
+ *   injects the executor IIFE, and sends IR via page.evaluate. Requires
+ *   playwright-core.
  *
  * Follows the same structural pattern as inprocessTransport: bidirectional
  * channels, protocol server in an isolated scope, cleanup on scope exit.
  */
 export function browserTransport(config?: BrowserTransportConfig): AgentTransportFactory {
   return function* (): Operation<AgentTransport> {
-    const headless = config?.headless ?? true;
-    const viewport = config?.viewport ?? DEFAULT_VIEWPORT;
-    const engineName = config?.engine ?? "chromium";
-    const launchArgs = config?.launchArgs ?? [];
     const capabilities = config?.capabilities ?? [];
     const executorPath = config?.executor;
-    const url = config?.url;
 
-    const browserType = ENGINE_MAP[engineName];
-    if (!browserType) {
-      throw new Error(`Unknown browser engine: ${engineName}`);
-    }
+    // Build the execute handler based on mode
+    let executeHandler: (params: ExecuteParams) => Operation<Json>;
 
-    // Launch browser
-    const browser: PWBrowser = yield* call(() =>
-      browserType.launch({ headless, args: launchArgs }),
-    );
-    yield* ensure(() => {
-      browser.close().catch(() => {});
-    });
-
-    // Create context + default page
-    const context: BrowserContext = yield* call(() => browser.newContext({ viewport }));
-    const page: Page = yield* call(() => context.newPage());
-
-    // Navigate to URL if configured
-    if (url) {
-      yield* call(() => page.goto(url));
-    }
-
-    // Inject executor bundle if in real-browser mode
     if (executorPath) {
+      // ── Real-browser mode: launch Playwright, inject executor ──
+      const headless = config?.headless ?? true;
+      const viewport = config?.viewport ?? DEFAULT_VIEWPORT;
+      const engineName = config?.engine ?? "chromium";
+      const launchArgs = config?.launchArgs ?? [];
+      const url = config?.url;
+
+      // Dynamic import — playwright-core is only loaded for real-browser mode
+      const pw: typeof import("playwright-core") = yield* call(() => import("playwright-core"));
+      const engineMap = { chromium: pw.chromium, firefox: pw.firefox, webkit: pw.webkit } as const;
+      const browserType = engineMap[engineName];
+      if (!browserType) {
+        throw new Error(`Unknown browser engine: ${engineName}`);
+      }
+
+      // Launch browser
+      const browser: PWBrowser = yield* call(() =>
+        browserType.launch({ headless, args: launchArgs }),
+      );
+      yield* ensure(() => {
+        browser.close().catch(() => {});
+      });
+
+      // Create context + default page
+      const context: BrowserContext = yield* call(() => browser.newContext({ viewport }));
+      const page: Page = yield* call(() => context.newPage());
+
+      // Navigate to URL if configured
+      if (url) {
+        yield* call(() => page.goto(url));
+      }
+
+      // Inject executor bundle
       yield* call(() => page.addScriptTag({ path: executorPath }));
       yield* call(() =>
         page.waitForFunction(() => typeof (globalThis as any).__tisyn_execute === "function"),
       );
-    }
 
-    // Create handler
-    const handlers = {
-      *execute(params: ExecuteParams): Operation<Json> {
-        if (executorPath) {
-          // Real-browser mode: send IR via page.evaluate
-          const result: any = yield* call(() =>
-            page.evaluate((ir) => (window as any).__tisyn_execute(ir), params.workflow as unknown),
-          );
-          if (result.status === "err") {
-            throw new Error(result.error?.message ?? "Browser workflow failed");
-          }
-          return result.value as Json;
+      executeHandler = function* (params: ExecuteParams): Operation<Json> {
+        const result: any = yield* call(() =>
+          page.evaluate((ir) => (window as any).__tisyn_execute(ir), params.workflow as unknown),
+        );
+        if (result.status === "err") {
+          throw new Error(result.error?.message ?? "Browser workflow failed");
         }
-        // In-process mode: execute IR directly with capabilities
-        // Uses the kernel evaluator + agent dispatch (avoids @tisyn/runtime circular dep)
+        return result.value as Json;
+      };
+    } else {
+      // ── In-process mode: no Playwright, kernel evaluation ──
+      executeHandler = function* (params: ExecuteParams): Operation<Json> {
         return yield* scoped(function* () {
           for (const cap of capabilities) {
             yield* cap();
@@ -184,6 +186,13 @@ export function browserTransport(config?: BrowserTransportConfig): AgentTranspor
           }
           return step.value as Json;
         });
+      };
+    }
+
+    // Create handler object
+    const handlers = {
+      *execute(params: ExecuteParams): Operation<Json> {
+        return yield* executeHandler(params);
       },
     };
 

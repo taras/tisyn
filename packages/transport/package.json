@@ -8,7 +8,9 @@
     "directory": "packages/transport"
   },
   "files": [
-    "dist"
+    "dist",
+    "src/transports/browser-executor.ts",
+    "src/transports/browser.ts"
   ],
   "type": "module",
   "main": "./dist/index.js",

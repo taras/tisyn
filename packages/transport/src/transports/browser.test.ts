@@ -83,18 +83,20 @@ beforeEach(() => {
     close: vi.fn(async () => {}),
     newContext: vi.fn(async () => mockContext),
   };
+
+  // Reset launcher mocks so tests don't leak call counts
+  mockLaunchers.chromium.launch.mockClear();
+  mockLaunchers.firefox.launch.mockClear();
+  mockLaunchers.webkit.launch.mockClear();
 });
 
-vi.mock("playwright-core", () => {
-  const createLauncher = () => ({
-    launch: vi.fn(async () => mockBrowser),
-  });
-  return {
-    chromium: createLauncher(),
-    firefox: createLauncher(),
-    webkit: createLauncher(),
-  };
-});
+const mockLaunchers = {
+  chromium: { launch: vi.fn(async () => mockBrowser) },
+  firefox: { launch: vi.fn(async () => mockBrowser) },
+  webkit: { launch: vi.fn(async () => mockBrowser) },
+};
+
+vi.mock("playwright-core", () => mockLaunchers);
 
 // ── Tests ──
 
@@ -328,9 +330,25 @@ describe("browser transport", () => {
       });
     });
 
-    it("transport shuts down on scope exit", function* () {
+    it("in-process mode does not touch Playwright", function* () {
       const factory = browserTransport({
-        capabilities: [],
+        capabilities: [localCapability(Calc, calcHandlers())],
+      });
+
+      yield* scoped(function* () {
+        yield* installRemoteAgent(Browser, factory);
+        yield* invoke(Browser.execute({ workflow: effectWorkflow("calc", "add", { a: 1, b: 2 }) }));
+      });
+
+      // Playwright should never have been launched
+      expect(mockLaunchers.chromium.launch).not.toHaveBeenCalled();
+      expect(mockLaunchers.firefox.launch).not.toHaveBeenCalled();
+      expect(mockLaunchers.webkit.launch).not.toHaveBeenCalled();
+    });
+
+    it("real-browser mode shuts down browser on scope exit", function* () {
+      const factory = browserTransport({
+        executor: "/path/to/executor.iife.js",
       });
 
       yield* scoped(function* () {
