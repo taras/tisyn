@@ -21,6 +21,8 @@ import {
   Eval,
   All,
   Race,
+  Resource,
+  Provide,
 } from "./constructors.js";
 
 describe("structural constructors", () => {
@@ -178,6 +180,27 @@ describe("external constructors", () => {
     const data = node.data as { tisyn: string; expr: { exprs: unknown[] } };
     expect(data.tisyn).toBe("quote");
     expect(data.expr.exprs).toHaveLength(1);
+  });
+
+  it("Resource wraps body in Quote", () => {
+    const node = Resource(Eval("a.b", null));
+    expect(node.tisyn).toBe("eval");
+    expect(node.id).toBe("resource");
+    const data = node.data as { tisyn: string; expr: { body: unknown } };
+    expect(data.tisyn).toBe("quote");
+    expect(data.expr.body).toEqual({ tisyn: "eval", id: "a.b", data: null });
+  });
+
+  it("Provide does NOT wrap data in Quote", () => {
+    const node = Provide(42);
+    expect(node.tisyn).toBe("eval");
+    expect(node.id).toBe("provide");
+    expect(node.data).toBe(42);
+  });
+
+  it("Provide with Ref produces raw Ref data", () => {
+    const node = Provide(Ref("x"));
+    expect(node.data).toEqual({ tisyn: "ref", name: "x" });
   });
 });
 

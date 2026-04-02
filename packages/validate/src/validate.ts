@@ -265,6 +265,28 @@ function walkSemantic(value: unknown, path: string[], errors: ValidationError[])
           });
         }
       }
+
+      if (id === "resource") {
+        if (!isPlainObject(data) || (data as Record<string, unknown>)["tisyn"] !== "quote") {
+          errors.push({
+            level: 2,
+            path,
+            message: `Resource node requires data to be a Quote node`,
+            code: MALFORMED_EVAL,
+          });
+          return;
+        }
+        const fields = (data as Record<string, unknown>)["expr"];
+        if (isPlainObject(fields)) {
+          checkPositions("resource", fields as Record<string, unknown>, path, errors);
+          checkResourceConstraints(fields as Record<string, unknown>, path, errors);
+        }
+      }
+
+      if (id === "provide") {
+        // provide data is evaluated (not Quote-wrapped), like join
+        // No additional structural constraints beyond standard Eval grammar check
+      }
       break;
     }
     case "quote": {
@@ -365,6 +387,21 @@ function checkSpawnConstraints(
       level: 2,
       path,
       message: `Spawn node requires a "body" field`,
+      code: MALFORMED_EVAL,
+    });
+  }
+}
+
+function checkResourceConstraints(
+  fields: Record<string, unknown>,
+  path: string[],
+  errors: ValidationError[],
+): void {
+  if (!("body" in fields)) {
+    errors.push({
+      level: 2,
+      path,
+      message: `Resource node requires a "body" field`,
       code: MALFORMED_EVAL,
     });
   }
@@ -489,7 +526,11 @@ function getEvaluationPositions(id: string, fields: Record<string, unknown>): un
     }
     case "spawn":
       return fields["body"] !== undefined ? [fields["body"]] : [];
+    case "resource":
+      return fields["body"] !== undefined ? [fields["body"]] : [];
     case "join":
+      return [];
+    case "provide":
       return [];
     default:
       return [];

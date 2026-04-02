@@ -39,4 +39,6 @@ export {
   ScopeEval,
   SpawnEval,
   JoinEval,
+  ResourceEval,
+  ProvideEval,
 } from "./ir-builders.js";

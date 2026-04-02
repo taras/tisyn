@@ -206,3 +206,11 @@ export function SpawnEval(body: Expr): EvalNode {
 export function JoinEval(ref: RefNode): EvalNode {
   return { tisyn: "eval", id: "join", data: ref };
 }
+
+export function ResourceEval(body: Expr): EvalNode {
+  return { tisyn: "eval", id: "resource", data: Q({ body }) };
+}
+
+export function ProvideEval(value: Expr): EvalNode {
+  return { tisyn: "eval", id: "provide", data: value };
+}

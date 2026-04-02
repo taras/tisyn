@@ -267,6 +267,17 @@ function decompileCompoundExternal(
   depth: number,
   opts: { indent: number; typeAnnotations: boolean },
 ): string {
+  if (id === "resource") {
+    const shape = unquoteShape(data) as { body: TisynExpr };
+    const body = decompileBody(shape.body, depth + 1, opts);
+    const pad = " ".repeat(depth * opts.indent);
+    return `yield* resource(function* () {\n${body}\n${pad}})`;
+  }
+  if (id === "provide") {
+    // provide data is not Quote-wrapped — it's a raw expression
+    return `yield* provide(${decompileExpr(data, depth, opts)})`;
+  }
+
   const shape = unquoteShape(data) as { exprs: TisynExpr[] };
   const args = shape.exprs.map((e) => {
     if (isFnNode(e)) {
