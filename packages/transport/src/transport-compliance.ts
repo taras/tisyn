@@ -311,8 +311,8 @@ export function transportComplianceSuite(name: string, createFactory: TransportF
           const task = yield* spawn(function* () {
             yield* invoke(slow.work());
           });
-          // Give the handler time to start
-          yield* sleep(10);
+          // Give the handler time to start (needs HTTP round-trip on CI)
+          yield* sleep(200);
           yield* task.halt();
         });
 
