@@ -357,6 +357,9 @@ importers:
       '@tisyn/agent':
         specifier: workspace:*
         version: link:../agent
+      '@tisyn/durable-streams':
+        specifier: workspace:*
+        version: link:../durable-streams
       '@tisyn/ir':
         specifier: workspace:*
         version: link:../ir
@@ -366,6 +369,9 @@ importers:
       '@tisyn/protocol':
         specifier: workspace:*
         version: link:../protocol
+      '@tisyn/runtime':
+        specifier: workspace:*
+        version: link:../runtime
       '@tisyn/validate':
         specifier: workspace:*
         version: link:../validate

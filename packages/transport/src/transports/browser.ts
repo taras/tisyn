@@ -1,7 +1,11 @@
 import type { Operation } from "effection";
-import { call, createChannel, createScope, ensure } from "effection";
-import type { OperationSpec } from "@tisyn/agent";
+import { call, createChannel, createScope, ensure, run, scoped } from "effection";
+import type { OperationSpec, AgentDeclaration, ImplementationHandlers } from "@tisyn/agent";
 import { agent, operation, implementAgent } from "@tisyn/agent";
+import type { IrInput, Json } from "@tisyn/ir";
+import { Call } from "@tisyn/ir";
+import { execute as runtimeExecute } from "@tisyn/runtime";
+import { InMemoryStream } from "@tisyn/durable-streams";
 import type {
   AgentTransport,
   AgentTransportFactory,
@@ -12,7 +16,91 @@ import { createProtocolServer } from "../protocol-server.js";
 import type { Browser as PWBrowser, BrowserContext, Page } from "playwright-core";
 import { chromium, firefox, webkit } from "playwright-core";
 
+// ── Capability composition ──
+
+/**
+ * A browser-local capability installer. When called, installs agent
+ * dispatch middleware into the current Effection scope so that incoming
+ * IR can dispatch to the agent locally.
+ *
+ * This is the single composition interface used in both in-process and
+ * real-browser execution modes.
+ */
+export type LocalCapability = () => Operation<void>;
+
+/**
+ * Create a browser-local capability from an agent declaration and handlers.
+ *
+ * The returned `LocalCapability` installs the agent's dispatch middleware
+ * via `implementAgent(declaration, handlers).install()`.
+ *
+ * Used in both execution modes:
+ * - In-process: passed to `browserTransport({ capabilities: [...] })`
+ * - Real-browser: passed to `createBrowserExecutor([...])`
+ */
+export function localCapability<Ops extends Record<string, OperationSpec>>(
+  declaration: AgentDeclaration<Ops>,
+  handlers: ImplementationHandlers<Ops>,
+): LocalCapability {
+  return function* () {
+    const impl = implementAgent(declaration, handlers);
+    yield* impl.install();
+  };
+}
+
+/**
+ * Create a browser executor that runs inside the browser page.
+ *
+ * Call this function in your executor script (which you bundle into an IIFE)
+ * to define `window.__tisyn_execute`. The executor installs the configured
+ * capabilities before each IR execution.
+ *
+ * @example
+ * ```typescript
+ * // my-executor.ts — bundle this into an IIFE
+ * import { createBrowserExecutor, localCapability } from "@tisyn/transport/browser";
+ * import { Dom, createDomHandlers } from "./my-dom-agent";
+ *
+ * createBrowserExecutor([
+ *   localCapability(Dom, createDomHandlers()),
+ * ]);
+ * ```
+ */
+export function createBrowserExecutor(capabilities: LocalCapability[]): void {
+  (globalThis as any).__tisyn_execute = (
+    ir: IrInput,
+  ): Promise<{ status: string; value?: unknown; error?: { message: string } }> => {
+    return run(function* () {
+      for (const cap of capabilities) {
+        yield* cap();
+      }
+      const stream = new InMemoryStream();
+      const { result } = yield* runtimeExecute({
+        ir: Call(ir as any) as IrInput,
+        stream,
+      });
+      return result;
+    });
+  };
+}
+
 // ── Types ──
+
+export interface ExecuteParams {
+  workflow: IrInput;
+}
+
+// ── Runtime declaration ──
+
+type BrowserOps = {
+  execute: OperationSpec<ExecuteParams, Json>;
+};
+
+export const Browser = agent<BrowserOps>("browser", {
+  execute: operation<ExecuteParams, Json>(),
+});
+
+// ── Browser transport factory ──
 
 export interface BrowserTransportConfig {
   /** Whether to run the browser in headless mode. Default: true. */
@@ -23,107 +111,25 @@ export interface BrowserTransportConfig {
   engine?: "chromium" | "firefox" | "webkit";
   /** Additional browser launch arguments. Default: []. */
   launchArgs?: string[];
+  /** URL to navigate to during setup. */
+  url?: string;
+
+  /**
+   * Browser-local capabilities installed before each execute call.
+   * Used in in-process execution mode (when executor is omitted).
+   */
+  capabilities?: LocalCapability[];
+
+  /**
+   * Path to executor IIFE bundle for real-browser execution.
+   * The bundle must be built using createBrowserExecutor() with
+   * the desired capabilities.
+   *
+   * When provided: real-browser mode — IR crosses page.evaluate.
+   * When omitted: in-process mode — IR executed directly with capabilities.
+   */
+  executor?: string;
 }
-
-export interface NavigateParams {
-  url: string;
-  page?: string;
-  timeout?: number;
-}
-
-export interface NavigateResult {
-  page: string;
-  status: number;
-  url: string;
-}
-
-export interface ClickParams {
-  selector: string;
-  page?: string;
-  timeout?: number;
-}
-
-export interface ClickResult {
-  ok: true;
-}
-
-export interface FillParams {
-  selector: string;
-  value: string;
-  page?: string;
-  timeout?: number;
-}
-
-export interface FillResult {
-  ok: true;
-}
-
-export interface ContentParams {
-  page?: string;
-  format?: "text" | "html";
-}
-
-export interface ContentResult {
-  text: string;
-  url: string;
-  title: string;
-}
-
-export interface ScreenshotParams {
-  page?: string;
-  fullPage?: boolean;
-  format?: "png" | "jpeg";
-  quality?: number;
-}
-
-export interface ScreenshotResult {
-  data: string;
-  mimeType: string;
-  width: number;
-  height: number;
-}
-
-export interface SelectPageParams {
-  page: string;
-}
-
-export interface SelectPageResult {
-  page: string;
-  url: string;
-}
-
-export interface ClosePageParams {
-  page: string;
-}
-
-export interface ClosePageResult {
-  ok: true;
-  activePage: string | null;
-}
-
-// ── Runtime declaration ──
-
-type BrowserOps = {
-  navigate: OperationSpec<NavigateParams, NavigateResult>;
-  click: OperationSpec<ClickParams, ClickResult>;
-  fill: OperationSpec<FillParams, FillResult>;
-  content: OperationSpec<ContentParams, ContentResult>;
-  screenshot: OperationSpec<ScreenshotParams, ScreenshotResult>;
-  selectPage: OperationSpec<SelectPageParams, SelectPageResult>;
-  closePage: OperationSpec<ClosePageParams, ClosePageResult>;
-};
-
-export const Browser = agent<BrowserOps>("browser", {
-  navigate: operation<NavigateParams, NavigateResult>(),
-  click: operation<ClickParams, ClickResult>(),
-  fill: operation<FillParams, FillResult>(),
-  content: operation<ContentParams, ContentResult>(),
-  screenshot: operation<ScreenshotParams, ScreenshotResult>(),
-  selectPage: operation<SelectPageParams, SelectPageResult>(),
-  closePage: operation<ClosePageParams, ClosePageResult>(),
-});
-
-// ── Browser transport factory ──
 
 const ENGINE_MAP = {
   chromium,
@@ -134,11 +140,16 @@ const ENGINE_MAP = {
 const DEFAULT_VIEWPORT = { width: 1280, height: 720 };
 
 /**
- * Create a transport factory for a browser agent. The factory launches a
- * Playwright browser, creates a default page, and maps browser contract
- * operations to Playwright API calls via the agent protocol.
+ * Create a transport factory for a browser agent.
  *
- * Follows the same structural pattern as `inprocessTransport`: bidirectional
+ * Supports two execution modes:
+ * - **In-process** (executor omitted): executes IR directly using @tisyn/runtime
+ *   with the configured capabilities. Good for testing and Node.js execution.
+ * - **Real-browser** (executor provided): injects the executor IIFE into a
+ *   Playwright page and sends IR via page.evaluate. The executor bundle must
+ *   be built using createBrowserExecutor() with the desired capabilities.
+ *
+ * Follows the same structural pattern as inprocessTransport: bidirectional
  * channels, protocol server in an isolated scope, cleanup on scope exit.
  */
 export function browserTransport(config?: BrowserTransportConfig): AgentTransportFactory {
@@ -147,6 +158,9 @@ export function browserTransport(config?: BrowserTransportConfig): AgentTranspor
     const viewport = config?.viewport ?? DEFAULT_VIEWPORT;
     const engineName = config?.engine ?? "chromium";
     const launchArgs = config?.launchArgs ?? [];
+    const capabilities = config?.capabilities ?? [];
+    const executorPath = config?.executor;
+    const url = config?.url;
 
     const browserType = ENGINE_MAP[engineName];
     if (!browserType) {
@@ -163,121 +177,50 @@ export function browserTransport(config?: BrowserTransportConfig): AgentTranspor
 
     // Create context + default page
     const context: BrowserContext = yield* call(() => browser.newContext({ viewport }));
-    const defaultPage: Page = yield* call(() => context.newPage());
+    const page: Page = yield* call(() => context.newPage());
 
-    // Page registry
-    const pages = new Map<string, Page>([["page:0", defaultPage]]);
-    let activePage = "page:0";
-    let _pageCounter = 0;
-
-    // Resolve target page from optional page param
-    function resolvePage(pageId?: string): Page {
-      const id = pageId ?? activePage;
-      const page = pages.get(id);
-      if (!page) {
-        throw new Error(`Page not found: ${id}`);
-      }
-      return page;
+    // Navigate to URL if configured
+    if (url) {
+      yield* call(() => page.goto(url));
     }
 
-    // Create handlers
+    // Inject executor bundle if in real-browser mode
+    if (executorPath) {
+      yield* call(() => page.addScriptTag({ path: executorPath }));
+      yield* call(() =>
+        page.waitForFunction(() => typeof (globalThis as any).__tisyn_execute === "function"),
+      );
+    }
+
+    // Create handler
     const handlers = {
-      *navigate(params: NavigateParams): Operation<NavigateResult> {
-        const page = resolvePage(params.page);
-        const response = yield* call(() =>
-          page.goto(params.url, { timeout: params.timeout ?? 30000 }),
-        );
-        const pageId = params.page ?? activePage;
-        activePage = pageId;
-        return {
-          page: pageId,
-          status: response?.status() ?? 0,
-          url: page.url(),
-        };
-      },
-
-      *click(params: ClickParams): Operation<ClickResult> {
-        const page = resolvePage(params.page);
-        yield* call(() => page.click(params.selector, { timeout: params.timeout ?? 30000 }));
-        return { ok: true as const };
-      },
-
-      *fill(params: FillParams): Operation<FillResult> {
-        const page = resolvePage(params.page);
-        yield* call(() =>
-          page.fill(params.selector, params.value, {
-            timeout: params.timeout ?? 30000,
-          }),
-        );
-        return { ok: true as const };
-      },
-
-      *content(params: ContentParams): Operation<ContentResult> {
-        const page = resolvePage(params.page);
-        const format = params.format ?? "text";
-        let text: string;
-        if (format === "html") {
-          text = yield* call(() => page.content());
-        } else {
-          text = yield* call(() => page.innerText("body"));
+      *execute(params: ExecuteParams): Operation<Json> {
+        if (executorPath) {
+          // Real-browser mode: send IR via page.evaluate
+          const result: any = yield* call(() =>
+            page.evaluate((ir) => (window as any).__tisyn_execute(ir), params.workflow as unknown),
+          );
+          if (result.status === "err") {
+            throw new Error(result.error?.message ?? "Browser workflow failed");
+          }
+          return result.value as Json;
         }
-        return {
-          text,
-          url: page.url(),
-          title: yield* call(() => page.title()),
-        };
-      },
-
-      *screenshot(params: ScreenshotParams): Operation<ScreenshotResult> {
-        const page = resolvePage(params.page);
-        const format = params.format ?? "png";
-        const buffer: Buffer = yield* call(() =>
-          page.screenshot({
-            fullPage: params.fullPage ?? false,
-            type: format,
-            ...(format === "jpeg" && params.quality != null ? { quality: params.quality } : {}),
-          }),
-        );
-        const data = buffer.toString("base64");
-        const viewportSize = page.viewportSize();
-        return {
-          data,
-          mimeType: format === "jpeg" ? "image/jpeg" : "image/png",
-          width: viewportSize?.width ?? viewport.width,
-          height: viewportSize?.height ?? viewport.height,
-        };
-      },
-
-      *selectPage(params: SelectPageParams): Operation<SelectPageResult> {
-        const page = resolvePage(params.page);
-        activePage = params.page;
-        return {
-          page: params.page,
-          url: page.url(),
-        };
-      },
-
-      *closePage(params: ClosePageParams): Operation<ClosePageResult> {
-        const page = resolvePage(params.page);
-
-        if (pages.size <= 1) {
-          throw new Error("Cannot close the last remaining page");
-        }
-
-        yield* call(() => page.close());
-        pages.delete(params.page);
-
-        // If closing the active page, select another
-        let newActive: string | null = null;
-        if (activePage === params.page) {
-          const firstRemaining = pages.keys().next().value!;
-          activePage = firstRemaining;
-          newActive = firstRemaining;
-        } else {
-          newActive = activePage;
-        }
-
-        return { ok: true as const, activePage: newActive };
+        // In-process mode: execute IR directly with capabilities
+        return yield* scoped(function* () {
+          for (const cap of capabilities) {
+            yield* cap();
+          }
+          const stream = new InMemoryStream();
+          const { result } = yield* runtimeExecute({
+            ir: Call(params.workflow as any) as IrInput,
+            stream,
+          });
+          if (result.status === "err") {
+            const errResult = result as { status: "err"; error: { message: string } };
+            throw new Error(errResult.error.message);
+          }
+          return (result as { status: "ok"; value: unknown }).value as Json;
+        });
       },
     };
 

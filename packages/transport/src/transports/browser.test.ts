@@ -2,62 +2,81 @@ import { describe, it } from "@effectionx/vitest";
 import { expect, vi, beforeEach } from "vitest";
 import { scoped } from "effection";
 import { invoke } from "@tisyn/agent";
+import { agent, operation } from "@tisyn/agent";
+import { Fn } from "@tisyn/ir";
+import type { IrInput } from "@tisyn/ir";
 import { installRemoteAgent } from "../install-remote.js";
-import { Browser, browserTransport } from "./browser.js";
+import { Browser, browserTransport, localCapability } from "./browser.js";
+
+// ── Test agent for capability composition ──
+
+const Calc = agent("calc", {
+  add: operation<{ a: number; b: number }, number>(),
+});
+
+const Greet = agent("greet", {
+  hello: operation<{ name: string }, string>(),
+});
+
+function calcHandlers() {
+  return {
+    // biome-ignore lint/correctness/useYield: mock
+    *add(params: { a: number; b: number }) {
+      return params.a + params.b;
+    },
+  };
+}
+
+function greetHandlers() {
+  return {
+    // biome-ignore lint/correctness/useYield: mock
+    *hello(params: { name: string }) {
+      return `Hello, ${params.name}!`;
+    },
+  };
+}
+
+// Helper: create IR that dispatches to an agent effect and returns the result
+// The workflow is a function with no params whose body is the effect
+function effectWorkflow(agentType: string, opName: string, data: unknown = {}): IrInput {
+  return Fn([], { tisyn: "eval", id: `${agentType}.${opName}`, data }) as IrInput;
+}
+
+// Helper: create IR that just returns a literal value
+function literalWorkflow(value: unknown): IrInput {
+  return Fn([], value) as IrInput;
+}
 
 // ── Mock Playwright ──
 
-// In-memory mock page that tracks state and returns deterministic results.
-function createMockPage(id: string, initialUrl = "about:blank") {
-  let url = initialUrl;
-  let title = "";
-  let textContent = "";
-  let htmlContent = "<html><body></body></html>";
+let mockPage: {
+  goto: ReturnType<typeof vi.fn>;
+  addScriptTag: ReturnType<typeof vi.fn>;
+  waitForFunction: ReturnType<typeof vi.fn>;
+  evaluate: ReturnType<typeof vi.fn>;
+  close: ReturnType<typeof vi.fn>;
+};
 
-  const page = {
-    url: () => url,
-    title: vi.fn(async () => title),
-    goto: vi.fn(async (targetUrl: string, _opts?: any) => {
-      url = targetUrl;
-      title = "Mock Page";
-      textContent = `Content of ${targetUrl}`;
-      htmlContent = `<html><body>${textContent}</body></html>`;
-      return { status: () => 200 };
-    }),
-    click: vi.fn(async (selector: string, _opts?: any) => {
-      if (selector === ".missing") throw new Error("Selector not found: .missing");
-    }),
-    fill: vi.fn(async (selector: string, _value: string, _opts?: any) => {
-      if (selector === ".invalid") throw new Error("Selector not found: .invalid");
-    }),
-    innerText: vi.fn(async (_selector: string) => textContent),
-    content: vi.fn(async () => htmlContent),
-    screenshot: vi.fn(async (_opts?: any) => Buffer.from("fake-screenshot-data")),
-    viewportSize: vi.fn(() => ({ width: 1280, height: 720 })),
-    close: vi.fn(async () => {}),
-    _id: id,
-  };
-
-  return page;
-}
-
-type MockPage = ReturnType<typeof createMockPage>;
-
-// Track mock state globally for test assertions
-let mockPages: MockPage[];
 let mockBrowser: {
   close: ReturnType<typeof vi.fn>;
   newContext: ReturnType<typeof vi.fn>;
 };
+
 let mockContext: {
   newPage: ReturnType<typeof vi.fn>;
 };
 
 beforeEach(() => {
-  mockPages = [createMockPage("page:0")];
+  mockPage = {
+    goto: vi.fn(async () => {}),
+    addScriptTag: vi.fn(async () => {}),
+    waitForFunction: vi.fn(async () => {}),
+    evaluate: vi.fn(async () => ({ status: "ok", value: 42 })),
+    close: vi.fn(async () => {}),
+  };
 
   mockContext = {
-    newPage: vi.fn(async () => mockPages[0]),
+    newPage: vi.fn(async () => mockPage),
   };
 
   mockBrowser = {
@@ -66,7 +85,6 @@ beforeEach(() => {
   };
 });
 
-// Mock playwright-core at the module level
 vi.mock("playwright-core", () => {
   const createLauncher = () => ({
     launch: vi.fn(async () => mockBrowser),
@@ -81,299 +99,246 @@ vi.mock("playwright-core", () => {
 // ── Tests ──
 
 describe("browser transport", () => {
-  // --- Transport lifecycle ---
+  // --- Capability composition — in-process mode ---
 
-  describe("Transport lifecycle", () => {
-    it("factory creates transport with default page", function* () {
-      const factory = browserTransport();
+  describe("Capability composition — in-process mode", () => {
+    it("installed local capability is available to incoming IR", function* () {
+      const factory = browserTransport({
+        capabilities: [localCapability(Calc, calcHandlers())],
+      });
 
       yield* scoped(function* () {
         yield* installRemoteAgent(Browser, factory);
-        const result = yield* invoke(Browser.content({ format: "text" }));
-        // Default page exists and responds
-        expect(result).toHaveProperty("text");
-        expect(result).toHaveProperty("url");
-        expect(result).toHaveProperty("title");
+        const result = yield* invoke(
+          Browser.execute({ workflow: effectWorkflow("calc", "add", { a: 3, b: 4 }) }),
+        );
+        expect(result).toBe(7);
+      });
+    });
+
+    it("multiple capabilities compose correctly", function* () {
+      const factory = browserTransport({
+        capabilities: [
+          localCapability(Calc, calcHandlers()),
+          localCapability(Greet, greetHandlers()),
+        ],
+      });
+
+      yield* scoped(function* () {
+        yield* installRemoteAgent(Browser, factory);
+
+        const sum = yield* invoke(
+          Browser.execute({ workflow: effectWorkflow("calc", "add", { a: 10, b: 20 }) }),
+        );
+        expect(sum).toBe(30);
+
+        const greeting = yield* invoke(
+          Browser.execute({ workflow: effectWorkflow("greet", "hello", { name: "World" }) }),
+        );
+        expect(greeting).toBe("Hello, World!");
+      });
+    });
+
+    it("uninstalled capability causes local error", function* () {
+      // No capabilities installed
+      const factory = browserTransport({});
+
+      yield* scoped(function* () {
+        yield* installRemoteAgent(Browser, factory);
+        try {
+          yield* invoke(
+            Browser.execute({ workflow: effectWorkflow("calc", "add", { a: 1, b: 2 }) }),
+          );
+          expect.unreachable("should have thrown");
+        } catch (error) {
+          expect(error).toBeInstanceOf(Error);
+        }
+      });
+    });
+
+    it("no host fallback for missing local capabilities", function* () {
+      // Install Calc but NOT Greet — dispatching to greet should fail locally
+      const factory = browserTransport({
+        capabilities: [localCapability(Calc, calcHandlers())],
+      });
+
+      yield* scoped(function* () {
+        yield* installRemoteAgent(Browser, factory);
+
+        // Calc works
+        const sum = yield* invoke(
+          Browser.execute({ workflow: effectWorkflow("calc", "add", { a: 1, b: 2 }) }),
+        );
+        expect(sum).toBe(3);
+
+        // Greet fails — no host fallback
+        try {
+          yield* invoke(
+            Browser.execute({ workflow: effectWorkflow("greet", "hello", { name: "X" }) }),
+          );
+          expect.unreachable("should have thrown");
+        } catch (error) {
+          expect(error).toBeInstanceOf(Error);
+        }
+      });
+    });
+  });
+
+  // --- Capability composition — real-browser mode ---
+
+  describe("Capability composition — real-browser mode", () => {
+    it("executor bundle is injected via page.addScriptTag", function* () {
+      const factory = browserTransport({
+        executor: "/path/to/executor.iife.js",
+      });
+
+      yield* scoped(function* () {
+        yield* installRemoteAgent(Browser, factory);
+        // Execute to trigger transport setup
+        yield* invoke(Browser.execute({ workflow: literalWorkflow(42) }));
+      });
+
+      expect(mockPage.addScriptTag).toHaveBeenCalledWith({
+        path: "/path/to/executor.iife.js",
+      });
+      expect(mockPage.waitForFunction).toHaveBeenCalled();
+    });
+
+    it("transport drives page.evaluate with IR and returns result", function* () {
+      const expectedResult = { key: "value", nested: [1, 2, 3] };
+      mockPage.evaluate.mockResolvedValue({ status: "ok", value: expectedResult });
+
+      const factory = browserTransport({
+        executor: "/path/to/executor.iife.js",
+      });
+
+      yield* scoped(function* () {
+        yield* installRemoteAgent(Browser, factory);
+        const result = yield* invoke(Browser.execute({ workflow: literalWorkflow("ignored") }));
+        expect(result).toEqual(expectedResult);
+      });
+
+      expect(mockPage.evaluate).toHaveBeenCalled();
+    });
+
+    it("executor error propagates as thrown Error", function* () {
+      mockPage.evaluate.mockResolvedValue({
+        status: "err",
+        error: { message: "capability not found: dom.click" },
+      });
+
+      const factory = browserTransport({
+        executor: "/path/to/executor.iife.js",
+      });
+
+      yield* scoped(function* () {
+        yield* installRemoteAgent(Browser, factory);
+        try {
+          yield* invoke(Browser.execute({ workflow: literalWorkflow(null) }));
+          expect.unreachable("should have thrown");
+        } catch (error) {
+          expect(error).toBeInstanceOf(Error);
+          expect((error as Error).message).toContain("capability not found: dom.click");
+        }
+      });
+    });
+  });
+
+  // --- Execute envelope ---
+
+  describe("Execute envelope", () => {
+    it("returns JSON-serializable result value", function* () {
+      const factory = browserTransport({
+        capabilities: [localCapability(Calc, calcHandlers())],
+      });
+
+      yield* scoped(function* () {
+        yield* installRemoteAgent(Browser, factory);
+        const result = yield* invoke(
+          Browser.execute({ workflow: effectWorkflow("calc", "add", { a: 100, b: 200 }) }),
+        );
+        expect(JSON.parse(JSON.stringify(result))).toEqual(result);
+        expect(result).toBe(300);
+      });
+    });
+
+    it("executor error throws Error with message", function* () {
+      const factory = browserTransport({
+        capabilities: [localCapability(Calc, calcHandlers())],
+      });
+
+      yield* scoped(function* () {
+        yield* installRemoteAgent(Browser, factory);
+        try {
+          // Pass IR that references nonexistent agent — causes runtime error
+          yield* invoke(Browser.execute({ workflow: effectWorkflow("nonexistent", "op", {}) }));
+          expect.unreachable("should have thrown");
+        } catch (error) {
+          expect(error).toBeInstanceOf(Error);
+        }
+      });
+    });
+
+    it("each execute call gets fresh capability scope", function* () {
+      let callCount = 0;
+      const countingCalc = agent("counting", {
+        inc: operation<Record<string, never>, number>(),
+      });
+      const countingCap = localCapability(countingCalc, {
+        // biome-ignore lint/correctness/useYield: mock
+        *inc() {
+          callCount++;
+          return callCount;
+        },
+      });
+
+      const factory = browserTransport({
+        capabilities: [countingCap],
+      });
+
+      yield* scoped(function* () {
+        yield* installRemoteAgent(Browser, factory);
+
+        const r1 = yield* invoke(
+          Browser.execute({ workflow: effectWorkflow("counting", "inc", {}) }),
+        );
+        const r2 = yield* invoke(
+          Browser.execute({ workflow: effectWorkflow("counting", "inc", {}) }),
+        );
+
+        // Both calls succeed (capabilities installed each time)
+        expect(r1).toBe(1);
+        expect(r2).toBe(2);
+      });
+    });
+  });
+
+  // --- Transport lifecycle ---
+
+  describe("Transport lifecycle", () => {
+    it("factory creates transport in in-process mode", function* () {
+      const factory = browserTransport({
+        capabilities: [localCapability(Calc, calcHandlers())],
+      });
+
+      yield* scoped(function* () {
+        yield* installRemoteAgent(Browser, factory);
+        const result = yield* invoke(Browser.execute({ workflow: literalWorkflow(42) }));
+        expect(result).toBe(42);
       });
     });
 
     it("transport shuts down on scope exit", function* () {
-      const factory = browserTransport();
+      const factory = browserTransport({
+        capabilities: [],
+      });
 
       yield* scoped(function* () {
         yield* installRemoteAgent(Browser, factory);
-        yield* invoke(Browser.content({ format: "text" }));
+        yield* invoke(Browser.execute({ workflow: literalWorkflow("hello") }));
       });
 
-      // After scope exits, browser.close() should have been called
       expect(mockBrowser.close).toHaveBeenCalled();
-    });
-
-    it("shutdown failure does not propagate", function* () {
-      mockBrowser.close.mockRejectedValueOnce(new Error("close failed"));
-      const factory = browserTransport();
-
-      // Should not throw even though close fails
-      yield* scoped(function* () {
-        yield* installRemoteAgent(Browser, factory);
-        yield* invoke(Browser.content({ format: "text" }));
-      });
-
-      // Scope exited successfully despite close failure
-    });
-  });
-
-  // --- Operation semantics ---
-
-  describe("Operation semantics", () => {
-    describe("navigate", () => {
-      it("returns page, status, url", function* () {
-        const factory = browserTransport();
-
-        yield* scoped(function* () {
-          yield* installRemoteAgent(Browser, factory);
-          const result = yield* invoke(Browser.navigate({ url: "https://example.com" }));
-          expect(result).toMatchObject({
-            page: "page:0",
-            status: 200,
-            url: "https://example.com",
-          });
-        });
-      });
-
-      it("failure returns error", function* () {
-        mockPages[0]!.goto.mockRejectedValueOnce(new Error("net::ERR_NAME_NOT_RESOLVED"));
-        const factory = browserTransport();
-
-        yield* scoped(function* () {
-          yield* installRemoteAgent(Browser, factory);
-          try {
-            yield* invoke(Browser.navigate({ url: "https://unreachable.invalid" }));
-            expect.unreachable("should have thrown");
-          } catch (error) {
-            expect(error).toBeInstanceOf(Error);
-            expect((error as Error).message).toContain("net::ERR_NAME_NOT_RESOLVED");
-          }
-        });
-      });
-    });
-
-    describe("click", () => {
-      it("returns ok result", function* () {
-        const factory = browserTransport();
-
-        yield* scoped(function* () {
-          yield* installRemoteAgent(Browser, factory);
-          const result = yield* invoke(Browser.click({ selector: "#btn" }));
-          expect(result).toEqual({ ok: true });
-        });
-      });
-
-      it("missing selector returns error", function* () {
-        const factory = browserTransport();
-
-        yield* scoped(function* () {
-          yield* installRemoteAgent(Browser, factory);
-          try {
-            yield* invoke(Browser.click({ selector: ".missing" }));
-            expect.unreachable("should have thrown");
-          } catch (error) {
-            expect((error as Error).message).toContain(".missing");
-          }
-        });
-      });
-    });
-
-    describe("fill", () => {
-      it("returns ok result", function* () {
-        const factory = browserTransport();
-
-        yield* scoped(function* () {
-          yield* installRemoteAgent(Browser, factory);
-          const result = yield* invoke(Browser.fill({ selector: "#input", value: "hello" }));
-          expect(result).toEqual({ ok: true });
-        });
-      });
-
-      it("invalid selector returns error", function* () {
-        const factory = browserTransport();
-
-        yield* scoped(function* () {
-          yield* installRemoteAgent(Browser, factory);
-          try {
-            yield* invoke(Browser.fill({ selector: ".invalid", value: "x" }));
-            expect.unreachable("should have thrown");
-          } catch (error) {
-            expect((error as Error).message).toContain(".invalid");
-          }
-        });
-      });
-    });
-
-    describe("content", () => {
-      it("returns text, url, title", function* () {
-        const factory = browserTransport();
-
-        yield* scoped(function* () {
-          yield* installRemoteAgent(Browser, factory);
-          yield* invoke(Browser.navigate({ url: "https://example.com" }));
-          const result = yield* invoke(Browser.content({ format: "text" }));
-          expect(result).toMatchObject({
-            text: expect.any(String),
-            url: "https://example.com",
-            title: "Mock Page",
-          });
-        });
-      });
-
-      it("format html returns full HTML", function* () {
-        const factory = browserTransport();
-
-        yield* scoped(function* () {
-          yield* installRemoteAgent(Browser, factory);
-          yield* invoke(Browser.navigate({ url: "https://example.com" }));
-          const result = yield* invoke(Browser.content({ format: "html" }));
-          expect(result.text).toContain("<html>");
-          // Verify the mock's content() was called (html path)
-          expect(mockPages[0]!.content).toHaveBeenCalled();
-        });
-      });
-    });
-
-    describe("screenshot", () => {
-      it("returns base64 data, mimeType, dimensions", function* () {
-        const factory = browserTransport();
-
-        yield* scoped(function* () {
-          yield* installRemoteAgent(Browser, factory);
-          const result = yield* invoke(Browser.screenshot({}));
-          expect(result).toMatchObject({
-            data: expect.any(String),
-            mimeType: "image/png",
-            width: 1280,
-            height: 720,
-          });
-          // Verify data is base64
-          expect(() => Buffer.from(result.data, "base64")).not.toThrow();
-        });
-      });
-    });
-  });
-
-  // --- Page management ---
-
-  describe("Page management", () => {
-    it("default page is page:0", function* () {
-      const factory = browserTransport();
-
-      yield* scoped(function* () {
-        yield* installRemoteAgent(Browser, factory);
-        const result = yield* invoke(Browser.navigate({ url: "https://example.com" }));
-        expect(result.page).toBe("page:0");
-      });
-    });
-
-    it("selectPage with invalid page ID returns error", function* () {
-      const factory = browserTransport();
-
-      yield* scoped(function* () {
-        yield* installRemoteAgent(Browser, factory);
-        try {
-          yield* invoke(Browser.selectPage({ page: "nonexistent" }));
-          expect.unreachable("should have thrown");
-        } catch (error) {
-          expect((error as Error).message).toContain("Page not found");
-        }
-      });
-    });
-
-    it("closePage on last page returns error", function* () {
-      const factory = browserTransport();
-
-      yield* scoped(function* () {
-        yield* installRemoteAgent(Browser, factory);
-        try {
-          yield* invoke(Browser.closePage({ page: "page:0" }));
-          expect.unreachable("should have thrown");
-        } catch (error) {
-          expect((error as Error).message).toContain("last remaining page");
-        }
-      });
-    });
-
-    it("operation with closed page ID returns error", function* () {
-      // Need two pages for this test — first navigate creates page:0,
-      // we need a way to add page:1. For now, test the simpler case:
-      // trying to access a page that doesn't exist
-      const factory = browserTransport();
-
-      yield* scoped(function* () {
-        yield* installRemoteAgent(Browser, factory);
-        try {
-          yield* invoke(Browser.click({ selector: "#btn", page: "page:99" }));
-          expect.unreachable("should have thrown");
-        } catch (error) {
-          expect((error as Error).message).toContain("Page not found");
-        }
-      });
-    });
-  });
-
-  // --- Error conventions ---
-
-  describe("Error conventions", () => {
-    it("operation error is catchable", function* () {
-      mockPages[0]!.goto.mockRejectedValueOnce(new Error("timeout"));
-      const factory = browserTransport();
-
-      yield* scoped(function* () {
-        yield* installRemoteAgent(Browser, factory);
-        try {
-          yield* invoke(Browser.navigate({ url: "https://slow.test" }));
-          expect.unreachable("should have thrown");
-        } catch (error) {
-          expect(error).toBeInstanceOf(Error);
-          expect((error as Error).message).toBe("timeout");
-        }
-        // Scope continues after catching the error
-        const result = yield* invoke(Browser.content({ format: "text" }));
-        expect(result).toHaveProperty("text");
-      });
-    });
-  });
-
-  // --- Serialization boundary ---
-
-  describe("Serialization boundary", () => {
-    it("operation outputs survive JSON roundtrip", function* () {
-      const factory = browserTransport();
-
-      yield* scoped(function* () {
-        yield* installRemoteAgent(Browser, factory);
-        yield* invoke(Browser.navigate({ url: "https://example.com" }));
-
-        const navResult = yield* invoke(Browser.navigate({ url: "https://example.com" }));
-        expect(JSON.parse(JSON.stringify(navResult))).toEqual(navResult);
-
-        const clickResult = yield* invoke(Browser.click({ selector: "#btn" }));
-        expect(JSON.parse(JSON.stringify(clickResult))).toEqual(clickResult);
-
-        const contentResult = yield* invoke(Browser.content({ format: "text" }));
-        expect(JSON.parse(JSON.stringify(contentResult))).toEqual(contentResult);
-
-        const screenshotResult = yield* invoke(Browser.screenshot({}));
-        expect(JSON.parse(JSON.stringify(screenshotResult))).toEqual(screenshotResult);
-      });
-    });
-
-    it("page identifiers are plain strings", function* () {
-      const factory = browserTransport();
-
-      yield* scoped(function* () {
-        yield* installRemoteAgent(Browser, factory);
-        const result = yield* invoke(Browser.navigate({ url: "https://example.com" }));
-        expect(typeof result.page).toBe("string");
-      });
     });
   });
 });

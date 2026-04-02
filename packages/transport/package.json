@@ -70,9 +70,11 @@
     "@effectionx/websocket": "^2.3.3",
     "@effectionx/worker": "^0.5.2",
     "@tisyn/agent": "workspace:*",
+    "@tisyn/durable-streams": "workspace:*",
     "@tisyn/ir": "workspace:*",
     "@tisyn/kernel": "workspace:*",
     "@tisyn/protocol": "workspace:*",
+    "@tisyn/runtime": "workspace:*",
     "@tisyn/validate": "workspace:*",
     "remeda": "^2.33.6"
   },

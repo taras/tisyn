@@ -75,7 +75,7 @@ On the remote side, adapters such as `createProtocolServer()` and `createStdioAg
 - `websocketTransport`: Create a transport that speaks the protocol over WebSocket. _(via `@tisyn/transport/websocket`)_
 - `workerTransport`: Create a transport that crosses a worker boundary. _(via `@tisyn/transport/worker`)_
 - `ssePostTransport`: Create an HTTP transport that combines POST requests with SSE responses. _(via `@tisyn/transport/sse-post`)_
-- `browserTransport`: Create a transport that maps browser contract operations to Playwright API calls. _(via `@tisyn/transport/browser`)_
+- `browserTransport`: Create a transport for browser execution with local capability composition. _(via `@tisyn/transport/browser`)_
 
 ### Agent-side adapters
 
@@ -118,11 +118,11 @@ Choose the transport that matches the boundary you need:
 - `websocketTransport`: long-lived remote sessions over a network connection
 - `workerTransport`: remoting across a worker boundary
 - `ssePostTransport`: asymmetric HTTP remoting using POST inbound and SSE outbound
-- `browserTransport`: browser automation via Playwright (requires `playwright-core` peer dependency)
+- `browserTransport`: browser execution with local capability composition (requires `playwright-core` peer dependency)
 
 ## Browser Transport
 
-The browser transport maps the `Browser` agent contract to Playwright API calls, allowing workflows to issue browser commands (`navigate`, `click`, `fill`, `content`, `screenshot`, `selectPage`, `closePage`) as ordinary durable external effects.
+The browser transport provides a single cross-boundary operation — `Browser.execute` — that sends IR into a browser execution environment for local execution. Browser-local agents are composed at transport setup time via a first-class capability composition interface.
 
 ### Requirements
 
@@ -134,47 +134,59 @@ pnpm add playwright-core
 
 ### Ambient Declaration
 
-Workflows must include an ambient declaration for the browser contract. The compiler discovers contracts exclusively from `declare function` declarations:
+Workflows must include an ambient declaration for the browser contract:
 
 ```typescript
-import type { Workflow } from "@tisyn/agent";
-import type {
-  NavigateParams, NavigateResult,
-  ClickParams, ClickResult,
-  FillParams, FillResult,
-  ContentParams, ContentResult,
-  ScreenshotParams, ScreenshotResult,
-  SelectPageParams, SelectPageResult,
-  ClosePageParams, ClosePageResult,
-} from "@tisyn/transport/browser";
+interface ExecuteParams { workflow: unknown }
 
 declare function Browser(): {
-  navigate(params: NavigateParams): Workflow<NavigateResult>;
-  click(params: ClickParams): Workflow<ClickResult>;
-  fill(params: FillParams): Workflow<FillResult>;
-  content(params: ContentParams): Workflow<ContentResult>;
-  screenshot(params: ScreenshotParams): Workflow<ScreenshotResult>;
-  selectPage(params: SelectPageParams): Workflow<SelectPageResult>;
-  closePage(params: ClosePageParams): Workflow<ClosePageResult>;
+  execute(params: ExecuteParams): Workflow<unknown>;
 };
+```
+
+### Capability Composition
+
+`LocalCapability` is the single composition interface for browser-local agents. Create capabilities with `localCapability()` and use them in both execution modes:
+
+```typescript
+import { browserTransport, localCapability } from "@tisyn/transport/browser";
+import { Dom, createDomHandlers } from "./my-dom-agent";
+
+const domCap = localCapability(Dom, createDomHandlers());
+
+// In-process mode (for testing):
+const transport = browserTransport({
+  capabilities: [domCap],
+});
+
+// Real-browser mode (executor built with createBrowserExecutor):
+const transport2 = browserTransport({
+  executor: "./dist/my-executor.iife.js",
+});
+```
+
+For real-browser mode, build an executor IIFE using the transport-provided `createBrowserExecutor`:
+
+```typescript
+// my-executor.ts — bundle into IIFE
+import { createBrowserExecutor, localCapability } from "@tisyn/transport/browser";
+import { Dom, createDomHandlers } from "./my-dom-agent";
+
+createBrowserExecutor([
+  localCapability(Dom, createDomHandlers()),
+]);
 ```
 
 ### Usage
 
 ```typescript
-import { browserTransport } from "@tisyn/transport/browser";
-
 yield* scoped(function* () {
   yield* useTransport(Browser, browserTransport({
-    headless: false,
-    viewport: { width: 1280, height: 720 },
+    capabilities: [domCapability()],
   }));
 
   const browser = yield* useAgent(Browser);
-
-  yield* browser.navigate({ url: "https://example.com" });
-  const page = yield* browser.content({ format: "text" });
-  yield* browser.click({ selector: "#submit" });
+  return yield* browser.execute({ workflow: someIr });
 });
 ```
 
@@ -186,25 +198,20 @@ yield* scoped(function* () {
 | `viewport` | `{ width, height }` | `{ width: 1280, height: 720 }` | Default viewport dimensions |
 | `engine` | `"chromium" \| "firefox" \| "webkit"` | `"chromium"` | Browser engine |
 | `launchArgs` | `string[]` | `[]` | Additional browser launch arguments |
-
-### Operations
-
-| Operation | Effect ID | Input | Output |
-|-----------|-----------|-------|--------|
-| `navigate` | `browser.navigate` | `{ url, page?, timeout? }` | `{ page, status, url }` |
-| `click` | `browser.click` | `{ selector, page?, timeout? }` | `{ ok: true }` |
-| `fill` | `browser.fill` | `{ selector, value, page?, timeout? }` | `{ ok: true }` |
-| `content` | `browser.content` | `{ page?, format? }` | `{ text, url, title }` |
-| `screenshot` | `browser.screenshot` | `{ page?, fullPage?, format?, quality? }` | `{ data, mimeType, width, height }` |
-| `selectPage` | `browser.selectPage` | `{ page }` | `{ page, url }` |
-| `closePage` | `browser.closePage` | `{ page }` | `{ ok: true, activePage }` |
+| `url` | `string` | — | URL to navigate to during setup |
+| `capabilities` | `LocalCapability[]` | `[]` | Browser-local capabilities (in-process mode) |
+| `executor` | `string` | — | Path to executor IIFE bundle (real-browser mode) |
 
 ### Runtime Exports
 
-For test harness and runtime use, `@tisyn/transport/browser` also exports:
+`@tisyn/transport/browser` exports:
 
-- `Browser` — a `DeclaredAgent` for use with `installRemoteAgent(Browser, factory)` and `invoke(Browser.method(...))`
-- All parameter and result type interfaces
+- `Browser` — a `DeclaredAgent` for use with `installRemoteAgent(Browser, factory)` and `invoke(Browser.execute(...))`
+- `browserTransport` — transport factory
+- `LocalCapability` — composition primitive type
+- `localCapability` — capability constructor
+- `createBrowserExecutor` — in-page executor setup function
+- `ExecuteParams`, `BrowserTransportConfig` — type interfaces
 
 ## Relationship to the Rest of Tisyn
 

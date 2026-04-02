@@ -3,7 +3,7 @@
  *
  * Validates that:
  * - Scope with browser binding executes body via transport
- * - Browser effects dispatch through bound transport
+ * - Browser.execute effects dispatch through bound transport
  * - Completed browser scope replays from journal without live dispatch
  * - Incomplete browser scope transitions to live dispatch at frontier
  */
@@ -21,9 +21,7 @@ import type { YieldEvent, DurableEvent } from "@tisyn/kernel";
 // ── Agent + IR helpers ──
 
 const browserAgent = agent("browser", {
-  navigate: operation<{ url: string }, { page: string; status: number; url: string }>(),
-  click: operation<{ selector: string }, { ok: true }>(),
-  content: operation<{ format?: string }, { text: string; url: string; title: string }>(),
+  execute: operation<{ workflow: unknown }, unknown>(),
 });
 
 const scope = (body: unknown, handler: unknown = null, bindings: unknown = {}) =>
@@ -52,16 +50,8 @@ describe("Browser scope — fresh execution", () => {
   it("scope with browser binding executes body", function* () {
     const factory = inprocessTransport(browserAgent, {
       // biome-ignore lint/correctness/useYield: mock
-      *navigate() {
-        return { page: "page:0", status: 200, url: "https://example.com" };
-      },
-      // biome-ignore lint/correctness/useYield: mock
-      *click() {
-        return { ok: true as const };
-      },
-      // biome-ignore lint/correctness/useYield: mock
-      *content() {
-        return { text: "hello", url: "https://example.com", title: "Example" };
+      *execute() {
+        return { result: "executed" };
       },
     });
 
@@ -75,70 +65,52 @@ describe("Browser scope — fresh execution", () => {
     expect(result).toEqual({ status: "ok", value: 42 });
   });
 
-  it("browser effect dispatches through bound transport", function* () {
-    let navigateCalled = false;
+  it("browser.execute effect dispatches through bound transport", function* () {
+    let executeCalled = false;
     const factory = inprocessTransport(browserAgent, {
       // biome-ignore lint/correctness/useYield: mock
-      *navigate(params: { url: string }) {
-        navigateCalled = true;
-        return { page: "page:0", status: 200, url: params.url };
-      },
-      // biome-ignore lint/correctness/useYield: mock
-      *click() {
-        return { ok: true as const };
-      },
-      // biome-ignore lint/correctness/useYield: mock
-      *content() {
-        return { text: "", url: "", title: "" };
+      *execute(params: { workflow: unknown }) {
+        executeCalled = true;
+        return { workflow: params.workflow, status: "done" };
       },
     });
 
-    const body = effectIR("browser", "navigate", { url: "https://example.com" });
+    const body = effectIR("browser", "execute", { workflow: { test: true } });
     const ir = scope(body, null, { browser: Get(Ref("envObj"), "transport") });
     const { result } = yield* execute({
       ir,
       // biome-ignore lint/suspicious/noExplicitAny: factory is not Json-serializable
       env: { envObj: { transport: factory } as any },
     });
-    expect(navigateCalled).toBe(true);
+    expect(executeCalled).toBe(true);
     expect(result.status).toBe("ok");
     if (result.status === "ok") {
       expect(result.value).toMatchObject({
-        page: "page:0",
-        status: 200,
-        url: "https://example.com",
+        workflow: { test: true },
+        status: "done",
       });
     }
   });
 
-  it("multiple browser effects dispatch sequentially", function* () {
-    const calls: string[] = [];
+  it("multiple browser.execute effects dispatch sequentially", function* () {
+    const calls: number[] = [];
     const factory = inprocessTransport(browserAgent, {
       // biome-ignore lint/correctness/useYield: mock
-      *navigate() {
-        calls.push("navigate");
-        return { page: "page:0", status: 200, url: "https://example.com" };
-      },
-      // biome-ignore lint/correctness/useYield: mock
-      *click() {
-        calls.push("click");
-        return { ok: true as const };
-      },
-      // biome-ignore lint/correctness/useYield: mock
-      *content() {
-        calls.push("content");
-        return { text: "hello", url: "https://example.com", title: "Example" };
+      *execute(params: { workflow: unknown }) {
+        const n = (params.workflow as any).n;
+        calls.push(n);
+        return { n, ok: true };
       },
     });
 
-    // Chain: navigate → click → content (using Let bindings)
+    // Chain: execute(1) → execute(2) → execute(3) using Let bindings
     const body = Let(
-      "_nav",
-      effectIR("browser", "navigate", { url: "https://example.com" }),
+      "_e1",
+      effectIR("browser", "execute", { workflow: { n: 1 } }),
       Let(
-        "_click",
-        effectIR("browser", "click", { selector: "#btn" }),
-        effectIR("browser", "content", { format: "text" }),
+        "_e2",
+        effectIR("browser", "execute", { workflow: { n: 2 } }),
+        effectIR("browser", "execute", { workflow: { n: 3 } }),
       ),
     );
     const ir = scope(body, null, { browser: Get(Ref("envObj"), "transport") });
@@ -148,7 +120,7 @@ describe("Browser scope — fresh execution", () => {
       env: { envObj: { transport: factory } as any },
     });
 
-    expect(calls).toEqual(["navigate", "click", "content"]);
+    expect(calls).toEqual([1, 2, 3]);
     expect(result.status).toBe("ok");
 
     // Journal should contain YieldEvents for all three browser effects
@@ -165,20 +137,12 @@ describe("Browser scope — replay", () => {
   it("completed browser scope replays from journal without live dispatch (RP3/RP4/RP6/RP7)", function* () {
     const factory = inprocessTransport(browserAgent, {
       // biome-ignore lint/correctness/useYield: mock
-      *navigate() {
-        return { page: "page:0", status: 200, url: "https://example.com" };
-      },
-      // biome-ignore lint/correctness/useYield: mock
-      *click() {
-        return { ok: true as const };
-      },
-      // biome-ignore lint/correctness/useYield: mock
-      *content() {
-        return { text: "hello", url: "https://example.com", title: "Example" };
+      *execute(params: { workflow: unknown }) {
+        return { result: params.workflow };
       },
     });
 
-    const body = effectIR("browser", "navigate", { url: "https://example.com" });
+    const body = effectIR("browser", "execute", { workflow: "hello" });
     const ir = scope(body, null, { browser: Get(Ref("envObj"), "transport") });
     // biome-ignore lint/suspicious/noExplicitAny: factory is not Json-serializable
     const env = { envObj: { transport: factory } as any };
@@ -194,19 +158,9 @@ describe("Browser scope — replay", () => {
     let spyCalled = false;
     const spyFactory = inprocessTransport(browserAgent, {
       // biome-ignore lint/correctness/useYield: mock
-      *navigate() {
+      *execute() {
         spyCalled = true;
-        return { page: "page:0", status: 999, url: "spy" };
-      },
-      // biome-ignore lint/correctness/useYield: mock
-      *click() {
-        spyCalled = true;
-        return { ok: true as const };
-      },
-      // biome-ignore lint/correctness/useYield: mock
-      *content() {
-        spyCalled = true;
-        return { text: "spy", url: "spy", title: "spy" };
+        return { result: "spy" };
       },
     });
 
@@ -227,24 +181,16 @@ describe("Browser scope — replay", () => {
   it("completed browser scope replay produces same result value (RP7)", function* () {
     const factory = inprocessTransport(browserAgent, {
       // biome-ignore lint/correctness/useYield: mock
-      *navigate(params: { url: string }) {
-        return { page: "page:0", status: 200, url: params.url };
-      },
-      // biome-ignore lint/correctness/useYield: mock
-      *click() {
-        return { ok: true as const };
-      },
-      // biome-ignore lint/correctness/useYield: mock
-      *content() {
-        return { text: "hello", url: "https://example.com", title: "Example" };
+      *execute(params: { workflow: unknown }) {
+        return { computed: "value", input: params.workflow };
       },
     });
 
-    // Use Let to bind navigate result and return it
+    // Use Let to bind execute result and return it
     const body = Let(
-      "navResult",
-      effectIR("browser", "navigate", { url: "https://example.com" }),
-      Ref("navResult"),
+      "execResult",
+      effectIR("browser", "execute", { workflow: { data: 42 } }),
+      Ref("execResult"),
     );
     const ir = scope(body, null, { browser: Get(Ref("envObj"), "transport") });
     // biome-ignore lint/suspicious/noExplicitAny: factory is not Json-serializable
@@ -257,22 +203,14 @@ describe("Browser scope — replay", () => {
 
     expect(run1.result.status).toBe("ok");
     if (run1.result.status === "ok") {
-      expect(run1.result.value).toMatchObject({ page: "page:0", status: 200 });
+      expect(run1.result.value).toMatchObject({ computed: "value" });
     }
 
     // Run 2: replay — should produce identical result
     const spyFactory = inprocessTransport(browserAgent, {
       // biome-ignore lint/correctness/useYield: mock
-      *navigate() {
-        return { page: "page:0", status: 999, url: "spy" };
-      },
-      // biome-ignore lint/correctness/useYield: mock
-      *click() {
-        return { ok: true as const };
-      },
-      // biome-ignore lint/correctness/useYield: mock
-      *content() {
-        return { text: "spy", url: "spy", title: "spy" };
+      *execute() {
+        return { computed: "spy", input: "spy" };
       },
     });
 
@@ -291,39 +229,25 @@ describe("Browser scope — replay", () => {
 
   it("incomplete browser scope transitions to live dispatch at frontier (v0.1.0)", function* () {
     // Construct a partial journal: scope child has a YieldEvent but no CloseEvent
-    // The scope itself is "root.0", so child effects have coroutineId "root.0"
     const stored: DurableEvent[] = [
-      yieldEvent(
-        "browser",
-        "navigate",
-        { page: "page:0", status: 200, url: "https://example.com" },
-        "root.0",
-      ),
+      yieldEvent("browser", "execute", { result: "first" }, "root.0"),
       // No closeOk for root.0 — scope is incomplete
     ];
 
     let liveCalled = false;
     const factory = inprocessTransport(browserAgent, {
       // biome-ignore lint/correctness/useYield: mock
-      *navigate() {
-        return { page: "page:0", status: 200, url: "https://example.com" };
-      },
-      // biome-ignore lint/correctness/useYield: mock
-      *click() {
+      *execute() {
         liveCalled = true;
-        return { ok: true as const };
-      },
-      // biome-ignore lint/correctness/useYield: mock
-      *content() {
-        return { text: "", url: "", title: "" };
+        return { result: "live" };
       },
     });
 
-    // Body: navigate (replayed) → click (should go live)
+    // Body: execute (replayed) → execute (should go live)
     const body = Let(
-      "_nav",
-      effectIR("browser", "navigate", { url: "https://example.com" }),
-      effectIR("browser", "click", { selector: "#btn" }),
+      "_first",
+      effectIR("browser", "execute", { workflow: "first" }),
+      effectIR("browser", "execute", { workflow: "second" }),
     );
     const ir = scope(body, null, { browser: Get(Ref("envObj"), "transport") });
 
@@ -335,11 +259,11 @@ describe("Browser scope — replay", () => {
       stream,
     });
 
-    // The click effect should have dispatched live at the frontier
+    // The second execute effect should have dispatched live at the frontier
     expect(liveCalled).toBe(true);
     expect(result.status).toBe("ok");
     if (result.status === "ok") {
-      expect(result.value).toEqual({ ok: true });
+      expect(result.value).toEqual({ result: "live" });
     }
   });
 });
