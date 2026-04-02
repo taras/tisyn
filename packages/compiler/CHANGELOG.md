@@ -1,5 +1,23 @@
 # @tisyn/compiler
 
+## 0.7.0
+
+### Minor Changes
+
+- f074970: Compile authored `resource(function*() { ... })` and `provide(value)` forms to IR.
+
+  - `emitResource` validates generator argument, compiles body with provide placement rules (P2–P7)
+  - `emitProvide` checks `inResourceBody` context, compiles value expression
+  - Nested `resource()` inside resource bodies rejected at compile time (MVP restriction)
+  - `ResourceEval` and `ProvideEval` IR builders exported
+
+### Patch Changes
+
+- Updated dependencies [f074970]
+- Updated dependencies [f074970]
+  - @tisyn/ir@0.7.0
+  - @tisyn/validate@0.7.0
+
 ## 0.6.0
 
 ### Patch Changes

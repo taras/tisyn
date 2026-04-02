@@ -1,5 +1,12 @@
 # @tisyn/cli
 
+## 0.1.7
+
+### Patch Changes
+
+- Updated dependencies [f074970]
+  - @tisyn/compiler@0.7.0
+
 ## 0.1.6
 
 ### Patch Changes
