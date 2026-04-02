@@ -26,6 +26,7 @@ If you want to **run** a Tisyn program rather than compile, inspect, or validate
 - reconstructing runtime state from the durable stream
 - continuing evaluation from the correct point
 - dispatching live effects through installed agents
+- handling stream iteration externals `stream.subscribe` and `stream.next`
 - orchestrating compound external nodes such as `scope`, `all`, `race`, `spawn`, `join`, `resource`, and `provide`, including scope-local transport and middleware lifecycle
 - appending new yield and close events before resuming execution
 - exposing local and remote execution entrypoints
@@ -45,6 +46,10 @@ Prior events are read from the stream and used to rebuild execution state. This 
 ### Dispatch
 
 When evaluation reaches a live effect that is not already satisfied by replay, the runtime routes that effect through the installed agents.
+
+### Stream iteration
+
+`stream.subscribe` and `stream.next` are runtime-managed standard external effects used by compiled `for (const x of yield* each(expr))` loops. The runtime creates subscription handles, enforces that they stay within allowed coroutine boundaries, and reconstructs replay state at the live frontier when a replayed loop resumes with a fresh live subscription.
 
 ### Structured concurrency
 
@@ -139,6 +144,7 @@ The runtime only performs live work where replay can no longer satisfy evaluatio
 - replay from prior events
 - reconstruction of execution state from the stream
 - live effect dispatch through installed agents
+- runtime handling of `stream.subscribe` / `stream.next` and restricted subscription handles
 - remote execution entrypoints
 
 `@tisyn/runtime` does **not** own:

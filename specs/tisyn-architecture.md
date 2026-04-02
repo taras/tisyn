@@ -371,6 +371,12 @@ agent-returned data from being re-interpreted as code.
 `unquote` instead of `resolve`, preserving child expressions for
 the execution layer to spawn as separate tasks.
 
+Stream iteration uses the standard external path instead.
+Compiled `for (const x of yield* each(expr))` loops lower to the
+reserved effect IDs `stream.subscribe` and `stream.next`, which
+flow through `resolve()` and the ordinary yield/journal boundary
+while the runtime manages restricted subscription-handle values.
+
 ### 5.4 Call-Site Resolution
 
 Tisyn functions have no closures. A `Fn` body evaluates in the

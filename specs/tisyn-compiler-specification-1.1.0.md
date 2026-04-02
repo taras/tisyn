@@ -36,6 +36,7 @@ This document specifies a compiler that transforms a restricted subset of JavaSc
 | Concurrency     | `yield* all([...])` / `yield* race([...])` | Compound Eval                            |
 | Blocking scope  | `yield* scoped(function* () { ... })`      | Compound Eval (`id: "scope"`)            |
 | Sleep           | `yield* sleep(ms)`                         | External Eval                            |
+| Stream iteration | `for (const x of yield* each(expr)) { ... }` | Recursive `Fn` + `Call` with `stream.subscribe` / `stream.next` |
 | Sub-workflow    | `yield* otherWorkflow(args)`               | Inlined or `call`                        |
 | Variable        | `const x = <expr>`                         | `let`                                    |
 | `let` declaration | `let x = v`                              | SSA-versioned `let` binding (`x_0`)      |
@@ -56,7 +57,9 @@ This document specifies a compiler that transforms a restricted subset of JavaSc
 
 ### 2.2 Effects and the Durability Boundary
 
-An **effect** is a `yield*` targeting an Agent method, `all`, `race`, `scoped`, `sleep`, or a sub-workflow containing effects. Each agent method call produces one Yield event.
+An **effect** is a `yield*` targeting an Agent method, `all`, `race`, `scoped`, `sleep`, `each(...)` in the accepted stream-iteration form, or a sub-workflow containing effects. Each agent method call produces one Yield event.
+
+The accepted stream-iteration form is intentionally narrow: only `for (const x of yield* each(expr)) { ... }` is supported. The compiler lowers that form to a recursive loop using the standard external effect IDs `stream.subscribe` and `stream.next`. All other `for...of` usage remains rejected.
 
 **Rule:** `yield*` MUST appear only in statement position — as the RHS of `const x = yield* ...` or as a bare statement. It MUST NOT appear in condition expressions, short-circuit operands, function arguments, or array/object literals.
 
@@ -1063,6 +1066,7 @@ Inner bindings shadow outer with same name. Outer restored after inner scope.
 | `yield*` in expr position | `if (yield* ...)` | E010              |
 | Ambiguous `+`             |                   | E011              |
 | `for...in`                |                   | E013              |
+| general `for...of`        | except `for (const x of yield* each(expr)) { ... }` | E013 |
 | `eval()/new Function()`   |                   | E014              |
 | `try` — `return` in `finally` | `return x` inside `finally` | E033 |
 | `try` — catch without binding | `catch {}` (no binding name) | E034    |
@@ -1076,6 +1080,12 @@ Inner bindings shadow outer with same name. Outer restored after inner scope.
 | Non-Error throw           | `throw "string"`  | E023              |
 | Arrow block body          | `(x) => { ... }`  | E024              |
 | `delete`/`Symbol`         |                   | E029/E030         |
+| stream `for...of` with `let` or `var` binding | | E-STREAM-001 |
+| stream `for...of` destructuring binding | | E-STREAM-002 |
+| `for (const x of each(expr))` | | E-STREAM-003 |
+| `each()` outside iterable position | | E-STREAM-004 |
+| `each.next()` | | E-STREAM-005 |
+| nested `for (const x of yield* each(expr))` | | E-STREAM-006 |
 | User var `__` prefix      | `const __x`       | E028              |
 
 ---

@@ -24,6 +24,7 @@ import {
   EffectError,
   RuntimeBugError,
   ScopeBindingEffectError,
+  SubscriptionCapabilityError,
 } from "./errors.js";
 import { assertValidIr } from "@tisyn/validate";
 import { evaluate, type Env, envFromRecord } from "@tisyn/kernel";
@@ -54,17 +55,43 @@ export interface ExecuteResult {
   journal: DurableEvent[];
 }
 
+/** Stream subscription entry — null subscription means replay-only, not yet live. */
+interface SubscriptionEntry {
+  subscription: { next(): Operation<IteratorResult<Val, unknown>> } | null;
+  sourceDefinition: unknown;
+}
+
 /** Shared context passed through driveKernel and orchestration functions. */
 interface DriveContext {
   replayIndex: ReplayIndex;
   stream: DurableStream;
   journal: DurableEvent[];
+  /** Stream subscription map shared across all coroutines in the execution. */
+  subscriptions: Map<string, SubscriptionEntry>;
 }
 
 interface ScopeInner {
   handler: FnNode | null;
   bindings: Record<string, Expr>;
   body: Expr;
+}
+
+/** Recursively check if a value tree contains a subscription handle. */
+function containsSubscriptionHandle(value: unknown): boolean {
+  if (value === null || value === undefined || typeof value !== "object") return false;
+  if (Array.isArray(value)) return value.some(containsSubscriptionHandle);
+  const obj = value as Record<string, unknown>;
+  if ("__tisyn_subscription" in obj) return true;
+  return Object.values(obj).some(containsSubscriptionHandle);
+}
+
+/** Assert that a close value does not contain subscription handles (RV3). */
+function assertNoSubscriptionHandleInCloseValue(value: unknown): void {
+  if (containsSubscriptionHandle(value)) {
+    throw new SubscriptionCapabilityError(
+      "Close value contains a subscription handle, which is a restricted capability value",
+    );
+  }
 }
 
 interface ResourceChild {
@@ -116,7 +143,7 @@ export function* execute(options: ExecuteOptions): Operation<ExecuteResult> {
 
   // Phase 3: Create kernel generator and drive it
   const kernel = evaluate(validatedIr, env);
-  const ctx: DriveContext = { replayIndex, stream, journal };
+  const ctx: DriveContext = { replayIndex, stream, journal, subscriptions: new Map() };
 
   let result: EventResult;
   try {
@@ -188,6 +215,8 @@ function* driveKernel(
   let pendingStep: IteratorResult<EffectDescriptor, Val> | null = null;
   // Unified counter for all compound-external children (scope, all, race, spawn) — replay-safe.
   let childSpawnCount = 0;
+  // Per-coroutine subscription counter for deterministic token generation.
+  let subscriptionCounter = 0;
   // Spawn/join tracking
   const spawnedTasks = new Map<string, { operation: Operation<EventResult> }>();
   const joinedTasks = new Set<string>();
@@ -202,6 +231,8 @@ function* driveKernel(
         pendingStep = null;
 
         if (step.done) {
+          // RV3: Reject subscription handles in close values
+          assertNoSubscriptionHandleInCloseValue(step.value);
           // R21: Tear down resource children in reverse creation order
           yield* teardownResourceChildren(resourceChildren);
           closed = true;
@@ -241,6 +272,7 @@ function* driveKernel(
               // T14: route through parent kernel so parent try/catch can intercept
               const throwResult = kernel.throw(scopeErr);
               if (throwResult.done) {
+                assertNoSubscriptionHandleInCloseValue(throwResult.value);
                 yield* teardownResourceChildren(resourceChildren);
                 closed = true;
                 const closeEvent: CloseEvent = {
@@ -374,6 +406,7 @@ function* driveKernel(
             } else {
               const throwResult = kernel.throw(resourceErr);
               if (throwResult.done) {
+                assertNoSubscriptionHandleInCloseValue(throwResult.value);
                 yield* teardownResourceChildren(resourceChildren);
                 closed = true;
                 const closeEvent: CloseEvent = {
@@ -428,6 +461,18 @@ function* driveKernel(
           // Match — consume entry, feed stored result
           ctx.replayIndex.consumeYield(coroutineId);
 
+          // Stream-specific: cache source definition during subscribe replay
+          if (descriptor.id === "stream.subscribe" && stored.result.status === "ok") {
+            const handle = stored.result.value as Record<string, unknown> | null;
+            if (handle && typeof handle === "object" && "__tisyn_subscription" in handle) {
+              ctx.subscriptions.set(handle.__tisyn_subscription as string, {
+                subscription: null,
+                sourceDefinition: descriptor.data,
+              });
+              subscriptionCounter++;
+            }
+          }
+
           const replayedEvent: YieldEvent = {
             type: "yield",
             coroutineId,
@@ -442,6 +487,7 @@ function* driveKernel(
             const err = new EffectError(stored.result.error.message, stored.result.error.name);
             const throwResult = kernel.throw(err);
             if (throwResult.done) {
+              assertNoSubscriptionHandleInCloseValue(throwResult.value);
               yield* teardownResourceChildren(resourceChildren);
               closed = true;
               const closeEvent: CloseEvent = {
@@ -474,7 +520,62 @@ function* driveKernel(
         // CASE 3: No replay entry, no close — LIVE dispatch
         let effectResult: EventResult;
         try {
-          const resultValue = yield* dispatch(descriptor.id, descriptor.data as Val);
+          let resultValue: Val;
+          if (descriptor.id === "stream.subscribe") {
+            const token = `sub:${coroutineId}:${subscriptionCounter++}`;
+            const sourceData = descriptor.data as unknown[];
+            const source = sourceData[0];
+            // Subscribe to the Effection stream
+            const sub = yield* source as Operation<{
+              next(): Operation<IteratorResult<Val, unknown>>;
+            }>;
+            ctx.subscriptions.set(token, { subscription: sub, sourceDefinition: source });
+            resultValue = { __tisyn_subscription: token } as unknown as Val;
+          } else if (descriptor.id === "stream.next") {
+            const nextData = descriptor.data as unknown[];
+            const handle = nextData[0] as Record<string, unknown> | null;
+            if (
+              !handle ||
+              typeof handle !== "object" ||
+              typeof handle.__tisyn_subscription !== "string"
+            ) {
+              throw new RuntimeBugError("stream.next: argument is not a valid subscription handle");
+            }
+            const token = handle.__tisyn_subscription as string;
+            // RV1: ancestor-or-equal coroutineId check
+            const handleCid = token.split(":")[1]!;
+            if (coroutineId !== handleCid && !coroutineId.startsWith(handleCid + ".")) {
+              throw new SubscriptionCapabilityError(
+                `stream.next: handle from '${handleCid}' cannot be used from '${coroutineId}'`,
+              );
+            }
+            const entry = ctx.subscriptions.get(token);
+            // Lazy reconstruction at live frontier
+            if (entry && !entry.subscription) {
+              const src = entry.sourceDefinition as unknown[];
+              const srcStream = src[0];
+              entry.subscription = yield* srcStream as Operation<{
+                next(): Operation<IteratorResult<Val, unknown>>;
+              }>;
+            }
+            if (!entry?.subscription) {
+              throw new RuntimeBugError(`stream.next: no subscription for token '${token}'`);
+            }
+            const iterResult = yield* entry.subscription.next();
+            if (iterResult.done) {
+              resultValue = { done: true } as unknown as Val;
+            } else {
+              resultValue = { done: false, value: iterResult.value } as unknown as Val;
+            }
+          } else {
+            // RV2: reject subscription handles in non-stream effect dispatch data
+            if (containsSubscriptionHandle(descriptor.data)) {
+              throw new SubscriptionCapabilityError(
+                `Effect '${descriptor.id}': resolved data contains a subscription handle, which is a restricted capability value`,
+              );
+            }
+            resultValue = yield* dispatch(descriptor.id, descriptor.data as Val);
+          }
           effectResult = { status: "ok", value: resultValue as Json };
         } catch (error) {
           const err = error instanceof Error ? error : new Error(String(error));
@@ -500,6 +601,7 @@ function* driveKernel(
           const err = new EffectError(effectResult.error.message, effectResult.error.name);
           const throwResult = kernel.throw(err);
           if (throwResult.done) {
+            assertNoSubscriptionHandleInCloseValue(throwResult.value);
             yield* teardownResourceChildren(resourceChildren);
             closed = true;
             const closeEvent: CloseEvent = {
@@ -805,6 +907,8 @@ function* orchestrateResourceChild(
 
   // Shared across init and cleanup phases for deterministic coroutineId allocation
   let childSpawnCount = 0;
+  // Per-resource subscription counter for deterministic token generation
+  let subscriptionCounter = 0;
 
   // ── INIT PHASE ──
   // Drive kernel to provide in its own scope. When the scope exits (at provide
@@ -952,6 +1056,19 @@ function* orchestrateResourceChild(
             );
           }
           ctx.replayIndex.consumeYield(childId);
+
+          // Stream-specific: cache source definition during subscribe replay
+          if (descriptor.id === "stream.subscribe" && stored.result.status === "ok") {
+            const handle = stored.result.value as Record<string, unknown> | null;
+            if (handle && typeof handle === "object" && "__tisyn_subscription" in handle) {
+              ctx.subscriptions.set(handle.__tisyn_subscription as string, {
+                subscription: null,
+                sourceDefinition: descriptor.data,
+              });
+              subscriptionCounter++;
+            }
+          }
+
           const replayedEvent: YieldEvent = {
             type: "yield",
             coroutineId: childId,
@@ -983,10 +1100,61 @@ function* orchestrateResourceChild(
           );
         }
 
-        // LIVE dispatch
+        // LIVE dispatch — stream-aware
         let effectResult: EventResult;
         try {
-          const resultValue = yield* dispatch(descriptor.id, descriptor.data as Val);
+          let resultValue: Val;
+          if (descriptor.id === "stream.subscribe") {
+            const token = `sub:${childId}:${subscriptionCounter++}`;
+            const sourceData = descriptor.data as unknown[];
+            const source = sourceData[0];
+            const sub = yield* source as Operation<{
+              next(): Operation<IteratorResult<Val, unknown>>;
+            }>;
+            ctx.subscriptions.set(token, { subscription: sub, sourceDefinition: source });
+            resultValue = { __tisyn_subscription: token } as unknown as Val;
+          } else if (descriptor.id === "stream.next") {
+            const nextData = descriptor.data as unknown[];
+            const handle = nextData[0] as Record<string, unknown> | null;
+            if (
+              !handle ||
+              typeof handle !== "object" ||
+              typeof handle.__tisyn_subscription !== "string"
+            ) {
+              throw new RuntimeBugError("stream.next: argument is not a valid subscription handle");
+            }
+            const token = handle.__tisyn_subscription as string;
+            const handleCid = token.split(":")[1]!;
+            if (childId !== handleCid && !childId.startsWith(handleCid + ".")) {
+              throw new SubscriptionCapabilityError(
+                `stream.next: handle from '${handleCid}' cannot be used from '${childId}'`,
+              );
+            }
+            const entry = ctx.subscriptions.get(token);
+            if (entry && !entry.subscription) {
+              const src = entry.sourceDefinition as unknown[];
+              const srcStream = src[0];
+              entry.subscription = yield* srcStream as Operation<{
+                next(): Operation<IteratorResult<Val, unknown>>;
+              }>;
+            }
+            if (!entry?.subscription) {
+              throw new RuntimeBugError(`stream.next: no subscription for token '${token}'`);
+            }
+            const iterResult = yield* entry.subscription.next();
+            if (iterResult.done) {
+              resultValue = { done: true } as unknown as Val;
+            } else {
+              resultValue = { done: false, value: iterResult.value } as unknown as Val;
+            }
+          } else {
+            if (containsSubscriptionHandle(descriptor.data)) {
+              throw new SubscriptionCapabilityError(
+                `Effect '${descriptor.id}': resolved data contains a subscription handle, which is a restricted capability value`,
+              );
+            }
+            resultValue = yield* dispatch(descriptor.id, descriptor.data as Val);
+          }
           effectResult = { status: "ok", value: resultValue as Json };
         } catch (error) {
           const err = error instanceof Error ? error : new Error(String(error));
@@ -1063,6 +1231,7 @@ function* orchestrateResourceChild(
         pendingStep = null;
 
         if (step.done) {
+          assertNoSubscriptionHandleInCloseValue(step.value);
           childClosed = true;
           const closeEvent: CloseEvent = {
             type: "close",
@@ -1105,6 +1274,7 @@ function* orchestrateResourceChild(
             } else {
               const throwResult = childKernel.throw(scopeErr);
               if (throwResult.done) {
+                assertNoSubscriptionHandleInCloseValue(throwResult.value);
                 childClosed = true;
                 const closeEvent: CloseEvent = {
                   type: "close",
@@ -1209,6 +1379,19 @@ function* orchestrateResourceChild(
             );
           }
           ctx.replayIndex.consumeYield(childId);
+
+          // Stream-specific: cache source definition during subscribe replay
+          if (descriptor.id === "stream.subscribe" && stored.result.status === "ok") {
+            const handle = stored.result.value as Record<string, unknown> | null;
+            if (handle && typeof handle === "object" && "__tisyn_subscription" in handle) {
+              ctx.subscriptions.set(handle.__tisyn_subscription as string, {
+                subscription: null,
+                sourceDefinition: descriptor.data,
+              });
+              subscriptionCounter++;
+            }
+          }
+
           const replayedEvent: YieldEvent = {
             type: "yield",
             coroutineId: childId,
@@ -1223,6 +1406,7 @@ function* orchestrateResourceChild(
             const err = new EffectError(stored.result.error.message, stored.result.error.name);
             const throwResult = childKernel.throw(err);
             if (throwResult.done) {
+              assertNoSubscriptionHandleInCloseValue(throwResult.value);
               childClosed = true;
               const closeEvent: CloseEvent = {
                 type: "close",
@@ -1249,10 +1433,61 @@ function* orchestrateResourceChild(
           );
         }
 
-        // LIVE dispatch
+        // LIVE dispatch — stream-aware
         let effectResult: EventResult;
         try {
-          const resultValue = yield* dispatch(descriptor.id, descriptor.data as Val);
+          let resultValue: Val;
+          if (descriptor.id === "stream.subscribe") {
+            const token = `sub:${childId}:${subscriptionCounter++}`;
+            const sourceData = descriptor.data as unknown[];
+            const source = sourceData[0];
+            const sub = yield* source as Operation<{
+              next(): Operation<IteratorResult<Val, unknown>>;
+            }>;
+            ctx.subscriptions.set(token, { subscription: sub, sourceDefinition: source });
+            resultValue = { __tisyn_subscription: token } as unknown as Val;
+          } else if (descriptor.id === "stream.next") {
+            const nextData = descriptor.data as unknown[];
+            const handle = nextData[0] as Record<string, unknown> | null;
+            if (
+              !handle ||
+              typeof handle !== "object" ||
+              typeof handle.__tisyn_subscription !== "string"
+            ) {
+              throw new RuntimeBugError("stream.next: argument is not a valid subscription handle");
+            }
+            const token = handle.__tisyn_subscription as string;
+            const handleCid = token.split(":")[1]!;
+            if (childId !== handleCid && !childId.startsWith(handleCid + ".")) {
+              throw new SubscriptionCapabilityError(
+                `stream.next: handle from '${handleCid}' cannot be used from '${childId}'`,
+              );
+            }
+            const entry = ctx.subscriptions.get(token);
+            if (entry && !entry.subscription) {
+              const src = entry.sourceDefinition as unknown[];
+              const srcStream = src[0];
+              entry.subscription = yield* srcStream as Operation<{
+                next(): Operation<IteratorResult<Val, unknown>>;
+              }>;
+            }
+            if (!entry?.subscription) {
+              throw new RuntimeBugError(`stream.next: no subscription for token '${token}'`);
+            }
+            const iterResult = yield* entry.subscription.next();
+            if (iterResult.done) {
+              resultValue = { done: true } as unknown as Val;
+            } else {
+              resultValue = { done: false, value: iterResult.value } as unknown as Val;
+            }
+          } else {
+            if (containsSubscriptionHandle(descriptor.data)) {
+              throw new SubscriptionCapabilityError(
+                `Effect '${descriptor.id}': resolved data contains a subscription handle, which is a restricted capability value`,
+              );
+            }
+            resultValue = yield* dispatch(descriptor.id, descriptor.data as Val);
+          }
           effectResult = { status: "ok", value: resultValue as Json };
         } catch (error) {
           const err = error instanceof Error ? error : new Error(String(error));
@@ -1277,6 +1512,7 @@ function* orchestrateResourceChild(
           const err = new EffectError(effectResult.error.message, effectResult.error.name);
           const throwResult = childKernel.throw(err);
           if (throwResult.done) {
+            assertNoSubscriptionHandleInCloseValue(throwResult.value);
             childClosed = true;
             const closeEvent: CloseEvent = {
               type: "close",

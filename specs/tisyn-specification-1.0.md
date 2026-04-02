@@ -674,6 +674,11 @@ classify(id) = STRUCTURAL  if id ∈ STRUCTURAL_IDS
 classify(id) = EXTERNAL    otherwise
 ```
 
+The reserved stream-iteration effect IDs `stream.subscribe` and
+`stream.next` are part of this EXTERNAL set. They use the normal
+standard-external boundary rather than the compound-external
+machinery.
+
 An interpreter MAY override classification, but overrides MUST be
 declared at initialization and MUST NOT change during execution.
 Classification MUST be identical between the original execution
@@ -686,6 +691,12 @@ and any replay.
 | Evaluated by       | Host evaluator | Agent (via execution layer) |
 | Journaled?         | No             | Yes (Yield event)           |
 | Causes suspension? | No             | Yes                         |
+
+Some EXTERNAL results are runtime-restricted capability values
+rather than freely serializable data. Stream subscription handles
+returned by `stream.subscribe` are one such case: they may be
+used by `stream.next` under runtime capability rules, but MUST
+NOT escape through ordinary effect payloads or close values.
 
 ### 7.3 The Dot Convention
 

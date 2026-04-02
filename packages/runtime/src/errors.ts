@@ -22,3 +22,10 @@ export class ScopeBindingEffectError extends Error {
     );
   }
 }
+
+export class SubscriptionCapabilityError extends Error {
+  override name = "SubscriptionCapabilityError" as const;
+  constructor(message: string) {
+    super(message);
+  }
+}

@@ -49,4 +49,11 @@ export const ErrorCodes = {
   E030: "Symbol is not allowed",
   E031: "Mutation method call is not allowed",
   E032: "Spread element outside array or object literal is not allowed",
+  // ── Stream iteration (MVP) ──
+  "E-STREAM-001": "for...of stream iteration requires 'const', not 'let' or 'var'",
+  "E-STREAM-002": "Destructuring in for...of stream iteration is not supported",
+  "E-STREAM-003": "for...of with each() requires 'yield*': use 'yield* each(expr)'",
+  "E-STREAM-004": "each() can only be used as the iterable in 'for (const x of yield* each(expr))'",
+  "E-STREAM-005": "each.next() is not part of the Tisyn authored language",
+  "E-STREAM-006": "Nested for...of stream iteration is not supported in this version",
 } as const;

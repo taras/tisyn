@@ -118,6 +118,11 @@ classify(id) = STRUCTURAL  if id ∈ STRUCTURAL
 classify(id) = EXTERNAL    otherwise
 ```
 
+Reserved stream-iteration effect IDs such as `stream.subscribe`
+and `stream.next` therefore classify as EXTERNAL. They are
+standard external effects, not structural operations and not
+compound external forms.
+
 Classification MUST be fixed at kernel initialization and MUST
 NOT change during execution. It MUST be identical between
 original execution and any replay.
