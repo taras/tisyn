@@ -38,20 +38,6 @@ const letIR = (name: string, value: unknown, body: unknown) =>
 const effectIR = (agentType: string, opName: string, data: unknown = []) =>
   ({ tisyn: "eval", id: `${agentType}.${opName}`, data }) as unknown as IrInput;
 
-const spawnIR = (body: unknown) =>
-  ({
-    tisyn: "eval",
-    id: "spawn",
-    data: { tisyn: "quote", expr: { body } },
-  }) as unknown as IrInput;
-
-const joinIR = (refName: string) =>
-  ({
-    tisyn: "eval",
-    id: "join",
-    data: { tisyn: "ref", name: refName },
-  }) as unknown as IrInput;
-
 // ── Tests ──
 
 describe("resource orchestration", () => {
