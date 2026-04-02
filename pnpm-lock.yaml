@@ -373,6 +373,9 @@ importers:
         specifier: ^2.33.6
         version: 2.33.6
     devDependencies:
+      '@effectionx/converge':
+        specifier: ^0.1.4
+        version: 0.1.4(effection@4.0.2)
       '@effectionx/vitest':
         specifier: ^0.3.1
         version: 0.3.1(effection@4.0.2)(vitest@4.1.0(@types/node@25.5.0)(vite@7.3.1(@types/node@25.5.0)(tsx@4.21.0)))
