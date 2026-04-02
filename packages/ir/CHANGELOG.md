@@ -1,5 +1,17 @@
 # @tisyn/ir
 
+## 0.7.0
+
+### Minor Changes
+
+- f074970: Add `resource` and `provide` as compound external node types.
+
+  - `ResourceShape`, `ResourceNode`, `ProvideNode` type definitions
+  - `Resource(body)` constructor wraps body in Quote (like `Spawn`)
+  - `Provide(value)` constructor leaves data unquoted (like `Join`)
+  - Print and decompile support for resource/provide nodes
+  - `"resource"` and `"provide"` added to `COMPOUND_EXTERNAL_IDS`
+
 ## 0.6.0
 
 ## 0.5.2

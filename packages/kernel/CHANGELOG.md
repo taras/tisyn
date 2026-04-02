@@ -1,5 +1,15 @@
 # @tisyn/kernel
 
+## 0.7.0
+
+### Patch Changes
+
+- f074970: Classify `resource` and `provide` as compound external operations so the kernel yields them for runtime orchestration.
+- Updated dependencies [f074970]
+- Updated dependencies [f074970]
+  - @tisyn/ir@0.7.0
+  - @tisyn/validate@0.7.0
+
 ## 0.6.0
 
 ### Patch Changes

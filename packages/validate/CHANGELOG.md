@@ -1,5 +1,17 @@
 # @tisyn/validate
 
+## 0.7.0
+
+### Patch Changes
+
+- f074970: Add semantic validation rules for `resource` and `provide` IR nodes.
+
+  - `resource`: data must be Quote node with `body` field; body is in evaluation position
+  - `provide`: accepts any expression as data (not Quote-wrapped, like `join`)
+
+- Updated dependencies [f074970]
+  - @tisyn/ir@0.7.0
+
 ## 0.6.0
 
 ### Patch Changes
