@@ -53,6 +53,10 @@
     "./browser": {
       "types": "./dist/transports/browser.d.ts",
       "import": "./dist/transports/browser.js"
+    },
+    "./browser-executor": {
+      "types": "./src/transports/browser-executor.ts",
+      "import": "./src/transports/browser-executor.ts"
     }
   },
   "publishConfig": {
@@ -70,11 +74,9 @@
     "@effectionx/websocket": "^2.3.3",
     "@effectionx/worker": "^0.5.2",
     "@tisyn/agent": "workspace:*",
-    "@tisyn/durable-streams": "workspace:*",
     "@tisyn/ir": "workspace:*",
     "@tisyn/kernel": "workspace:*",
     "@tisyn/protocol": "workspace:*",
-    "@tisyn/runtime": "workspace:*",
     "@tisyn/validate": "workspace:*",
     "remeda": "^2.33.6"
   },
@@ -89,10 +91,18 @@
     "ws": "^8"
   },
   "peerDependencies": {
+    "@tisyn/durable-streams": "workspace:*",
+    "@tisyn/runtime": "workspace:*",
     "effection": "^3 || ^4",
     "playwright-core": "^1.40"
   },
   "peerDependenciesMeta": {
+    "@tisyn/durable-streams": {
+      "optional": true
+    },
+    "@tisyn/runtime": {
+      "optional": true
+    },
     "playwright-core": {
       "optional": true
     }

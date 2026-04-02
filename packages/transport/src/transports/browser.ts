@@ -1,11 +1,10 @@
 import type { Operation } from "effection";
-import { call, createChannel, createScope, ensure, run, scoped } from "effection";
+import { call, createChannel, createScope, ensure, scoped } from "effection";
 import type { OperationSpec, AgentDeclaration, ImplementationHandlers } from "@tisyn/agent";
-import { agent, operation, implementAgent } from "@tisyn/agent";
-import type { IrInput, Json } from "@tisyn/ir";
+import { agent, operation, implementAgent, dispatch } from "@tisyn/agent";
+import type { IrInput, Json, Val, TisynExpr } from "@tisyn/ir";
 import { Call } from "@tisyn/ir";
-import { execute as runtimeExecute } from "@tisyn/runtime";
-import { InMemoryStream } from "@tisyn/durable-streams";
+import { evaluate, EMPTY_ENV } from "@tisyn/kernel";
 import type {
   AgentTransport,
   AgentTransportFactory,
@@ -45,42 +44,6 @@ export function localCapability<Ops extends Record<string, OperationSpec>>(
   return function* () {
     const impl = implementAgent(declaration, handlers);
     yield* impl.install();
-  };
-}
-
-/**
- * Create a browser executor that runs inside the browser page.
- *
- * Call this function in your executor script (which you bundle into an IIFE)
- * to define `window.__tisyn_execute`. The executor installs the configured
- * capabilities before each IR execution.
- *
- * @example
- * ```typescript
- * // my-executor.ts — bundle this into an IIFE
- * import { createBrowserExecutor, localCapability } from "@tisyn/transport/browser";
- * import { Dom, createDomHandlers } from "./my-dom-agent";
- *
- * createBrowserExecutor([
- *   localCapability(Dom, createDomHandlers()),
- * ]);
- * ```
- */
-export function createBrowserExecutor(capabilities: LocalCapability[]): void {
-  (globalThis as any).__tisyn_execute = (
-    ir: IrInput,
-  ): Promise<{ status: string; value?: unknown; error?: { message: string } }> => {
-    return run(function* () {
-      for (const cap of capabilities) {
-        yield* cap();
-      }
-      const stream = new InMemoryStream();
-      const { result } = yield* runtimeExecute({
-        ir: Call(ir as any) as IrInput,
-        stream,
-      });
-      return result;
-    });
   };
 }
 
@@ -206,20 +169,20 @@ export function browserTransport(config?: BrowserTransportConfig): AgentTranspor
           return result.value as Json;
         }
         // In-process mode: execute IR directly with capabilities
+        // Uses the kernel evaluator + agent dispatch (avoids @tisyn/runtime circular dep)
         return yield* scoped(function* () {
           for (const cap of capabilities) {
             yield* cap();
           }
-          const stream = new InMemoryStream();
-          const { result } = yield* runtimeExecute({
-            ir: Call(params.workflow as any) as IrInput,
-            stream,
-          });
-          if (result.status === "err") {
-            const errResult = result as { status: "err"; error: { message: string } };
-            throw new Error(errResult.error.message);
+          const ir = Call(params.workflow as any);
+          const gen = evaluate(ir as unknown as TisynExpr, EMPTY_ENV);
+          let step = gen.next(undefined as unknown as Val);
+          while (!step.done) {
+            const descriptor = step.value;
+            const result = yield* dispatch(descriptor.id, descriptor.data as Val);
+            step = gen.next(result as Val);
           }
-          return (result as { status: "ok"; value: unknown }).value as Json;
+          return step.value as Json;
         });
       },
     };
