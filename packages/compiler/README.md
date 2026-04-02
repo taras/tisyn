@@ -170,6 +170,7 @@ Supported constructs include:
 - `const` declarations
 - `if` / `else`
 - `while`
+- `for (const x of yield* each(sourceExpr)) { ... }`
 - `throw new Error(...)`
 - `try / catch / finally`
 - object literals
@@ -210,6 +211,40 @@ while (x < target) {
 }
 return x;   // returns the final value of x after the loop
 ```
+
+### Stream Iteration
+
+`for (const x of yield* each(sourceExpr)) { ... }` is the only supported `for...of` form.
+
+Example:
+
+```typescript
+export function* run(source: unknown) {
+  let count = 0;
+
+  for (const item of yield* each(source)) {
+    count = count + 1;
+    yield* OrderService().process(item);
+  }
+
+  return count;
+}
+```
+
+Lowering shape:
+
+- one `ExternalEval("stream.subscribe", [compiledSource])` before the loop
+- one recursive `Fn` containing `ExternalEval("stream.next", [Ref("__sub_N")])`
+- one `If(Get(Ref("__item_N"), "done"), ...)` dispatch per iteration
+- the same loop-carried-state packing/rebinding rules used for `while` when outer `let` bindings are reassigned in the loop body
+
+Rules:
+
+- only `for (const x of yield* each(expr))` is accepted
+- `let`, `var`, and destructuring bindings are rejected
+- `each()` may only appear in that iterable position
+- `each.next()` is not part of the authored language
+- nested stream-iteration loops are rejected in this MVP
 
 ### Scoped Blocks
 
@@ -531,7 +566,7 @@ The compiler enforces a deterministic, side-effect-free subset of TypeScript. Vi
 | E009 | `async` / `await` is not allowed                  |
 | E010 | `yield*` must appear in statement position only   |
 | E011 | Ambiguous `+` operator                            |
-| E013 | `for...in` / `for...of` is not allowed            |
+| E013 | `for...in` is not allowed; general `for...of` is not allowed outside the stream-iteration form |
 | E014 | `eval()` / `new Function()` is not allowed        |
 | E016 | `class` / `this` is not allowed                   |
 | E033 | `return` inside a `try` / `catch` / `finally` clause is not supported |
@@ -547,6 +582,12 @@ The compiler enforces a deterministic, side-effect-free subset of TypeScript. Vi
 | E028 | Variable names must not start with `__`           |
 | E029 | `delete` operator is not allowed                  |
 | E030 | `Symbol` is not allowed                           |
+| E-STREAM-001 | `for...of` stream iteration requires `const`, not `let` or `var` |
+| E-STREAM-002 | Destructuring in stream iteration is not supported |
+| E-STREAM-003 | `for...of` with `each()` requires `yield*` |
+| E-STREAM-004 | `each()` is only valid as the iterable in `for (const x of yield* each(expr))` |
+| E-STREAM-005 | `each.next()` is not part of the Tisyn authored language |
+| E-STREAM-006 | Nested stream-iteration loops are not supported in this version |
 
 ### Contract errors
 

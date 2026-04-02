@@ -16,6 +16,12 @@ The authoring layer is NOT the compiler. It does not transform
 generator functions. It provides the programmatic surface for
 working with IR as data.
 
+Compiler-recognized authored forms such as
+`for (const x of yield* each(expr)) { ... }` belong to the
+workflow compiler surface, not to the constructor-style authoring
+layer defined in this document. `each(...)` is therefore not a
+general IR-construction helper here.
+
 ### 1.1 Design Principles
 
 **Grammar and result types, not scope.** The authoring layer

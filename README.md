@@ -127,6 +127,7 @@ For the detailed agent model and API examples, see [`@tisyn/agent`](./packages/a
 | [Compound Concurrency Spec](./specs/tisyn-compound-concurrency-spec.md) | `all`, `race`, `spawn`, and `join` orchestration semantics |
 | [Spawn Specification](./specs/tisyn-spawn-specification.md) | Authored `spawn(...)`, task handles, `join`, and structured child-task lifecycle |
 | [Resource Specification](./specs/tisyn-resource-specification.md) | `resource(...)` and `provide(...)` scope-creating primitives for managed initialization and cleanup |
+| [Stream Iteration Specification](./specs/tisyn-stream-iteration-specification.md) | Authored `for (const x of yield* each(expr))`, `stream.subscribe`, `stream.next`, and subscription-handle runtime rules |
 | [Authoring Layer Spec](./specs/tisyn-authoring-layer-spec.md) | Generator-based authoring format and contract declarations |
 | [Constructor DSL Specification](./specs/tisyn-constructor-dsl-specification.md) | Grammar, constructor table, and recovery semantics for the DSL parser |
 | [Architecture](./specs/tisyn-architecture.md) | System architecture and package relationships |
