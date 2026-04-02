@@ -764,10 +764,10 @@ function* teardownResourceChildren(children: ResourceChild[]): Operation<void> {
  * Spawned as a background Effection task in the parent's scope.
  * Sole owner of the child's Close event (parent never writes Close for resource children).
  *
- * Lifecycle:
- * 1. Init: drive child kernel to `provide`, capture value
- * 2. Background: child stays alive, suspended at provide
- * 3. Teardown: resume child kernel, drive cleanup to completion
+ * Two-phase scoped design (R22):
+ * 1. Init scope: drive kernel to `provide`, capture value. When the scope exits,
+ *    Effection tears down any grandchildren spawned during init — BEFORE cleanup begins.
+ * 2. Cleanup scope: resume kernel (P7), drive finally/cleanup effects to completion.
  */
 function* orchestrateResourceChild(
   childKernel: Generator<EffectDescriptor, Val, Val>,
@@ -803,35 +803,27 @@ function* orchestrateResourceChild(
     return;
   }
 
-  let provideReceived = false;
+  // Shared across init and cleanup phases for deterministic coroutineId allocation
+  let childSpawnCount = 0;
 
-  yield* scoped(function* () {
-    let nextValue: Val = null;
-    let pendingStep: IteratorResult<EffectDescriptor, Val> | null = null;
-    let childSpawnCount = 0;
-    const spawnedTasks = new Map<string, { operation: Operation<EventResult> }>();
-    const joinedTasks = new Set<string>();
+  // ── INIT PHASE ──
+  // Drive kernel to provide in its own scope. When the scope exits (at provide
+  // or on error), Effection tears down any grandchildren spawned during init.
+  // This satisfies R22: grandchildren are halted before cleanup begins.
+  let initResult: { value: Val };
+  try {
+    initResult = yield* scoped(function* () {
+      let nextValue: Val = null;
+      let pendingStep: IteratorResult<EffectDescriptor, Val> | null = null;
+      const spawnedTasks = new Map<string, { operation: Operation<EventResult> }>();
+      const joinedTasks = new Set<string>();
 
-    try {
       for (;;) {
         const step = pendingStep ?? childKernel.next(nextValue);
         pendingStep = null;
 
         if (step.done) {
-          if (!provideReceived) {
-            throw new RuntimeBugError("Resource body completed without provide");
-          }
-          // Cleanup phase completed successfully
-          childClosed = true;
-          const closeEvent: CloseEvent = {
-            type: "close",
-            coroutineId: childId,
-            result: { status: "ok", value: step.value as Json },
-          };
-          yield* ctx.stream.append(closeEvent);
-          ctx.journal.push(closeEvent);
-          cleanupResolve();
-          return;
+          throw new RuntimeBugError("Resource body completed without provide");
         }
 
         const descriptor = step.value as EffectDescriptor;
@@ -842,13 +834,8 @@ function* orchestrateResourceChild(
           const cEnv = compoundData.__tisyn_env;
 
           if (descriptor.id === "provide") {
-            provideReceived = true;
-            provideResolve(compoundData.__tisyn_inner as Val);
-            // Suspend until parent signals teardown
-            yield* teardownOp;
-            // P7: resume kernel with null
-            nextValue = null;
-            continue;
+            // Return from scoped — tears down grandchildren (R22)
+            return { value: compoundData.__tisyn_inner as Val };
           }
 
           if (descriptor.id === "resource") {
@@ -870,9 +857,254 @@ function* orchestrateResourceChild(
             } else {
               const throwResult = childKernel.throw(scopeErr);
               if (throwResult.done) {
-                if (!provideReceived) {
-                  throw new RuntimeBugError("Resource body completed without provide");
+                throw new RuntimeBugError("Resource body completed without provide");
+              }
+              pendingStep = throwResult;
+              nextValue = null;
+            }
+          } else if (descriptor.id === "spawn") {
+            const spawnChildId = `${childId}.${childSpawnCount++}`;
+            const inner = compoundData.__tisyn_inner as { body: Expr };
+            const spawnChildKernel = evaluate(inner.body, cEnv);
+            const {
+              operation: joinOp,
+              resolve: joinResolve,
+              reject: joinReject,
+            } = withResolvers<EventResult>();
+            spawnedTasks.set(spawnChildId, { operation: joinOp });
+
+            yield* spawn(function* () {
+              try {
+                const result = yield* driveKernel(spawnChildKernel, spawnChildId, cEnv, ctx);
+                joinResolve(result);
+                if (result.status === "err") {
+                  const errResult = result as {
+                    status: "err";
+                    error: { message: string; name?: string };
+                  };
+                  throw new EffectError(errResult.error.message, errResult.error.name);
                 }
+              } catch (e) {
+                const err = e instanceof Error ? e : new Error(String(e));
+                joinReject(err);
+                throw err;
+              }
+            });
+
+            nextValue = { __tisyn_task: spawnChildId } as Val;
+          } else if (descriptor.id === "join") {
+            const taskHandle = compoundData.__tisyn_inner as Val;
+            if (
+              taskHandle === null ||
+              typeof taskHandle !== "object" ||
+              typeof (taskHandle as Record<string, unknown>).__tisyn_task !== "string"
+            ) {
+              throw new RuntimeBugError("join: inner value is not a valid task handle");
+            }
+            const joinChildId = (taskHandle as { __tisyn_task: string }).__tisyn_task;
+            if (joinedTasks.has(joinChildId)) {
+              throw new RuntimeBugError(`join: task '${joinChildId}' has already been joined`);
+            }
+            joinedTasks.add(joinChildId);
+            const entry = spawnedTasks.get(joinChildId);
+            if (!entry) {
+              throw new RuntimeBugError(`join: no spawned task found for '${joinChildId}'`);
+            }
+            const childResult = yield* entry.operation;
+            if (childResult.status === "ok") {
+              nextValue = (childResult.value ?? null) as Val;
+            } else {
+              const errResult = childResult as {
+                status: "err";
+                error: { message: string; name?: string };
+              };
+              throw new EffectError(errResult.error.message, errResult.error.name);
+            }
+          } else {
+            // all/race
+            const inner = compoundData.__tisyn_inner as { exprs: Expr[] };
+            const exprs = inner.exprs;
+            const startIndex = childSpawnCount;
+            childSpawnCount += exprs.length;
+            if (descriptor.id === "all") {
+              nextValue = yield* orchestrateAll(exprs, childId, startIndex, cEnv, ctx);
+            } else {
+              nextValue = yield* orchestrateRace(exprs, childId, startIndex, cEnv, ctx);
+            }
+          }
+          continue;
+        }
+
+        // ── Standard effect dispatch ──
+        const description = parseEffectId(descriptor.id);
+        const stored = ctx.replayIndex.peekYield(childId);
+
+        if (stored) {
+          if (
+            stored.description.type !== description.type ||
+            stored.description.name !== description.name
+          ) {
+            const cursor = ctx.replayIndex.getCursor(childId);
+            throw new DivergenceError(
+              `Divergence at ${childId}[${cursor}]: ` +
+                `expected ${stored.description.type}.${stored.description.name}, ` +
+                `got ${description.type}.${description.name}`,
+            );
+          }
+          ctx.replayIndex.consumeYield(childId);
+          const replayedEvent: YieldEvent = {
+            type: "yield",
+            coroutineId: childId,
+            description: stored.description,
+            result: stored.result,
+          };
+          ctx.journal.push(replayedEvent);
+
+          if (stored.result.status === "ok") {
+            nextValue = (stored.result.value ?? null) as Val;
+          } else if (stored.result.status === "err") {
+            const err = new EffectError(stored.result.error.message, stored.result.error.name);
+            const throwResult = childKernel.throw(err);
+            if (throwResult.done) {
+              throw new RuntimeBugError("Resource body completed without provide");
+            }
+            pendingStep = throwResult;
+            nextValue = null;
+            continue;
+          } else {
+            throw new Error("Cannot replay cancelled result");
+          }
+          continue;
+        }
+
+        if (ctx.replayIndex.hasClose(childId)) {
+          throw new DivergenceError(
+            `Divergence: journal shows ${childId} closed, but generator continues to yield effects`,
+          );
+        }
+
+        // LIVE dispatch
+        let effectResult: EventResult;
+        try {
+          const resultValue = yield* dispatch(descriptor.id, descriptor.data as Val);
+          effectResult = { status: "ok", value: resultValue as Json };
+        } catch (error) {
+          const err = error instanceof Error ? error : new Error(String(error));
+          effectResult = {
+            status: "err",
+            error: { message: err.message, name: err.name },
+          };
+        }
+
+        const yieldEvent: YieldEvent = {
+          type: "yield",
+          coroutineId: childId,
+          description,
+          result: effectResult,
+        };
+        yield* ctx.stream.append(yieldEvent);
+        ctx.journal.push(yieldEvent);
+
+        if (effectResult.status === "ok") {
+          nextValue = (effectResult.value ?? null) as Val;
+        } else {
+          const err = new EffectError(effectResult.error.message, effectResult.error.name);
+          const throwResult = childKernel.throw(err);
+          if (throwResult.done) {
+            throw new RuntimeBugError("Resource body completed without provide");
+          }
+          pendingStep = throwResult;
+          nextValue = null;
+          continue;
+        }
+      }
+    });
+  } catch (error) {
+    // Init failure — write Close(err), reject provide
+    childClosed = true;
+    const err = error instanceof Error ? error : new Error(String(error));
+    const closeEvent: CloseEvent = {
+      type: "close",
+      coroutineId: childId,
+      result: {
+        status: "err",
+        error: { message: err.message, name: err.name },
+      },
+    };
+    yield* ctx.stream.append(closeEvent);
+    ctx.journal.push(closeEvent);
+
+    if (error instanceof DivergenceError) {
+      cleanupResolve();
+      throw error; // Fatal
+    }
+
+    provideReject(err);
+    cleanupResolve();
+    return;
+  }
+
+  // Init succeeded — provide value to parent, wait for teardown signal
+  provideResolve(initResult.value);
+  yield* teardownOp;
+
+  // ── CLEANUP PHASE ──
+  // Resume kernel with null (P7), drive cleanup/finally effects to completion.
+  // Runs in its own scope so any compound externals in finally blocks are contained.
+  try {
+    yield* scoped(function* () {
+      let nextValue: Val = null; // P7: resume kernel with null
+      let pendingStep: IteratorResult<EffectDescriptor, Val> | null = null;
+      const spawnedTasks = new Map<string, { operation: Operation<EventResult> }>();
+      const joinedTasks = new Set<string>();
+
+      for (;;) {
+        const step = pendingStep ?? childKernel.next(nextValue);
+        pendingStep = null;
+
+        if (step.done) {
+          childClosed = true;
+          const closeEvent: CloseEvent = {
+            type: "close",
+            coroutineId: childId,
+            result: { status: "ok", value: step.value as Json },
+          };
+          yield* ctx.stream.append(closeEvent);
+          ctx.journal.push(closeEvent);
+          cleanupResolve();
+          return;
+        }
+
+        const descriptor = step.value as EffectDescriptor;
+
+        // ── Compound effect interception ──
+        if (isCompoundExternal(descriptor.id)) {
+          const compoundData = descriptor.data as { __tisyn_inner: unknown; __tisyn_env: Env };
+          const cEnv = compoundData.__tisyn_env;
+
+          if (descriptor.id === "provide") {
+            throw new RuntimeBugError("Multiple provide in resource body");
+          }
+
+          if (descriptor.id === "resource") {
+            throw new RuntimeBugError("Nested resource is not supported");
+          }
+
+          if (descriptor.id === "scope") {
+            const inner = compoundData.__tisyn_inner as ScopeInner;
+            const scopeChildId = `${childId}.${childSpawnCount++}`;
+            let scopeValue: Val = null;
+            let scopeErr: Error | null = null;
+            try {
+              scopeValue = yield* orchestrateScope(inner, scopeChildId, cEnv, ctx);
+            } catch (e) {
+              scopeErr = e instanceof Error ? e : new Error(String(e));
+            }
+            if (scopeErr === null) {
+              nextValue = scopeValue;
+            } else {
+              const throwResult = childKernel.throw(scopeErr);
+              if (throwResult.done) {
                 childClosed = true;
                 const closeEvent: CloseEvent = {
                   type: "close",
@@ -991,9 +1223,6 @@ function* orchestrateResourceChild(
             const err = new EffectError(stored.result.error.message, stored.result.error.name);
             const throwResult = childKernel.throw(err);
             if (throwResult.done) {
-              if (!provideReceived) {
-                throw new RuntimeBugError("Resource body completed without provide");
-              }
               childClosed = true;
               const closeEvent: CloseEvent = {
                 type: "close",
@@ -1048,9 +1277,6 @@ function* orchestrateResourceChild(
           const err = new EffectError(effectResult.error.message, effectResult.error.name);
           const throwResult = childKernel.throw(err);
           if (throwResult.done) {
-            if (!provideReceived) {
-              throw new RuntimeBugError("Resource body completed without provide");
-            }
             childClosed = true;
             const closeEvent: CloseEvent = {
               type: "close",
@@ -1067,7 +1293,10 @@ function* orchestrateResourceChild(
           continue;
         }
       }
-    } catch (error) {
+    });
+  } catch (error) {
+    // Cleanup failure — write Close(err), propagate to parent
+    if (!childClosed) {
       childClosed = true;
       const err = error instanceof Error ? error : new Error(String(error));
       const closeEvent: CloseEvent = {
@@ -1080,21 +1309,8 @@ function* orchestrateResourceChild(
       };
       yield* ctx.stream.append(closeEvent);
       ctx.journal.push(closeEvent);
-
-      if (error instanceof DivergenceError) {
-        cleanupResolve();
-        throw error; // Fatal — always propagate
-      }
-
-      if (!provideReceived) {
-        // Init failure — reject provide, let parent handle
-        provideReject(err);
-        cleanupResolve();
-      } else {
-        // Background or cleanup failure — propagate to parent scope
-        cleanupResolve();
-        throw err;
-      }
     }
-  });
+    cleanupResolve();
+    throw error; // Propagate to parent scope
+  }
 }

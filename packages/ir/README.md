@@ -82,6 +82,8 @@ Use these to build IR programmatically:
 - `Eval` — invoke an external operation or structural form by id
 - `All` — evaluate multiple expressions concurrently and collect their results
 - `Race` — evaluate multiple expressions concurrently and resolve with the first result
+- `Resource` — declare a resource with an init/cleanup lifecycle and a provided value
+- `Provide` — yield a value from a resource body to its parent
 
 ### Classification and guards
 

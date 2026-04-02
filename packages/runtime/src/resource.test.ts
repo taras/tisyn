@@ -6,6 +6,7 @@
 
 import { describe, it } from "@effectionx/vitest";
 import { expect } from "vitest";
+import { suspend, ensure, withResolvers } from "effection";
 import { execute } from "./execute.js";
 import { Effects } from "@tisyn/agent";
 import { Seq, Try, Throw, Ref } from "@tisyn/ir";
@@ -37,6 +38,13 @@ const letIR = (name: string, value: unknown, body: unknown) =>
 
 const effectIR = (agentType: string, opName: string, data: unknown = []) =>
   ({ tisyn: "eval", id: `${agentType}.${opName}`, data }) as unknown as IrInput;
+
+const spawnIR = (body: unknown) =>
+  ({
+    tisyn: "eval",
+    id: "spawn",
+    data: { tisyn: "quote", expr: { body } },
+  }) as unknown as IrInput;
 
 // ── Tests ──
 
@@ -218,6 +226,56 @@ describe("resource orchestration", () => {
       (e) => e.type === "yield" && (e as any).coroutineId === "root.0",
     );
     expect(childYields).toHaveLength(2);
+  });
+
+  // R22: spawned grandchildren torn down before cleanup effects
+  it("R22: grandchildren torn down before cleanup effects", function* () {
+    const order: string[] = [];
+    const { operation: grandchildStarted, resolve: signalStarted } =
+      withResolvers<void>();
+
+    yield* Effects.around({
+      *dispatch([effectId, _data]: [string, unknown]) {
+        if (effectId === "bg.work") {
+          yield* ensure(function* () {
+            order.push("grandchild-cancelled");
+          });
+          signalStarted();
+          yield* suspend(); // block forever — cancelled when init scope exits
+        }
+        if (effectId === "init.sync") {
+          yield* grandchildStarted; // wait for grandchild to actually start
+          return null;
+        }
+        if (effectId === "cleanup.run") {
+          order.push("cleanup-ran");
+          return null;
+        }
+        return null;
+      },
+    });
+
+    // Resource body:
+    // 1. Spawn a child that calls bg.work (blocks forever)
+    // 2. init.sync — suspends parent, giving grandchild a turn to start
+    // 3. Provide 42
+    // 4. Finally: dispatch cleanup.run
+    const body = Seq(
+      letIR(
+        "_task",
+        spawnIR(effectIR("bg", "work")),
+        Seq(
+          effectIR("init", "sync"),
+          Try(provideIR(42), undefined, undefined, effectIR("cleanup", "run")),
+        ),
+      ),
+    );
+    const ir = resourceIR(body);
+    const { result } = yield* execute({ ir });
+    expect(result).toEqual({ status: "ok", value: 42 });
+
+    // R22: grandchild must be torn down before cleanup effects run
+    expect(order).toEqual(["grandchild-cancelled", "cleanup-ran"]);
   });
 
   // Replay produces identical results
