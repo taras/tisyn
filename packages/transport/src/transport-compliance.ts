@@ -1,6 +1,7 @@
 import { describe, it } from "@effectionx/vitest";
 import { expect } from "vitest";
-import { spawn, scoped, sleep, suspend } from "effection";
+import { spawn, scoped, suspend } from "effection";
+import { when } from "@effectionx/converge";
 import type { Operation } from "effection";
 import type { Val } from "@tisyn/ir";
 import type { AgentDeclaration, OperationSpec, ImplementationHandlers } from "@tisyn/agent";
@@ -311,8 +312,10 @@ export function transportComplianceSuite(name: string, createFactory: TransportF
           const task = yield* spawn(function* () {
             yield* invoke(slow.work());
           });
-          // Give the handler time to start (needs HTTP round-trip on CI)
-          yield* sleep(200);
+          // Wait until the execute request has been sent before halting
+          yield* when(function* () {
+            expect(messages.some((m) => m.method === "execute")).toBe(true);
+          });
           yield* task.halt();
         });
 

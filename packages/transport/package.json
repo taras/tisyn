@@ -73,6 +73,7 @@
     "remeda": "^2.33.6"
   },
   "devDependencies": {
+    "@effectionx/converge": "^0.1.4",
     "@effectionx/vitest": "^0.3.1",
     "@types/node": "^25.5.0",
     "@types/ws": "^8",
