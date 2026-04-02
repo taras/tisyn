@@ -75,6 +75,7 @@ On the remote side, adapters such as `createProtocolServer()` and `createStdioAg
 - `websocketTransport`: Create a transport that speaks the protocol over WebSocket. _(via `@tisyn/transport/websocket`)_
 - `workerTransport`: Create a transport that crosses a worker boundary. _(via `@tisyn/transport/worker`)_
 - `ssePostTransport`: Create an HTTP transport that combines POST requests with SSE responses. _(via `@tisyn/transport/sse-post`)_
+- `browserTransport`: Create a transport that maps browser contract operations to Playwright API calls. _(via `@tisyn/transport/browser`)_
 
 ### Agent-side adapters
 
@@ -117,6 +118,93 @@ Choose the transport that matches the boundary you need:
 - `websocketTransport`: long-lived remote sessions over a network connection
 - `workerTransport`: remoting across a worker boundary
 - `ssePostTransport`: asymmetric HTTP remoting using POST inbound and SSE outbound
+- `browserTransport`: browser automation via Playwright (requires `playwright-core` peer dependency)
+
+## Browser Transport
+
+The browser transport maps the `Browser` agent contract to Playwright API calls, allowing workflows to issue browser commands (`navigate`, `click`, `fill`, `content`, `screenshot`, `selectPage`, `closePage`) as ordinary durable external effects.
+
+### Requirements
+
+`playwright-core` is an optional peer dependency. Install it when using the browser transport:
+
+```sh
+pnpm add playwright-core
+```
+
+### Ambient Declaration
+
+Workflows must include an ambient declaration for the browser contract. The compiler discovers contracts exclusively from `declare function` declarations:
+
+```typescript
+import type { Workflow } from "@tisyn/agent";
+import type {
+  NavigateParams, NavigateResult,
+  ClickParams, ClickResult,
+  FillParams, FillResult,
+  ContentParams, ContentResult,
+  ScreenshotParams, ScreenshotResult,
+  SelectPageParams, SelectPageResult,
+  ClosePageParams, ClosePageResult,
+} from "@tisyn/transport/browser";
+
+declare function Browser(): {
+  navigate(params: NavigateParams): Workflow<NavigateResult>;
+  click(params: ClickParams): Workflow<ClickResult>;
+  fill(params: FillParams): Workflow<FillResult>;
+  content(params: ContentParams): Workflow<ContentResult>;
+  screenshot(params: ScreenshotParams): Workflow<ScreenshotResult>;
+  selectPage(params: SelectPageParams): Workflow<SelectPageResult>;
+  closePage(params: ClosePageParams): Workflow<ClosePageResult>;
+};
+```
+
+### Usage
+
+```typescript
+import { browserTransport } from "@tisyn/transport/browser";
+
+yield* scoped(function* () {
+  yield* useTransport(Browser, browserTransport({
+    headless: false,
+    viewport: { width: 1280, height: 720 },
+  }));
+
+  const browser = yield* useAgent(Browser);
+
+  yield* browser.navigate({ url: "https://example.com" });
+  const page = yield* browser.content({ format: "text" });
+  yield* browser.click({ selector: "#submit" });
+});
+```
+
+### Configuration
+
+| Option | Type | Default | Description |
+|--------|------|---------|-------------|
+| `headless` | `boolean` | `true` | Run browser in headless mode |
+| `viewport` | `{ width, height }` | `{ width: 1280, height: 720 }` | Default viewport dimensions |
+| `engine` | `"chromium" \| "firefox" \| "webkit"` | `"chromium"` | Browser engine |
+| `launchArgs` | `string[]` | `[]` | Additional browser launch arguments |
+
+### Operations
+
+| Operation | Effect ID | Input | Output |
+|-----------|-----------|-------|--------|
+| `navigate` | `browser.navigate` | `{ url, page?, timeout? }` | `{ page, status, url }` |
+| `click` | `browser.click` | `{ selector, page?, timeout? }` | `{ ok: true }` |
+| `fill` | `browser.fill` | `{ selector, value, page?, timeout? }` | `{ ok: true }` |
+| `content` | `browser.content` | `{ page?, format? }` | `{ text, url, title }` |
+| `screenshot` | `browser.screenshot` | `{ page?, fullPage?, format?, quality? }` | `{ data, mimeType, width, height }` |
+| `selectPage` | `browser.selectPage` | `{ page }` | `{ page, url }` |
+| `closePage` | `browser.closePage` | `{ page }` | `{ ok: true, activePage }` |
+
+### Runtime Exports
+
+For test harness and runtime use, `@tisyn/transport/browser` also exports:
+
+- `Browser` — a `DeclaredAgent` for use with `installRemoteAgent(Browser, factory)` and `invoke(Browser.method(...))`
+- All parameter and result type interfaces
 
 ## Relationship to the Rest of Tisyn
 

@@ -49,6 +49,10 @@
     "./sse-post-agent": {
       "types": "./dist/sse-post-agent.d.ts",
       "import": "./dist/sse-post-agent.js"
+    },
+    "./browser": {
+      "types": "./dist/transports/browser.d.ts",
+      "import": "./dist/transports/browser.js"
     }
   },
   "publishConfig": {
@@ -74,6 +78,7 @@
   },
   "devDependencies": {
     "@effectionx/converge": "^0.1.4",
+    "playwright-core": "^1.40",
     "@effectionx/vitest": "^0.3.1",
     "@types/node": "^25.5.0",
     "@types/ws": "^8",
@@ -82,6 +87,12 @@
     "ws": "^8"
   },
   "peerDependencies": {
-    "effection": "^3 || ^4"
+    "effection": "^3 || ^4",
+    "playwright-core": "^1.40"
+  },
+  "peerDependenciesMeta": {
+    "playwright-core": {
+      "optional": true
+    }
   }
 }
