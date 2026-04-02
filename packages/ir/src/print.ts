@@ -274,6 +274,16 @@ function printCompoundExternal(
     const refStr = printNode(data, depth + 1, opts);
     return formatCall("Join", [refStr], depth, opts);
   }
+  if (id === "resource") {
+    const s = shape as { body: TisynExpr };
+    const bodyStr = printNode(s.body, depth + 1, opts);
+    return formatCall("Resource", [bodyStr], depth, opts);
+  }
+  if (id === "provide") {
+    // provide data is not Quote-wrapped — print the raw data node
+    const dataStr = printNode(data, depth + 1, opts);
+    return formatCall("Provide", [dataStr], depth, opts);
+  }
 
   const s = shape as { exprs: TisynExpr[] };
   const name = constructorName(id);
@@ -347,6 +357,10 @@ function constructorName(id: string): string {
       return "Spawn";
     case "join":
       return "Join";
+    case "resource":
+      return "Resource";
+    case "provide":
+      return "Provide";
     default:
       return id;
   }

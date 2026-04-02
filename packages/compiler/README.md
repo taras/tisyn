@@ -286,6 +286,43 @@ Rules:
 - Inside a spawned body, parent spawn handles are not visible. Nested spawned bodies must create and join their own task handles.
 - A joined task handle should be treated as single-use. The runtime rejects duplicate joins of the same task.
 
+### Resources
+
+`yield* resource(function* () { ... })` declares a resource with an init/cleanup lifecycle. The resource body must call `yield* provide(value)` exactly once to supply a value to the parent.
+
+Example:
+
+```typescript
+export function* run() {
+  const conn = yield* resource(function* () {
+    const c = yield* DbService().connect();
+    try {
+      yield* provide(c);
+    } finally {
+      yield* DbService().disconnect(c);
+    }
+  });
+
+  return yield* DbService().query(conn, "SELECT 1");
+}
+```
+
+Lowering shape:
+
+- `yield* resource(function* () { ... })` lowers to `ResourceEval(bodyExpr)` with the body Quote-wrapped
+- `yield* provide(value)` lowers to `ProvideEval(compiledValue)` (not Quote-wrapped)
+
+Rules:
+
+- `resource()` takes exactly one inline generator-function expression (RS1).
+- The resource body must contain exactly one `provide` call (RS4).
+- `provide` must not appear outside a resource body (P2).
+- `provide` must appear at the top level of the body or inside the try block of a top-level try/finally (P4/P5).
+- `provide` must not appear inside `if`, `while`, `scoped`, `spawn`, or nested generators (P5).
+- No code may follow `provide` at the same nesting level (P6). Use try/finally for cleanup.
+- `provide` requires exactly one argument (P1).
+- Nested `resource()` inside a resource body is not supported (RS7).
+
 ## Workflow Calls and Lowering
 
 When a workflow calls a contract method with `yield*`, the compiler lowers that call to an `ExternalEval` IR node.
@@ -546,6 +583,14 @@ Contract validation errors use `E999`, including:
 | SP2  | Spawn handle bindings must use `const`, not `let`                                    |
 | SP4  | Spawn handles are join-only and cannot be used as ordinary values                    |
 | SP11 | Spawned bodies do not inherit parent spawn handles                                   |
+| RS1  | `resource()` requires exactly one inline generator-function argument                  |
+| RS4  | Resource body must contain exactly one `provide` call                                 |
+| RS7  | Nested `resource()` inside a resource body is not supported                           |
+| P1   | `provide()` requires exactly one argument                                             |
+| P2   | `provide()` is only valid inside a resource body                                      |
+| P3   | Multiple `provide` calls in the same resource body                                    |
+| P5   | `provide` must not appear inside control flow, scoped, spawn, or nested generators    |
+| P6   | No code may follow `provide` at the same nesting level                                |
 
 ### Validation errors
 
@@ -639,7 +684,7 @@ Re-exported for programmatic IR construction:
 ```typescript
 Q, Ref, Fn, Let, Seq, If, While, Call, Get, Add, Sub, Mul, Div, Mod, Gt, Gte,
 Lt, Lte, Eq, Neq, And, Or, Not, Neg, Construct, ArrayNode, Concat, Throw, Try,
-ExternalEval, AllEval, RaceEval, ScopeEval
+ExternalEval, AllEval, RaceEval, ScopeEval, SpawnEval, JoinEval, ResourceEval, ProvideEval
 ```
 
 ## Using the Generated Module

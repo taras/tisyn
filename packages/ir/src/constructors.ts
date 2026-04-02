@@ -271,3 +271,19 @@ export function Join<T>(ref: RefT<{ __tisyn_task: string }>): EvalT<T> {
     data: ref,
   } as EvalT<T>;
 }
+
+export function Resource<T>(body: Expr<T>): EvalT<T> {
+  return {
+    tisyn: "eval",
+    id: "resource",
+    data: { tisyn: "quote", expr: { body } },
+  } as EvalT<T>;
+}
+
+export function Provide<T>(value: Expr<T>): EvalT<null> {
+  return {
+    tisyn: "eval",
+    id: "provide",
+    data: value,
+  } as EvalT<null>;
+}

@@ -25,6 +25,8 @@ In practice, this package answers one question:
 - throwing a boundary-specific error when invalid IR is admitted
 - exporting schema values for external integrations and tooling
 - validating `scope` eval nodes: handler type, bindings shape, and eval-position constraints
+- validating `resource` eval nodes: data must be a Quote with a `body` field in evaluation position
+- validating `provide` eval nodes: data is any expression (not Quote-wrapped), similar to `join`
 
 It does not define execution behavior, concurrency semantics, or durable replay. Its job is to protect the boundary before those layers begin.
 

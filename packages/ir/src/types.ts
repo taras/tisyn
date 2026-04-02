@@ -118,6 +118,10 @@ export interface SpawnShape {
   readonly body: TisynExpr;
 }
 
+export interface ResourceShape {
+  readonly body: TisynExpr;
+}
+
 // ── Narrowed Structural Eval Types ──
 
 export interface LetNode {
@@ -298,6 +302,18 @@ export interface JoinNode {
   readonly tisyn: "eval";
   readonly id: "join";
   readonly data: RefNode;
+}
+
+export interface ResourceNode {
+  readonly tisyn: "eval";
+  readonly id: "resource";
+  readonly data: QuoteNode<ResourceShape>;
+}
+
+export interface ProvideNode {
+  readonly tisyn: "eval";
+  readonly id: "provide";
+  readonly data: TisynExpr;
 }
 
 export interface ConcatArraysShape {

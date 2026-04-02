@@ -46,6 +46,8 @@ import {
   ScopeEval,
   SpawnEval,
   JoinEval,
+  ResourceEval,
+  ProvideEval,
 } from "./ir-builders.js";
 import { toAgentId } from "./agent-id.js";
 import { Counter } from "./counter.js";
@@ -80,6 +82,8 @@ interface EmitContext {
   handleBindings?: Map<string, string>;
   /** Set only during scoped body compilation. agentPrefix → DiscoveredContract. */
   scopedContracts?: Map<string, DiscoveredContract>;
+  /** Set only during resource body compilation. */
+  inResourceBody?: boolean;
 }
 
 // ── Scope helpers ──
@@ -2508,6 +2512,24 @@ function emitYieldStar(target: ts.Expression, ctx: EmitContext): Expr {
         return emitSpawn(target, ctx);
       }
 
+      // yield* resource(function* () { ... })
+      if (callee.text === "resource") {
+        if (ctx.inResourceBody) {
+          throw error(
+            "RS7",
+            "resource() cannot be nested inside another resource body (deferred to future specification)",
+            target,
+            ctx,
+          );
+        }
+        return emitResource(target, ctx);
+      }
+
+      // yield* provide(expr)
+      if (callee.text === "provide") {
+        return emitProvide(target, ctx);
+      }
+
       if (callee.text === "all" || callee.text === "race") {
         return emitConcurrency(callee.text, target, ctx);
       }
@@ -2540,7 +2562,7 @@ function emitYieldStar(target: ts.Expression, ctx: EmitContext): Expr {
 
   throw error(
     "E010",
-    "yield* target must be an agent call, all/race, sleep, or sub-workflow",
+    "yield* target must be an agent call, all/race, resource/provide, sleep, or sub-workflow",
     target,
     ctx,
   );
@@ -2711,6 +2733,189 @@ function emitSpawn(callExpr: ts.CallExpression, ctx: EmitContext): Expr {
   const bodyExpr = emitBlock(Array.from(arg.body.statements), bodyCtx);
 
   return SpawnEval(bodyExpr);
+}
+
+// ── Resource ──
+
+/**
+ * Compile `yield* resource(function* () { ... })` → ResourceEval(bodyExpr).
+ *
+ * Resource bodies compile with:
+ * - preserved scopeStack with parent spawn handles downgraded (like spawn)
+ * - cleared handleBindings (like spawn)
+ * - inResourceBody = true (enables provide recognition, blocks nested resource)
+ *
+ * Validates provide placement per spec §3.2 (P1–P7).
+ */
+function emitResource(callExpr: ts.CallExpression, ctx: EmitContext): Expr {
+  const arg = callExpr.arguments[0];
+  if (!arg || !ts.isFunctionExpression(arg) || !arg.asteriskToken) {
+    throw error("RS1", "resource() requires a single generator function argument", callExpr, ctx);
+  }
+  if (callExpr.arguments.length > 1) {
+    throw error("RS1", "resource() takes exactly one argument", callExpr, ctx);
+  }
+
+  // Validate provide placement in the source AST before compilation
+  validateProvideInResourceBody(arg.body, ctx);
+
+  const bodyCtx: EmitContext = {
+    ...ctx,
+    scopeStack: cloneScopeStackForSpawnBody(ctx.scopeStack),
+    handleBindings: undefined,
+    inResourceBody: true,
+  };
+  const bodyExpr = emitBlock(Array.from(arg.body.statements), bodyCtx);
+
+  return ResourceEval(bodyExpr);
+}
+
+/**
+ * Validate that provide appears exactly once in a valid position within a resource body.
+ *
+ * Valid positions (P4):
+ *   (a) Final yield* statement in the resource body
+ *   (b) Body of a try block at the resource body's top level
+ *
+ * Invalid positions (P5): inside if, while, scoped, spawn, all, race, nested generator
+ * Post-provide (P6): no code after provide at same level (except finally in try form)
+ */
+function validateProvideInResourceBody(body: ts.Block, ctx: EmitContext): void {
+  const stmts = body.statements;
+  let provideFound = false;
+
+  for (let i = 0; i < stmts.length; i++) {
+    const stmt = stmts[i]!;
+
+    // Check if this statement is `yield* provide(expr)`
+    if (isProvideStatement(stmt)) {
+      if (provideFound) {
+        throw error("P3", "Multiple provide calls in resource body", stmt, ctx);
+      }
+      provideFound = true;
+      // P6: no code after provide at same level
+      if (i < stmts.length - 1) {
+        throw error(
+          "P6",
+          "No code may follow provide at the same nesting level",
+          stmts[i + 1]!,
+          ctx,
+        );
+      }
+      continue;
+    }
+
+    // Check if this statement is a try block containing provide in its body
+    if (ts.isTryStatement(stmt)) {
+      const tryProvide = findProvideInTryBody(stmt.tryBlock);
+      if (tryProvide) {
+        if (provideFound) {
+          throw error("P3", "Multiple provide calls in resource body", tryProvide, ctx);
+        }
+        provideFound = true;
+        // P4b: provide must be in the try body, the try must be at top level
+        // P6: no code after the try at same level (except it IS the try, so
+        // only code after the entire try statement matters)
+        if (i < stmts.length - 1) {
+          throw error(
+            "P6",
+            "No code may follow the try/provide block at the same nesting level",
+            stmts[i + 1]!,
+            ctx,
+          );
+        }
+        // Verify provide is the last statement in the try body
+        validateProvideLastInTryBody(stmt.tryBlock, ctx);
+        continue;
+      }
+    }
+
+    // Scan for provide in invalid positions (P5)
+    checkForProvideInInvalidPosition(stmt, ctx);
+  }
+
+  if (!provideFound) {
+    throw error("RS4", "resource body must contain exactly one provide call", body, ctx);
+  }
+}
+
+/** Check if a statement is `yield* provide(expr)` */
+function isProvideStatement(stmt: ts.Statement): boolean {
+  if (!ts.isExpressionStatement(stmt)) return false;
+  const expr = stmt.expression;
+  if (!ts.isYieldExpression(expr) || !expr.asteriskToken || !expr.expression) return false;
+  if (!ts.isCallExpression(expr.expression)) return false;
+  const callee = expr.expression.expression;
+  return ts.isIdentifier(callee) && callee.text === "provide";
+}
+
+/** Find a provide statement in a try body's statements (first level only) */
+function findProvideInTryBody(block: ts.Block): ts.Statement | null {
+  for (const stmt of block.statements) {
+    if (isProvideStatement(stmt)) return stmt;
+  }
+  return null;
+}
+
+/** Verify provide is the last statement in the try body */
+function validateProvideLastInTryBody(block: ts.Block, ctx: EmitContext): void {
+  const stmts = block.statements;
+  for (let i = 0; i < stmts.length; i++) {
+    if (isProvideStatement(stmts[i]!)) {
+      if (i < stmts.length - 1) {
+        throw error("P6", "No code may follow provide inside the try body", stmts[i + 1]!, ctx);
+      }
+    }
+  }
+}
+
+/** Recursively check for provide in positions where it's forbidden (P5) */
+function checkForProvideInInvalidPosition(node: ts.Node, ctx: EmitContext): void {
+  if (isProvideStatement(node as ts.Statement)) {
+    throw error(
+      "P5",
+      "provide must not appear inside control flow, scoped, spawn, or nested generators",
+      node,
+      ctx,
+    );
+  }
+  // Don't recurse into generator functions — they are opaque boundaries
+  if (ts.isFunctionExpression(node) || ts.isFunctionDeclaration(node) || ts.isArrowFunction(node)) {
+    return;
+  }
+  // For try statements, don't flag provide found at top level (already handled by caller)
+  // But DO check catch/finally for stray provides
+  if (ts.isTryStatement(node)) {
+    // Only check catch and finally clauses for invalid provide
+    if (node.catchClause) {
+      ts.forEachChild(node.catchClause, (child) => checkForProvideInInvalidPosition(child, ctx));
+    }
+    // Don't check try body here — it's checked by the caller
+    // Don't check finally — provide in finally is invalid and caught by P5
+    if (node.finallyBlock) {
+      for (const stmt of node.finallyBlock.statements) {
+        checkForProvideInInvalidPosition(stmt, ctx);
+      }
+    }
+    return;
+  }
+  ts.forEachChild(node, (child) => checkForProvideInInvalidPosition(child, ctx));
+}
+
+/**
+ * Compile `yield* provide(expr)` → ProvideEval(compiledExpr).
+ *
+ * Only valid inside a resource body (P2).
+ */
+function emitProvide(callExpr: ts.CallExpression, ctx: EmitContext): Expr {
+  if (!ctx.inResourceBody) {
+    throw error("P2", "provide() is only valid inside a resource body", callExpr, ctx);
+  }
+  if (callExpr.arguments.length !== 1) {
+    throw error("P1", "provide() requires exactly one argument", callExpr, ctx);
+  }
+  const valueExpr = emitExpression(callExpr.arguments[0]!, ctx);
+  return ProvideEval(valueExpr);
 }
 
 // ── Handle method call (inside scoped body) ──
