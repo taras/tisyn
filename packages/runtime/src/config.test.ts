@@ -326,6 +326,41 @@ describe("secret handling", () => {
   });
 });
 
+// ── Unknown Kind Rejection ──
+
+describe("unknown transport/server kinds", () => {
+  it("unknown transport kind is rejected by resolveConfig", () => {
+    const w = workflow({
+      run: "hello",
+      agents: [
+        {
+          tisyn_config: "agent",
+          id: "a",
+          transport: { tisyn_config: "transport", kind: "custom", module: "./a.ts" },
+        } as any,
+      ],
+    });
+    expect(() => resolveConfig(w, { processEnv: {} })).toThrow(ConfigError);
+    expect(() => resolveConfig(w, { processEnv: {} })).toThrow(/Unknown transport kind 'custom'/);
+  });
+
+  it("unknown server kind is rejected by resolveConfig", () => {
+    const w = workflow({
+      run: "hello",
+      agents: [agent("a", transport.inprocess("./a.ts"))],
+      entrypoints: {
+        dev: entrypoint({
+          server: { tisyn_config: "server", kind: "http", port: 3000 } as any,
+        }),
+      },
+    });
+    expect(() => resolveConfig(w, { entrypoint: "dev", processEnv: {} })).toThrow(ConfigError);
+    expect(() => resolveConfig(w, { entrypoint: "dev", processEnv: {} })).toThrow(
+      /Unknown server kind 'http'/,
+    );
+  });
+});
+
 // ── Projection Tests (replacing CFG-USE-* behavioral tests) ──
 
 describe("projectConfig", () => {

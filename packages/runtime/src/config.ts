@@ -220,6 +220,11 @@ export function resolveConfig(
   return projectConfig(merged, resolvedEnv);
 }
 
+// ── Built-in kind registries ──
+
+const BUILT_IN_TRANSPORT_KINDS = new Set(["worker", "local", "stdio", "websocket", "inprocess"]);
+const BUILT_IN_SERVER_KINDS = new Set(["websocket"]);
+
 // ── Projection (§7.5.2) ──
 
 export function projectConfig(
@@ -248,6 +253,10 @@ function projectAgent(
   resolvedEnv: Map<EnvDescriptor, string | number | boolean>,
 ): ResolvedAgent {
   const transportObj = agent.transport as unknown as Record<string, unknown>;
+  const kind = transportObj.kind as string;
+  if (!BUILT_IN_TRANSPORT_KINDS.has(kind)) {
+    throw new ConfigError(`Unknown transport kind '${kind}' (no extension resolver registered)`);
+  }
   const projected: Record<string, unknown> = {};
   for (const [key, val] of Object.entries(transportObj)) {
     if (key === "tisyn_config") continue;
@@ -271,14 +280,19 @@ function projectJournal(
 }
 
 function projectServer(
-  server: ServerDescriptor,
+  serverDesc: ServerDescriptor,
   resolvedEnv: Map<EnvDescriptor, string | number | boolean>,
 ): ResolvedServer {
+  if (!BUILT_IN_SERVER_KINDS.has(serverDesc.kind)) {
+    throw new ConfigError(
+      `Unknown server kind '${serverDesc.kind}' (no extension resolver registered)`,
+    );
+  }
   const result: ResolvedServer = {
-    kind: server.kind,
-    port: resolveValue(server.port, resolvedEnv) as number,
+    kind: serverDesc.kind,
+    port: resolveValue(serverDesc.port, resolvedEnv) as number,
   };
-  if (server.static != null) result.static = server.static;
+  if (serverDesc.static != null) result.static = serverDesc.static;
   return result;
 }
 
