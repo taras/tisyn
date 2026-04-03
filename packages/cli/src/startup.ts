@@ -6,7 +6,8 @@
  */
 
 import { createServer } from "node:http";
-import { readFileSync } from "node:fs";
+import { readFile } from "node:fs/promises";
+import type { AddressInfo } from "node:net";
 import { join, extname } from "node:path";
 import { pathToFileURL } from "node:url";
 import { call, resource, withResolvers } from "effection";
@@ -105,18 +106,23 @@ const MIME_TYPES: Record<string, string> = {
   ".svg": "image/svg+xml",
 };
 
+export interface ServerInfo {
+  wss: WebSocketServer;
+  address: AddressInfo;
+}
+
 /**
  * Start an HTTP+WebSocket server from resolved server config.
  * Returns an Effection resource that tears down on scope exit.
  */
-export function* startServer(serverConfig: ResolvedServer, ready?: () => void): Operation<void> {
-  yield* resource(function* (provide) {
-    const httpServer = createServer((req, res) => {
+export function startServer(serverConfig: ResolvedServer): Operation<ServerInfo> {
+  return resource(function* (provide) {
+    const httpServer = createServer(async (req, res) => {
       if (serverConfig.static && req.url) {
         const urlPath = req.url === "/" ? "/index.html" : req.url;
         const filePath = join(serverConfig.static, urlPath);
         try {
-          const content = readFileSync(filePath);
+          const content = await readFile(filePath);
           const ext = extname(filePath);
           const contentType = MIME_TYPES[ext] ?? "application/octet-stream";
           res.writeHead(200, { "Content-Type": contentType });
@@ -134,15 +140,11 @@ export function* startServer(serverConfig: ResolvedServer, ready?: () => void): 
     const wss = new WebSocketServer({ server: httpServer });
 
     const listening = withResolvers<void>();
-    httpServer.on("error", (err: Error) => listening.reject(err));
     httpServer.listen(serverConfig.port, listening.resolve);
     yield* listening.operation;
 
-    console.log(`Server listening on http://localhost:${serverConfig.port}`);
-    ready?.();
-
     try {
-      yield* provide(undefined);
+      yield* provide({ wss, address: httpServer.address() as AddressInfo });
     } finally {
       wss.close();
       httpServer.close();

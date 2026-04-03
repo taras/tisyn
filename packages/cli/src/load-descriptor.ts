@@ -7,6 +7,8 @@
 
 import { pathToFileURL } from "node:url";
 import { resolve, dirname } from "node:path";
+import { call } from "effection";
+import type { Operation } from "effection";
 import type { TisynExpr as Expr } from "@tisyn/ir";
 import type { InputSchema } from "@tisyn/compiler";
 import type { WorkflowDescriptor } from "@tisyn/config";
@@ -23,10 +25,12 @@ export interface WorkflowExport {
  * - 3: module not found / import error
  * - 2: no default export or not a valid WorkflowDescriptor
  */
-export async function loadDescriptorModule(modulePath: string): Promise<WorkflowDescriptor> {
+export function* loadDescriptorModule(modulePath: string): Operation<WorkflowDescriptor> {
   let mod: Record<string, unknown>;
   try {
-    mod = (await import(pathToFileURL(modulePath).href)) as Record<string, unknown>;
+    mod = yield* call(
+      () => import(pathToFileURL(modulePath).href) as Promise<Record<string, unknown>>,
+    );
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
     throw new CliError(3, `Failed to load descriptor module '${modulePath}': ${msg}`);
@@ -71,13 +75,15 @@ export function resolveWorkflowModule(
  * - 3: module import failure
  * - 2: named export not found or structurally invalid
  */
-export async function loadWorkflowExport(
+export function* loadWorkflowExport(
   modulePath: string,
   exportName: string,
-): Promise<WorkflowExport> {
+): Operation<WorkflowExport> {
   let mod: Record<string, unknown>;
   try {
-    mod = (await import(pathToFileURL(modulePath).href)) as Record<string, unknown>;
+    mod = yield* call(
+      () => import(pathToFileURL(modulePath).href) as Promise<Record<string, unknown>>,
+    );
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
     throw new CliError(3, `Failed to load workflow module '${modulePath}': ${msg}`);

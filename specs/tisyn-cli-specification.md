@@ -1,6 +1,6 @@
 # Tisyn CLI Specification
 
-**Version:** 0.3.3
+**Version:** 0.3.4
 **Complements:** Tisyn Compiler Specification 1.1.0, Tisyn Configuration Specification 0.4.1
 **Status:** Draft
 
@@ -622,7 +622,13 @@ be renamed to avoid the conflict.
 
 ### 9.6 Help Generation
 
-`tsn run <module> --help` MUST produce:
+Help for `tsn run` has two modes:
+
+**Static help.** `tsn run --help` (no module argument)
+displays the command's built-in options and usage, then
+exits 0. No descriptor or workflow metadata is loaded.
+
+**Dynamic help.** `tsn run <module> --help` MUST produce:
 
 1. **Usage line.**
 2. **Built-in options.** `--entrypoint`, `--verbose`,
@@ -632,17 +638,18 @@ be renamed to avoid the conflict.
 4. **Entrypoints.** Named entrypoints from the descriptor,
    if any.
 
-Help describes invocation inputs only. It MUST NOT describe
-resolved workflow config or `useConfig()` internals.
+Dynamic help requires loading the descriptor module and
+deriving the input schema. Help describes invocation inputs
+only. It MUST NOT describe resolved workflow config or
+`useConfig()` internals.
 
-**Help failure behavior.** `tsn run <module> --help` requires
-loading the descriptor module and deriving the input schema
-in order to display workflow-derived flags. If module loading,
-descriptor validation, or schema derivation fails, the CLI
-MUST display built-in options and a diagnostic explaining why
-workflow-derived flags cannot be shown, then exit with the
-appropriate error code (§3.4). It MUST NOT silently omit the
-workflow inputs section without explanation.
+**Help failure behavior.** If module loading, descriptor
+validation, or schema derivation fails during dynamic help,
+the CLI MUST display built-in options and a diagnostic
+explaining why workflow-derived flags cannot be shown, then
+exit with the appropriate error code (§3.4). It MUST NOT
+silently omit the workflow inputs section without
+explanation.
 
 ---
 
@@ -881,7 +888,35 @@ derived flag parsing independently.
 No normative concept in this specification depends on any
 particular parsing library.
 
-### 16.2 Input Schema Derivation Mechanism
+### 16.2 Two-Phase Parsing Model for `tsn run`
+
+The current implementation uses a two-phase parsing model
+for `tsn run`:
+
+**Phase 1 (Configliere).** The CLI parsing library parses
+built-in command options (`module`, `--entrypoint`,
+`--verbose`) and detects `--help`/`--version`. Flags not
+recognized by the library remain in its **remainder** — the
+unconsumed portion of the input after parsing.
+
+**Phase 2 (application-owned).** The CLI loads the
+descriptor module, resolves the workflow export, derives the
+invocation input schema (§8), and parses the remainder
+against the derived flags (§9). This phase is also
+responsible for assembling dynamic help (§9.6) when
+`--help` appears in the remainder.
+
+The remainder is the sole source of workflow invocation
+flags. The CLI MUST NOT derive workflow flags from raw
+`process.argv` or any other source that includes
+already-consumed built-in options.
+
+This two-phase model is an implementation choice, not a
+normative requirement. Any implementation that correctly
+separates built-in options from workflow-derived flags and
+produces the specified behavior is conforming.
+
+### 16.3 Input Schema Derivation Mechanism
 
 The normative requirement (§8.1) is that the CLI has access
 to a workflow invocation input schema conforming to the
@@ -903,7 +938,7 @@ Whether future tooling chooses to colocate schema metadata
 alongside the descriptor is an implementation decision
 outside the scope of both specifications.
 
-### 16.3 Provenance
+### 16.4 Provenance
 
 When `--verbose` is active, the CLI SHOULD display the
 resolved value and origin of each built-in CLI flag,

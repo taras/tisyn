@@ -10,7 +10,7 @@
  */
 
 import { resolve } from "node:path";
-import { call, exit } from "effection";
+import { exit } from "effection";
 import type { Operation } from "effection";
 import { collectEnvNodes } from "@tisyn/config";
 import { applyOverlay, resolveEnv, ConfigError } from "@tisyn/runtime";
@@ -26,14 +26,14 @@ export function* runCheck(options: CheckCommandOptions, cwd: string): Operation<
   const modulePath = resolve(cwd, options.module);
 
   // Phase A: Load and validate descriptor
-  const descriptor = yield* call(() => loadDescriptorModule(modulePath));
+  const descriptor = yield* loadDescriptorModule(modulePath);
 
   // Apply entrypoint overlay if specified
   const merged = options.entrypoint ? applyOverlay(descriptor, options.entrypoint) : descriptor;
 
   // Phase B: Resolve workflow module + export
   const { modulePath: workflowPath, exportName } = resolveWorkflowModule(merged, modulePath);
-  const workflowExport = yield* call(() => loadWorkflowExport(workflowPath, exportName));
+  const workflowExport = yield* loadWorkflowExport(workflowPath, exportName);
 
   // Phase C: Resolve environment
   const envNodes = collectEnvNodes(merged);

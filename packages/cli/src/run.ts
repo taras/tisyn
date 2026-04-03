@@ -9,7 +9,7 @@
  */
 
 import { resolve, dirname, isAbsolute } from "node:path";
-import { call, exit, spawn, withResolvers } from "effection";
+import { exit } from "effection";
 import type { Operation } from "effection";
 import {
   applyOverlay,
@@ -28,20 +28,34 @@ import { deriveFlags, parseInputFlags, formatInputHelp } from "./inputs.js";
 import { installAllTransports, createJournalStream, startServer } from "./startup.js";
 import type { RunCommandOptions } from "./types.js";
 
+/**
+ * Shared Phase A + B: load descriptor, apply entrypoint overlay, resolve
+ * workflow module, and load workflow export with input schema.
+ *
+ * Used by both runRun() and runHelp() so the two paths cannot drift.
+ */
+function* loadRunMetadata(modulePath: string, entrypoint?: string) {
+  // Phase A: Load and validate descriptor
+  const descriptor = yield* loadDescriptorModule(modulePath);
+  const merged = entrypoint ? applyOverlay(descriptor, entrypoint) : descriptor;
+
+  // Phase B: Resolve workflow module and load export
+  const { modulePath: workflowPath, exportName } = resolveWorkflowModule(merged, modulePath);
+  const workflowExport = yield* loadWorkflowExport(workflowPath, exportName);
+
+  return { descriptor, merged, workflowPath, exportName, workflowExport };
+}
+
 export function* runRun(
   options: RunCommandOptions,
   cwd: string,
   extraArgv: string[],
 ): Operation<void> {
   const modulePath = resolve(cwd, options.module);
-
-  // Phase A: Load and validate descriptor
-  const descriptor = yield* call(() => loadDescriptorModule(modulePath));
-  const merged = options.entrypoint ? applyOverlay(descriptor, options.entrypoint) : descriptor;
-
-  // Phase B: Derive and validate inputs
-  const { modulePath: workflowPath, exportName } = resolveWorkflowModule(merged, modulePath);
-  const workflowExport = yield* call(() => loadWorkflowExport(workflowPath, exportName));
+  const { merged, workflowPath, exportName, workflowExport } = yield* loadRunMetadata(
+    modulePath,
+    options.entrypoint,
+  );
 
   if (!workflowExport.inputSchema) {
     throw new CliError(
@@ -91,13 +105,10 @@ export function* runRun(
   // Install agent transports
   yield* installAllTransports(resolvedProjection);
 
-  // Start server if present and wait for it to be listening
+  // Start server if present (resource provides after listening)
   if (resolvedProjection.server) {
-    const serverReady = withResolvers<void>();
-    yield* spawn(function* () {
-      yield* startServer(resolvedProjection.server!, serverReady.resolve);
-    });
-    yield* serverReady.operation;
+    const { address } = yield* startServer(resolvedProjection.server);
+    console.log(`Server listening on http://localhost:${address.port}`);
   }
 
   // Execute workflow
@@ -145,10 +156,7 @@ export function* runHelp(options: RunCommandOptions, cwd: string): Operation<voi
   const modulePath = resolve(cwd, options.module);
 
   try {
-    const descriptor = yield* call(() => loadDescriptorModule(modulePath));
-    const merged = options.entrypoint ? applyOverlay(descriptor, options.entrypoint) : descriptor;
-    const { modulePath: workflowPath, exportName } = resolveWorkflowModule(merged, modulePath);
-    const workflowExport = yield* call(() => loadWorkflowExport(workflowPath, exportName));
+    const { descriptor, workflowExport } = yield* loadRunMetadata(modulePath, options.entrypoint);
 
     if (!workflowExport.inputSchema) {
       console.error(

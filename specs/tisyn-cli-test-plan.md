@@ -1,6 +1,6 @@
 # Tisyn CLI Test Plan
 
-**Validates:** Tisyn CLI Specification v0.3.3
+**Validates:** Tisyn CLI Specification v0.3.4
 **Status:** Final Draft
 **Style reference:** Blocking Scope Conformance Test Plan
 
@@ -142,6 +142,7 @@ instrumentation:
 | CLI-CMD-001 | P0 | E2E | §2.1 | `tsn generate --help` exits 0 and shows usage |
 | CLI-CMD-002 | P0 | E2E | §2.2 | `tsn build --help` exits 0 and shows usage |
 | CLI-CMD-003 | P0 | E2E | §2.3, §9.6 | `tsn run <valid-module> --help` loads module and shows workflow-derived help. See CLI-HLP-008/009 for failure path. |
+| CLI-CMD-003a | P0 | E2E | §2.3 | `tsn run --help` (no module) shows static command help and exits 0. |
 | CLI-CMD-004 | P0 | E2E | §2.4 | `tsn check --help` exits 0 and shows usage |
 | CLI-CMD-005 | P0 | E2E | §1.1 | `tsn --version` prints version and exits 0 |
 | CLI-CMD-006 | P0 | E2E | §3.4 | Unknown command `tsn foo` exits with code 2 |
@@ -233,6 +234,9 @@ unsupported shapes.
 | CLI-FLG-011 | P0 | E2E | §9.3 | Number coercion failure: `--max-turns abc` → exit code 4 |
 | CLI-FLG-012 | P0 | E2E | §9.4 | Unknown invocation flag → exit code 4 |
 | CLI-FLG-013 | P0 | E2E | §9.2 | Multiple missing required fields → all reported in one diagnostic |
+| CLI-FLG-014 | P0 | E2E | §16.2 | `--verbose` after module does not leak into workflow flag parsing (not rejected as unknown) |
+| CLI-FLG-015 | P0 | E2E | §16.2 | `--entrypoint <name>` after module does not leak into workflow flag parsing |
+| CLI-FLG-016 | P0 | E2E | §16.2 | Built-in and workflow flags coexist: `--entrypoint dev --max-turns 10` parses both correctly |
 
 ### H. Boolean v1 Semantics
 
@@ -354,13 +358,13 @@ continued diagnostic collection. P1.
 
 | Category | P0 | P1 | GOLDEN | Total |
 | --- | --- | --- | --- | --- |
-| A. Command surface | 6 | 0 | 0 | 6 |
+| A. Command surface | 7 | 0 | 0 | 7 |
 | B. `tsn generate` | 6 | 0 | 0 | 6 |
 | C. `tsn build` | 6 | 1 | 0 | 7 |
 | D. Descriptor loading | 8 | 0 | 0 | 8 |
 | E. Entrypoint selection | 4 | 0 | 0 | 4 |
 | F. Input schema contract | 11 | 0 | 0 | 11 |
-| G. Flag derivation | 13 | 0 | 0 | 13 |
+| G. Flag derivation | 16 | 0 | 0 | 16 |
 | H. Boolean v1 | 7 | 0 | 0 | 7 |
 | I. Flag collision | 2 | 1 | 0 | 3 |
 | J. Help generation | 8 | 2 | 1 | 11 |
@@ -369,7 +373,7 @@ continued diagnostic collection. P1.
 | M. Exit codes | 13 | 1 | 0 | 14 |
 | N. Combined reporting | 0 | 1 | 0 | 1 |
 | O. Golden/snapshot | 0 | 0 | 7 | 7 |
-| **Total** | **99** | **7** | **9** | **115** |
+| **Total** | **103** | **7** | **9** | **119** |
 
 GOLDEN counts are **orthogonal output-stability coverage**,
 not a third priority bucket parallel to P0/P1. An
