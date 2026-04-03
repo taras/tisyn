@@ -393,45 +393,24 @@ export const CONSTRUCTOR_TABLE: Record<string, ConstructorEntry> = {
     maxArgs: 4,
     dispatch(args) {
       // Converge(probe, until, interval, timeout) macro expansion.
-      // Lowers to: Timebox(timeout, Let(__until_0, until, Let(__poll_0, Fn([], ...recursive...), Call(__poll_0))))
-      const [probe, until, interval, timeout] = args;
-      // Build IR using Q() to avoid type-level constraints on Call/Fn generics
+      // Expands to: Timebox(timeout, Let(__until_0, until,
+      //   Let(__poll_0, Fn([], Let(__probe_0, probe,
+      //     If(Call(__until_0, __probe_0), __probe_0,
+      //       Let(__discard_0, sleep(interval), Call(__poll_0))))),
+      //   Call(__poll_0))))
+      const [probe, until, interval, timeout] = args as AnyExpr[];
       const sleepNode = Eval("sleep", [interval] as AnyExpr);
-      const pollBody = {
-        tisyn: "eval", id: "let",
-        data: { tisyn: "quote", expr: {
-          name: "__probe_0", value: probe,
-          body: {
-            tisyn: "eval", id: "if",
-            data: { tisyn: "quote", expr: {
-              condition: { tisyn: "eval", id: "call", data: { tisyn: "quote", expr: {
-                fn: { tisyn: "ref", name: "__until_0" },
-                args: [{ tisyn: "ref", name: "__probe_0" }],
-              }}},
-              then: { tisyn: "ref", name: "__probe_0" },
-              else: {
-                tisyn: "eval", id: "let",
-                data: { tisyn: "quote", expr: {
-                  name: "__discard_0", value: sleepNode,
-                  body: { tisyn: "eval", id: "call", data: { tisyn: "quote", expr: {
-                    fn: { tisyn: "ref", name: "__poll_0" },
-                    args: [],
-                  }}},
-                }},
-              },
-            }},
-          },
-        }},
-      };
-      const callPoll = { tisyn: "eval", id: "call", data: { tisyn: "quote", expr: {
-        fn: { tisyn: "ref", name: "__poll_0" },
-        args: [],
-      }}};
+      const callUntil = Call(Ref("__until_0") as AnyExpr, Ref("__probe_0") as AnyExpr);
+      const recurse = Call(Ref("__poll_0") as AnyExpr);
+      const elseBranch = Let("__discard_0", sleepNode as AnyExpr, recurse as AnyExpr);
+      const ifNode = If(callUntil as AnyExpr, Ref("__probe_0") as AnyExpr, elseBranch as AnyExpr);
+      const pollBody = Let("__probe_0", probe, ifNode as AnyExpr);
       const pollFn = Fn([], pollBody as AnyExpr);
-      const inner = Let("__until_0", until as AnyExpr,
+      const callPoll = Call(Ref("__poll_0") as AnyExpr);
+      const inner = Let("__until_0", until,
         Let("__poll_0", pollFn as AnyExpr, callPoll as AnyExpr) as AnyExpr,
       );
-      return Timebox(timeout as AnyExpr, inner as AnyExpr) as TisynExpr;
+      return Timebox(timeout, inner as AnyExpr) as TisynExpr;
     },
   },
 };
