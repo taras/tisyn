@@ -160,6 +160,21 @@ importers:
       '@tisyn/compiler':
         specifier: workspace:*
         version: link:../compiler
+      '@tisyn/config':
+        specifier: workspace:*
+        version: link:../config
+      '@tisyn/durable-streams':
+        specifier: workspace:*
+        version: link:../durable-streams
+      '@tisyn/ir':
+        specifier: workspace:*
+        version: link:../ir
+      '@tisyn/runtime':
+        specifier: workspace:*
+        version: link:../runtime
+      '@tisyn/transport':
+        specifier: workspace:*
+        version: link:../transport
       configliere:
         specifier: ^0.3.0
         version: 0.3.0
@@ -169,6 +184,9 @@ importers:
       typescript:
         specifier: ~5.8.0
         version: 5.8.3
+      ws:
+        specifier: ^8.18.0
+        version: 8.20.0
       zod:
         specifier: ^3
         version: 3.25.76
@@ -182,6 +200,9 @@ importers:
       '@types/node':
         specifier: ^25.5.0
         version: 25.5.0
+      '@types/ws':
+        specifier: ^8.18.0
+        version: 8.18.1
       vitest:
         specifier: ^4
         version: 4.1.0(@types/node@25.5.0)(vite@7.3.1(@types/node@25.5.0)(tsx@4.21.0))

@@ -48,6 +48,8 @@ export interface ExecuteOptions {
   stream?: DurableStream;
   /** Coroutine ID for the root task. Defaults to "root". */
   coroutineId?: string;
+  /** Resolved config projection for `yield* useConfig()`. */
+  config?: Record<string, unknown>;
 }
 
 export interface ExecuteResult {
@@ -68,6 +70,8 @@ interface DriveContext {
   journal: DurableEvent[];
   /** Stream subscription map shared across all coroutines in the execution. */
   subscriptions: Map<string, SubscriptionEntry>;
+  /** Resolved config projection for `__config` effect. Null if not provided. */
+  config: Record<string, unknown> | null;
 }
 
 interface ScopeInner {
@@ -110,7 +114,13 @@ interface ResourceChild {
  * 5. Write Close event on completion/error
  */
 export function* execute(options: ExecuteOptions): Operation<ExecuteResult> {
-  const { ir, env: envRecord = {}, stream = new InMemoryStream(), coroutineId = "root" } = options;
+  const {
+    ir,
+    env: envRecord = {},
+    stream = new InMemoryStream(),
+    coroutineId = "root",
+    config: configRecord = null,
+  } = options;
 
   // Phase 1: Validate IR before evaluation
   let validatedIr: Expr;
@@ -143,7 +153,13 @@ export function* execute(options: ExecuteOptions): Operation<ExecuteResult> {
 
   // Phase 3: Create kernel generator and drive it
   const kernel = evaluate(validatedIr, env);
-  const ctx: DriveContext = { replayIndex, stream, journal, subscriptions: new Map() };
+  const ctx: DriveContext = {
+    replayIndex,
+    stream,
+    journal,
+    subscriptions: new Map(),
+    config: configRecord,
+  };
 
   let result: EventResult;
   try {
@@ -563,7 +579,9 @@ function* driveKernel(
         let effectResult: EventResult;
         try {
           let resultValue: Val;
-          if (descriptor.id === "stream.subscribe") {
+          if (descriptor.id === "__config") {
+            resultValue = (ctx.config ?? null) as Val;
+          } else if (descriptor.id === "stream.subscribe") {
             const token = `sub:${coroutineId}:${subscriptionCounter++}`;
             const sourceData = descriptor.data as unknown[];
             const source = sourceData[0];
@@ -1221,7 +1239,9 @@ function* orchestrateResourceChild(
         let effectResult: EventResult;
         try {
           let resultValue: Val;
-          if (descriptor.id === "stream.subscribe") {
+          if (descriptor.id === "__config") {
+            resultValue = (ctx.config ?? null) as Val;
+          } else if (descriptor.id === "stream.subscribe") {
             const token = `sub:${childId}:${subscriptionCounter++}`;
             const sourceData = descriptor.data as unknown[];
             const source = sourceData[0];
@@ -1554,7 +1574,9 @@ function* orchestrateResourceChild(
         let effectResult: EventResult;
         try {
           let resultValue: Val;
-          if (descriptor.id === "stream.subscribe") {
+          if (descriptor.id === "__config") {
+            resultValue = (ctx.config ?? null) as Val;
+          } else if (descriptor.id === "stream.subscribe") {
             const token = `sub:${childId}:${subscriptionCounter++}`;
             const sourceData = descriptor.data as unknown[];
             const source = sourceData[0];

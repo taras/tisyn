@@ -33,15 +33,22 @@
   },
   "dependencies": {
     "@tisyn/compiler": "workspace:*",
+    "@tisyn/config": "workspace:*",
+    "@tisyn/durable-streams": "workspace:*",
+    "@tisyn/ir": "workspace:*",
+    "@tisyn/runtime": "workspace:*",
+    "@tisyn/transport": "workspace:*",
     "configliere": "^0.3.0",
     "effection": "4.0.2",
     "typescript": "~5.8.0",
+    "ws": "^8.18.0",
     "zod": "^3"
   },
   "devDependencies": {
     "@effectionx/process": "^0.7.4",
     "@effectionx/vitest": "^0.3.0",
     "@types/node": "^25.5.0",
+    "@types/ws": "^8.18.0",
     "vitest": "^4"
   }
 }

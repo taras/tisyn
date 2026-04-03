@@ -16,6 +16,9 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { topoSort, runGenerate, runBuild } from "./compile.js";
 import { discoverConfig, validateAndResolveConfig, ConfigError } from "./config.js";
+import { buildInputSchema } from "@tisyn/compiler";
+import { deriveFlags, parseInputFlags, formatInputHelp } from "./inputs.js";
+import { CliError } from "./load-descriptor.js";
 
 // ── Temp dir helpers ──────────────────────────────────────────────────────────
 
@@ -308,5 +311,126 @@ describe("CLI entry surface", () => {
   it("generate with missing input exits non-zero", function* () {
     const result = yield* exec("node", { arguments: [CLI_BIN, "generate"] }).join();
     expect(result.code).not.toBe(0);
+  });
+
+  it("run --help exits 0 and prints command-level help", function* () {
+    const result = yield* exec("node", { arguments: [CLI_BIN, "run", "--help"] }).join();
+    expect(result.code ?? 0).toBe(0);
+    expect(result.stdout).toContain("run");
+    expect(result.stdout).toContain("module");
+  });
+
+  it("check --help exits 0 and prints command-level help", function* () {
+    const result = yield* exec("node", { arguments: [CLI_BIN, "check", "--help"] }).join();
+    expect(result.code ?? 0).toBe(0);
+    expect(result.stdout).toContain("check");
+    expect(result.stdout).toContain("env-example");
+  });
+
+  it("run with missing module argument exits non-zero", function* () {
+    const result = yield* exec("node", { arguments: [CLI_BIN, "run"] }).join();
+    expect(result.code).not.toBe(0);
+  });
+
+  it("check with missing module argument exits non-zero", function* () {
+    const result = yield* exec("node", { arguments: [CLI_BIN, "check"] }).join();
+    expect(result.code).not.toBe(0);
+  });
+
+  it("run with nonexistent descriptor exits 3", function* () {
+    const result = yield* exec("node", {
+      arguments: [CLI_BIN, "run", "/tmp/nonexistent-descriptor.ts"],
+    }).join();
+    expect(result.code).toBe(3);
+  });
+
+  it("check with nonexistent descriptor exits 3", function* () {
+    const result = yield* exec("node", {
+      arguments: [CLI_BIN, "check", "/tmp/nonexistent-descriptor.ts"],
+    }).join();
+    expect(result.code).toBe(3);
+  });
+});
+
+// ── Input flag parsing ──────────────────────────────────────────────────────
+
+describe("input flag parsing", () => {
+  it("derives kebab-case flags from camelCase fields", function* () {
+    const schema = buildInputSchema(["{ maxTurns: number; modelName: string }"]);
+    const flags = deriveFlags(schema);
+    expect(flags).toHaveLength(2);
+    expect(flags[0]!.flag).toBe("max-turns");
+    expect(flags[1]!.flag).toBe("model-name");
+  });
+
+  it("parses string and number flags", function* () {
+    const schema = buildInputSchema(["{ name: string; count: number }"]);
+    const flags = deriveFlags(schema);
+    const parsed = parseInputFlags(flags, ["--name", "hello", "--count", "42"]);
+    expect(parsed).toEqual({ name: "hello", count: 42 });
+  });
+
+  it("parses boolean presence flags", function* () {
+    const schema = buildInputSchema(["{ debug: boolean }"]);
+    const flags = deriveFlags(schema);
+    const parsed = parseInputFlags(flags, ["--debug"]);
+    expect(parsed).toEqual({ debug: true });
+  });
+
+  it("boolean flag absent → false", function* () {
+    const schema = buildInputSchema(["{ debug: boolean }"]);
+    const flags = deriveFlags(schema);
+    const parsed = parseInputFlags(flags, []);
+    expect(parsed).toEqual({ debug: false });
+  });
+
+  it("unknown flag → exit 4", function* () {
+    const schema = buildInputSchema(["{ name: string }"]);
+    const flags = deriveFlags(schema);
+    expect(() => parseInputFlags(flags, ["--unknown", "val"])).toThrow(CliError);
+    try {
+      parseInputFlags(flags, ["--unknown", "val"]);
+    } catch (e) {
+      expect((e as CliError).exitCode).toBe(4);
+    }
+  });
+
+  it("missing required flag → exit 4", function* () {
+    const schema = buildInputSchema(["{ name: string }"]);
+    const flags = deriveFlags(schema);
+    expect(() => parseInputFlags(flags, [])).toThrow(CliError);
+    try {
+      parseInputFlags(flags, []);
+    } catch (e) {
+      expect((e as CliError).exitCode).toBe(4);
+    }
+  });
+
+  it("number coercion failure → exit 4", function* () {
+    const schema = buildInputSchema(["{ count: number }"]);
+    const flags = deriveFlags(schema);
+    expect(() => parseInputFlags(flags, ["--count", "abc"])).toThrow(CliError);
+    try {
+      parseInputFlags(flags, ["--count", "abc"]);
+    } catch (e) {
+      expect((e as CliError).exitCode).toBe(4);
+    }
+  });
+
+  it("optional field not provided → omitted from result", function* () {
+    const schema = buildInputSchema(["{ name: string; tag?: string }"]);
+    const flags = deriveFlags(schema);
+    const parsed = parseInputFlags(flags, ["--name", "hello"]);
+    expect(parsed).toEqual({ name: "hello" });
+  });
+
+  it("formatInputHelp produces readable output", function* () {
+    const schema = buildInputSchema(["{ name: string; debug?: boolean }"]);
+    const flags = deriveFlags(schema);
+    const help = formatInputHelp(flags);
+    expect(help).toContain("--name");
+    expect(help).toContain("(required)");
+    expect(help).toContain("--debug");
+    expect(help).toContain("(optional)");
   });
 });

@@ -40,6 +40,7 @@ import {
   Fn,
   ConcatArrays,
   MergeObjects,
+  Q,
   ExternalEval,
   AllEval,
   RaceEval,
@@ -3074,6 +3075,13 @@ function emitYieldStar(target: ts.Expression, ctx: EmitContext): Expr {
         return ExternalEval("sleep", args as unknown as Expr);
       }
 
+      if (callee.text === "useConfig") {
+        if (target.arguments.length !== 0) {
+          throw error("UC1", "useConfig() takes no arguments", target, ctx);
+        }
+        return ExternalEval("__config", Q(null));
+      }
+
       // yield* timebox(duration, function* () { ... })
       if (callee.text === "timebox") {
         return emitTimebox(target, ctx);
@@ -3131,7 +3139,7 @@ function emitYieldStar(target: ts.Expression, ctx: EmitContext): Expr {
 
   throw error(
     "E010",
-    "yield* target must be an agent call, all/race, resource/provide, sleep, timebox, converge, or sub-workflow",
+    "yield* target must be an agent call, all/race, resource/provide, sleep, timebox, converge, useConfig, or sub-workflow",
     target,
     ctx,
   );

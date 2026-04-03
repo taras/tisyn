@@ -167,7 +167,7 @@ const config = resolveConfig(descriptor, {
 | `resolveConfig(descriptor, options?)` | Full resolution pipeline (steps 2-6) |
 | `projectConfig(descriptor, resolvedEnv)` | Strip discriminants, project workflow-visible shape |
 
-> **Note:** Workflow-authored `yield* useConfig()` access is not yet available. These helpers deliver the resolution pipeline as pure functions. Wiring them into a workflow execution context requires compiler support and a config-aware runtime entrypoint, both defined by a companion spec.
+> **Config-aware execution:** `execute()` accepts an optional `config` field in `ExecuteOptions`. When provided, the resolved config projection is available to workflows via `yield* useConfig()`. The `__config` effect is journaled for replay safety — replayed executions use the stored config value, not the current one.
 
 ## Boundaries
 

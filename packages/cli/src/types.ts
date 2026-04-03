@@ -27,6 +27,19 @@ export interface BuildCommandOptions {
   verbose: boolean;
 }
 
+export interface RunCommandOptions {
+  module: string;
+  entrypoint?: string;
+  verbose: boolean;
+}
+
+export interface CheckCommandOptions {
+  module: string;
+  entrypoint?: string;
+  envExample: boolean;
+  verbose: boolean;
+}
+
 export interface ResolvedPass extends Required<Pick<GeneratePass, "name" | "input" | "output">> {
   include: string[];
   format: "printed" | "json";

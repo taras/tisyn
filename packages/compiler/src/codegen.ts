@@ -5,6 +5,7 @@
  * and grouped agents/workflows maps.
  */
 
+import ts from "typescript";
 import type { TisynExpr as Expr } from "@tisyn/ir";
 import { print } from "@tisyn/ir";
 import type { DiscoveredContract } from "./discover.js";
@@ -13,6 +14,92 @@ export interface WorkflowInfo {
   ir: Expr;
   paramTypes: string[];
   returnType: string;
+}
+
+// ── Input Schema Types ──
+
+export interface InputFieldSchema {
+  name: string;
+  fieldType: "string" | "number" | "boolean";
+  optional: boolean;
+}
+
+export type InputSchema =
+  | { type: "none" }
+  | { type: "object"; fields: InputFieldSchema[] }
+  | { type: "unsupported"; reason: string };
+
+const PRIMITIVE_TYPE_MAP: Record<string, "string" | "number" | "boolean"> = {
+  string: "string",
+  number: "number",
+  boolean: "boolean",
+};
+
+/**
+ * Build an InputSchema from the workflow's paramTypes.
+ *
+ * Supports:
+ * - Zero parameters → { type: "none" }
+ * - One flat object parameter with primitive fields → { type: "object", fields: [...] }
+ * - Anything else → { type: "unsupported", reason: "..." }
+ */
+export function buildInputSchema(paramTypes: string[]): InputSchema {
+  if (paramTypes.length === 0) {
+    return { type: "none" };
+  }
+  if (paramTypes.length > 1) {
+    return { type: "unsupported", reason: "multiple parameters" };
+  }
+
+  const typeStr = paramTypes[0]!.trim();
+
+  // Parse the type string using the TypeScript compiler API
+  const sourceFile = ts.createSourceFile(
+    "__schema.ts",
+    `type __T = ${typeStr};`,
+    ts.ScriptTarget.Latest,
+    true,
+  );
+
+  const typeAlias = sourceFile.statements[0];
+  if (!typeAlias || !ts.isTypeAliasDeclaration(typeAlias) || !typeAlias.type) {
+    return { type: "unsupported", reason: `cannot parse type: ${typeStr}` };
+  }
+
+  const typeNode = typeAlias.type;
+
+  if (!ts.isTypeLiteralNode(typeNode)) {
+    return { type: "unsupported", reason: `parameter type is not an object literal: ${typeStr}` };
+  }
+
+  const fields: InputFieldSchema[] = [];
+  for (const member of typeNode.members) {
+    if (!ts.isPropertySignature(member)) {
+      return { type: "unsupported", reason: "object type contains non-property member" };
+    }
+    if (!member.name || !ts.isIdentifier(member.name)) {
+      return { type: "unsupported", reason: "object type contains computed property" };
+    }
+    const name = member.name.text;
+    const optional = !!member.questionToken;
+
+    if (!member.type) {
+      return { type: "unsupported", reason: `field '${name}' has no type annotation` };
+    }
+
+    const fieldTypeText = member.type.getText(sourceFile);
+    const fieldType = PRIMITIVE_TYPE_MAP[fieldTypeText];
+    if (!fieldType) {
+      return {
+        type: "unsupported",
+        reason: `field '${name}' has unsupported type '${fieldTypeText}'`,
+      };
+    }
+
+    fields.push({ name, fieldType, optional });
+  }
+
+  return { type: "object", fields };
 }
 
 /** All IR constructor names that print() can emit, in deterministic order. */
@@ -141,6 +228,20 @@ export function generateCode(
   if (sortedWorkflowNames.length > 0) {
     const workflowNames = sortedWorkflowNames.join(", ");
     lines.push(`export const workflows = { ${workflowNames} };`);
+  }
+
+  // Generate input schema metadata
+  if (sortedWorkflowNames.length > 0) {
+    lines.push("");
+    const schemaEntries: string[] = [];
+    for (const name of sortedWorkflowNames) {
+      const wf = workflows[name]!;
+      const schema = buildInputSchema(wf.paramTypes);
+      schemaEntries.push(`  ${name}: ${JSON.stringify(schema)}`);
+    }
+    lines.push(`export const inputSchemas = {`);
+    lines.push(schemaEntries.join(",\n"));
+    lines.push(`};`);
   }
 
   lines.push("");
