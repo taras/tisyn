@@ -9,7 +9,6 @@ import type { ConfigToken } from "./types.js";
  */
 export function* useConfig<T>(_token: ConfigToken<T>): Generator<unknown, T, unknown> {
   throw new Error(
-    "useConfig() must be compiled by the Tisyn compiler. " +
-      "Direct invocation is not supported.",
+    "useConfig() must be compiled by the Tisyn compiler. " + "Direct invocation is not supported.",
   );
 }

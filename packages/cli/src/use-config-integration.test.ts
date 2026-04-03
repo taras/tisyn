@@ -11,15 +11,7 @@ import { expect } from "vitest";
 import { Call, Ref } from "@tisyn/ir";
 import { execute, resolveConfig } from "@tisyn/runtime";
 import { compileOne } from "@tisyn/compiler";
-import {
-  workflow,
-  agent,
-  transport,
-  env,
-  journal,
-  entrypoint,
-  server,
-} from "@tisyn/config";
+import { workflow, agent, transport, env, journal, entrypoint, server } from "@tisyn/config";
 
 describe("useConfig(Token) integration", () => {
   it("CFG-USE-001: returns post-overlay config", function* () {
