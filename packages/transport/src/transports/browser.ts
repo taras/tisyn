@@ -1,10 +1,9 @@
 import type { Operation } from "effection";
 import { call, createChannel, createScope, ensure, scoped } from "effection";
 import type { OperationSpec, AgentDeclaration, ImplementationHandlers } from "@tisyn/agent";
-import { agent, operation, implementAgent, dispatch } from "@tisyn/agent";
-import type { IrInput, Json, Val, TisynExpr } from "@tisyn/ir";
+import { agent, operation, implementAgent } from "@tisyn/agent";
+import type { IrInput, Json } from "@tisyn/ir";
 import { Call } from "@tisyn/ir";
-import { evaluate, EMPTY_ENV } from "@tisyn/kernel";
 import type {
   AgentTransport,
   AgentTransportFactory,
@@ -110,8 +109,9 @@ const DEFAULT_VIEWPORT = { width: 1280, height: 720 };
  * Create a transport factory for a browser agent.
  *
  * Supports two execution modes:
- * - **In-process** (executor omitted): executes IR directly using the kernel
- *   evaluator with the configured capabilities. No Playwright dependency.
+ * - **In-process** (executor omitted): executes IR using `@tisyn/runtime`
+ *   with the configured capabilities. No Playwright dependency. Requires
+ *   `@tisyn/runtime` and `@tisyn/durable-streams` (loaded dynamically).
  * - **Real-browser** (executor provided): launches a Playwright browser,
  *   injects the executor IIFE, and sends IR via page.evaluate. Requires
  *   playwright-core.
@@ -181,7 +181,15 @@ export function browserTransport(config?: BrowserTransportConfig): AgentTranspor
         return result.value as Json;
       };
     } else {
-      // ── In-process mode: no Playwright, kernel evaluation ──
+      // ── In-process mode: no Playwright, runtime evaluation ──
+      // Dynamic import — @tisyn/runtime loaded only when needed (avoids circular dep)
+      const { execute: runtimeExecute }: typeof import("@tisyn/runtime") = yield* call(
+        () => import("@tisyn/runtime"),
+      );
+      const { InMemoryStream }: typeof import("@tisyn/durable-streams") = yield* call(
+        () => import("@tisyn/durable-streams"),
+      );
+
       navigateHandler = function* (): Operation<void> {
         throw new Error("Browser.navigate requires real-browser mode (provide executor config)");
       };
@@ -190,15 +198,15 @@ export function browserTransport(config?: BrowserTransportConfig): AgentTranspor
           for (const cap of capabilities) {
             yield* cap();
           }
-          const ir = Call(params.workflow as any);
-          const gen = evaluate(ir as unknown as TisynExpr, EMPTY_ENV);
-          let step = gen.next(undefined as unknown as Val);
-          while (!step.done) {
-            const descriptor = step.value;
-            const result = yield* dispatch(descriptor.id, descriptor.data as Val);
-            step = gen.next(result as Val);
+          const stream = new InMemoryStream();
+          const { result } = yield* runtimeExecute({
+            ir: Call(params.workflow as any) as IrInput,
+            stream,
+          });
+          if (result.status === "err") {
+            throw new Error((result as any).error?.message ?? "Browser execute failed");
           }
-          return step.value as Json;
+          return (result as any).value as Json;
         });
       };
     }
