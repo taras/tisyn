@@ -214,3 +214,7 @@ export function ResourceEval(body: Expr): EvalNode {
 export function ProvideEval(value: Expr): EvalNode {
   return { tisyn: "eval", id: "provide", data: value };
 }
+
+export function TimeboxEval(duration: Expr, body: Expr): EvalNode {
+  return { tisyn: "eval", id: "timebox", data: Q({ duration, body }) };
+}

@@ -41,4 +41,5 @@ export {
   JoinEval,
   ResourceEval,
   ProvideEval,
+  TimeboxEval,
 } from "./ir-builders.js";

@@ -287,3 +287,14 @@ export function Provide<T>(value: Expr<T>): EvalT<null> {
     data: value,
   } as EvalT<null>;
 }
+
+export function Timebox<V>(
+  duration: Expr<number>,
+  body: Expr<V>,
+): EvalT<{ status: "completed"; value: V } | { status: "timeout" }> {
+  return {
+    tisyn: "eval",
+    id: "timebox",
+    data: { tisyn: "quote", expr: { duration, body } },
+  } as EvalT<{ status: "completed"; value: V } | { status: "timeout" }>;
+}
