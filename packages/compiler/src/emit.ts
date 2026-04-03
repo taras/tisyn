@@ -3412,10 +3412,16 @@ function emitConverge(callExpr: ts.CallExpression, ctx: EmitContext): Expr {
     throw error("E-CONV-01", "converge() probe must be a generator function expression", probeExpr, ctx);
   }
 
-  // Validate until: must be arrow with expression body
+  // Validate until: must be arrow with expression body and exactly one identifier parameter
   const untilExpr = (untilProp as ts.PropertyAssignment).initializer;
   if (!ts.isArrowFunction(untilExpr)) {
     throw error("E-CONV-02", "converge() until must be an arrow function", untilExpr, ctx);
+  }
+  if (untilExpr.parameters.length !== 1) {
+    throw error("E-CONV-02", "converge() until must accept exactly one parameter", untilExpr, ctx);
+  }
+  if (!ts.isIdentifier(untilExpr.parameters[0]!.name)) {
+    throw error("E-CONV-02", "converge() until parameter must be a simple identifier", untilExpr.parameters[0]!, ctx);
   }
   if (ts.isBlock(untilExpr.body)) {
     throw error("E-CONV-03", "converge() until must have an expression body (not a block body)", untilExpr, ctx);

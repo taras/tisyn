@@ -86,7 +86,7 @@ The public surface exported from `src/index.ts` includes the following:
 - `classify` — classify an eval id as structural or external
 - `classify` treats `stream.subscribe` and `stream.next` as standard external effects
 - `isStructural` — check whether an eval id is handled directly by kernel semantics
-- `isCompoundExternal` — check whether an eval id is a compound external form such as `all`, `race`, `scope`, `spawn`, `join`, `resource`, or `provide`
+- `isCompoundExternal` — check whether an eval id is a compound external form such as `all`, `race`, `scope`, `spawn`, `join`, `resource`, `provide`, or `timebox`
 
 ### Environment and reference resolution
 

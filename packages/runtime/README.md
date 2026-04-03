@@ -27,7 +27,7 @@ If you want to **run** a Tisyn program rather than compile, inspect, or validate
 - continuing evaluation from the correct point
 - dispatching live effects through installed agents
 - handling stream iteration externals `stream.subscribe` and `stream.next`
-- orchestrating compound external nodes such as `scope`, `all`, `race`, `spawn`, `join`, `resource`, and `provide`, including scope-local transport and middleware lifecycle
+- orchestrating compound external nodes such as `scope`, `all`, `race`, `spawn`, `join`, `resource`, `provide`, and `timebox`, including scope-local transport and middleware lifecycle
 - appending new yield and close events before resuming execution
 - exposing local and remote execution entrypoints
 

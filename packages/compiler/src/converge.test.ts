@@ -266,6 +266,51 @@ describe("converge rejection", () => {
     ).toThrow("E-CONV-02");
   });
 
+  it("rejects zero-parameter until (E-CONV-02)", () => {
+    expect(() =>
+      compileOne(`
+        function* f(): Workflow<any> {
+          return yield* converge({
+            probe: function* () { return 42; },
+            until: () => true,
+            timeout: 5000,
+            interval: 100,
+          });
+        }
+      `),
+    ).toThrow("E-CONV-02");
+  });
+
+  it("rejects two-parameter until (E-CONV-02)", () => {
+    expect(() =>
+      compileOne(`
+        function* f(): Workflow<any> {
+          return yield* converge({
+            probe: function* () { return 42; },
+            until: (a, b) => a > b,
+            timeout: 5000,
+            interval: 100,
+          });
+        }
+      `),
+    ).toThrow("E-CONV-02");
+  });
+
+  it("rejects destructured until parameter (E-CONV-02)", () => {
+    expect(() =>
+      compileOne(`
+        function* f(): Workflow<any> {
+          return yield* converge({
+            probe: function* () { return { v: 42 }; },
+            until: ({ v }) => v > 0,
+            timeout: 5000,
+            interval: 100,
+          });
+        }
+      `),
+    ).toThrow("E-CONV-02");
+  });
+
   it("rejects block body until (E-CONV-03)", () => {
     expect(() =>
       compileOne(`

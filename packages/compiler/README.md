@@ -178,6 +178,8 @@ Supported constructs include:
 - template literals
 - ternary expressions
 - arrow functions with expression bodies only
+- `yield* timebox(duration, function* () { ... })`
+- `yield* converge({ probe, until, interval, timeout })`
 
 See [Restrictions and Errors](#restrictions-and-errors) for unsupported constructs.
 
@@ -357,6 +359,73 @@ Rules:
 - No code may follow `provide` at the same nesting level (P6). Use try/finally for cleanup.
 - `provide` requires exactly one argument (P1).
 - Nested `resource()` inside a resource body is not supported (RS7).
+
+### Timebox
+
+`yield* timebox(duration, function* () { ... })` races a body computation against a timeout deadline.
+
+Example:
+
+```typescript
+export function* run() {
+  const result = yield* timebox(5000, function* () {
+    return yield* OrderService().fetchOrder("abc");
+  });
+
+  if (result.status === "completed") {
+    return result.value;
+  }
+  // result.status === "timeout"
+  return null;
+}
+```
+
+Lowering shape:
+
+- `yield* timebox(duration, function* () { ... })` lowers to `TimeboxEval(durationExpr, bodyExpr)`
+- The body compiles with spawn-body scope isolation (parent spawn handles are not visible)
+
+Result type: `{ status: "completed", value: T } | { status: "timeout" }`. Timeout is a normal value, not an error.
+
+Rules:
+
+- `timebox()` takes exactly two arguments: a duration expression and a generator function (E-TB-01).
+- The second argument must be an inline generator-function expression (E-TB-02).
+
+### Converge
+
+`yield* converge({ probe, until, interval, timeout })` polls a probe until a predicate is satisfied or the timeout expires. It is compiler sugar — there is no runtime `"converge"` primitive.
+
+Example:
+
+```typescript
+export function* run() {
+  return yield* converge({
+    probe: function* () {
+      return yield* StatusService().check("job-42");
+    },
+    until: (status) => status === "done",
+    interval: 500,
+    timeout: 30000,
+  });
+}
+```
+
+Lowering shape:
+
+- `converge(...)` lowers entirely to `TimeboxEval(timeout, Let("__until_N", Fn([param], untilBody), Let("__poll_N", Fn([], Let("__probe_N", probeBody, If(Call(__until_N, __probe_N), __probe_N, Let("__discard_N", sleep(interval), Call(__poll_N))))), Call(__poll_N))))`
+- No `"converge"` id appears in the output IR
+
+Rules:
+
+- Config must be an object literal, not a variable (E-CONV-07).
+- `probe` must be a generator function expression (E-CONV-01).
+- `until` must be an arrow function with exactly one identifier parameter and an expression body (E-CONV-02, E-CONV-03).
+- `until` must not contain `yield*` (E-CONV-04).
+- `interval` is required (E-CONV-05).
+- `timeout` is required (E-CONV-06).
+- `interval` must not contain `yield*` (E-CONV-08).
+- `timeout` must not contain `yield*` (E-CONV-09).
 
 ## Workflow Calls and Lowering
 
@@ -627,6 +696,17 @@ Contract validation errors use `E999`, including:
 | RS1  | `resource()` requires exactly one inline generator-function argument                  |
 | RS4  | Resource body must contain exactly one `provide` call                                 |
 | RS7  | Nested `resource()` inside a resource body is not supported                           |
+| E-TB-01 | `timebox()` requires exactly 2 arguments: duration and generator function          |
+| E-TB-02 | `timebox()` second argument must be a generator function expression               |
+| E-CONV-01 | `converge()` probe must be a generator function expression                      |
+| E-CONV-02 | `converge()` until must be an arrow function with exactly one identifier parameter |
+| E-CONV-03 | `converge()` until must have an expression body (not a block body)              |
+| E-CONV-04 | `converge()` until must not contain `yield*`                                    |
+| E-CONV-05 | `converge()` requires an interval property                                      |
+| E-CONV-06 | `converge()` requires a timeout property                                        |
+| E-CONV-07 | `converge()` argument must be an object literal                                 |
+| E-CONV-08 | `converge()` interval must not contain `yield*`                                 |
+| E-CONV-09 | `converge()` timeout must not contain `yield*`                                  |
 | P1   | `provide()` requires exactly one argument                                             |
 | P2   | `provide()` is only valid inside a resource body                                      |
 | P3   | Multiple `provide` calls in the same resource body                                    |
@@ -725,7 +805,7 @@ Re-exported for programmatic IR construction:
 ```typescript
 Q, Ref, Fn, Let, Seq, If, While, Call, Get, Add, Sub, Mul, Div, Mod, Gt, Gte,
 Lt, Lte, Eq, Neq, And, Or, Not, Neg, Construct, ArrayNode, Concat, Throw, Try,
-ExternalEval, AllEval, RaceEval, ScopeEval, SpawnEval, JoinEval, ResourceEval, ProvideEval
+ExternalEval, AllEval, RaceEval, ScopeEval, SpawnEval, JoinEval, ResourceEval, ProvideEval, TimeboxEval
 ```
 
 ## Using the Generated Module
