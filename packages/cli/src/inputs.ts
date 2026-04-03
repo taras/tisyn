@@ -17,12 +17,7 @@ export interface FlagDefinition {
 }
 
 /** Built-in flags that cannot be overridden by workflow inputs. */
-const BUILT_IN_FLAGS = new Set([
-  "help",
-  "entrypoint",
-  "env-example",
-  "verbose",
-]);
+const BUILT_IN_FLAGS = new Set(["help", "entrypoint", "env-example", "verbose"]);
 
 /**
  * Derive CLI flag definitions from an InputSchema.
@@ -56,10 +51,7 @@ export function deriveFlags(schema: InputSchema): FlagDefinition[] {
  * - Missing required field
  * - Number coercion failure
  */
-export function parseInputFlags(
-  flags: FlagDefinition[],
-  argv: string[],
-): Record<string, unknown> {
+export function parseInputFlags(flags: FlagDefinition[], argv: string[]): Record<string, unknown> {
   const flagMap = new Map<string, FlagDefinition>();
   for (const def of flags) {
     flagMap.set(def.flag, def);

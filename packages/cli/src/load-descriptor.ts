@@ -60,9 +60,7 @@ export function resolveWorkflowModule(
 ): { modulePath: string; exportName: string } {
   const run = descriptor.run;
   const exportName = run.export;
-  const modulePath = run.module
-    ? resolve(dirname(descriptorPath), run.module)
-    : descriptorPath;
+  const modulePath = run.module ? resolve(dirname(descriptorPath), run.module) : descriptorPath;
   return { modulePath, exportName };
 }
 
@@ -87,17 +85,14 @@ export async function loadWorkflowExport(
 
   const ir = mod[exportName];
   if (!ir || typeof ir !== "object") {
-    throw new CliError(
-      2,
-      `Workflow module '${modulePath}' does not export '${exportName}'`,
-    );
+    throw new CliError(2, `Workflow module '${modulePath}' does not export '${exportName}'`);
   }
 
-  if ((ir as Record<string, unknown>).tisyn !== "fn" && (ir as Record<string, unknown>).tisyn !== "eval") {
-    throw new CliError(
-      2,
-      `Export '${exportName}' in '${modulePath}' is not a valid Tisyn IR node`,
-    );
+  if (
+    (ir as Record<string, unknown>).tisyn !== "fn" &&
+    (ir as Record<string, unknown>).tisyn !== "eval"
+  ) {
+    throw new CliError(2, `Export '${exportName}' in '${modulePath}' is not a valid Tisyn IR node`);
   }
 
   // Attempt to load input schema metadata

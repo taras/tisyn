@@ -131,7 +131,7 @@ interface FlagInfo {
  * Mutates the config in place.
  */
 export function rebaseConfigPaths(config: ResolvedConfig, descriptorDir: string): void {
-  const rebase = (p: string) => isAbsolute(p) ? p : resolve(descriptorDir, p);
+  const rebase = (p: string) => (isAbsolute(p) ? p : resolve(descriptorDir, p));
 
   for (const agent of config.agents) {
     const t = agent.transport;
@@ -141,7 +141,11 @@ export function rebaseConfigPaths(config: ResolvedConfig, descriptorDir: string)
     if (t.kind === "worker" && typeof t.url === "string" && !(t.url as string).includes("://")) {
       t.url = rebase(t.url as string);
     }
-    if (t.kind === "stdio" && typeof t.command === "string" && (t.command as string).startsWith("./")) {
+    if (
+      t.kind === "stdio" &&
+      typeof t.command === "string" &&
+      (t.command as string).startsWith("./")
+    ) {
       t.command = rebase(t.command as string);
     }
   }

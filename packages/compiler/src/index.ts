@@ -1,11 +1,7 @@
 export { compile, compileOne, type CompileOptions, type CompileResult } from "./compile.js";
 export { generateWorkflowModule, type GenerateOptions, type GenerateResult } from "./generate.js";
 export type { DiscoveredContract, ContractMethod } from "./discover.js";
-export {
-  buildInputSchema,
-  type InputSchema,
-  type InputFieldSchema,
-} from "./codegen.js";
+export { buildInputSchema, type InputSchema, type InputFieldSchema } from "./codegen.js";
 export { toAgentId } from "./agent-id.js";
 export { Counter } from "./counter.js";
 export { CompileError, ErrorCodes } from "./errors.js";

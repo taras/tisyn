@@ -18,7 +18,12 @@ import { websocketTransport } from "@tisyn/transport/websocket";
 import type { AgentTransportFactory } from "@tisyn/transport";
 import { InMemoryStream } from "@tisyn/durable-streams";
 import type { DurableStream } from "@tisyn/durable-streams";
-import type { ResolvedConfig, ResolvedAgent, ResolvedJournal, ResolvedServer } from "@tisyn/runtime";
+import type {
+  ResolvedConfig,
+  ResolvedAgent,
+  ResolvedJournal,
+  ResolvedServer,
+} from "@tisyn/runtime";
 import { WebSocketServer } from "ws";
 import { CliError } from "./load-descriptor.js";
 
@@ -52,10 +57,7 @@ export async function createTransportFactory(agent: ResolvedAgent): Promise<Agen
         throw new CliError(3, `Failed to load transport module '${modulePath}': ${msg}`);
       }
       if (typeof mod.createTransport !== "function") {
-        throw new CliError(
-          2,
-          `Module '${modulePath}' must export createTransport()`,
-        );
+        throw new CliError(2, `Module '${modulePath}' must export createTransport()`);
       }
       return (mod.createTransport as () => AgentTransportFactory)();
     }
@@ -107,10 +109,7 @@ const MIME_TYPES: Record<string, string> = {
  * Start an HTTP+WebSocket server from resolved server config.
  * Returns an Effection resource that tears down on scope exit.
  */
-export function* startServer(
-  serverConfig: ResolvedServer,
-  ready?: () => void,
-): Operation<void> {
+export function* startServer(serverConfig: ResolvedServer, ready?: () => void): Operation<void> {
   yield* resource(function* (provide) {
     const httpServer = createServer((req, res) => {
       if (serverConfig.static && req.url) {

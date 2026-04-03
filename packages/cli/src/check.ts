@@ -44,7 +44,12 @@ export function* runCheck(options: CheckCommandOptions, cwd: string): Operation<
       console.log("# No environment variables required");
     } else {
       for (const node of envNodes) {
-        const mode = node.mode === "optional" ? "(optional)" : node.mode === "secret" ? "(secret)" : "(required)";
+        const mode =
+          node.mode === "optional"
+            ? "(optional)"
+            : node.mode === "secret"
+              ? "(secret)"
+              : "(required)";
         const defaultVal = "default" in node ? ` # default: ${node.default}` : "";
         console.log(`${node.name}=${mode}${defaultVal}`);
       }
@@ -67,7 +72,9 @@ export function* runCheck(options: CheckCommandOptions, cwd: string): Operation<
   if (!workflowExport.inputSchema) {
     console.warn("Warning: workflow module does not export input schema metadata");
   } else if (workflowExport.inputSchema.type === "unsupported") {
-    console.warn(`Warning: workflow input parameters are unsupported: ${workflowExport.inputSchema.reason}`);
+    console.warn(
+      `Warning: workflow input parameters are unsupported: ${workflowExport.inputSchema.reason}`,
+    );
   } else if (workflowExport.inputSchema.type === "object") {
     const flags = deriveFlags(workflowExport.inputSchema);
     if (flags.length > 0) {
