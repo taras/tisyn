@@ -61,15 +61,28 @@ function walk(
     return;
   }
   if (typeof value === "bigint" || typeof value === "symbol" || typeof value === "function") {
-    errors.push({ rule: "V8", path, message: `${typeof value} is not in the serializable data domain` });
+    errors.push({
+      rule: "V8",
+      path,
+      message: `${typeof value} is not in the serializable data domain`,
+    });
     return;
   }
   if (typeof value !== "object") return;
 
   // V8: non-plain objects
-  if (value instanceof Date || value instanceof RegExp || value instanceof Map ||
-      value instanceof Set || value instanceof ArrayBuffer) {
-    errors.push({ rule: "V8", path, message: `${value.constructor.name} is not in the serializable data domain` });
+  if (
+    value instanceof Date ||
+    value instanceof RegExp ||
+    value instanceof Map ||
+    value instanceof Set ||
+    value instanceof ArrayBuffer
+  ) {
+    errors.push({
+      rule: "V8",
+      path,
+      message: `${value.constructor.name} is not in the serializable data domain`,
+    });
     return;
   }
 
@@ -86,11 +99,19 @@ function walk(
   if (!Array.isArray(value)) {
     const proto = Object.getPrototypeOf(value);
     if (proto !== null && proto !== Object.prototype) {
-      errors.push({ rule: "V8", path, message: "Class instances are not in the serializable data domain" });
+      errors.push({
+        rule: "V8",
+        path,
+        message: "Class instances are not in the serializable data domain",
+      });
       return;
     }
     if (Object.getOwnPropertySymbols(value).length > 0) {
-      errors.push({ rule: "V8", path, message: "Symbol keys are not in the serializable data domain" });
+      errors.push({
+        rule: "V8",
+        path,
+        message: "Symbol keys are not in the serializable data domain",
+      });
       return;
     }
   }
@@ -150,19 +171,31 @@ function validateWorkflowRules(
     errors.push({ rule: "V2", path: p(path, "run"), message: "Missing 'run' field" });
   } else if (typeof run === "string") {
     if (run === "") {
-      errors.push({ rule: "V2", path: p(path, "run"), message: "'run' must be a non-empty string" });
+      errors.push({
+        rule: "V2",
+        path: p(path, "run"),
+        message: "'run' must be a non-empty string",
+      });
     }
   } else if (typeof run === "object" && run !== null) {
     const ref = run as Record<string, unknown>;
     if (typeof ref.export !== "string" || ref.export === "") {
-      errors.push({ rule: "V2", path: p(path, "run.export"), message: "'run.export' must be a non-empty string" });
+      errors.push({
+        rule: "V2",
+        path: p(path, "run.export"),
+        message: "'run.export' must be a non-empty string",
+      });
     }
   }
 
   // V2: agents
   const agents = obj.agents;
   if (!Array.isArray(agents) || agents.length === 0) {
-    errors.push({ rule: "V2", path: p(path, "agents"), message: "'agents' must be a non-empty array" });
+    errors.push({
+      rule: "V2",
+      path: p(path, "agents"),
+      message: "'agents' must be a non-empty array",
+    });
   } else {
     // V4: unique agent ids
     const ids = new Set<string>();
@@ -170,7 +203,11 @@ function validateWorkflowRules(
       const a = agents[i] as Record<string, unknown>;
       if (a != null && typeof a === "object" && typeof a.id === "string" && a.id !== "") {
         if (ids.has(a.id)) {
-          errors.push({ rule: "V4", path: p(path, `agents[${i}].id`), message: `Duplicate agent id: '${a.id}'` });
+          errors.push({
+            rule: "V4",
+            path: p(path, `agents[${i}].id`),
+            message: `Duplicate agent id: '${a.id}'`,
+          });
         }
         ids.add(a.id);
       }
@@ -179,11 +216,19 @@ function validateWorkflowRules(
 
   // V10: base WorkflowDescriptor must NOT have server
   if ("server" in obj) {
-    errors.push({ rule: "V10", path: p(path, "server"), message: "Base WorkflowDescriptor must not include a 'server' field" });
+    errors.push({
+      rule: "V10",
+      path: p(path, "server"),
+      message: "Base WorkflowDescriptor must not include a 'server' field",
+    });
   }
 
   // V7: entrypoint key format
-  if (obj.entrypoints != null && typeof obj.entrypoints === "object" && !Array.isArray(obj.entrypoints)) {
+  if (
+    obj.entrypoints != null &&
+    typeof obj.entrypoints === "object" &&
+    !Array.isArray(obj.entrypoints)
+  ) {
     const entries = obj.entrypoints as Record<string, unknown>;
     for (const key of Object.keys(entries)) {
       if (!ENTRYPOINT_KEY_RE.test(key)) {
@@ -204,12 +249,20 @@ function validateAgentRules(
 ): void {
   // V3: non-empty id
   if (typeof obj.id !== "string" || obj.id === "") {
-    errors.push({ rule: "V3", path: p(path, "id"), message: "Agent 'id' must be a non-empty string" });
+    errors.push({
+      rule: "V3",
+      path: p(path, "id"),
+      message: "Agent 'id' must be a non-empty string",
+    });
   }
 
   // V3: valid transport
   if (obj.transport == null) {
-    errors.push({ rule: "V3", path: p(path, "transport"), message: "Agent must have a 'transport'" });
+    errors.push({
+      rule: "V3",
+      path: p(path, "transport"),
+      message: "Agent must have a 'transport'",
+    });
   }
 }
 
@@ -220,7 +273,11 @@ function validateTransportRules(
 ): void {
   // V5: kind field
   if (typeof obj.kind !== "string" || obj.kind === "") {
-    errors.push({ rule: "V5", path: p(path, "kind"), message: "Transport must have a 'kind' field" });
+    errors.push({
+      rule: "V5",
+      path: p(path, "kind"),
+      message: "Transport must have a 'kind' field",
+    });
     return;
   }
 

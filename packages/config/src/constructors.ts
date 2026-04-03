@@ -27,10 +27,7 @@ export function workflow(config: {
   journal?: JournalDescriptor;
   entrypoints?: Record<string, EntrypointDescriptor>;
 }): WorkflowDescriptor {
-  const run: WorkflowRef =
-    typeof config.run === "string"
-      ? { export: config.run }
-      : config.run;
+  const run: WorkflowRef = typeof config.run === "string" ? { export: config.run } : config.run;
   return {
     tisyn_config: "workflow",
     run,
@@ -76,10 +73,7 @@ export const transport = {
 
 // ── env ──
 
-function envOptional(
-  name: string,
-  defaultValue: string | number | boolean,
-): EnvOptionalDescriptor {
+function envOptional(name: string, defaultValue: string | number | boolean): EnvOptionalDescriptor {
   return { tisyn_config: "env", mode: "optional", name, default: defaultValue };
 }
 
@@ -126,10 +120,7 @@ export function entrypoint(config?: {
 // ── server ──
 
 export const server = {
-  websocket(config: {
-    port: number | EnvDescriptor;
-    static?: string;
-  }): ServerDescriptor {
+  websocket(config: { port: number | EnvDescriptor; static?: string }): ServerDescriptor {
     return {
       tisyn_config: "server",
       kind: "websocket",

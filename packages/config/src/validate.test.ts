@@ -27,7 +27,13 @@ describe("V1: missing tisyn_config", () => {
     const bad = {
       tisyn_config: "workflow",
       run: { export: "hello" },
-      agents: [{ tisyn_config: "agent", id: "a", transport: { tisyn_config: "foo", kind: "inprocess", module: "./a.ts" } }],
+      agents: [
+        {
+          tisyn_config: "agent",
+          id: "a",
+          transport: { tisyn_config: "foo", kind: "inprocess", module: "./a.ts" },
+        },
+      ],
     };
     const result2 = validateConfig(bad);
     expect(result2.ok).toBe(false);
@@ -40,10 +46,7 @@ describe("V1: missing tisyn_config", () => {
 // CFG-VAL-002
 describe("V1: unrecognized tisyn_config value", () => {
   it("unrecognized discriminant → failure", () => {
-    expectFailure(
-      { tisyn_config: "bogus", run: { export: "hello" }, agents: [] },
-      "V1",
-    );
+    expectFailure({ tisyn_config: "bogus", run: { export: "hello" }, agents: [] }, "V1");
   });
 });
 
@@ -51,7 +54,10 @@ describe("V1: unrecognized tisyn_config value", () => {
 describe("V2: missing run", () => {
   it("missing run field → failure", () => {
     expectFailure(
-      { tisyn_config: "workflow", agents: [{ tisyn_config: "agent", id: "a", transport: transport.inprocess("./a.ts") }] },
+      {
+        tisyn_config: "workflow",
+        agents: [{ tisyn_config: "agent", id: "a", transport: transport.inprocess("./a.ts") }],
+      },
       "V2",
     );
   });
@@ -61,7 +67,11 @@ describe("V2: missing run", () => {
 describe("V2: empty string run", () => {
   it("empty string run → failure", () => {
     expectFailure(
-      { tisyn_config: "workflow", run: "", agents: [{ tisyn_config: "agent", id: "a", transport: transport.inprocess("./a.ts") }] },
+      {
+        tisyn_config: "workflow",
+        run: "",
+        agents: [{ tisyn_config: "agent", id: "a", transport: transport.inprocess("./a.ts") }],
+      },
       "V2",
     );
   });
@@ -70,10 +80,7 @@ describe("V2: empty string run", () => {
 // CFG-VAL-005
 describe("V2: empty agents", () => {
   it("empty agents array → failure", () => {
-    expectFailure(
-      { tisyn_config: "workflow", run: { export: "hello" }, agents: [] },
-      "V2",
-    );
+    expectFailure({ tisyn_config: "workflow", run: { export: "hello" }, agents: [] }, "V2");
   });
 });
 
@@ -122,9 +129,7 @@ describe("V5: transport missing kind", () => {
     const w = {
       tisyn_config: "workflow",
       run: { export: "hello" },
-      agents: [
-        { tisyn_config: "agent", id: "a", transport: { tisyn_config: "transport" } },
-      ],
+      agents: [{ tisyn_config: "agent", id: "a", transport: { tisyn_config: "transport" } }],
     };
     expectFailure(w, "V5");
   });
@@ -137,7 +142,11 @@ describe("V5: built-in transport missing required field", () => {
       tisyn_config: "workflow",
       run: { export: "hello" },
       agents: [
-        { tisyn_config: "agent", id: "a", transport: { tisyn_config: "transport", kind: "worker" } },
+        {
+          tisyn_config: "agent",
+          id: "a",
+          transport: { tisyn_config: "transport", kind: "worker" },
+        },
       ],
     };
     expectFailure(w, "V5");
@@ -257,9 +266,7 @@ describe("V9: node with both tisyn_config and tisyn", () => {
       tisyn_config: "workflow",
       tisyn: "eval",
       run: { export: "hello" },
-      agents: [
-        { tisyn_config: "agent", id: "a", transport: transport.inprocess("./a.ts") },
-      ],
+      agents: [{ tisyn_config: "agent", id: "a", transport: transport.inprocess("./a.ts") }],
     };
     expectFailure(w, "V9");
   });
@@ -271,9 +278,7 @@ describe("V10: base WorkflowDescriptor with server", () => {
     const w = {
       tisyn_config: "workflow",
       run: { export: "hello" },
-      agents: [
-        { tisyn_config: "agent", id: "a", transport: transport.inprocess("./a.ts") },
-      ],
+      agents: [{ tisyn_config: "agent", id: "a", transport: transport.inprocess("./a.ts") }],
       server: server.websocket({ port: 3000 }),
     };
     expectFailure(w, "V10");

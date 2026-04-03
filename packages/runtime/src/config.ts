@@ -63,10 +63,7 @@ export function applyOverlay(
   return mergeOverlay(base, overlay);
 }
 
-function mergeOverlay(
-  base: WorkflowDescriptor,
-  overlay: EntrypointDescriptor,
-): WorkflowDescriptor {
+function mergeOverlay(base: WorkflowDescriptor, overlay: EntrypointDescriptor): WorkflowDescriptor {
   // Agents: merge by id
   const mergedAgents = mergeAgents(
     base.agents as AgentBinding[],
@@ -91,10 +88,7 @@ function mergeOverlay(
   return result as unknown as WorkflowDescriptor;
 }
 
-function mergeAgents(
-  baseAgents: AgentBinding[],
-  overlayAgents?: AgentBinding[],
-): AgentBinding[] {
+function mergeAgents(baseAgents: AgentBinding[], overlayAgents?: AgentBinding[]): AgentBinding[] {
   if (!overlayAgents || overlayAgents.length === 0) return [...baseAgents];
 
   const overlayById = new Map<string, AgentBinding>();
@@ -162,7 +156,11 @@ export function resolveEnv(
   return resolved;
 }
 
-function coerce(raw: string, defaultValue: string | number | boolean, name: string): string | number | boolean {
+function coerce(
+  raw: string,
+  defaultValue: string | number | boolean,
+  name: string,
+): string | number | boolean {
   if (typeof defaultValue === "string") return raw;
 
   if (typeof defaultValue === "number") {
@@ -176,7 +174,9 @@ function coerce(raw: string, defaultValue: string | number | boolean, name: stri
   // boolean
   if (raw === "true" || raw === "1") return true;
   if (raw === "false" || raw === "0") return false;
-  throw new ConfigError(`Environment variable '${name}': cannot coerce '${raw}' to boolean (expected true/false/1/0)`);
+  throw new ConfigError(
+    `Environment variable '${name}': cannot coerce '${raw}' to boolean (expected true/false/1/0)`,
+  );
 }
 
 // ── Full Resolution Pipeline (§7.1 steps 2-6) ──
@@ -213,7 +213,7 @@ export function resolveConfig(
   const envNodes = collectEnvNodes(merged);
 
   // Step 5-6: environment resolution
-  const processEnv = options?.processEnv ?? process.env as Record<string, string | undefined>;
+  const processEnv = options?.processEnv ?? (process.env as Record<string, string | undefined>);
   const resolvedEnv = resolveEnv(envNodes, processEnv);
 
   // Replace env nodes with resolved values and project
@@ -226,16 +226,16 @@ export function projectConfig(
   descriptor: WorkflowDescriptor,
   resolvedEnv: Map<EnvDescriptor, string | number | boolean>,
 ): ResolvedConfig {
-  const agents = (descriptor.agents as AgentBinding[]).map((a) =>
-    projectAgent(a, resolvedEnv),
-  );
+  const agents = (descriptor.agents as AgentBinding[]).map((a) => projectAgent(a, resolvedEnv));
 
   const journal = projectJournal(descriptor.journal, resolvedEnv);
 
   const result: ResolvedConfig = { agents, journal };
 
   // Server comes from merged descriptor (may have been added by overlay)
-  const serverField = (descriptor as unknown as Record<string, unknown>).server as ServerDescriptor | undefined;
+  const serverField = (descriptor as unknown as Record<string, unknown>).server as
+    | ServerDescriptor
+    | undefined;
   if (serverField) {
     result.server = projectServer(serverField, resolvedEnv);
   }

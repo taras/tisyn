@@ -1,13 +1,5 @@
 import { describe, it, expect } from "vitest";
-import {
-  workflow,
-  agent,
-  transport,
-  env,
-  journal,
-  entrypoint,
-  server,
-} from "./constructors.js";
+import { workflow, agent, transport, env, journal, entrypoint, server } from "./constructors.js";
 
 // ── A. Constructor and Descriptor Formation ──
 
@@ -94,14 +86,17 @@ describe("transport constructors", () => {
       kind: "inprocess",
       fields: { module: "./agent.ts" },
     },
-  ])("transport.$name produces tisyn_config: 'transport' with kind '$kind'", ({ make, kind, fields }) => {
-    const t = make();
-    expect(t.tisyn_config).toBe("transport");
-    expect(t.kind).toBe(kind);
-    for (const [key, value] of Object.entries(fields)) {
-      expect((t as any)[key]).toEqual(value);
-    }
-  });
+  ])(
+    "transport.$name produces tisyn_config: 'transport' with kind '$kind'",
+    ({ make, kind, fields }) => {
+      const t = make();
+      expect(t.tisyn_config).toBe("transport");
+      expect(t.kind).toBe(kind);
+      for (const [key, value] of Object.entries(fields)) {
+        expect((t as any)[key]).toEqual(value);
+      }
+    },
+  );
 });
 
 // CFG-CON-007
@@ -200,10 +195,7 @@ describe("serializable data domain", () => {
   it("all constructor outputs are JSON-round-trippable", () => {
     const w = workflow({
       run: "hello",
-      agents: [
-        agent("llm", transport.worker("./w.js")),
-        agent("app", transport.local("./app.ts")),
-      ],
+      agents: [agent("llm", transport.worker("./w.js")), agent("app", transport.local("./app.ts"))],
       journal: journal.file(env("JOURNAL", "./j.log")),
       entrypoints: {
         dev: entrypoint({

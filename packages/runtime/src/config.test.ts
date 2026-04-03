@@ -9,13 +9,7 @@ import {
   server,
   collectEnvNodes,
 } from "@tisyn/config";
-import {
-  applyOverlay,
-  resolveEnv,
-  resolveConfig,
-  projectConfig,
-  ConfigError,
-} from "./config.js";
+import { applyOverlay, resolveEnv, resolveConfig, projectConfig, ConfigError } from "./config.js";
 
 // ── Helper ──
 
@@ -252,7 +246,9 @@ describe("resolution order", () => {
       agents: [agent("a", transport.inprocess("./a.ts"))],
       entrypoints: {
         bad: entrypoint({
-          agents: [{ tisyn_config: "agent", id: "", transport: transport.inprocess("./b.ts") } as any],
+          agents: [
+            { tisyn_config: "agent", id: "", transport: transport.inprocess("./b.ts") } as any,
+          ],
         }),
       },
     });

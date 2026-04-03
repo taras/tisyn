@@ -82,10 +82,7 @@ export interface EnvSecretDescriptor {
   readonly name: string;
 }
 
-export type EnvDescriptor =
-  | EnvOptionalDescriptor
-  | EnvRequiredDescriptor
-  | EnvSecretDescriptor;
+export type EnvDescriptor = EnvOptionalDescriptor | EnvRequiredDescriptor | EnvSecretDescriptor;
 
 // ── Journal Descriptors ──
 

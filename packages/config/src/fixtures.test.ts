@@ -10,9 +10,7 @@ describe("§9.1 minimal workflow fixture", () => {
   it("produces a valid descriptor", () => {
     const w = workflow({
       run: "hello",
-      agents: [
-        agent("greeter", transport.inprocess("./greeter-impl.ts")),
-      ],
+      agents: [agent("greeter", transport.inprocess("./greeter-impl.ts"))],
     });
     expect(validateConfig(w).ok).toBe(true);
   });
@@ -100,10 +98,7 @@ describe("§9.7 duplicate agent IDs fixture", () => {
   it("fails validation with V4", () => {
     const w = workflow({
       run: "chat",
-      agents: [
-        agent("llm", transport.worker("./a.js")),
-        agent("llm", transport.worker("./b.js")),
-      ],
+      agents: [agent("llm", transport.worker("./a.js")), agent("llm", transport.worker("./b.js"))],
     });
     const result = validateConfig(w);
     expect(result.ok).toBe(false);
