@@ -3076,9 +3076,14 @@ function emitYieldStar(target: ts.Expression, ctx: EmitContext): Expr {
       }
 
       if (callee.text === "useConfig") {
-        if (target.arguments.length !== 0) {
-          throw error("UC1", "useConfig() takes no arguments", target, ctx);
+        if (target.arguments.length !== 1) {
+          throw error("UC1", "useConfig() requires exactly one ConfigToken argument", target, ctx);
         }
+        const tokenArg = target.arguments[0]!;
+        if (!ts.isIdentifier(tokenArg)) {
+          throw error("UC2", "useConfig() argument must be a ConfigToken identifier", target, ctx);
+        }
+        // Token is erased — same runtime effect regardless of token identity
         return ExternalEval("__config", Q(null));
       }
 

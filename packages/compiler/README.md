@@ -526,7 +526,7 @@ Additional notes:
 - Type-only imports used by contract signatures are forwarded automatically.
 - Contracts and workflows are emitted in alphabetical order for deterministic output.
 - Generated code is build output and should not be edited by hand.
-- `yield* useConfig()` is a recognized authored form that compiles to `ExternalEval("__config", Q(null))`. It takes no arguments and returns the resolved config projection at runtime.
+- `yield* useConfig(Token)` is a recognized authored form that compiles to `ExternalEval("__config", Q(null))`. It requires exactly one `ConfigToken` identifier argument (UC1 if wrong arity, UC2 if non-identifier). The token provides static typing via `ConfigToken<T>` and is erased by the compiler. At runtime, the `__config` effect returns the resolved config projection from `ExecuteOptions.config`.
 
 ## Agent ID Naming
 

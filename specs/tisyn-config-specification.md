@@ -785,15 +785,16 @@ This specification defines only the semantic contract:
 what `useConfig()` returns, when it is valid to call, and
 what guarantees it provides.
 
-> **MVP Scope (v0.8.0):** Workflow-authored `yield* useConfig()`
-> access is **deferred** to a companion compiler/runtime
-> integration spec. The compiler does not recognize
-> `useConfig()` as an authored form, and the runtime
-> entrypoint does not supply a resolved-config context.
-> This MVP delivers the resolution pipeline
-> (`resolveConfig` → `projectConfig`) as pure functions
-> that a future config-aware entrypoint can use to
-> populate an Effection context.
+> **Implementation (v0.8.0+):** Workflow-authored config
+> access is provided via `yield* useConfig(Token)`, where
+> `Token` is a `ConfigToken<T>` that carries static typing
+> for the resolved config projection. The compiler lowers
+> this to `ExternalEval("__config", Q(null))`, erasing the
+> token. The runtime resolves the `__config` effect from
+> `ExecuteOptions.config`. See Compiler Specification §4.6
+> for lowering details. Automatic type inference from
+> descriptor shape is not yet specified — the token
+> approach provides explicit typing.
 
 ---
 
@@ -969,10 +970,10 @@ export default workflow({
 });
 ```
 
-This MVP does not yet provide authored `yield* useConfig()`
-access inside workflows. Instead, the runtime resolution
-pipeline produces the same workflow-visible projection as a
-plain value:
+The `yield* useConfig(Token)` authored form gives workflow
+code access to the resolved config projection. The runtime
+resolution pipeline produces this projection, which the
+runtime makes available through the `__config` effect:
 
 ```typescript
 const config = resolveConfig(descriptor, {
@@ -999,10 +1000,12 @@ const journalPath: string = config.journal.path;
 // - no tisyn_config discriminant fields
 ```
 
-A future config-aware entrypoint may expose that same
-projection to workflow code through `useConfig()`, as
-described in §7.5.3, but that authored access mechanism is
-not part of this MVP.
+Workflow code accesses this projection via
+`yield* useConfig(Token)`, as described in §7.5.3. The
+`Token` is a `ConfigToken<T>` providing static typing.
+The compiler erases the token and emits an
+`ExternalEval("__config", Q(null))` effect; the runtime
+resolves it from `ExecuteOptions.config`.
 
 ### 9.7 Invalid Config
 
@@ -1100,8 +1103,8 @@ a CLI feature.
 - **Config-owned validation** (§6.1): Implementable
   standalone.
 - **`useConfig()` semantic contract** (§7.5): Semantic
-  rules specified. Typing/binding deferred to companion
-  specs.
+  rules specified. Typed token binding is implemented
+  via `ConfigToken<T>` (see Compiler Specification §4.6).
 - **Security constraints** (§8): Fully specified.
 
 ### Needs Companion Spec
@@ -1109,9 +1112,10 @@ a CLI feature.
 - **`tsn run` / `tsn check`**: CLI specification for module
   evaluation, entrypoint selection, flag parsing, process
   lifecycle, and Configliere integration.
-- **`useConfig()` typing and binding**: Runtime/compiler
-  specification for the TypeScript signature, type inference,
-  and how a workflow is bound to a specific `WorkflowDescriptor`.
+- **`useConfig()` type inference**: Automatic type inference
+  of the `useConfig()` return type from the descriptor shape
+  is not yet specified. The current approach uses explicit
+  `ConfigToken<T>` typing.
 - **`transport.local()` runtime contract**: Alignment with
   `@tisyn/agent` and transport specification.
 - **Extension transport registration**: How the runtime

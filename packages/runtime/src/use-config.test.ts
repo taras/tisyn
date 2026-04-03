@@ -1,9 +1,10 @@
 /**
  * Runtime tests for the __config journaled effect.
  *
- * The __config effect is emitted by compiled `yield* useConfig()` and
+ * The __config effect is emitted by compiled `yield* useConfig(Token)` and
  * returns the projected resolved config provided via ExecuteOptions.config.
- * It is journaled like any standard external effect for replay safety.
+ * The token argument is erased at compile time — it does not reach the runtime.
+ * The effect is journaled like any standard external effect for replay safety.
  */
 
 import { describe, it } from "@effectionx/vitest";
@@ -12,7 +13,7 @@ import { execute } from "./execute.js";
 import { InMemoryStream } from "@tisyn/durable-streams";
 import type { YieldEvent } from "@tisyn/kernel";
 
-// IR for: yield* useConfig() → ExternalEval("__config", Q(null))
+// IR for: yield* useConfig(Token) → ExternalEval("__config", Q(null))
 const useConfigIr = {
   tisyn: "eval",
   id: "__config",

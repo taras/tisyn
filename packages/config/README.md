@@ -19,6 +19,7 @@ This package defines the shape of configuration. It does not resolve environment
 ```typescript
 import {
   workflow, agent, transport, env, journal, entrypoint, server,
+  configToken, useConfig,
 } from "@tisyn/config";
 
 export default workflow({
@@ -54,8 +55,35 @@ export default workflow({
 | `journal.memory()` | `MemoryJournalDescriptor` |
 | `entrypoint(config?)` | `EntrypointDescriptor` |
 | `server.websocket({ port, static? })` | `ServerDescriptor` |
+| `configToken<T>()` | `ConfigToken<T>` |
 
 Transport, journal path, server port, and stdio command/args positions accept `EnvDescriptor` nodes for deferred environment resolution.
+
+### Config Token and `useConfig()`
+
+`ConfigToken<T>` is a typed anchor for accessing resolved config inside workflows. The token carries the projected config type `T` at compile time:
+
+```typescript
+import { configToken, useConfig } from "@tisyn/config";
+
+type AppConfig = {
+  agents: Array<{ id: string }>;
+  journal: { kind: string; path?: string };
+};
+
+export const AppConfigToken = configToken<AppConfig>();
+```
+
+Workflow code accesses the resolved config projection via `yield* useConfig(Token)`:
+
+```typescript
+function* main(): Workflow<void> {
+  const config = yield* useConfig(AppConfigToken);
+  // config is statically typed as AppConfig
+}
+```
+
+The compiler erases the token and emits `ExternalEval("__config", Q(null))`. At runtime, the `__config` effect returns the resolved config from `ExecuteOptions.config`. `useConfig()` throws if called outside the Tisyn compiler.
 
 ## Validation
 

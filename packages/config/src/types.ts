@@ -116,3 +116,9 @@ export interface ServerDescriptor {
   readonly port: number | EnvDescriptor;
   readonly static?: string;
 }
+
+// ── Config Token ──
+
+export interface ConfigToken<_T> {
+  readonly __tisyn_config_token__: unique symbol;
+}

@@ -1,8 +1,8 @@
 /**
- * Compiler tests for yield* useConfig().
+ * Compiler tests for yield* useConfig(Token).
  *
- * useConfig() is an authored form that lowers to ExternalEval("__config", Q(null)).
- * Unlike useAgent(), it is NOT erased — it returns a value that can be bound.
+ * useConfig(Token) is an authored form that lowers to ExternalEval("__config", Q(null)).
+ * The token argument provides static typing and is erased by the compiler.
  */
 
 import { describe, it, expect } from "vitest";
@@ -28,10 +28,11 @@ function findNode(node: unknown, id: string): Record<string, any> | undefined {
 }
 
 describe("useConfig compilation", () => {
-  it("yield* useConfig() compiles to ExternalEval(__config, Q(null))", () => {
+  it("yield* useConfig(Token) compiles to ExternalEval(__config, Q(null))", () => {
     const ir = compileOne(`
+      declare const AppToken: ConfigToken<{debug: boolean}>;
       function* f(): Workflow<void> {
-        yield* useConfig();
+        yield* useConfig(AppToken);
       }
     `);
     const configNode = findNode(ir, "__config");
@@ -39,10 +40,11 @@ describe("useConfig compilation", () => {
     expect(configNode!.data).toEqual({ tisyn: "quote", expr: null });
   });
 
-  it("const cfg = yield* useConfig() binds the result to a variable", () => {
+  it("const cfg = yield* useConfig(Token) binds the result to a variable", () => {
     const ir = compileOne(`
+      declare const AppToken: ConfigToken<{debug: boolean}>;
       function* f(): Workflow<void> {
-        const cfg = yield* useConfig();
+        const cfg = yield* useConfig(AppToken);
       }
     `);
     const configNode = findNode(ir, "__config");
@@ -54,21 +56,44 @@ describe("useConfig compilation", () => {
     expect(json).toContain('"__config"');
   });
 
-  it("yield* useConfig('arg') → compile error UC1", () => {
+  it("yield* useConfig() (no args) → compile error UC1", () => {
     expect(() =>
       compileOne(`
         function* f(): Workflow<void> {
-          yield* useConfig("arg");
+          yield* useConfig();
         }
       `),
     ).toThrow("UC1");
   });
 
-  it("yield* useConfig() inside spawn body compiles", () => {
+  it("yield* useConfig(a, b) (multiple args) → compile error UC1", () => {
+    expect(() =>
+      compileOne(`
+        declare const A: ConfigToken<unknown>;
+        declare const B: ConfigToken<unknown>;
+        function* f(): Workflow<void> {
+          yield* useConfig(A, B);
+        }
+      `),
+    ).toThrow("UC1");
+  });
+
+  it('yield* useConfig("string") (non-identifier) → compile error UC2', () => {
+    expect(() =>
+      compileOne(`
+        function* f(): Workflow<void> {
+          yield* useConfig("not-an-identifier");
+        }
+      `),
+    ).toThrow("UC2");
+  });
+
+  it("yield* useConfig(Token) inside spawn body compiles", () => {
     const ir = compileOne(`
+      declare const AppToken: ConfigToken<{debug: boolean}>;
       function* f(): Workflow<void> {
         yield* spawn(function* () {
-          const cfg = yield* useConfig();
+          const cfg = yield* useConfig(AppToken);
         });
       }
     `);
