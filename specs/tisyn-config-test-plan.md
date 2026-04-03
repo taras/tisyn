@@ -26,7 +26,13 @@ This test plan covers:
 - Environment reference model
 - Resolution boundary and startup ordering
 - Secret handling and redaction
-- `useConfig()` semantic contract (R1–R4)
+- Resolution pipeline projection (CT-PROJECT)
+
+> **Deferred:** `useConfig()` semantic contract (R1–R4) is deferred to the
+> companion compiler/runtime integration spec. This MVP validates the
+> resolution pipeline as pure functions; authored `yield* useConfig()`
+> access requires compiler recognition and a runtime config context that
+> do not yet exist.
 
 This test plan does NOT cover:
 
@@ -75,8 +81,8 @@ incidental representation details:
 - Validation tests assert rejection of invalid inputs and
   acceptance of valid inputs.
 - Resolution tests assert correct resolved values.
-- `useConfig()` tests assert observable semantic guarantees
-  (R1–R4).
+- Projection tests assert correct resolved output shapes
+  from the resolution pipeline.
 
 Where multiple tests exercise variants of the same rule,
 they MAY be implemented as parameterized cases under one
@@ -88,8 +94,9 @@ conformance requirement.
   Covers constructors, validation, walking.
 - **Integration tests.** Descriptor + runtime resolution.
   Requires process environment manipulation.
-- **Behavioral tests.** `useConfig()` contract verification.
-  Requires a running workflow context.
+- **Behavioral tests.** *(Deferred)* `useConfig()` contract
+  verification. Requires a running workflow context and
+  compiler support not present in this MVP.
 
 ## 5. Fixture Strategy
 
@@ -255,7 +262,7 @@ single diagnostic and fail." This is MUST-level. P0.
 | CFG-SEC-002 | P0 | Integration | §8.1 | Resolved secret does not appear in validation error messages produced by config or runtime infrastructure |
 | CFG-SEC-003 | P0 | Integration | §8.1 | Resolved secret does not appear in diagnostic or verbose output produced by config or runtime infrastructure |
 | CFG-SEC-004 | P0 | Integration | §8.1 | Resolved secret does not appear in log output produced by config or runtime infrastructure |
-| CFG-SEC-005 | P0 | Behavioral | R4 | Resolved secret IS available in `useConfig()` return value (runtime memory) |
+| CFG-SEC-005 | P0 | Integration | §8.1 | Resolved secret IS present in projected config output (runtime memory, not a human-readable surface) |
 
 **Note on redaction scope.** The config spec §8.1 enumerates
 surfaces: diagnostic messages, log output, validation error
@@ -345,8 +352,9 @@ specs.
 - Environment resolution tests require `process.env`
   manipulation. Test infrastructure MUST restore env
   state after each test.
-- `useConfig()` behavioral tests require a minimal runtime
-  context. The test plan does not prescribe scaffolding.
+- `useConfig()` behavioral tests (Category I) are deferred.
+  They require compiler recognition and a runtime config
+  context not present in this MVP.
 - CFG-OVR-003 (entrypoint agent append) tests the current
   normative rule and is contingent on config spec Q2.
 - Compiler-integrated validations (C) require metadata
@@ -359,7 +367,8 @@ specs.
   against `@tisyn/config` alone.
 - Categories D, E, G, H, J require `@tisyn/runtime` or
   equivalent resolution infrastructure.
-- Category I requires a workflow execution context.
+- Category I is **deferred** — requires compiler recognition
+  of `yield* useConfig()` and a runtime config context.
 - Category C requires compiler metadata integration.
 
 ---
@@ -379,9 +388,11 @@ specs.
    surfaces added later must be re-validated against
    CFG-SEC-002 through CFG-SEC-004.
 
-4. **`useConfig()` / invocation-args separation.** The
-   boundary is the sharpest architectural invariant.
-   CFG-USE-004 and CFG-USE-009 prevent silent collapse.
+4. **`useConfig()` / invocation-args separation.** *(Deferred)*
+   The boundary is the sharpest architectural invariant.
+   CFG-USE-004 and CFG-USE-009 will prevent silent collapse
+   once the companion compiler/runtime integration spec
+   delivers authored `useConfig()` access.
 
 5. **Resolution ordering.** CFG-ORD-001 and CFG-ORD-002
    are the only tests enforcing overlay-before-validation
