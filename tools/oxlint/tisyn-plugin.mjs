@@ -6,6 +6,32 @@ function isFunctionLike(node) {
   return node?.type === "ArrowFunctionExpression" || node?.type === "FunctionExpression";
 }
 
+function isGeneratorFunctionLike(node) {
+  return (
+    node?.generator === true &&
+    (node.type === "FunctionDeclaration" || node.type === "FunctionExpression")
+  );
+}
+
+function getSingleReturnYield(node) {
+  const statements = node?.body?.body;
+  if (!Array.isArray(statements) || statements.length !== 1) {
+    return null;
+  }
+
+  const [statement] = statements;
+  if (statement?.type !== "ReturnStatement") {
+    return null;
+  }
+
+  const argument = statement.argument;
+  if (argument?.type !== "YieldExpression" || argument.delegate !== true || !argument.argument) {
+    return null;
+  }
+
+  return argument;
+}
+
 function getWrappedCallbackBody(node) {
   if (node?.type !== "YieldExpression" || node.delegate !== true) {
     return null;
@@ -124,11 +150,67 @@ const noLocalCallWrapper = {
   },
 };
 
+function getNamedGeneratorTarget(node) {
+  if (node.type === "FunctionDeclaration" && node.id) {
+    return node.id;
+  }
+
+  if (
+    node.type === "FunctionExpression" &&
+    node.parent?.type === "VariableDeclarator" &&
+    node.parent.id?.type === "Identifier"
+  ) {
+    return node.parent.id;
+  }
+
+  return null;
+}
+
+const noTrivialGeneratorWrapper = {
+  meta: {
+    type: "problem",
+    docs: {
+      description:
+        "Disallow generator helpers whose entire body is a single return yield* wrapper.",
+    },
+    schema: [],
+  },
+  create(context) {
+    function check(node) {
+      if (!isGeneratorFunctionLike(node)) {
+        return;
+      }
+
+      const target = getNamedGeneratorTarget(node);
+      if (!target) {
+        return;
+      }
+
+      if (!getSingleReturnYield(node)) {
+        return;
+      }
+
+      context.report({
+        node: target,
+        message:
+          `Generator '${target.name}' only delegates with return yield*. ` +
+          `Prefer a plain function that returns the delegated operation directly.`,
+      });
+    }
+
+    return {
+      FunctionDeclaration: check,
+      FunctionExpression: check,
+    };
+  },
+};
+
 export default {
   meta: {
     name: "tisyn",
   },
   rules: {
     "no-local-call-wrapper": noLocalCallWrapper,
+    "no-trivial-generator-wrapper": noTrivialGeneratorWrapper,
   },
 };

@@ -902,13 +902,13 @@ function* orchestrateTimebox(
  * All transport sessions and the enforcement middleware are owned by this scoped() block
  * and torn down when it exits.
  */
-function* orchestrateScope(
+function orchestrateScope(
   inner: ScopeInner,
   childId: string,
   env: Env,
   ctx: DriveContext,
 ): Operation<Val> {
-  return yield* scoped(function* () {
+  return scoped(function* () {
     const scope = yield* useScope();
     const current = scope.get(BoundAgentsContext) ?? null;
     const next = new Set(current ?? []);

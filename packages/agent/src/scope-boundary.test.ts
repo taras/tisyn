@@ -158,9 +158,9 @@ describe("scope boundaries", () => {
       },
     });
 
-    function* subworkflow() {
+    function subworkflow() {
       // This is a plain generator call — no scope boundary
-      return yield* dispatch("test.op", null);
+      return dispatch("test.op", null);
     }
 
     yield* subworkflow();
