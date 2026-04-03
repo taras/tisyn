@@ -22,10 +22,10 @@ Almost every other Tisyn package depends on this one, directly or indirectly.
 
 This package provides the core building blocks for working with Tisyn programs as data:
 
-- expression and value types such as `TisynExpr`, `Val`, `Json`, `TisynFn`, `ScopeNode`, and `ScopeShape`
-- constructor helpers such as `Fn`, `Ref`, `Let`, `Call`, `Try`, `Eval`, `All`, and `Race`
+- expression and value types such as `TisynExpr`, `Val`, `Json`, `TisynFn`, `ScopeNode`, `ScopeShape`, `TimeboxNode`, and `TimeboxShape`
+- constructor helpers such as `Fn`, `Ref`, `Let`, `Call`, `Try`, `Eval`, `All`, `Race`, and `Timebox`
 - traversal and transformation utilities such as `walk()`, `fold()`, and `transform()`
-- inspection and developer tooling such as `classifyNode()`, `collectRefs()`, `print()`, and `decompile()`
+- inspection and developer tooling such as `classifyNode()`, `collectRefs()`, `print()`, and `decompile()`, including compound externals like `timebox`
 
 ## Core Concepts
 
@@ -59,6 +59,8 @@ The API surface is broad, but it falls into a few clear groups.
 - `IrInput` — validated input shapes accepted by IR-consuming APIs
 - `ScopeShape` — the payload shape for a `scope` eval node: `{ handler, bindings, body }`
 - `ScopeNode` — an eval node with `id: "scope"` carrying a `ScopeShape` in a Quote
+- `TimeboxShape` — the payload shape for a `timebox` eval node: `{ duration, body }`
+- `TimeboxNode` — an eval node with `id: "timebox"` carrying a `TimeboxShape` in a Quote
 
 ### Constructors
 
@@ -84,6 +86,7 @@ Use these to build IR programmatically:
 - `Race` — evaluate multiple expressions concurrently and resolve with the first result
 - `Resource` — declare a resource with an init/cleanup lifecycle and a provided value
 - `Provide` — yield a value from a resource body to its parent
+- `Timebox` — declare a deadline-bounded compound external with a duration expression and body
 
 ### Classification and guards
 
@@ -113,8 +116,8 @@ Use these to analyze or rewrite IR trees:
 
 Use these for debugging, testing, and inspection:
 
-- `print` — stable constructor-style rendering
-- `decompile` — readable TypeScript-like rendering
+- `print` — stable constructor-style rendering, including `timebox(...)`
+- `decompile` — readable TypeScript-like rendering, including `timebox(...)`
 
 ## Example
 
@@ -130,6 +133,14 @@ Function-shaped IR values are data too:
 import { Add, Fn, Ref } from "@tisyn/ir";
 
 const double = Fn(["x"], Add(Ref("x"), Ref("x")));
+```
+
+Compound externals can be built directly too:
+
+```ts
+import { Timebox } from "@tisyn/ir";
+
+const bounded = Timebox(5000, "done");
 ```
 
 ## Relationship to the Rest of Tisyn
