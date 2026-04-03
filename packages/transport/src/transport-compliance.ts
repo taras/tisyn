@@ -317,10 +317,12 @@ export function transportComplianceSuite(name: string, createFactory: TransportF
             expect(messages.some((m) => m.method === "execute")).toBe(true);
           });
           yield* task.halt();
+          // Wait for the cancel message to appear (sent asynchronously during teardown)
+          yield* when(function* () {
+            const cancelMessages = messages.filter((m) => m.method === "cancel");
+            expect(cancelMessages.length).toBeGreaterThanOrEqual(1);
+          });
         });
-
-        const cancelMessages = messages.filter((m) => m.method === "cancel");
-        expect(cancelMessages.length).toBeGreaterThanOrEqual(1);
       });
     });
 
