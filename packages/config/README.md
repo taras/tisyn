@@ -1,8 +1,18 @@
-# @tisyn/config
+# `@tisyn/config`
 
-Pure constructors, types, validation, and walking for Tisyn workflow configuration descriptors.
+`@tisyn/config` provides pure constructors, types, validation, and walking for Tisyn workflow configuration descriptors.
 
 This package owns the **descriptor data model** — tagged data structures that declare a workflow's runtime topology (agents, transports, environment references, journals, entrypoints, servers). All constructors are pure functions that return serializable data within the `tisyn_config` tagged domain.
+
+## Where It Fits
+
+`@tisyn/config` sits between authored configuration and runtime resolution.
+
+- Authors use the constructor vocabulary to declare workflow topology.
+- `@tisyn/runtime` resolves descriptors into workflow-visible config projections.
+- `@tisyn/cli` loads and validates descriptors during `tsn run` and `tsn check`.
+
+This package defines the shape of configuration. It does not resolve environment variables, apply entrypoint overlays, or project runtime-visible config — those responsibilities belong to `@tisyn/runtime`.
 
 ## Constructor Vocabulary
 
@@ -83,6 +93,26 @@ walkConfig(descriptor, (node, path) => {
 // Collect all environment variable references
 const envNodes = collectEnvNodes(descriptor);
 ```
+
+## Relationship to the Rest of Tisyn
+
+- [`@tisyn/runtime`](../runtime/README.md) resolves descriptors into workflow-visible config projections using `applyOverlay()`, `resolveEnv()`, and `resolveConfig()`.
+- [`@tisyn/cli`](../cli/README.md) loads descriptor modules and uses `collectEnvNodes()` for `tsn check --env-example`.
+- [`@tisyn/compiler`](../compiler/README.md) is independent of config — it compiles workflows, not descriptors.
+
+## Boundaries
+
+`@tisyn/config` owns:
+
+- descriptor data model and tagged constructors
+- config validation (V1-V10)
+- config tree walking and env node collection
+
+`@tisyn/config` does not own:
+
+- environment resolution or entrypoint overlay application (owned by `@tisyn/runtime`)
+- descriptor module loading or CLI integration (owned by `@tisyn/cli`)
+- workflow compilation or IR (owned by `@tisyn/compiler`)
 
 ## Specification
 
