@@ -6,5 +6,12 @@
   },
   "include": ["src"],
   "exclude": ["src/**/*.test.ts"],
-  "references": [{ "path": "../compiler" }]
+  "references": [
+    { "path": "../compiler" },
+    { "path": "../config" },
+    { "path": "../durable-streams" },
+    { "path": "../ir" },
+    { "path": "../runtime" },
+    { "path": "../transport" }
+  ]
 }

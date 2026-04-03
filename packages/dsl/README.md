@@ -1,14 +1,18 @@
-# @tisyn/dsl
+# `@tisyn/dsl`
 
-Parser for the Tisyn Constructor DSL. Converts constructor-call text into Tisyn IR by calling the real `@tisyn/ir` constructor functions. The parser is the inverse of `print()`.
+`@tisyn/dsl` parses Tisyn Constructor DSL text into IR by calling the real `@tisyn/ir` constructor functions. The parser is the inverse of `print()` — it round-trips between text and IR.
 
-```typescript
-import {
-  parseDSL, parseDSLSafe, parseDSLWithRecovery,
-  tryAutoClose, DSLParseError,
-  print,
-} from "@tisyn/dsl";
-```
+This package is the bridge between human-readable or LLM-generated constructor text and executable Tisyn IR.
+
+## Where It Fits
+
+`@tisyn/dsl` sits between text representations and the IR layer.
+
+- `@tisyn/ir` defines the IR node shapes and provides `print()` for serialization.
+- `@tisyn/dsl` parses constructor text back into those IR nodes.
+- `@tisyn/validate` checks that parsed IR is well-formed.
+
+Use this package when you need to convert constructor-call text into IR, especially from LLM-generated output or developer tooling.
 
 ## Round-trip
 
@@ -29,7 +33,7 @@ const reparsed = parseDSL(text);   // structurally equal to ir
 | `parseDSLSafe` | no | no | you want a discriminated result |
 | `parseDSLWithRecovery` | no | yes | input is LLM-generated and may be truncated |
 
-## API
+## Main APIs
 
 ### `parseDSL(source: string): TisynExpr`
 
@@ -82,20 +86,7 @@ Attempts to close unbalanced delimiters and re-parse. Returns the repaired strin
 
 Re-exported from `@tisyn/ir`. Serializes IR to Constructor DSL text.
 
-## Error format
-
-```
-DSLParseError: <message> (line N, col M)
-  .line: number
-  .column: number
-  .offset: number  // UTF-16 code-unit offset
-```
-
-## Package boundaries
-
-`@tisyn/dsl` owns syntax parsing and truncation recovery. `print` is re-exported here for convenience when working with text round-trips. Semantic validation of IR belongs to `@tisyn/validate`.
-
-## Macro constructors
+## Macro Constructors
 
 `Converge(probe, until, interval, timeout)` is a macro constructor — it expands at parse time into a `Timebox` node containing a recursive polling loop. The expansion is identical to the IR produced by the authored `yield* converge({ ... })` form.
 
@@ -106,7 +97,36 @@ const ir = parseDSL('Converge(42, Fn(["x"], Gt(Ref("x"), 0)), 100, 5000)');
 // Produces: Timebox(5000, Let("__until_0", ..., Let("__poll_0", ..., Call(...))))
 ```
 
-## V1 limitations
+## Error Format
+
+```
+DSLParseError: <message> (line N, col M)
+  .line: number
+  .column: number
+  .offset: number  // UTF-16 code-unit offset
+```
+
+## Relationship to the Rest of Tisyn
+
+- [`@tisyn/ir`](../ir/README.md) defines the IR node shapes that this package parses into, and provides `print()` for the forward direction.
+- [`@tisyn/validate`](../validate/README.md) checks that parsed IR is structurally valid.
+- [`@tisyn/runtime`](../runtime/README.md) executes the IR that this package produces.
+
+## Boundaries
+
+`@tisyn/dsl` owns:
+
+- constructor DSL parsing
+- truncation recovery for LLM-generated input
+- macro constructor expansion (`Converge`)
+
+`@tisyn/dsl` does not own:
+
+- IR node definitions or `print()` serialization (owned by `@tisyn/ir`)
+- semantic IR validation (owned by `@tisyn/validate`)
+- workflow compilation from TypeScript (owned by `@tisyn/compiler`)
+
+## V1 Limitations
 
 - No streaming parse.
-- No type checking beyond the constructor-level shape constraints in §5.1 of the spec.
+- No type checking beyond the constructor-level shape constraints in the spec.

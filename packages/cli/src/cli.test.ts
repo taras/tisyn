@@ -8,6 +8,7 @@
 import { describe, it } from "@effectionx/vitest";
 import { expect, afterEach } from "vitest";
 import { call } from "effection";
+import type { Operation } from "effection";
 import { exec } from "@effectionx/process";
 import { mkdtemp, writeFile, mkdir, rm, readFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
@@ -16,6 +17,11 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { topoSort, runGenerate, runBuild } from "./compile.js";
 import { discoverConfig, validateAndResolveConfig, ConfigError } from "./config.js";
+import { buildInputSchema } from "@tisyn/compiler";
+import { deriveFlags, parseInputFlags, formatInputHelp } from "./inputs.js";
+import { CliError } from "./load-descriptor.js";
+import { rebaseConfigPaths } from "./run.js";
+import type { ResolvedConfig } from "@tisyn/runtime";
 
 // ── Temp dir helpers ──────────────────────────────────────────────────────────
 
@@ -308,5 +314,444 @@ describe("CLI entry surface", () => {
   it("generate with missing input exits non-zero", function* () {
     const result = yield* exec("node", { arguments: [CLI_BIN, "generate"] }).join();
     expect(result.code).not.toBe(0);
+  });
+
+  it("run --help exits 0 and prints command-level help", function* () {
+    const result = yield* exec("node", { arguments: [CLI_BIN, "run", "--help"] }).join();
+    expect(result.code ?? 0).toBe(0);
+    expect(result.stdout).toContain("run");
+    expect(result.stdout).toContain("module");
+  });
+
+  it("check --help exits 0 and prints command-level help", function* () {
+    const result = yield* exec("node", { arguments: [CLI_BIN, "check", "--help"] }).join();
+    expect(result.code ?? 0).toBe(0);
+    expect(result.stdout).toContain("check");
+    expect(result.stdout).toContain("env-example");
+  });
+
+  it("run with missing module argument exits non-zero", function* () {
+    const result = yield* exec("node", { arguments: [CLI_BIN, "run"] }).join();
+    expect(result.code).not.toBe(0);
+  });
+
+  it("check with missing module argument exits non-zero", function* () {
+    const result = yield* exec("node", { arguments: [CLI_BIN, "check"] }).join();
+    expect(result.code).not.toBe(0);
+  });
+
+  it("run with nonexistent descriptor exits 3", function* () {
+    const result = yield* exec("node", {
+      arguments: [CLI_BIN, "run", "/tmp/nonexistent-descriptor.ts"],
+    }).join();
+    expect(result.code).toBe(3);
+  });
+
+  it("check with nonexistent descriptor exits 3", function* () {
+    const result = yield* exec("node", {
+      arguments: [CLI_BIN, "check", "/tmp/nonexistent-descriptor.ts"],
+    }).join();
+    expect(result.code).toBe(3);
+  });
+});
+
+// ── Input flag parsing ──────────────────────────────────────────────────────
+
+describe("input flag parsing", () => {
+  it("derives kebab-case flags from camelCase fields", function* () {
+    const schema = buildInputSchema(["{ maxTurns: number; modelName: string }"]);
+    const flags = deriveFlags(schema);
+    expect(flags).toHaveLength(2);
+    expect(flags[0]!.flag).toBe("max-turns");
+    expect(flags[1]!.flag).toBe("model-name");
+  });
+
+  it("parses string and number flags", function* () {
+    const schema = buildInputSchema(["{ name: string; count: number }"]);
+    const flags = deriveFlags(schema);
+    const parsed = parseInputFlags(flags, ["--name", "hello", "--count", "42"]);
+    expect(parsed).toEqual({ name: "hello", count: 42 });
+  });
+
+  it("parses boolean presence flags", function* () {
+    const schema = buildInputSchema(["{ debug: boolean }"]);
+    const flags = deriveFlags(schema);
+    const parsed = parseInputFlags(flags, ["--debug"]);
+    expect(parsed).toEqual({ debug: true });
+  });
+
+  it("boolean flag absent → false", function* () {
+    const schema = buildInputSchema(["{ debug: boolean }"]);
+    const flags = deriveFlags(schema);
+    const parsed = parseInputFlags(flags, []);
+    expect(parsed).toEqual({ debug: false });
+  });
+
+  it("unknown flag → exit 4", function* () {
+    const schema = buildInputSchema(["{ name: string }"]);
+    const flags = deriveFlags(schema);
+    expect(() => parseInputFlags(flags, ["--unknown", "val"])).toThrow(CliError);
+    try {
+      parseInputFlags(flags, ["--unknown", "val"]);
+    } catch (e) {
+      expect((e as CliError).exitCode).toBe(4);
+    }
+  });
+
+  it("missing required flag → exit 4", function* () {
+    const schema = buildInputSchema(["{ name: string }"]);
+    const flags = deriveFlags(schema);
+    expect(() => parseInputFlags(flags, [])).toThrow(CliError);
+    try {
+      parseInputFlags(flags, []);
+    } catch (e) {
+      expect((e as CliError).exitCode).toBe(4);
+    }
+  });
+
+  it("number coercion failure → exit 4", function* () {
+    const schema = buildInputSchema(["{ count: number }"]);
+    const flags = deriveFlags(schema);
+    expect(() => parseInputFlags(flags, ["--count", "abc"])).toThrow(CliError);
+    try {
+      parseInputFlags(flags, ["--count", "abc"]);
+    } catch (e) {
+      expect((e as CliError).exitCode).toBe(4);
+    }
+  });
+
+  it("optional field not provided → omitted from result", function* () {
+    const schema = buildInputSchema(["{ name: string; tag?: string }"]);
+    const flags = deriveFlags(schema);
+    const parsed = parseInputFlags(flags, ["--name", "hello"]);
+    expect(parsed).toEqual({ name: "hello" });
+  });
+
+  it("formatInputHelp produces readable output", function* () {
+    const schema = buildInputSchema(["{ name: string; debug?: boolean }"]);
+    const flags = deriveFlags(schema);
+    const help = formatInputHelp(flags);
+    expect(help).toContain("--name");
+    expect(help).toContain("(required)");
+    expect(help).toContain("--debug");
+    expect(help).toContain("(optional)");
+  });
+});
+
+// ── rebaseConfigPaths ─────────────────────────────────────────────────────────
+
+describe("rebaseConfigPaths", () => {
+  it("resolves relative local transport module path", function* () {
+    const config: ResolvedConfig = {
+      agents: [{ id: "a", transport: { kind: "local", module: "./agent.js" } }],
+      journal: { kind: "memory" },
+    };
+    rebaseConfigPaths(config, "/project/descriptors");
+    expect(config.agents[0]!.transport.module).toBe("/project/descriptors/agent.js");
+  });
+
+  it("leaves absolute transport module path unchanged", function* () {
+    const config: ResolvedConfig = {
+      agents: [{ id: "a", transport: { kind: "inprocess", module: "/abs/agent.js" } }],
+      journal: { kind: "memory" },
+    };
+    rebaseConfigPaths(config, "/project/descriptors");
+    expect(config.agents[0]!.transport.module).toBe("/abs/agent.js");
+  });
+
+  it("resolves relative server static path", function* () {
+    const config: ResolvedConfig = {
+      agents: [],
+      journal: { kind: "memory" },
+      server: { kind: "http", port: 3000, static: "./public" },
+    };
+    rebaseConfigPaths(config, "/project/descriptors");
+    expect(config.server!.static).toBe("/project/descriptors/public");
+  });
+
+  it("resolves relative file journal path", function* () {
+    const config: ResolvedConfig = {
+      agents: [],
+      journal: { kind: "file", path: "./data/journal.log" },
+    };
+    rebaseConfigPaths(config, "/project/descriptors");
+    expect(config.journal.path).toBe("/project/descriptors/data/journal.log");
+  });
+
+  it("resolves relative worker URL that looks like a file path", function* () {
+    const config: ResolvedConfig = {
+      agents: [{ id: "w", transport: { kind: "worker", url: "./worker.js" } }],
+      journal: { kind: "memory" },
+    };
+    rebaseConfigPaths(config, "/project/descriptors");
+    expect(config.agents[0]!.transport.url).toBe("/project/descriptors/worker.js");
+  });
+
+  it("leaves worker URL with protocol unchanged", function* () {
+    const config: ResolvedConfig = {
+      agents: [{ id: "w", transport: { kind: "worker", url: "http://localhost:4000/worker.js" } }],
+      journal: { kind: "memory" },
+    };
+    rebaseConfigPaths(config, "/project/descriptors");
+    expect(config.agents[0]!.transport.url).toBe("http://localhost:4000/worker.js");
+  });
+
+  it("resolves relative stdio command starting with ./", function* () {
+    const config: ResolvedConfig = {
+      agents: [{ id: "s", transport: { kind: "stdio", command: "./bin/agent" } }],
+      journal: { kind: "memory" },
+    };
+    rebaseConfigPaths(config, "/project/descriptors");
+    expect(config.agents[0]!.transport.command).toBe("/project/descriptors/bin/agent");
+  });
+});
+
+// ── Fixture helpers for E2E tests ─────────────────────────────────────────────
+
+const FIXTURE_WORKFLOW = `
+export const myWorkflow = {
+  tisyn: "fn",
+  params: ["input"],
+  body: { tisyn: "eval", code: "Q(null)" },
+};
+export const inputSchemas = {
+  myWorkflow: {
+    type: "object",
+    fields: [
+      { name: "maxTurns", fieldType: "number", optional: false },
+      { name: "modelName", fieldType: "string", optional: true },
+    ],
+  },
+};
+`;
+
+const FIXTURE_WORKFLOW_NO_SCHEMA = `
+export const myWorkflow = {
+  tisyn: "fn",
+  params: ["input"],
+  body: { tisyn: "eval", code: "Q(null)" },
+};
+`;
+
+const FIXTURE_WORKFLOW_UNSUPPORTED = `
+export const myWorkflow = {
+  tisyn: "fn",
+  params: ["input"],
+  body: { tisyn: "eval", code: "Q(null)" },
+};
+export const inputSchemas = {
+  myWorkflow: { type: "unsupported", reason: "tuple parameter" },
+};
+`;
+
+const FIXTURE_WORKFLOW_NONE = `
+export const myWorkflow = {
+  tisyn: "fn",
+  params: [],
+  body: { tisyn: "eval", code: "Q(null)" },
+};
+export const inputSchemas = {
+  myWorkflow: { type: "none" },
+};
+`;
+
+const FIXTURE_WORKFLOW_EMPTY_OBJECT = `
+export const myWorkflow = {
+  tisyn: "fn",
+  params: ["input"],
+  body: { tisyn: "eval", code: "Q(null)" },
+};
+export const inputSchemas = {
+  myWorkflow: { type: "object", fields: [] },
+};
+`;
+
+function descriptorSource(opts?: { entrypoints?: boolean; serverEntrypoint?: boolean }): string {
+  let entrypoints = "";
+  if (opts?.serverEntrypoint) {
+    entrypoints = `entrypoints: { dev: { tisyn_config: "entrypoint", server: { tisyn_config: "server", kind: "websocket", port: 0 } } },`;
+  } else if (opts?.entrypoints) {
+    entrypoints = `entrypoints: { dev: { tisyn_config: "entrypoint" }, staging: { tisyn_config: "entrypoint" } },`;
+  }
+  // serverEntrypoint tests need a valid agent (V2 requires non-empty agents)
+  const agents = opts?.serverEntrypoint
+    ? `agents: [{ tisyn_config: "agent", id: "dummy", transport: { tisyn_config: "transport", kind: "websocket", url: "ws://localhost:9999" } }],`
+    : "agents: [],";
+  return `
+export default {
+  tisyn_config: "workflow",
+  run: { export: "myWorkflow", module: "./workflow.generated.mjs" },
+  ${agents}
+  journal: { tisyn_config: "journal", kind: "memory" },
+  ${entrypoints}
+};
+`;
+}
+
+function* writeFixture(
+  dir: string,
+  workflow: string,
+  descriptorOpts?: { entrypoints?: boolean; serverEntrypoint?: boolean },
+): Operation<string> {
+  yield* call(() => writeFile(join(dir, "workflow.generated.mjs"), workflow));
+  const descriptorPath = join(dir, "descriptor.mjs");
+  yield* call(() => writeFile(descriptorPath, descriptorSource(descriptorOpts)));
+  return descriptorPath;
+}
+
+// ── argv partitioning ─────────────────────────────────────────────────────────
+
+describe("argv partitioning", () => {
+  it("--verbose after module is not rejected as unknown workflow flag", function* () {
+    const dir = yield* call(makeTempDir);
+    const descriptorPath = yield* writeFixture(dir, FIXTURE_WORKFLOW);
+    const result = yield* exec("node", {
+      arguments: [CLI_BIN, "run", descriptorPath, "--verbose", "--max-turns", "5"],
+    }).join();
+    // Must not exit 4 with "Unknown flag: --verbose"
+    expect(result.code).not.toBe(4);
+    expect(result.stderr).not.toContain("Unknown flag: --verbose");
+  });
+
+  it("--entrypoint after module is not rejected as unknown workflow flag", function* () {
+    const dir = yield* call(makeTempDir);
+    const descriptorPath = yield* writeFixture(dir, FIXTURE_WORKFLOW, { entrypoints: true });
+    const result = yield* exec("node", {
+      arguments: [CLI_BIN, "run", descriptorPath, "--entrypoint", "dev", "--max-turns", "5"],
+    }).join();
+    // Must not exit 4 with "Unknown flag: --entrypoint"
+    expect(result.code).not.toBe(4);
+    expect(result.stderr).not.toContain("Unknown flag: --entrypoint");
+  });
+
+  it("workflow-only flags parse correctly without built-in leakage", function* () {
+    const dir = yield* call(makeTempDir);
+    const descriptorPath = yield* writeFixture(dir, FIXTURE_WORKFLOW);
+    const result = yield* exec("node", {
+      arguments: [CLI_BIN, "run", descriptorPath, "--max-turns", "10"],
+    }).join();
+    // Must not exit 4 — max-turns is a valid workflow flag
+    expect(result.code).not.toBe(4);
+  });
+});
+
+// ── dynamic help ──────────────────────────────────────────────────────────────
+
+describe("dynamic help", () => {
+  it("tsn run <module> --help shows workflow-derived flags", function* () {
+    const dir = yield* call(makeTempDir);
+    const descriptorPath = yield* writeFixture(dir, FIXTURE_WORKFLOW);
+    const result = yield* exec("node", {
+      arguments: [CLI_BIN, "run", descriptorPath, "--help"],
+    }).join();
+    expect(result.code ?? 0).toBe(0);
+    expect(result.stdout).toContain("--max-turns");
+    expect(result.stdout).toContain("--model-name");
+    expect(result.stdout).toContain("--entrypoint");
+  });
+
+  it("tsn run <module> --help shows entrypoints", function* () {
+    const dir = yield* call(makeTempDir);
+    const descriptorPath = yield* writeFixture(dir, FIXTURE_WORKFLOW, { entrypoints: true });
+    const result = yield* exec("node", {
+      arguments: [CLI_BIN, "run", descriptorPath, "--help"],
+    }).join();
+    expect(result.code ?? 0).toBe(0);
+    expect(result.stdout).toContain("Entrypoints:");
+    expect(result.stdout).toContain("dev");
+    expect(result.stdout).toContain("staging");
+  });
+
+  it("tsn run <nonexistent> --help shows built-in help plus diagnostic", function* () {
+    const result = yield* exec("node", {
+      arguments: [CLI_BIN, "run", "/tmp/nonexistent-descriptor-help.mjs", "--help"],
+    }).join();
+    expect(result.code).toBe(3);
+    expect(result.stdout).toContain("Usage: tsn run");
+    expect(result.stderr).toContain("Could not load workflow");
+  });
+
+  it("tsn run <module> --help with unsupported schema shows diagnostic", function* () {
+    const dir = yield* call(makeTempDir);
+    const descriptorPath = yield* writeFixture(dir, FIXTURE_WORKFLOW_UNSUPPORTED);
+    const result = yield* exec("node", {
+      arguments: [CLI_BIN, "run", descriptorPath, "--help"],
+    }).join();
+    expect(result.code).toBe(2);
+    expect(result.stdout).toContain("Usage: tsn run");
+    expect(result.stderr).toContain("unsupported input parameters");
+  });
+
+  it("tsn run <module> --help with missing schema shows diagnostic", function* () {
+    const dir = yield* call(makeTempDir);
+    const descriptorPath = yield* writeFixture(dir, FIXTURE_WORKFLOW_NO_SCHEMA);
+    const result = yield* exec("node", {
+      arguments: [CLI_BIN, "run", descriptorPath, "--help"],
+    }).join();
+    expect(result.code).toBe(2);
+    expect(result.stdout).toContain("Usage: tsn run");
+    expect(result.stderr).toContain("input schema metadata");
+  });
+});
+
+// ── unknown tokens in workflow-input remainder ──────────────────────────────
+
+describe("unknown tokens in workflow-input remainder", () => {
+  it("zero-parameter workflow rejects unknown flags with exit 4", function* () {
+    const dir = yield* call(makeTempDir);
+    const descriptorPath = yield* writeFixture(dir, FIXTURE_WORKFLOW_NONE);
+    const result = yield* exec("node", {
+      arguments: [CLI_BIN, "run", descriptorPath, "--bogus"],
+    }).join();
+    expect(result.code).toBe(4);
+    expect(result.stderr).toContain("Unknown flag: --bogus");
+  });
+
+  it("empty-object-schema workflow rejects unknown flags with exit 4", function* () {
+    const dir = yield* call(makeTempDir);
+    const descriptorPath = yield* writeFixture(dir, FIXTURE_WORKFLOW_EMPTY_OBJECT);
+    const result = yield* exec("node", {
+      arguments: [CLI_BIN, "run", descriptorPath, "--bogus"],
+    }).join();
+    expect(result.code).toBe(4);
+    expect(result.stderr).toContain("Unknown flag: --bogus");
+  });
+
+  it("unknown short flag -x after module exits with code 4", function* () {
+    const dir = yield* call(makeTempDir);
+    const descriptorPath = yield* writeFixture(dir, FIXTURE_WORKFLOW);
+    const result = yield* exec("node", {
+      arguments: [CLI_BIN, "run", descriptorPath, "-x", "--max-turns", "5"],
+    }).join();
+    expect(result.code).toBe(4);
+    expect(result.stderr).toContain("Unexpected argument: -x");
+  });
+
+  it("bare positional arg after module exits with code 4", function* () {
+    const dir = yield* call(makeTempDir);
+    const descriptorPath = yield* writeFixture(dir, FIXTURE_WORKFLOW);
+    const result = yield* exec("node", {
+      arguments: [CLI_BIN, "run", descriptorPath, "stray", "--max-turns", "5"],
+    }).join();
+    expect(result.code).toBe(4);
+    expect(result.stderr).toContain("Unexpected argument: stray");
+  });
+});
+
+// ── entrypoint overlay ───────────────────────────────��──────────────────────
+
+describe("entrypoint overlay", () => {
+  it("entrypoint-introduced server does not fail V10 base validation", function* () {
+    const dir = yield* call(makeTempDir);
+    const descriptorPath = yield* writeFixture(dir, FIXTURE_WORKFLOW_NONE, {
+      serverEntrypoint: true,
+    });
+    const result = yield* exec("node", {
+      arguments: [CLI_BIN, "run", descriptorPath, "-e", "dev"],
+    }).join();
+    // Must not fail with config validation / V10 error
+    expect(result.code).not.toBe(5);
+    expect(result.stderr).not.toContain("V10");
+    expect(result.stderr).not.toContain("Config validation failed");
   });
 });

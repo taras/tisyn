@@ -517,11 +517,16 @@ The generated module includes:
 - **compiled workflow IR constants** exported as `const`
 - **grouped exports** named `agents` and `workflows`
 
+The generated module also includes:
+
+- **input schema metadata** exported as `inputSchemas`, a map from workflow name to structured schema describing the workflow's invocation parameters. The CLI uses this metadata to derive CLI flags for `tsn run`.
+
 Additional notes:
 
 - Type-only imports used by contract signatures are forwarded automatically.
 - Contracts and workflows are emitted in alphabetical order for deterministic output.
 - Generated code is build output and should not be edited by hand.
+- `yield* useConfig()` is a recognized authored form that compiles to `ExternalEval("__config", Q(null))`. It takes no arguments and returns the resolved config projection at runtime.
 
 ## Agent ID Naming
 

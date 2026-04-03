@@ -13,7 +13,15 @@ import {
   stringArraySchema,
   stringSchema,
 } from "./schemas.js";
-import type { BuildCommandOptions, GenerateCommandOptions } from "./types.js";
+import { runCheck } from "./check.js";
+import { runRun, runHelp } from "./run.js";
+import { CliError } from "./load-descriptor.js";
+import type {
+  BuildCommandOptions,
+  CheckCommandOptions,
+  GenerateCommandOptions,
+  RunCommandOptions,
+} from "./types.js";
 
 const _require = createRequire(import.meta.url);
 const { version } = _require("../package.json") as { version: string };
@@ -71,6 +79,46 @@ const app = program({
         },
       }),
     },
+    run: {
+      description: "execute a workflow from a descriptor module",
+      ...object({
+        module: {
+          description: "path to workflow descriptor module",
+          ...field(stringSchema, cli.argument()),
+        },
+        entrypoint: {
+          description: "named entrypoint to apply",
+          aliases: ["-e"],
+          ...field(optionalStringSchema),
+        },
+        verbose: {
+          description: "show detailed diagnostics",
+          ...field(booleanSchema, field.default(false)),
+        },
+      }),
+    },
+    check: {
+      description: "validate descriptor readiness without executing",
+      ...object({
+        module: {
+          description: "path to workflow descriptor module",
+          ...field(stringSchema, cli.argument()),
+        },
+        entrypoint: {
+          description: "named entrypoint to apply",
+          aliases: ["-e"],
+          ...field(optionalStringSchema),
+        },
+        "env-example": {
+          description: "print env template and exit",
+          ...field(booleanSchema, field.default(false)),
+        },
+        verbose: {
+          description: "show detailed diagnostics",
+          ...field(booleanSchema, field.default(false)),
+        },
+      }),
+    },
   }),
 });
 
@@ -119,8 +167,43 @@ await main(function* () {
         yield* runBuild(passes, options, dirname(configPath));
         break;
       }
+      case "run": {
+        const raw = command.config as Record<string, unknown>;
+        const runOptions: RunCommandOptions = {
+          module: raw.module as string,
+          entrypoint: raw.entrypoint as string | undefined,
+          verbose: (raw.verbose as boolean) ?? false,
+        };
+        const extraArgv = parsed.remainder.args ?? [];
+
+        // Dynamic help: tsn run <module> --help
+        if (extraArgv.includes("--help") || extraArgv.includes("-h")) {
+          yield* runHelp(runOptions, process.cwd());
+          break;
+        }
+
+        yield* runRun(runOptions, process.cwd(), extraArgv);
+        break;
+      }
+      case "check": {
+        const raw = command.config as Record<string, unknown>;
+        const checkOptions: CheckCommandOptions = {
+          module: raw.module as string,
+          entrypoint: raw.entrypoint as string | undefined,
+          envExample: (raw["env-example"] as boolean) ?? false,
+          verbose: (raw.verbose as boolean) ?? false,
+        };
+        yield* runCheck(checkOptions, process.cwd());
+        break;
+      }
     }
   } catch (error) {
+    if (error instanceof CliError) {
+      console.error(error.message);
+      yield* exit(error.exitCode);
+      return;
+    }
+
     if (error instanceof ConfigError) {
       console.error(error.message);
       yield* exit(2);
