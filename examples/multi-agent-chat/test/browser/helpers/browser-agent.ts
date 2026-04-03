@@ -1,4 +1,4 @@
-import { call } from "effection";
+import { call, type Operation } from "effection";
 import type { ImplementationHandlers } from "@tisyn/agent";
 import type { Browser, BrowserContext, Page } from "playwright";
 import { Browser as BrowserDecl } from "../host-workflows.generated.js";
@@ -21,9 +21,11 @@ function activePage(state: BrowserAgentState): Page {
   return session.page;
 }
 
-async function injectExecutor(page: Page): Promise<void> {
-  await page.addScriptTag({ path: EXECUTOR_BUNDLE_PATH });
-  await page.waitForFunction(() => typeof (window as any).__tisyn_execute === "function");
+function* injectExecutor(page: Page): Operation<void> {
+  yield* call(() => page.addScriptTag({ path: EXECUTOR_BUNDLE_PATH }));
+  yield* call(() =>
+    page.waitForFunction(() => typeof (window as any).__tisyn_execute === "function"),
+  );
 }
 
 type BrowserHandlers = ImplementationHandlers<ReturnType<typeof BrowserDecl>["operations"]>;
@@ -33,15 +35,16 @@ export function createBrowserAgentHandlers(state: BrowserAgentState): BrowserHan
     *open() {
       const page = activePage(state);
       yield* call(() => page.goto(state.appUrl));
-      yield* call(() => injectExecutor(page));
+      yield* injectExecutor(page);
     },
     *close() {
-      yield* call(() => activePage(state).close());
+      const page = activePage(state);
+      yield* call(() => page.close());
     },
     *reload() {
       const page = activePage(state);
       yield* call(() => page.reload());
-      yield* call(() => injectExecutor(page));
+      yield* injectExecutor(page);
     },
     *openSession({ input }) {
       const context = yield* call(() => state.browser.newContext());
@@ -49,7 +52,7 @@ export function createBrowserAgentHandlers(state: BrowserAgentState): BrowserHan
       state.sessions.set(input.sessionId, { context, page });
       state.activeSessionId = input.sessionId;
       yield* call(() => page.goto(state.appUrl));
-      yield* call(() => injectExecutor(page));
+      yield* injectExecutor(page);
     },
     *switchSession({ input }) {
       if (!state.sessions.has(input.sessionId)) {

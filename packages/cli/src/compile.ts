@@ -13,15 +13,13 @@ import { ConfigError } from "./config.js";
 
 export function* runGenerate(options: GenerateCommandOptions, cwd: string): Operation<void> {
   const inputPath = resolve(cwd, options.input);
-  const includePaths = yield* call(() => expandPatterns(options.include, cwd));
-  const assembled = yield* call(() =>
-    assembleSource({
-      inputPath,
-      workflowPaths: includePaths,
-      stubBlocks: [],
-      stripImportsFrom: new Set(),
-    }),
-  );
+  const includePaths = yield* expandPatterns(options.include, cwd);
+  const assembled = yield* assembleSource({
+    inputPath,
+    workflowPaths: includePaths,
+    stubBlocks: [],
+    stripImportsFrom: new Set(),
+  });
 
   const inputRelPath = relative(cwd, inputPath) || inputPath;
   const filename = options.output
@@ -62,11 +60,11 @@ export function* runBuild(
 
   for (const pass of passes) {
     outputsToPass.set(pass.output, pass.name);
-    const workflowPaths = yield* call(() => expandPatterns(pass.include, configDir));
+    const workflowPaths = yield* expandPatterns(pass.include, configDir);
     sourcesByPass.set(pass.name, [pass.input, ...workflowPaths]);
   }
 
-  const graph = yield* call(() => inferDependencyGraph(passes, sourcesByPass, outputsToPass));
+  const graph = yield* inferDependencyGraph(passes, sourcesByPass, outputsToPass);
   const ordered = topoSort(
     passes.map((pass) => pass.name),
     graph,
@@ -87,14 +85,12 @@ export function* runBuild(
       [...(graph.get(name) ?? [])].map((depName) => passByName.get(depName)!.output),
     );
     const workflowPaths = sourcesByPass.get(name)!.filter((path) => path !== pass.input);
-    const assembled = yield* call(() =>
-      assembleSource({
-        inputPath: pass.input,
-        workflowPaths,
-        stubBlocks: deps.map(createStubBlock),
-        stripImportsFrom,
-      }),
-    );
+    const assembled = yield* assembleSource({
+      inputPath: pass.input,
+      workflowPaths,
+      stubBlocks: deps.map(createStubBlock),
+      stripImportsFrom,
+    });
 
     const filename = relative(configDir, pass.output) || pass.output;
     let result: GenerateResult;
@@ -117,11 +113,11 @@ export function* runBuild(
   }
 }
 
-async function inferDependencyGraph(
+function* inferDependencyGraph(
   passes: ResolvedPass[],
   sourcesByPass: Map<string, string[]>,
   outputsToPass: Map<string, string>,
-): Promise<Map<string, Set<string>>> {
+): Operation<Map<string, Set<string>>> {
   const graph = new Map<string, Set<string>>();
 
   for (const pass of passes) {
@@ -131,7 +127,7 @@ async function inferDependencyGraph(
   for (const pass of passes) {
     const deps = graph.get(pass.name)!;
     for (const sourcePath of sourcesByPass.get(pass.name) ?? []) {
-      const source = await readFile(sourcePath, "utf-8");
+      const source = yield* call(() => readFile(sourcePath, "utf-8"));
       const sourceFile = ts.createSourceFile(
         sourcePath,
         source,
@@ -220,18 +216,18 @@ function selectPasses(
   return selected;
 }
 
-async function assembleSource(input: {
+function* assembleSource(input: {
   inputPath: string;
   workflowPaths: string[];
   stubBlocks: string[];
   stripImportsFrom: Set<string>;
-}): Promise<{ source: string }> {
-  const declarationSource = await readFile(input.inputPath, "utf-8");
-  const workflowSources = await Promise.all(
-    input.workflowPaths.map(async (path) =>
-      stripImportsFromSource(await readFile(path, "utf-8"), path, input.stripImportsFrom),
-    ),
-  );
+}): Operation<{ source: string }> {
+  const declarationSource = yield* call(() => readFile(input.inputPath, "utf-8"));
+  const workflowSources: string[] = [];
+  for (const path of input.workflowPaths) {
+    const source = yield* call(() => readFile(path, "utf-8"));
+    workflowSources.push(stripImportsFromSource(source, path, input.stripImportsFrom));
+  }
 
   const parts = [declarationSource];
   if (input.stubBlocks.length > 0) {
@@ -242,12 +238,18 @@ async function assembleSource(input: {
   return { source: parts.filter(Boolean).join("\n\n") };
 }
 
-async function expandPatterns(patterns: string[], cwd: string): Promise<string[]> {
+function* expandPatterns(patterns: string[], cwd: string): Operation<string[]> {
   const files = new Set<string>();
   for (const pattern of patterns) {
-    for await (const match of glob(pattern, { cwd })) {
-      const path = resolve(cwd, match);
-      files.add(path);
+    const matches = yield* call(async () => {
+      const found: string[] = [];
+      for await (const match of glob(pattern, { cwd })) {
+        found.push(match);
+      }
+      return found;
+    });
+    for (const match of matches) {
+      files.add(resolve(cwd, match));
     }
   }
   return [...files].sort();
