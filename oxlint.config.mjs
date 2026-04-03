@@ -5,5 +5,6 @@ export default defineConfig({
   ignorePatterns: ["tools/oxlint/test/fixtures/*"],
   rules: {
     "tisyn/no-local-call-wrapper": "error",
+    "tisyn/no-trivial-generator-wrapper": "error",
   },
 });
