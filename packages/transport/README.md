@@ -129,6 +129,11 @@ The browser transport provides two host-visible operations:
 
 The transport owns one implicit current page. `navigate` changes it, `execute` runs against it. No multi-page API in v1.
 
+This package-level browser contract is intentionally narrower than the richer
+Browser agents used by some test harnesses or examples. The generic contract is
+about page location and batched in-browser execution, not standardized DOM
+methods like `click` or `fill`.
+
 ### Requirements
 
 `playwright-core` is an optional peer dependency, required only for real-browser mode:

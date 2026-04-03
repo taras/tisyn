@@ -19,6 +19,11 @@ Specification v0.3.0. It covers:
 - compiler acceptance of the browser contract authored form
 - runtime scope orchestration and replay semantics
 
+This plan applies to the generic `@tisyn/transport/browser`
+contract only. Richer Browser agent surfaces used in test
+harnesses or examples are out of scope here and are specified
+separately.
+
 ---
 
 ## 2. Test Suites

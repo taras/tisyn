@@ -149,6 +149,25 @@ or roll back side effects.
 
 ## 3. Execution Flow
 
+### 3.0 Browser Execution Boundary
+
+The browser transport is a specialized case of the general
+execution-layer-to-agent boundary.
+
+In v1 it exposes two host-visible operations:
+
+- `Browser.navigate({ url })`, which changes the transport-owned
+  implicit current page
+- `Browser.execute({ workflow })`, which sends IR into that page
+  for local execution
+
+This is intentionally not a per-DOM-operation transport API.
+DOM-facing work is expected to run inside `Browser.execute(...)`
+through browser-local capabilities installed by the transport's
+executor environment. At the host level, the journal records one
+outer browser effect result per `navigate` or `execute` call, not
+one event per inner browser-local action.
+
 ### 3.1 End-to-End: One Effect
 
 The path of a single agent method call through the entire system:

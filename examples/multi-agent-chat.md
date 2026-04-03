@@ -13,6 +13,11 @@ multiple boundaries:
 This is not an autonomous multi-agent system. Agents do not talk to each
 other. The host is the only orchestrator.
 
+The browser-facing contract in this demo is example-specific. It should not be
+read as the canonical generic browser transport contract for Tisyn. The
+generic transport-level browser contract is specified separately in
+`specs/tisyn-browser-contract-specification.md` and is intentionally narrower.
+
 ## Goals
 
 The demo should prove all of the following:
@@ -99,6 +104,10 @@ It does not own:
 ### Browser Agent Gateway
 
 The browser gateway is a real agent boundary between the host and the browser.
+
+For this demo, the gateway exposes app-specific operations like
+`waitForUser(...)` and `showAssistantMessage(...)`. Those are not intended to
+be the generic reusable browser transport API for Tisyn as a whole.
 
 It owns:
 

@@ -11,6 +11,11 @@
 This document specifies how Tisyn-orchestrated acceptance tests drive real
 browser UI against a real host process for the multi-agent-chat example.
 
+This is a harness-specific orchestration spec. Its Browser agent surface is
+for the acceptance-test runner and example workflow suite; it is not the
+canonical generic browser transport contract defined by
+`specs/tisyn-browser-contract-specification.md`.
+
 Each acceptance test is a Tisyn workflow that coordinates two agents -- a Host
 agent and a Browser agent -- while a runner owns all process lifecycle, browser
 context creation, and readiness probing. Workflows assume the system is ready
@@ -36,6 +41,9 @@ transitions (reload, restart).
 
 - Replacing the existing WebSocket-level e2e test in `test/e2e.test.ts`.
 - Exposing Playwright APIs directly in workflow source.
+- Defining the generic `@tisyn/transport/browser` contract. That contract is
+  specified separately and intentionally narrower than this harness-specific
+  Browser agent.
 - Using `data-testid` or any non-accessible selector.
 - Modeling the entire test suite as a single workflow.
 - Testing Tisyn internals through protocol-level message assertions.

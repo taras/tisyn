@@ -213,10 +213,10 @@ interface BrowserTransportConfig {
 ### 6.2 Execution Modes
 
 **In-process mode** (`executor` omitted): the transport executes
-IR directly using the kernel evaluator with the configured
-capabilities. Each execute call creates a fresh scoped
-environment, installs capabilities, and runs the IR. Navigate
-is unsupported in this mode and throws an error:
+IR locally in the host process using the standard runtime with
+the configured capabilities. Each execute call creates a fresh
+scoped environment, installs capabilities, and runs the IR.
+Navigate is unsupported in this mode and throws an error:
 `"Browser.navigate requires real-browser mode (provide executor config)"`.
 
 **Real-browser mode** (`executor` provided): the transport
