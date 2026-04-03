@@ -1105,7 +1105,8 @@ a CLI feature.
 - **`Config.useConfig()` semantic contract** (§7.5): Semantic
   rules specified. Typed token binding is implemented
   via `ConfigToken<T>` (see Compiler Specification §4.6).
-  Runtime config is execution-scoped via `ConfigContext`.
+  Runtime config is execution-scoped via the config-scope
+  abstraction (`provideConfig`/`readConfig`).
 - **Security constraints** (§8): Fully specified.
 
 ### Needs Companion Spec

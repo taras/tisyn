@@ -8,7 +8,7 @@
  */
 
 import type { Operation } from "effection";
-import { spawn, ensure, scoped, withResolvers, createContext } from "effection";
+import { spawn, ensure, scoped, withResolvers } from "effection";
 import type { TisynExpr as Expr, Val, Json, IrInput } from "@tisyn/ir";
 import {
   type DurableEvent,
@@ -38,6 +38,7 @@ import {
 import { installAgentTransport, type AgentTransportFactory } from "@tisyn/transport";
 import { useScope } from "effection";
 import type { FnNode } from "@tisyn/ir";
+import { provideConfig, readConfig } from "./config-scope.js";
 
 export interface ExecuteOptions {
   /** The IR tree to evaluate. */
@@ -48,7 +49,11 @@ export interface ExecuteOptions {
   stream?: DurableStream;
   /** Coroutine ID for the root task. Defaults to "root". */
   coroutineId?: string;
-  /** Resolved config projection for `yield* Config.useConfig(Token)`. */
+  /**
+   * @internal Resolved config projection — seeds the runtime config scope.
+   * Not part of the public API. Config is owned by the runtime config-scope
+   * mechanism; this field exists as an internal seeding shim.
+   */
   config?: Record<string, unknown>;
 }
 
@@ -71,14 +76,6 @@ interface DriveContext {
   /** Stream subscription map shared across all coroutines in the execution. */
   subscriptions: Map<string, SubscriptionEntry>;
 }
-
-/**
- * Execution-scoped config context.
- *
- * Set once at the start of execute() from the resolved config projection.
- * Read by `__config` effect dispatch via scope.get(ConfigContext).
- */
-export const ConfigContext = createContext<Record<string, unknown> | null>("$config", null);
 
 interface ScopeInner {
   handler: FnNode | null;
@@ -147,9 +144,8 @@ export function* execute(options: ExecuteOptions): Operation<ExecuteResult> {
   }
 
   return yield* scoped(function* () {
-    // Seed the execution-scoped config context
-    const scope = yield* useScope();
-    scope.set(ConfigContext, configRecord);
+    // Seed the execution-scoped config
+    yield* provideConfig(configRecord);
 
     // Phase 2: Read journal, build ReplayIndex
     const storedEvents = yield* stream.readAll();
@@ -591,8 +587,7 @@ function* driveKernel(
         try {
           let resultValue: Val;
           if (descriptor.id === "__config") {
-            const cfgScope = yield* useScope();
-            resultValue = (cfgScope.get(ConfigContext) ?? null) as Val;
+            resultValue = yield* readConfig();
           } else if (descriptor.id === "stream.subscribe") {
             const token = `sub:${coroutineId}:${subscriptionCounter++}`;
             const sourceData = descriptor.data as unknown[];
@@ -1252,8 +1247,7 @@ function* orchestrateResourceChild(
         try {
           let resultValue: Val;
           if (descriptor.id === "__config") {
-            const cfgScope = yield* useScope();
-            resultValue = (cfgScope.get(ConfigContext) ?? null) as Val;
+            resultValue = yield* readConfig();
           } else if (descriptor.id === "stream.subscribe") {
             const token = `sub:${childId}:${subscriptionCounter++}`;
             const sourceData = descriptor.data as unknown[];
@@ -1588,8 +1582,7 @@ function* orchestrateResourceChild(
         try {
           let resultValue: Val;
           if (descriptor.id === "__config") {
-            const cfgScope = yield* useScope();
-            resultValue = (cfgScope.get(ConfigContext) ?? null) as Val;
+            resultValue = yield* readConfig();
           } else if (descriptor.id === "stream.subscribe") {
             const token = `sub:${childId}:${subscriptionCounter++}`;
             const sourceData = descriptor.data as unknown[];

@@ -2,11 +2,11 @@
  * Runtime tests for the __config journaled effect.
  *
  * The __config effect is emitted by compiled `yield* Config.useConfig(Token)` and
- * returns the resolved config projection from the runtime ConfigContext.
+ * returns the resolved config projection from the runtime config-scope.
  * The token argument is erased at compile time — it does not reach the runtime.
  * The effect is journaled like any standard external effect for replay safety.
  *
- * Tests use execute({ config }) which internally seeds ConfigContext.
+ * Tests use execute()'s internal config seeding shim.
  */
 
 import { describe, it } from "@effectionx/vitest";
