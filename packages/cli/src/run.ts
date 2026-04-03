@@ -52,7 +52,7 @@ export function* runRun(
   extraArgv: string[],
 ): Operation<void> {
   const modulePath = resolve(cwd, options.module);
-  const { merged, workflowPath, exportName, workflowExport } = yield* loadRunMetadata(
+  const { descriptor, workflowPath, exportName, workflowExport } = yield* loadRunMetadata(
     modulePath,
     options.entrypoint,
   );
@@ -70,19 +70,15 @@ export function* runRun(
     );
   }
 
-  let inputFlags: FlagInfo = { flags: [], parsed: {} };
-  if (workflowExport.inputSchema.type === "object") {
-    const flags = deriveFlags(workflowExport.inputSchema);
-    if (flags.length > 0) {
-      const parsed = parseInputFlags(flags, extraArgv);
-      inputFlags = { flags, parsed };
-    }
-  }
+  const flags =
+    workflowExport.inputSchema.type === "object" ? deriveFlags(workflowExport.inputSchema) : [];
+  const parsed = parseInputFlags(flags, extraArgv);
+  const inputFlags: FlagInfo = { flags, parsed };
 
   // Phase C: Resolve environment
   let resolvedProjection;
   try {
-    resolvedProjection = resolveConfig(merged, {
+    resolvedProjection = resolveConfig(descriptor, {
       entrypoint: options.entrypoint,
       processEnv: process.env as Record<string, string>,
     });
@@ -107,8 +103,15 @@ export function* runRun(
 
   // Start server if present (resource provides after listening)
   if (resolvedProjection.server) {
-    const { address } = yield* startServer(resolvedProjection.server);
-    console.log(`Server listening on http://localhost:${address.port}`);
+    try {
+      const { address } = yield* startServer(resolvedProjection.server);
+      console.log(`Server listening on http://localhost:${address.port}`);
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      console.error(`Server failed to start: ${msg}`);
+      yield* exit(6);
+      return;
+    }
   }
 
   // Execute workflow

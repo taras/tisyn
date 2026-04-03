@@ -237,6 +237,10 @@ unsupported shapes.
 | CLI-FLG-014 | P0 | E2E | §16.2 | `--verbose` after module does not leak into workflow flag parsing (not rejected as unknown) |
 | CLI-FLG-015 | P0 | E2E | §16.2 | `--entrypoint <name>` after module does not leak into workflow flag parsing |
 | CLI-FLG-016 | P0 | E2E | §16.2 | Built-in and workflow flags coexist: `--entrypoint dev --max-turns 10` parses both correctly |
+| CLI-FLG-017 | P0 | E2E | §9.4 | Unknown short flag `-x` after module → exit code 4 |
+| CLI-FLG-018 | P0 | E2E | §9.4 | Bare positional arg `stray` after module → exit code 4 |
+| CLI-FLG-019 | P0 | E2E | §9.4 | Zero-parameter workflow + unknown flag → exit code 4 |
+| CLI-FLG-020 | P0 | E2E | §9.4 | Empty-object-schema workflow + unknown flag → exit code 4 |
 
 ### H. Boolean v1 Semantics
 
@@ -297,7 +301,7 @@ namespacing, this test must be updated.
 | CLI-CHK-007 | P1 | E2E | §2.4 | Reports invocation input schema if derivation succeeds (MAY) |
 | CLI-CHK-008 | P0 | E2E | §2.4 | Schema derivation failure does NOT cause `tsn check` to fail |
 | CLI-CHK-009 | P0 | E2E | §2.4 | Does NOT validate specific invocation input values |
-| CLI-CHK-010 | P0 | E2E | §2.4 | `--env-example` generates `.env.example` file. Spec grounding: §2.4 options table. |
+| CLI-CHK-010 | P0 | E2E | §2.4 | `--env-example` prints environment variable template to stdout and exits 0. Spec grounding: §2.4 options table. |
 | CLI-CHK-011 | GOLDEN | Golden | §2.4 | Snapshot: `tsn check` output for `multi-agent` fixture |
 
 ### L. Startup Lifecycle Ordering
@@ -364,7 +368,7 @@ continued diagnostic collection. P1.
 | D. Descriptor loading | 8 | 0 | 0 | 8 |
 | E. Entrypoint selection | 4 | 0 | 0 | 4 |
 | F. Input schema contract | 11 | 0 | 0 | 11 |
-| G. Flag derivation | 16 | 0 | 0 | 16 |
+| G. Flag derivation | 20 | 0 | 0 | 20 |
 | H. Boolean v1 | 7 | 0 | 0 | 7 |
 | I. Flag collision | 2 | 1 | 0 | 3 |
 | J. Help generation | 8 | 2 | 1 | 11 |
@@ -373,7 +377,7 @@ continued diagnostic collection. P1.
 | M. Exit codes | 13 | 1 | 0 | 14 |
 | N. Combined reporting | 0 | 1 | 0 | 1 |
 | O. Golden/snapshot | 0 | 0 | 7 | 7 |
-| **Total** | **103** | **7** | **9** | **119** |
+| **Total** | **107** | **7** | **9** | **123** |
 
 GOLDEN counts are **orthogonal output-stability coverage**,
 not a third priority bucket parallel to P0/P1. An

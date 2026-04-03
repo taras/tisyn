@@ -64,6 +64,7 @@ export function parseInputFlags(flags: FlagDefinition[], argv: string[]): Record
   while (i < argv.length) {
     const arg = argv[i]!;
     if (!arg.startsWith("--")) {
+      errors.push(`Unexpected argument: ${arg}`);
       i++;
       continue;
     }

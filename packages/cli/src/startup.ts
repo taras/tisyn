@@ -142,7 +142,12 @@ export function startServer(serverConfig: ResolvedServer): Operation<ServerInfo>
     const wss = new WebSocketServer({ server: httpServer });
 
     const listening = withResolvers<void>();
-    httpServer.listen(serverConfig.port, listening.resolve);
+    const onError = (err: Error) => listening.reject(err);
+    httpServer.on("error", onError);
+    httpServer.listen(serverConfig.port, () => {
+      httpServer.off("error", onError);
+      listening.resolve();
+    });
     yield* listening.operation;
 
     try {

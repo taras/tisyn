@@ -544,15 +544,44 @@ export const inputSchemas = {
 };
 `;
 
-function descriptorSource(opts?: { entrypoints?: boolean }): string {
-  const entrypoints = opts?.entrypoints
-    ? `entrypoints: { dev: { tisyn_config: "entrypoint" }, staging: { tisyn_config: "entrypoint" } },`
-    : "";
+const FIXTURE_WORKFLOW_NONE = `
+export const myWorkflow = {
+  tisyn: "fn",
+  params: [],
+  body: { tisyn: "eval", code: "Q(null)" },
+};
+export const inputSchemas = {
+  myWorkflow: { type: "none" },
+};
+`;
+
+const FIXTURE_WORKFLOW_EMPTY_OBJECT = `
+export const myWorkflow = {
+  tisyn: "fn",
+  params: ["input"],
+  body: { tisyn: "eval", code: "Q(null)" },
+};
+export const inputSchemas = {
+  myWorkflow: { type: "object", fields: [] },
+};
+`;
+
+function descriptorSource(opts?: { entrypoints?: boolean; serverEntrypoint?: boolean }): string {
+  let entrypoints = "";
+  if (opts?.serverEntrypoint) {
+    entrypoints = `entrypoints: { dev: { tisyn_config: "entrypoint", server: { tisyn_config: "server", kind: "websocket", port: 0 } } },`;
+  } else if (opts?.entrypoints) {
+    entrypoints = `entrypoints: { dev: { tisyn_config: "entrypoint" }, staging: { tisyn_config: "entrypoint" } },`;
+  }
+  // serverEntrypoint tests need a valid agent (V2 requires non-empty agents)
+  const agents = opts?.serverEntrypoint
+    ? `agents: [{ tisyn_config: "agent", id: "dummy", transport: { tisyn_config: "transport", kind: "websocket", url: "ws://localhost:9999" } }],`
+    : "agents: [],";
   return `
 export default {
   tisyn_config: "workflow",
   run: { export: "myWorkflow", module: "./workflow.generated.mjs" },
-  agents: [],
+  ${agents}
   journal: { tisyn_config: "journal", kind: "memory" },
   ${entrypoints}
 };
@@ -562,7 +591,7 @@ export default {
 function* writeFixture(
   dir: string,
   workflow: string,
-  descriptorOpts?: { entrypoints?: boolean },
+  descriptorOpts?: { entrypoints?: boolean; serverEntrypoint?: boolean },
 ): Operation<string> {
   yield* call(() => writeFile(join(dir, "workflow.generated.mjs"), workflow));
   const descriptorPath = join(dir, "descriptor.mjs");
@@ -662,5 +691,67 @@ describe("dynamic help", () => {
     expect(result.code).toBe(2);
     expect(result.stdout).toContain("Usage: tsn run");
     expect(result.stderr).toContain("input schema metadata");
+  });
+});
+
+// ── unknown tokens in workflow-input remainder ──────────────────────────────
+
+describe("unknown tokens in workflow-input remainder", () => {
+  it("zero-parameter workflow rejects unknown flags with exit 4", function* () {
+    const dir = yield* call(makeTempDir);
+    const descriptorPath = yield* writeFixture(dir, FIXTURE_WORKFLOW_NONE);
+    const result = yield* exec("node", {
+      arguments: [CLI_BIN, "run", descriptorPath, "--bogus"],
+    }).join();
+    expect(result.code).toBe(4);
+    expect(result.stderr).toContain("Unknown flag: --bogus");
+  });
+
+  it("empty-object-schema workflow rejects unknown flags with exit 4", function* () {
+    const dir = yield* call(makeTempDir);
+    const descriptorPath = yield* writeFixture(dir, FIXTURE_WORKFLOW_EMPTY_OBJECT);
+    const result = yield* exec("node", {
+      arguments: [CLI_BIN, "run", descriptorPath, "--bogus"],
+    }).join();
+    expect(result.code).toBe(4);
+    expect(result.stderr).toContain("Unknown flag: --bogus");
+  });
+
+  it("unknown short flag -x after module exits with code 4", function* () {
+    const dir = yield* call(makeTempDir);
+    const descriptorPath = yield* writeFixture(dir, FIXTURE_WORKFLOW);
+    const result = yield* exec("node", {
+      arguments: [CLI_BIN, "run", descriptorPath, "-x", "--max-turns", "5"],
+    }).join();
+    expect(result.code).toBe(4);
+    expect(result.stderr).toContain("Unexpected argument: -x");
+  });
+
+  it("bare positional arg after module exits with code 4", function* () {
+    const dir = yield* call(makeTempDir);
+    const descriptorPath = yield* writeFixture(dir, FIXTURE_WORKFLOW);
+    const result = yield* exec("node", {
+      arguments: [CLI_BIN, "run", descriptorPath, "stray", "--max-turns", "5"],
+    }).join();
+    expect(result.code).toBe(4);
+    expect(result.stderr).toContain("Unexpected argument: stray");
+  });
+});
+
+// ── entrypoint overlay ───────────────────────────────��──────────────────────
+
+describe("entrypoint overlay", () => {
+  it("entrypoint-introduced server does not fail V10 base validation", function* () {
+    const dir = yield* call(makeTempDir);
+    const descriptorPath = yield* writeFixture(dir, FIXTURE_WORKFLOW_NONE, {
+      serverEntrypoint: true,
+    });
+    const result = yield* exec("node", {
+      arguments: [CLI_BIN, "run", descriptorPath, "-e", "dev"],
+    }).join();
+    // Must not fail with config validation / V10 error
+    expect(result.code).not.toBe(5);
+    expect(result.stderr).not.toContain("V10");
+    expect(result.stderr).not.toContain("Config validation failed");
   });
 });

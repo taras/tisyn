@@ -215,7 +215,7 @@ tsn check <module> [options]
 | Flag | Alias | Description |
 | --- | --- | --- |
 | `--entrypoint <n>` | `-e` | Apply a named entrypoint overlay |
-| `--env-example` | | Generate `.env.example` from descriptor |
+| `--env-example` | | Print environment variable template to stdout |
 | `--help` | `-h` | Show help |
 
 **Scope.** `tsn check` validates two categories of
@@ -600,12 +600,13 @@ follow §8.3.
 
 ### 9.4 Unknown Flags
 
-During `tsn run` input parsing (§10.1 step 6), any CLI flag
-not matching a built-in option (§2.3) or a derived invocation
-input MUST cause exit code 4 with a diagnostic listing the
-unrecognized flag. This is an invocation input error, not a
-structural error, because it occurs after the input schema
-has been successfully derived.
+During `tsn run` input parsing (§10.1 step 6), any CLI
+token in the workflow-input remainder that does not match a
+derived invocation input MUST cause exit code 4 with a
+diagnostic. This includes unknown `--` flags, short flags
+(`-x`), and bare positional arguments. The v1 invocation
+surface is long flags only; no short-flag aliases or
+positional workflow arguments are supported.
 
 ### 9.5 Flag Collision
 
