@@ -25,6 +25,7 @@ import {
   MALFORMED_FN_BODY,
   STRUCTURAL_REQUIRES_QUOTE,
   QUOTE_AT_EVAL_POSITION,
+  TIMEBOX_DURATION_EXTERNAL,
 } from "./errors.js";
 
 const IR_DISCRIMINANTS = new Set(["eval", "quote", "ref", "fn"]);
@@ -287,6 +288,23 @@ function walkSemantic(value: unknown, path: string[], errors: ValidationError[])
         // provide data is evaluated (not Quote-wrapped), like join
         // No additional structural constraints beyond standard Eval grammar check
       }
+
+      if (id === "timebox") {
+        if (!isPlainObject(data) || (data as Record<string, unknown>)["tisyn"] !== "quote") {
+          errors.push({
+            level: 2,
+            path,
+            message: `Timebox node requires data to be a Quote node`,
+            code: MALFORMED_EVAL,
+          });
+          return;
+        }
+        const fields = (data as Record<string, unknown>)["expr"];
+        if (isPlainObject(fields)) {
+          checkPositions("timebox", fields as Record<string, unknown>, path, errors);
+          checkTimeboxConstraints(fields as Record<string, unknown>, path, errors);
+        }
+      }
       break;
     }
     case "quote": {
@@ -404,6 +422,66 @@ function checkResourceConstraints(
       message: `Resource node requires a "body" field`,
       code: MALFORMED_EVAL,
     });
+  }
+}
+
+function checkTimeboxConstraints(
+  fields: Record<string, unknown>,
+  path: string[],
+  errors: ValidationError[],
+): void {
+  if (!("duration" in fields)) {
+    errors.push({
+      level: 2,
+      path,
+      message: `Timebox node requires a "duration" field`,
+      code: MALFORMED_EVAL,
+    });
+  }
+  if (!("body" in fields)) {
+    errors.push({
+      level: 2,
+      path,
+      message: `Timebox node requires a "body" field`,
+      code: MALFORMED_EVAL,
+    });
+  }
+  // TB-V4: duration subtree must not contain external Eval nodes
+  if ("duration" in fields) {
+    checkNoExternalEvalInSubtree(fields["duration"], [...path, "data", "expr", "duration"], errors);
+  }
+}
+
+function checkNoExternalEvalInSubtree(
+  value: unknown,
+  path: string[],
+  errors: ValidationError[],
+): void {
+  if (value === null || typeof value !== "object") return;
+
+  if (Array.isArray(value)) {
+    for (let i = 0; i < value.length; i++) {
+      checkNoExternalEvalInSubtree(value[i], [...path, String(i)], errors);
+    }
+    return;
+  }
+
+  const obj = value as Record<string, unknown>;
+  if (obj["tisyn"] === "eval" && typeof obj["id"] === "string") {
+    const evalId = obj["id"] as string;
+    if (!isStructural(evalId)) {
+      errors.push({
+        level: 2,
+        path,
+        message: `Timebox duration must not contain external Eval "${evalId}" — duration must be synchronous`,
+        code: TIMEBOX_DURATION_EXTERNAL,
+      });
+      return;
+    }
+  }
+  // Recurse into all children
+  for (const [key, val] of Object.entries(obj)) {
+    checkNoExternalEvalInSubtree(val, [...path, key], errors);
   }
 }
 
@@ -528,6 +606,8 @@ function getEvaluationPositions(id: string, fields: Record<string, unknown>): un
       return fields["body"] !== undefined ? [fields["body"]] : [];
     case "resource":
       return fields["body"] !== undefined ? [fields["body"]] : [];
+    case "timebox":
+      return [fields["duration"], fields["body"]].filter((x) => x !== undefined);
     case "join":
       return [];
     case "provide":

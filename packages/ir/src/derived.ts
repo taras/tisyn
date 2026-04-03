@@ -32,6 +32,7 @@ import type {
   JoinNode,
   ResourceNode,
   ProvideNode,
+  TimeboxNode,
   ConcatArraysNode,
   MergeObjectsNode,
   TryNode,
@@ -82,6 +83,7 @@ export const COMPOUND_EXTERNAL_IDS = [
   "join",
   "resource",
   "provide",
+  "timebox",
 ] as const;
 
 export type CompoundExternalId = (typeof COMPOUND_EXTERNAL_IDS)[number];
@@ -125,7 +127,8 @@ export type CompoundExternalNode =
   | SpawnNode
   | JoinNode
   | ResourceNode
-  | ProvideNode;
+  | ProvideNode
+  | TimeboxNode;
 
 export interface StandardExternalEvalNode {
   readonly tisyn: "eval";

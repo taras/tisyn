@@ -48,6 +48,7 @@ import {
   JoinEval,
   ResourceEval,
   ProvideEval,
+  TimeboxEval,
 } from "./ir-builders.js";
 import { toAgentId } from "./agent-id.js";
 import { Counter } from "./counter.js";
@@ -180,6 +181,12 @@ function cloneScopeStackForSpawnBody(stack: ScopeFrame[]): ScopeFrame[] {
     }
     return newFrame;
   });
+}
+
+/** Check if an AST subtree contains any `yield*` expression. */
+function containsYieldStar(node: ts.Node): boolean {
+  if (ts.isYieldExpression(node) && node.asteriskToken) return true;
+  return ts.forEachChild(node, containsYieldStar) ?? false;
 }
 
 /** Snapshot current versions of all let bindings across the scope stack. */
@@ -3067,6 +3074,16 @@ function emitYieldStar(target: ts.Expression, ctx: EmitContext): Expr {
         return ExternalEval("sleep", args as unknown as Expr);
       }
 
+      // yield* timebox(duration, function* () { ... })
+      if (callee.text === "timebox") {
+        return emitTimebox(target, ctx);
+      }
+
+      // yield* converge({ probe, until, timeout, interval? })
+      if (callee.text === "converge") {
+        return emitConverge(target, ctx);
+      }
+
       // yield* each(...) outside for...of → E-STREAM-004
       if (callee.text === "each") {
         throw error(
@@ -3114,7 +3131,7 @@ function emitYieldStar(target: ts.Expression, ctx: EmitContext): Expr {
 
   throw error(
     "E010",
-    "yield* target must be an agent call, all/race, resource/provide, sleep, or sub-workflow",
+    "yield* target must be an agent call, all/race, resource/provide, sleep, timebox, converge, or sub-workflow",
     target,
     ctx,
   );
@@ -3320,6 +3337,229 @@ function emitResource(callExpr: ts.CallExpression, ctx: EmitContext): Expr {
   const bodyExpr = emitBlock(Array.from(arg.body.statements), bodyCtx);
 
   return ResourceEval(bodyExpr);
+}
+
+// ── Timebox ──
+
+function emitTimebox(callExpr: ts.CallExpression, ctx: EmitContext): Expr {
+  if (callExpr.arguments.length !== 2) {
+    throw error(
+      "E-TB-01",
+      "timebox() requires exactly 2 arguments: duration and generator function",
+      callExpr,
+      ctx,
+    );
+  }
+
+  const [durationArg, bodyArg] = callExpr.arguments;
+
+  if (!bodyArg || !ts.isFunctionExpression(bodyArg) || !bodyArg.asteriskToken) {
+    throw error(
+      "E-TB-02",
+      "timebox() second argument must be a generator function expression",
+      callExpr,
+      ctx,
+    );
+  }
+
+  const durationExpr = emitExpression(durationArg!, ctx);
+
+  const bodyCtx: EmitContext = {
+    ...ctx,
+    scopeStack: cloneScopeStackForSpawnBody(ctx.scopeStack),
+    handleBindings: undefined,
+  };
+  const bodyExpr = emitBlock(Array.from(bodyArg.body.statements), bodyCtx);
+
+  return TimeboxEval(durationExpr, bodyExpr);
+}
+
+// ── Converge ──
+
+function emitConverge(callExpr: ts.CallExpression, ctx: EmitContext): Expr {
+  if (callExpr.arguments.length !== 1) {
+    throw error("E-CONV-07", "converge() argument must be an object literal", callExpr, ctx);
+  }
+
+  const arg = callExpr.arguments[0]!;
+  if (!ts.isObjectLiteralExpression(arg)) {
+    throw error("E-CONV-07", "converge() argument must be an object literal", arg, ctx);
+  }
+
+  // Extract properties
+  let probeProp: ts.ObjectLiteralElementLike | undefined;
+  let untilProp: ts.ObjectLiteralElementLike | undefined;
+  let timeoutProp: ts.ObjectLiteralElementLike | undefined;
+  let intervalProp: ts.ObjectLiteralElementLike | undefined;
+
+  for (const prop of arg.properties) {
+    if (!ts.isPropertyAssignment(prop) || !ts.isIdentifier(prop.name)) continue;
+    switch (prop.name.text) {
+      case "probe":
+        probeProp = prop;
+        break;
+      case "until":
+        untilProp = prop;
+        break;
+      case "timeout":
+        timeoutProp = prop;
+        break;
+      case "interval":
+        intervalProp = prop;
+        break;
+    }
+  }
+
+  // Validate required properties
+  if (!timeoutProp || !ts.isPropertyAssignment(timeoutProp)) {
+    throw error("E-CONV-06", "converge() requires a timeout property", arg, ctx);
+  }
+  if (!intervalProp || !ts.isPropertyAssignment(intervalProp)) {
+    throw error("E-CONV-05", "converge() requires an interval property", arg, ctx);
+  }
+  if (!probeProp || !ts.isPropertyAssignment(probeProp)) {
+    throw error("E-CONV-01", "converge() probe must be a generator function expression", arg, ctx);
+  }
+  if (!untilProp || !ts.isPropertyAssignment(untilProp)) {
+    throw error("E-CONV-02", "converge() until must be an arrow function", arg, ctx);
+  }
+
+  // Validate probe: must be generator function*
+  const probeExpr = (probeProp as ts.PropertyAssignment).initializer;
+  if (!ts.isFunctionExpression(probeExpr) || !probeExpr.asteriskToken) {
+    throw error(
+      "E-CONV-01",
+      "converge() probe must be a generator function expression",
+      probeExpr,
+      ctx,
+    );
+  }
+
+  // Validate until: must be arrow with expression body and exactly one identifier parameter
+  const untilExpr = (untilProp as ts.PropertyAssignment).initializer;
+  if (!ts.isArrowFunction(untilExpr)) {
+    throw error("E-CONV-02", "converge() until must be an arrow function", untilExpr, ctx);
+  }
+  if (untilExpr.parameters.length !== 1) {
+    throw error("E-CONV-02", "converge() until must accept exactly one parameter", untilExpr, ctx);
+  }
+  if (!ts.isIdentifier(untilExpr.parameters[0]!.name)) {
+    throw error(
+      "E-CONV-02",
+      "converge() until parameter must be a simple identifier",
+      untilExpr.parameters[0]!,
+      ctx,
+    );
+  }
+  if (ts.isBlock(untilExpr.body)) {
+    throw error(
+      "E-CONV-03",
+      "converge() until must have an expression body (not a block body)",
+      untilExpr,
+      ctx,
+    );
+  }
+
+  // Scan for yield* in restricted positions
+  if (containsYieldStar(untilExpr.body)) {
+    throw error("E-CONV-04", "converge() until must not contain yield*", untilExpr.body, ctx);
+  }
+
+  const timeoutInitializer = (timeoutProp as ts.PropertyAssignment).initializer;
+  if (containsYieldStar(timeoutInitializer)) {
+    throw error("E-CONV-09", "converge() timeout must not contain yield*", timeoutInitializer, ctx);
+  }
+
+  const intervalInitializer = (intervalProp as ts.PropertyAssignment).initializer;
+  if (containsYieldStar(intervalInitializer)) {
+    throw error(
+      "E-CONV-08",
+      "converge() interval must not contain yield*",
+      intervalInitializer,
+      ctx,
+    );
+  }
+
+  // W-CONV-01: effectless probe should emit a warning, but the compiler
+  // currently has no warning channel. Deferred until a warning infrastructure
+  // is added. See converge amendment §5.1/AC1.
+
+  // Compile timeout and interval as expressions in the outer context
+  const timeoutExprIr = emitExpression(timeoutInitializer, ctx);
+  const intervalExprIr = emitExpression(intervalInitializer, ctx);
+
+  // Build child contexts for compilation
+  const timeboxBodyCtx: EmitContext = {
+    ...ctx,
+    scopeStack: cloneScopeStackForSpawnBody(ctx.scopeStack),
+    handleBindings: undefined,
+  };
+
+  // Get the until parameter name
+  const untilParam = untilExpr.parameters[0];
+  const untilParamName =
+    untilParam && ts.isIdentifier(untilParam.name) ? untilParam.name.text : "x";
+
+  // Compile until body with its own scope frame containing the parameter
+  const untilCtx: EmitContext = {
+    ...timeboxBodyCtx,
+    scopeStack: cloneScopeStack(timeboxBodyCtx.scopeStack),
+  };
+  pushFrame(untilCtx);
+  declareBinding(untilParamName, "const", untilCtx);
+  const untilBodyIr = emitExpression(untilExpr.body as ts.Expression, untilCtx);
+  popFrame(untilCtx);
+
+  // Compile probe body with timebox body context
+  const probeCtx: EmitContext = {
+    ...timeboxBodyCtx,
+    scopeStack: cloneScopeStack(timeboxBodyCtx.scopeStack),
+  };
+  const probeBodyIr = emitBlock(Array.from(probeExpr.body.statements), probeCtx);
+
+  // Generate synthetic names
+  const untilName = ctx.counter.next("until");
+  const pollName = ctx.counter.next("poll");
+  const probeName = ctx.counter.next("probe");
+  const discardName = ctx.counter.next("discard");
+
+  // Build lowered IR:
+  // TimeboxEval(timeout,
+  //   Let(__until, Fn([param], untilBody),
+  //     Let(__poll, Fn([],
+  //       Let(__probe, probeBody,
+  //         If(Call(Ref(__until), [Ref(__probe)]),
+  //           Ref(__probe),
+  //           Let(__discard, ExternalEval("sleep", [interval]),
+  //             Call(Ref(__poll), []))))),
+  //       Call(Ref(__poll), []))))
+  return TimeboxEval(
+    timeoutExprIr,
+    Let(
+      untilName,
+      Fn([untilParamName], untilBodyIr),
+      Let(
+        pollName,
+        Fn(
+          [],
+          Let(
+            probeName,
+            probeBodyIr,
+            If(
+              Call(Ref(untilName), [Ref(probeName)]),
+              Ref(probeName),
+              Let(
+                discardName,
+                ExternalEval("sleep", [intervalExprIr] as unknown as Expr),
+                Call(Ref(pollName), []),
+              ),
+            ),
+          ),
+        ),
+        Call(Ref(pollName), []),
+      ),
+    ),
+  );
 }
 
 /**

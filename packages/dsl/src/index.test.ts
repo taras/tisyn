@@ -34,6 +34,7 @@ import {
   Eval,
   All,
   Race,
+  Timebox,
 } from "@tisyn/ir";
 import {
   parseDSL,
@@ -724,6 +725,8 @@ describe("All constructors round-trip via print", () => {
       "Try/finally/finallyPayload",
       Try(Ref("x") as never, undefined, undefined, Ref("y") as never, "fp_0"),
     ],
+    ["Timebox", Timebox(5000 as never, 42 as never)],
+    ["Timebox/nested", Timebox(Ref("t") as never, Eval("sleep", [100] as never) as never)],
   ];
 
   for (const [name, expr] of cases) {
@@ -799,5 +802,107 @@ describe("DSL-084: Try — finallyPayload (5th arg)", () => {
   it("rejects empty-string finallyPayload", () => {
     const result = parseDSLSafe('Try(Ref("x"), undefined, undefined, Ref("y"), "")');
     expect(result.ok).toBe(false);
+  });
+});
+
+// ── Timebox constructor DSL tests ────────────────────────────────────────────
+
+describe("DSL: Timebox constructor", () => {
+  it("parses Timebox(5000, 42)", () => {
+    const expected = Timebox(5000 as never, 42 as never);
+    const result = parseDSLSafe("Timebox(5000, 42)");
+    expect(result.ok).toBe(true);
+    if (result.ok) expect(result.value).toEqual(expected);
+  });
+
+  it("parses Timebox with nested expressions", () => {
+    const expected = Timebox(Ref("t") as never, Eval("sleep", [100] as never) as never);
+    const result = parseDSLSafe('Timebox(Ref("t"), Eval("sleep", [100]))');
+    expect(result.ok).toBe(true);
+    if (result.ok) expect(result.value).toEqual(expected);
+  });
+
+  it("round-trips", () => {
+    roundTrip(Timebox(5000 as never, 42 as never));
+  });
+
+  it("rejects arity 1", () => {
+    const result = parseDSLSafe("Timebox(5000)");
+    expect(result.ok).toBe(false);
+  });
+
+  it("rejects arity 3", () => {
+    const result = parseDSLSafe("Timebox(5000, 42, 99)");
+    expect(result.ok).toBe(false);
+  });
+});
+
+// ── Converge macro DSL tests ─────────────────────────────────────────────────
+
+describe("DSL: Converge macro", () => {
+  it("expands Converge to timebox IR (no 'converge' id)", () => {
+    const result = parseDSLSafe('Converge(42, Fn(["x"], Gt(Ref("x"), 0)), 100, 5000)');
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    const ir = result.value as Record<string, any>;
+    // Top-level should be timebox
+    expect(ir.tisyn).toBe("eval");
+    expect(ir.id).toBe("timebox");
+    // Duration should be 5000 (the 4th arg = timeout)
+    expect(ir.data.expr.duration).toBe(5000);
+  });
+
+  it("expansion contains __until_0, __poll_0, __probe_0, __discard_0 names", () => {
+    const result = parseDSLSafe('Converge(42, Fn(["x"], Gt(Ref("x"), 0)), 100, 5000)');
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    const text = JSON.stringify(result.value);
+    expect(text).toContain("__until_0");
+    expect(text).toContain("__poll_0");
+    expect(text).toContain("__probe_0");
+    expect(text).toContain("__discard_0");
+  });
+
+  it("sleep node uses interval value (3rd arg)", () => {
+    const result = parseDSLSafe('Converge(42, Fn(["x"], Gt(Ref("x"), 0)), 200, 5000)');
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    const text = JSON.stringify(result.value);
+    // The sleep data should contain the interval 200
+    expect(text).toContain('"id":"sleep"');
+    expect(text).toContain("200");
+  });
+
+  it("rejects arity 3 (missing timeout)", () => {
+    const result = parseDSLSafe('Converge(42, Fn(["x"], Gt(Ref("x"), 0)), 100)');
+    expect(result.ok).toBe(false);
+  });
+
+  it("rejects arity 5", () => {
+    const result = parseDSLSafe('Converge(42, Fn(["x"], Gt(Ref("x"), 0)), 100, 5000, "extra")');
+    expect(result.ok).toBe(false);
+  });
+
+  it("DSL Converge and compiler converge produce equivalent IR structure", () => {
+    // Build the same converge via DSL macro
+    const dslResult = parseDSLSafe('Converge(42, Fn(["x"], Gt(Ref("x"), 0)), 100, 5000)');
+    expect(dslResult.ok).toBe(true);
+    if (!dslResult.ok) return;
+
+    // The DSL macro uses fixed names __until_0, __poll_0, etc.
+    // Verify the structure matches the expected lowering shape
+    const ir = dslResult.value as Record<string, any>;
+    // timebox → let __until_0 → let __poll_0 → call __poll_0
+    expect(ir.id).toBe("timebox");
+    const body = ir.data.expr.body;
+    expect(body.id).toBe("let");
+    expect(body.data.expr.name).toBe("__until_0");
+    const pollLet = body.data.expr.body;
+    expect(pollLet.id).toBe("let");
+    expect(pollLet.data.expr.name).toBe("__poll_0");
+    // The poll let body is Call(Ref("__poll_0"))
+    const callPoll = pollLet.data.expr.body;
+    expect(callPoll.id).toBe("call");
+    expect(callPoll.data.expr.fn).toEqual({ tisyn: "ref", name: "__poll_0" });
   });
 });

@@ -284,6 +284,12 @@ function printCompoundExternal(
     const dataStr = printNode(data, depth + 1, opts);
     return formatCall("Provide", [dataStr], depth, opts);
   }
+  if (id === "timebox") {
+    const s = shape as { duration: TisynExpr; body: TisynExpr };
+    const durationStr = printNode(s.duration, depth + 1, opts);
+    const bodyStr = printNode(s.body, depth + 1, opts);
+    return formatCall("Timebox", [durationStr, bodyStr], depth, opts);
+  }
 
   const s = shape as { exprs: TisynExpr[] };
   const name = constructorName(id);

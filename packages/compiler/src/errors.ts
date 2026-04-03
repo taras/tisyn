@@ -56,4 +56,17 @@ export const ErrorCodes = {
   "E-STREAM-004": "each() can only be used as the iterable in 'for (const x of yield* each(expr))'",
   "E-STREAM-005": "each.next() is not part of the Tisyn authored language",
   "E-STREAM-006": "Nested for...of stream iteration is not supported in this version",
+  // ── Timebox ──
+  "E-TB-01": "timebox() requires exactly 2 arguments: duration and generator function",
+  "E-TB-02": "timebox() second argument must be a generator function expression",
+  // ── Converge ──
+  "E-CONV-01": "converge() probe must be a generator function expression",
+  "E-CONV-02": "converge() until must be an arrow function",
+  "E-CONV-03": "converge() until must have an expression body (not a block body)",
+  "E-CONV-04": "converge() until must not contain yield*",
+  "E-CONV-05": "converge() requires an interval property",
+  "E-CONV-06": "converge() requires a timeout property",
+  "E-CONV-07": "converge() argument must be an object literal",
+  "E-CONV-08": "converge() interval must not contain yield*",
+  "E-CONV-09": "converge() timeout must not contain yield*",
 } as const;

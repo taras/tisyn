@@ -83,7 +83,28 @@ export function* evaluate(expr: Expr, env: Env): Generator<EffectDescriptor, Val
 
     // EXTERNAL: compound or standard
     if (isCompoundExternal(id)) {
-      // Compound: use unquote to preserve child expressions.
+      if (id === "timebox") {
+        // Per-ID evaluation rule (Timebox Spec §7):
+        // Evaluate duration to a Val, keep body as unevaluated Expr.
+        const inner = yield* unquote(data, env, evaluate);
+        const fields = inner as { duration: unknown; body: unknown };
+        const durationVal = yield* evaluate(fields.duration as Expr, env);
+        if (typeof durationVal !== "number" || !Number.isFinite(durationVal) || durationVal < 0) {
+          throw new TypeError(
+            `timebox: duration must be a non-negative finite number, got ${JSON.stringify(durationVal)}`,
+          );
+        }
+        const descriptor: EffectDescriptor = {
+          id,
+          data: {
+            __tisyn_inner: { duration: durationVal, body: fields.body },
+            __tisyn_env: env,
+          },
+        };
+        return yield descriptor;
+      }
+
+      // Generic compound external path (all, race, scope, spawn, etc.)
       // Attach env via wrapper struct so the runtime can spawn child
       // kernels in the parent's scope. Using a wrapper (not spread)
       // prevents collision with user data fields.

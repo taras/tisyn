@@ -8,6 +8,7 @@ export {
   MALFORMED_FN_BODY,
   STRUCTURAL_REQUIRES_QUOTE,
   QUOTE_AT_EVAL_POSITION,
+  TIMEBOX_DURATION_EXTERNAL,
 } from "./errors.js";
 export { validateGrammar, validateIr, assertValidIr } from "./validate.js";
 export {

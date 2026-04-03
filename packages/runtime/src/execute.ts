@@ -421,6 +421,48 @@ function* driveKernel(
               pendingStep = throwResult;
               nextValue = null;
             }
+          } else if (descriptor.id === "timebox") {
+            const inner = compoundData.__tisyn_inner as { duration: number; body: Expr };
+            // TB-R2: allocate 2 child IDs — body = N, timeout = N+1
+            const bodyChildId = `${coroutineId}.${childSpawnCount++}`;
+            const timeoutChildId = `${coroutineId}.${childSpawnCount++}`;
+
+            let timeboxValue: Val = null;
+            let timeboxErr: Error | null = null;
+            try {
+              timeboxValue = yield* orchestrateTimebox(
+                inner.duration,
+                inner.body,
+                bodyChildId,
+                timeoutChildId,
+                childEnv,
+                ctx,
+              );
+            } catch (e) {
+              timeboxErr = e instanceof Error ? e : new Error(String(e));
+            }
+
+            if (timeboxErr === null) {
+              nextValue = timeboxValue;
+            } else {
+              // Route error through parent kernel for try/catch interception
+              const throwResult = kernel.throw(timeboxErr);
+              if (throwResult.done) {
+                assertNoSubscriptionHandleInCloseValue(throwResult.value);
+                yield* teardownResourceChildren(resourceChildren);
+                closed = true;
+                const closeEvent: CloseEvent = {
+                  type: "close",
+                  coroutineId,
+                  result: { status: "ok", value: throwResult.value as Json },
+                };
+                yield* ctx.stream.append(closeEvent);
+                ctx.journal.push(closeEvent);
+                return { status: "ok", value: throwResult.value as Json };
+              }
+              pendingStep = throwResult;
+              nextValue = null;
+            }
           } else if (descriptor.id === "provide") {
             throw new RuntimeBugError("provide outside resource context");
           } else {
@@ -766,6 +808,81 @@ function* orchestrateRace(
         }
       });
     }
+
+    yield* operation;
+  });
+
+  return yield* operation;
+}
+
+/**
+ * Orchestrate `timebox` — race body against a timeout.
+ *
+ * TB-R3: Two child tasks — body evaluates the body expression,
+ *        timeout evaluates sleep(duration).
+ * TB-R4: First to resolve wins.
+ * TB-R6: Simultaneous completion — body takes precedence.
+ *
+ * The scoped() block ensures the losing child is cancelled automatically.
+ */
+function* orchestrateTimebox(
+  duration: number,
+  bodyExpr: Expr,
+  bodyChildId: string,
+  timeoutChildId: string,
+  env: Env,
+  ctx: DriveContext,
+): Operation<Val> {
+  const bodyKernel = evaluate(bodyExpr, env);
+  // Timeout child evaluates: Eval("sleep", [duration])
+  const sleepIr: Expr = {
+    tisyn: "eval",
+    id: "sleep",
+    data: [duration],
+  } as unknown as Expr;
+  const timeoutKernel = evaluate(sleepIr, env);
+
+  const { operation, resolve, reject } = withResolvers<Val>();
+
+  yield* scoped(function* () {
+    let resolved = false;
+
+    // Body child — spawned first so it wins on simultaneous completion (TB-R6)
+    yield* spawn(function* () {
+      const result = yield* driveKernel(bodyKernel, bodyChildId, env, ctx);
+      if (!resolved) {
+        resolved = true;
+        if (result.status === "ok") {
+          resolve({
+            status: "completed",
+            value: result.value ?? null,
+          } as unknown as Val);
+        } else {
+          const errResult = result as {
+            status: "err";
+            error: { message: string; name?: string };
+          };
+          reject(new EffectError(errResult.error.message, errResult.error.name));
+        }
+      }
+    });
+
+    // Timeout child
+    yield* spawn(function* () {
+      const result = yield* driveKernel(timeoutKernel, timeoutChildId, env, ctx);
+      if (!resolved) {
+        resolved = true;
+        if (result.status === "ok") {
+          resolve({ status: "timeout" } as unknown as Val);
+        } else {
+          const errResult = result as {
+            status: "err";
+            error: { message: string; name?: string };
+          };
+          reject(new EffectError(errResult.error.message, errResult.error.name));
+        }
+      }
+    });
 
     yield* operation;
   });

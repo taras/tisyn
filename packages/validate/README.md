@@ -27,6 +27,7 @@ In practice, this package answers one question:
 - validating `scope` eval nodes: handler type, bindings shape, and eval-position constraints
 - validating `resource` eval nodes: data must be a Quote with a `body` field in evaluation position
 - validating `provide` eval nodes: data is any expression (not Quote-wrapped), similar to `join`
+- validating `timebox` eval nodes: `data` must be a Quote with `duration` and `body`, and the `duration` subtree may not contain external evals
 
 It does not define execution behavior, concurrency semantics, or durable replay. Its job is to protect the boundary before those layers begin.
 
@@ -71,6 +72,11 @@ The main public surface is exported from `src/index.ts`.
 - `MalformedIR`  
   Error type used when invalid IR crosses a trust boundary.
 
+### Exported error codes
+
+- `TIMEBOX_DURATION_EXTERNAL`  
+  Validation error code raised when a `timebox` duration subtree contains an external eval. `timebox` duration may contain only structural evaluation.
+
 ### Exported schemas
 
 - `tisynExprSchema`  
@@ -96,6 +102,15 @@ The main public surface is exported from `src/index.ts`.
 - `ValidationResult`  
   Represents the success or failure result returned by validation functions.
 
+## Validation Rules Worth Knowing
+
+Most callers can treat validation as a black box, but a few package-level rules are worth knowing when constructing IR directly:
+
+- `scope` validates handler shape, bindings shape, and eval-position constraints
+- `resource` requires Quote-wrapped `{ body }` data
+- `provide` accepts any expression payload directly
+- `timebox` requires Quote-wrapped `{ duration, body }` data, and `duration` must stay structural-only
+
 ## Example
 
 ```ts
@@ -117,6 +132,7 @@ Typical uses include:
 - protecting transport boundaries between services or agents
 - checking persisted IR before loading or replaying it
 - exposing schema definitions to external tools and adapters
+- checking hand-built `timebox` IR before execution, especially when the duration comes from generated expression trees
 
 ## Relationship to the Rest of Tisyn
 

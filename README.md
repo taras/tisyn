@@ -129,6 +129,9 @@ For the detailed agent model and API examples, see [`@tisyn/agent`](./packages/a
 | [Resource Specification](./specs/tisyn-resource-specification.md) | `resource(...)` and `provide(...)` scope-creating primitives for managed initialization and cleanup |
 | [Stream Iteration Specification](./specs/tisyn-stream-iteration-specification.md) | Authored `for (const x of yield* each(expr))`, `stream.subscribe`, `stream.next`, and subscription-handle runtime rules |
 | [Browser Contract Specification](./specs/tisyn-browser-contract-specification.md) | Browser transport boundary with `navigate`, batched in-browser `execute`, and transport-configured local capability composition |
+| [Timebox Specification](./specs/tisyn-timebox-specification.md) | `timebox` compound external: deadline-bounded execution returning completed/timeout result |
+| [Converge Amendment](./specs/tisyn-converge-amendment.md) | `converge` compiler sugar: poll-until-predicate lowered to timebox + recursive Fn + sleep |
+| [Timebox/Converge Conformance Plan](./specs/tisyn-timebox-converge-conformance-plan.md) | Test plan for timebox and converge across compiler, runtime, and journaling layers |
 | [Authoring Layer Spec](./specs/tisyn-authoring-layer-spec.md) | Generator-based authoring format and contract declarations |
 | [Constructor DSL Specification](./specs/tisyn-constructor-dsl-specification.md) | Grammar, constructor table, and recovery semantics for the DSL parser |
 | [Architecture](./specs/tisyn-architecture.md) | System architecture and package relationships |

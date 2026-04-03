@@ -34,6 +34,7 @@ import {
   Eval,
   All,
   Race,
+  Timebox,
 } from "@tisyn/ir";
 import { DSLParseError } from "./errors.js";
 import type { Token } from "./token.js";
@@ -378,6 +379,40 @@ export const CONSTRUCTOR_TABLE: Record<string, ConstructorEntry> = {
     maxArgs: Infinity,
     dispatch(args) {
       return Race(...(args as AnyExpr[])) as TisynExpr;
+    },
+  },
+  Timebox: {
+    minArgs: 2,
+    maxArgs: 2,
+    dispatch(args) {
+      return Timebox(args[0] as AnyExpr, args[1] as AnyExpr) as TisynExpr;
+    },
+  },
+  Converge: {
+    minArgs: 4,
+    maxArgs: 4,
+    dispatch(args) {
+      // Converge(probe, until, interval, timeout) macro expansion.
+      // Expands to: Timebox(timeout, Let(__until_0, until,
+      //   Let(__poll_0, Fn([], Let(__probe_0, probe,
+      //     If(Call(__until_0, __probe_0), __probe_0,
+      //       Let(__discard_0, sleep(interval), Call(__poll_0))))),
+      //   Call(__poll_0))))
+      const [probe, until, interval, timeout] = args as AnyExpr[];
+      const sleepNode = Eval("sleep", [interval] as AnyExpr);
+      const callUntil = Call(Ref("__until_0") as AnyExpr, Ref("__probe_0") as AnyExpr);
+      const recurse = Call(Ref("__poll_0") as AnyExpr);
+      const elseBranch = Let("__discard_0", sleepNode as AnyExpr, recurse as AnyExpr);
+      const ifNode = If(callUntil as AnyExpr, Ref("__probe_0") as AnyExpr, elseBranch as AnyExpr);
+      const pollBody = Let("__probe_0", probe, ifNode as AnyExpr);
+      const pollFn = Fn([], pollBody as AnyExpr);
+      const callPoll = Call(Ref("__poll_0") as AnyExpr);
+      const inner = Let(
+        "__until_0",
+        until,
+        Let("__poll_0", pollFn as AnyExpr, callPoll as AnyExpr) as AnyExpr,
+      );
+      return Timebox(timeout, inner as AnyExpr) as TisynExpr;
     },
   },
 };

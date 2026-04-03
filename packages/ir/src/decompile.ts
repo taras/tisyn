@@ -277,6 +277,13 @@ function decompileCompoundExternal(
     // provide data is not Quote-wrapped — it's a raw expression
     return `yield* provide(${decompileExpr(data, depth, opts)})`;
   }
+  if (id === "timebox") {
+    const shape = unquoteShape(data) as { duration: TisynExpr; body: TisynExpr };
+    const durationStr = decompileExpr(shape.duration, depth, opts);
+    const bodyStr = decompileBody(shape.body, depth + 1, opts);
+    const pad = " ".repeat(depth * opts.indent);
+    return `yield* timebox(${durationStr}, function* () {\n${bodyStr}\n${pad}})`;
+  }
 
   const shape = unquoteShape(data) as { exprs: TisynExpr[] };
   const args = shape.exprs.map((e) => {

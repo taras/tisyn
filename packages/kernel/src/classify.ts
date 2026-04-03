@@ -48,6 +48,7 @@ const COMPOUND_EXTERNAL_IDS = new Set([
   "join",
   "resource",
   "provide",
+  "timebox",
 ]);
 
 export type Classification = "STRUCTURAL" | "EXTERNAL";

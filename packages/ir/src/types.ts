@@ -122,6 +122,11 @@ export interface ResourceShape {
   readonly body: TisynExpr;
 }
 
+export interface TimeboxShape {
+  readonly duration: TisynExpr;
+  readonly body: TisynExpr;
+}
+
 // ── Narrowed Structural Eval Types ──
 
 export interface LetNode {
@@ -314,6 +319,12 @@ export interface ProvideNode {
   readonly tisyn: "eval";
   readonly id: "provide";
   readonly data: TisynExpr;
+}
+
+export interface TimeboxNode {
+  readonly tisyn: "eval";
+  readonly id: "timebox";
+  readonly data: QuoteNode<TimeboxShape>;
 }
 
 export interface ConcatArraysShape {

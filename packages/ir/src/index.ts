@@ -31,6 +31,7 @@ export type {
   ScopeShape,
   SpawnShape,
   ResourceShape,
+  TimeboxShape,
   ConcatArraysShape,
   MergeObjectsShape,
   TryShape,
@@ -69,6 +70,7 @@ export type {
   JoinNode,
   ResourceNode,
   ProvideNode,
+  TimeboxNode,
   ConcatArraysNode,
   MergeObjectsNode,
   TryNode,
@@ -138,6 +140,7 @@ export {
   Join,
   Resource,
   Provide,
+  Timebox,
 } from "./constructors.js";
 
 export type { Walker } from "./walk.js";
