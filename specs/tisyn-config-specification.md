@@ -949,7 +949,7 @@ The descriptor contains
 The resolved value is redacted from all human-readable
 surfaces per §8.1.
 
-### 9.6 Workflow Config Access
+### 9.6 Resolved Config Projection
 
 Given this descriptor:
 
@@ -969,33 +969,40 @@ export default workflow({
 });
 ```
 
-The workflow sees the resolved config projection, not the
-raw descriptor:
+This MVP does not yet provide authored `yield* useConfig()`
+access inside workflows. Instead, the runtime resolution
+pipeline produces the same workflow-visible projection as a
+plain value:
 
 ```typescript
-export function* chat(args: { maxTurns: number }) {
-  const config = yield* useConfig();
+const config = resolveConfig(descriptor, {
+  entrypoint: "dev",
+  processEnv: {
+    JOURNAL_PATH: "./data/chat.journal",
+    PORT: "3000",
+  },
+});
 
-  // Journal path is a resolved string — the EnvDescriptor
-  // for JOURNAL_PATH has been replaced with its concrete
-  // value (e.g., "./data/chat.journal" or whatever the
-  // environment provided).
-  const journalPath: string = config.journal.path;
+// Journal path is a resolved string — the EnvDescriptor
+// for JOURNAL_PATH has been replaced with its concrete
+// value.
+const journalPath: string = config.journal.path;
 
-  // Agent bindings are available with resolved transport
-  // config. If a transport URL used env.required(), the
-  // resolved URL string is here, not the EnvDescriptor.
+// Agent bindings are available with resolved transport
+// config. If a transport URL used env.required(), the
+// resolved URL string is here, not the EnvDescriptor.
 
-  // Descriptor-only metadata is not present:
-  // - no config.entrypoints (overlays already applied)
-  // - no config.run (the workflow is already running)
-  // - no tisyn_config discriminant fields
-
-  // Workflow invocation args (--max-turns 10) arrive via
-  // the function parameter, not via useConfig().
-  const turns = args.maxTurns;
-}
+// Descriptor-only metadata is not present:
+// - no config.entrypoints (overlays already applied)
+// - no config.run (workflow selection remains outside the
+//   projected runtime view)
+// - no tisyn_config discriminant fields
 ```
+
+A future config-aware entrypoint may expose that same
+projection to workflow code through `useConfig()`, as
+described in §7.5.3, but that authored access mechanism is
+not part of this MVP.
 
 ### 9.7 Invalid Config
 
