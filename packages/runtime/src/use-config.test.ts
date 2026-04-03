@@ -6,12 +6,13 @@
  * The token argument is erased at compile time — it does not reach the runtime.
  * The effect is journaled like any standard external effect for replay safety.
  *
- * Tests use execute()'s internal config seeding shim.
+ * Tests seed config via provideConfig() before calling execute().
  */
 
 import { describe, it } from "@effectionx/vitest";
 import { expect } from "vitest";
 import { execute } from "./execute.js";
+import { provideConfig } from "./config-scope.js";
 import { InMemoryStream } from "@tisyn/durable-streams";
 import type { YieldEvent } from "@tisyn/kernel";
 
@@ -26,9 +27,9 @@ describe("__config effect", () => {
   it("returns projected config when config is provided", function* () {
     const config = { debug: true, model: "gpt-4", maxTurns: 10 };
 
+    yield* provideConfig(config);
     const { result } = yield* execute({
       ir: useConfigIr as never,
-      config,
     });
 
     expect(result).toEqual({ status: "ok", value: config });
@@ -46,9 +47,9 @@ describe("__config effect", () => {
     const config = { debug: true };
     const stream = new InMemoryStream();
 
+    yield* provideConfig(config);
     const { journal } = yield* execute({
       ir: useConfigIr as never,
-      config,
       stream,
     });
 
@@ -64,16 +65,15 @@ describe("__config effect", () => {
     const stream = new InMemoryStream();
 
     // First execution — populates the journal
+    yield* provideConfig(config);
     yield* execute({
       ir: useConfigIr as never,
-      config,
       stream,
     });
 
     // Second execution — replays from the same stream
     const { result } = yield* execute({
       ir: useConfigIr as never,
-      config,
       stream,
     });
 
@@ -84,12 +84,10 @@ describe("__config effect", () => {
     const config = { debug: true };
     const envArgs = { input: "hello" };
 
-    // IR: let cfg = yield* useConfig(); let env = __env; [cfg, env]
-    // Simplified: just use __config to verify config doesn't leak into env
+    yield* provideConfig(config);
     const { result } = yield* execute({
       ir: useConfigIr as never,
       env: envArgs as never,
-      config,
     });
 
     // __config returns config, not env

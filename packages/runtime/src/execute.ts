@@ -38,7 +38,7 @@ import {
 import { installAgentTransport, type AgentTransportFactory } from "@tisyn/transport";
 import { useScope } from "effection";
 import type { FnNode } from "@tisyn/ir";
-import { provideConfig, readConfig } from "./config-scope.js";
+import { readConfig } from "./config-scope.js";
 
 export interface ExecuteOptions {
   /** The IR tree to evaluate. */
@@ -49,12 +49,6 @@ export interface ExecuteOptions {
   stream?: DurableStream;
   /** Coroutine ID for the root task. Defaults to "root". */
   coroutineId?: string;
-  /**
-   * @internal Resolved config projection — seeds the runtime config scope.
-   * Not part of the public API. Config is owned by the runtime config-scope
-   * mechanism; this field exists as an internal seeding shim.
-   */
-  config?: Record<string, unknown>;
 }
 
 export interface ExecuteResult {
@@ -122,7 +116,6 @@ export function* execute(options: ExecuteOptions): Operation<ExecuteResult> {
     env: envRecord = {},
     stream = new InMemoryStream(),
     coroutineId = "root",
-    config: configRecord = null,
   } = options;
 
   // Phase 1: Validate IR before evaluation
@@ -144,9 +137,6 @@ export function* execute(options: ExecuteOptions): Operation<ExecuteResult> {
   }
 
   return yield* scoped(function* () {
-    // Seed the execution-scoped config
-    yield* provideConfig(configRecord);
-
     // Phase 2: Read journal, build ReplayIndex
     const storedEvents = yield* stream.readAll();
     const replayIndex = new ReplayIndex(storedEvents);

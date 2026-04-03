@@ -9,7 +9,7 @@
 import { describe, it } from "@effectionx/vitest";
 import { expect } from "vitest";
 import { Call, Ref } from "@tisyn/ir";
-import { execute, resolveConfig } from "@tisyn/runtime";
+import { execute, resolveConfig, provideConfig } from "@tisyn/runtime";
 import { compileOne } from "@tisyn/compiler";
 import { workflow, agent, transport, env, journal, entrypoint, server } from "@tisyn/config";
 
@@ -43,9 +43,9 @@ describe("Config.useConfig(Token) integration", () => {
       }
     `);
 
+    yield* provideConfig(resolved as unknown as Record<string, unknown>);
     const { result } = yield* execute({
       ir: Call(ir),
-      config: resolved as unknown as Record<string, unknown>,
     });
 
     expect(result.status).toBe("ok");
@@ -84,9 +84,9 @@ describe("Config.useConfig(Token) integration", () => {
       }
     `);
 
+    yield* provideConfig(resolved as unknown as Record<string, unknown>);
     const { result } = yield* execute({
       ir: Call(ir),
-      config: resolved as unknown as Record<string, unknown>,
     });
 
     expect(result.status).toBe("ok");
@@ -115,10 +115,10 @@ describe("Config.useConfig(Token) integration", () => {
       }
     `);
 
+    yield* provideConfig(config as Record<string, unknown>);
     const { result } = yield* execute({
       ir: Call(ir, Ref("input")),
       env: { input: "hello-world" } as never,
-      config: config as Record<string, unknown>,
     });
 
     expect(result.status).toBe("ok");
