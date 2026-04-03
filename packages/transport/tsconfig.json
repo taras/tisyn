@@ -5,7 +5,7 @@
     "rootDir": "./src"
   },
   "include": ["src"],
-  "exclude": ["src/**/*.test.ts", "src/**/test-assets/**"],
+  "exclude": ["src/**/*.test.ts", "src/**/test-assets/**", "src/transports/browser-executor.ts"],
   "references": [
     { "path": "../agent" },
     { "path": "../ir" },

@@ -379,6 +379,15 @@ importers:
       '@effectionx/vitest':
         specifier: ^0.3.1
         version: 0.3.1(effection@4.0.2)(vitest@4.1.0(@types/node@25.5.0)(vite@7.3.1(@types/node@25.5.0)(tsx@4.21.0)))
+      '@tisyn/compiler':
+        specifier: workspace:*
+        version: link:../compiler
+      '@tisyn/durable-streams':
+        specifier: workspace:*
+        version: link:../durable-streams
+      '@tisyn/runtime':
+        specifier: workspace:*
+        version: link:../runtime
       '@types/node':
         specifier: ^25.5.0
         version: 25.5.0
@@ -388,6 +397,9 @@ importers:
       effection:
         specifier: 4.0.2
         version: 4.0.2
+      playwright-core:
+        specifier: ^1.40
+        version: 1.58.2
       vitest:
         specifier: ^4
         version: 4.1.0(@types/node@25.5.0)(vite@7.3.1(@types/node@25.5.0)(tsx@4.21.0))
