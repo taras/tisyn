@@ -5,7 +5,7 @@
 ### Patch Changes
 
 - Updated dependencies [b515855]
-  - @tisyn/compiler@1.0.0
+  - @tisyn/compiler@0.8.0
 
 ## 0.1.7
 

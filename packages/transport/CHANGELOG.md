@@ -1,18 +1,18 @@
 # @tisyn/transport
 
-## 1.0.0
+## 0.8.0
 
 ### Patch Changes
 
 - Updated dependencies [b515855]
 - Updated dependencies [b515855]
-  - @tisyn/kernel@1.0.0
-  - @tisyn/runtime@1.0.0
-  - @tisyn/agent@1.0.0
-  - @tisyn/durable-streams@1.0.0
-  - @tisyn/ir@1.0.0
-  - @tisyn/protocol@1.0.0
-  - @tisyn/validate@1.0.0
+  - @tisyn/kernel@0.8.0
+  - @tisyn/runtime@0.8.0
+  - @tisyn/agent@0.8.0
+  - @tisyn/durable-streams@0.8.0
+  - @tisyn/ir@0.8.0
+  - @tisyn/protocol@0.8.0
+  - @tisyn/validate@0.8.0
 
 ## 0.7.0
 
