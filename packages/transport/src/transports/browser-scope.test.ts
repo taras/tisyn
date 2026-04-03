@@ -3,7 +3,7 @@
  *
  * Validates that:
  * - Scope with browser binding executes body via transport
- * - Browser.execute effects dispatch through bound transport
+ * - Browser.navigate and Browser.execute effects dispatch through bound transport
  * - Completed browser scope replays from journal without live dispatch
  * - Incomplete browser scope transitions to live dispatch at frontier
  */
@@ -11,7 +11,7 @@
 import { describe, it } from "@effectionx/vitest";
 import { expect } from "vitest";
 import { scoped } from "effection";
-import { execute } from "./execute.js";
+import { execute } from "@tisyn/runtime";
 import { InMemoryStream } from "@tisyn/durable-streams";
 import { Ref, Get, Let } from "@tisyn/ir";
 import { agent, operation } from "@tisyn/agent";
@@ -21,6 +21,7 @@ import type { YieldEvent, DurableEvent } from "@tisyn/kernel";
 // ── Agent + IR helpers ──
 
 const browserAgent = agent("browser", {
+  navigate: operation<{ url: string }, void>(),
   execute: operation<{ workflow: unknown }, unknown>(),
 });
 
@@ -50,6 +51,8 @@ describe("Browser scope — fresh execution", () => {
   it("scope with browser binding executes body", function* () {
     const factory = inprocessTransport(browserAgent, {
       // biome-ignore lint/correctness/useYield: mock
+      *navigate() {},
+      // biome-ignore lint/correctness/useYield: mock
       *execute() {
         return { result: "executed" };
       },
@@ -68,6 +71,8 @@ describe("Browser scope — fresh execution", () => {
   it("browser.execute effect dispatches through bound transport", function* () {
     let executeCalled = false;
     const factory = inprocessTransport(browserAgent, {
+      // biome-ignore lint/correctness/useYield: mock
+      *navigate() {},
       // biome-ignore lint/correctness/useYield: mock
       *execute(params: { workflow: unknown }) {
         executeCalled = true;
@@ -92,9 +97,45 @@ describe("Browser scope — fresh execution", () => {
     }
   });
 
+  it("browser.navigate effect dispatches through bound transport", function* () {
+    let navigateCalled = false;
+    let navigateUrl = "";
+    const factory = inprocessTransport(browserAgent, {
+      // biome-ignore lint/correctness/useYield: mock
+      *navigate(params: { url: string }) {
+        navigateCalled = true;
+        navigateUrl = params.url;
+      },
+      // biome-ignore lint/correctness/useYield: mock
+      *execute() {
+        return {};
+      },
+    });
+
+    const body = effectIR("browser", "navigate", { url: "https://example.com" });
+    const ir = scope(body, null, { browser: Get(Ref("envObj"), "transport") });
+    const { result, journal } = yield* execute({
+      ir,
+      // biome-ignore lint/suspicious/noExplicitAny: factory is not Json-serializable
+      env: { envObj: { transport: factory } as any },
+    });
+    expect(navigateCalled).toBe(true);
+    expect(navigateUrl).toBe("https://example.com");
+    expect(result.status).toBe("ok");
+
+    // Journal should contain a YieldEvent for browser.navigate
+    const yieldEvents = journal.filter(
+      (e) => e.type === "yield" && (e as YieldEvent).description.type === "browser",
+    );
+    expect(yieldEvents).toHaveLength(1);
+    expect((yieldEvents[0] as YieldEvent).description.name).toBe("navigate");
+  });
+
   it("multiple browser.execute effects dispatch sequentially", function* () {
     const calls: number[] = [];
     const factory = inprocessTransport(browserAgent, {
+      // biome-ignore lint/correctness/useYield: mock
+      *navigate() {},
       // biome-ignore lint/correctness/useYield: mock
       *execute(params: { workflow: unknown }) {
         const n = (params.workflow as any).n;
@@ -137,6 +178,8 @@ describe("Browser scope — replay", () => {
   it("completed browser scope replays from journal without live dispatch (RP3/RP4/RP6/RP7)", function* () {
     const factory = inprocessTransport(browserAgent, {
       // biome-ignore lint/correctness/useYield: mock
+      *navigate() {},
+      // biome-ignore lint/correctness/useYield: mock
       *execute(params: { workflow: unknown }) {
         return { result: params.workflow };
       },
@@ -157,6 +200,10 @@ describe("Browser scope — replay", () => {
     // Run 2: replay from stored journal with a spy transport
     let spyCalled = false;
     const spyFactory = inprocessTransport(browserAgent, {
+      // biome-ignore lint/correctness/useYield: mock
+      *navigate() {
+        spyCalled = true;
+      },
       // biome-ignore lint/correctness/useYield: mock
       *execute() {
         spyCalled = true;
@@ -180,6 +227,8 @@ describe("Browser scope — replay", () => {
 
   it("completed browser scope replay produces same result value (RP7)", function* () {
     const factory = inprocessTransport(browserAgent, {
+      // biome-ignore lint/correctness/useYield: mock
+      *navigate() {},
       // biome-ignore lint/correctness/useYield: mock
       *execute(params: { workflow: unknown }) {
         return { computed: "value", input: params.workflow };
@@ -209,6 +258,8 @@ describe("Browser scope — replay", () => {
     // Run 2: replay — should produce identical result
     const spyFactory = inprocessTransport(browserAgent, {
       // biome-ignore lint/correctness/useYield: mock
+      *navigate() {},
+      // biome-ignore lint/correctness/useYield: mock
       *execute() {
         return { computed: "spy", input: "spy" };
       },
@@ -236,6 +287,8 @@ describe("Browser scope — replay", () => {
 
     let liveCalled = false;
     const factory = inprocessTransport(browserAgent, {
+      // biome-ignore lint/correctness/useYield: mock
+      *navigate() {},
       // biome-ignore lint/correctness/useYield: mock
       *execute() {
         liveCalled = true;
@@ -265,5 +318,65 @@ describe("Browser scope — replay", () => {
     if (result.status === "ok") {
       expect(result.value).toEqual({ result: "live" });
     }
+  });
+
+  it("completed replay covers both navigate and execute", function* () {
+    const factory = inprocessTransport(browserAgent, {
+      // biome-ignore lint/correctness/useYield: mock
+      *navigate() {},
+      // biome-ignore lint/correctness/useYield: mock
+      *execute(params: { workflow: unknown }) {
+        return { result: params.workflow };
+      },
+    });
+
+    // Body: navigate then execute
+    const body = Let(
+      "_nav",
+      effectIR("browser", "navigate", { url: "https://example.com" }),
+      effectIR("browser", "execute", { workflow: "payload" }),
+    );
+    const ir = scope(body, null, { browser: Get(Ref("envObj"), "transport") });
+    // biome-ignore lint/suspicious/noExplicitAny: factory is not Json-serializable
+    const env = { envObj: { transport: factory } as any };
+
+    // Run 1: fresh execution — capture journal
+    const run1 = yield* scoped(function* () {
+      return yield* execute({ ir, env });
+    });
+    expect(run1.result.status).toBe("ok");
+
+    // Verify journal contains both navigate and execute YieldEvents
+    const yieldEvents = run1.journal.filter((e) => e.type === "yield") as YieldEvent[];
+    const types = yieldEvents.map((e) => e.description.name);
+    expect(types).toContain("navigate");
+    expect(types).toContain("execute");
+
+    // Run 2: replay from stored journal with spy transport
+    let spyCalled = false;
+    const spyFactory = inprocessTransport(browserAgent, {
+      // biome-ignore lint/correctness/useYield: mock
+      *navigate() {
+        spyCalled = true;
+      },
+      // biome-ignore lint/correctness/useYield: mock
+      *execute() {
+        spyCalled = true;
+        return { result: "spy" };
+      },
+    });
+
+    const stream = new InMemoryStream(run1.journal);
+    const run2 = yield* scoped(function* () {
+      return yield* execute({
+        ir,
+        // biome-ignore lint/suspicious/noExplicitAny: factory is not Json-serializable
+        env: { envObj: { transport: spyFactory } as any },
+        stream,
+      });
+    });
+
+    expect(spyCalled).toBe(false);
+    expect(run2.result).toEqual(run1.result);
   });
 });

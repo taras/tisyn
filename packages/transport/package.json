@@ -85,6 +85,9 @@
   "devDependencies": {
     "@effectionx/converge": "^0.1.4",
     "@effectionx/vitest": "^0.3.1",
+    "@tisyn/compiler": "workspace:*",
+    "@tisyn/durable-streams": "workspace:*",
+    "@tisyn/runtime": "workspace:*",
     "@types/node": "^25.5.0",
     "@types/ws": "^8",
     "effection": "4.0.2",

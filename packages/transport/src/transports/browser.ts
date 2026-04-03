@@ -50,6 +50,10 @@ export function localCapability<Ops extends Record<string, OperationSpec>>(
 
 // ── Types ──
 
+export interface NavigateParams {
+  url: string;
+}
+
 export interface ExecuteParams {
   workflow: IrInput;
 }
@@ -57,10 +61,12 @@ export interface ExecuteParams {
 // ── Runtime declaration ──
 
 type BrowserOps = {
+  navigate: OperationSpec<NavigateParams, void>;
   execute: OperationSpec<ExecuteParams, Json>;
 };
 
 export const Browser = agent<BrowserOps>("browser", {
+  navigate: operation<NavigateParams, void>(),
   execute: operation<ExecuteParams, Json>(),
 });
 
@@ -118,7 +124,8 @@ export function browserTransport(config?: BrowserTransportConfig): AgentTranspor
     const capabilities = config?.capabilities ?? [];
     const executorPath = config?.executor;
 
-    // Build the execute handler based on mode
+    // Build handlers based on mode
+    let navigateHandler: (params: NavigateParams) => Operation<void>;
     let executeHandler: (params: ExecuteParams) => Operation<Json>;
 
     if (executorPath) {
@@ -160,6 +167,10 @@ export function browserTransport(config?: BrowserTransportConfig): AgentTranspor
         page.waitForFunction(() => typeof (globalThis as any).__tisyn_execute === "function"),
       );
 
+      navigateHandler = function* (params: NavigateParams): Operation<void> {
+        yield* call(() => page.goto(params.url));
+      };
+
       executeHandler = function* (params: ExecuteParams): Operation<Json> {
         const result: any = yield* call(() =>
           page.evaluate((ir) => (window as any).__tisyn_execute(ir), params.workflow as unknown),
@@ -171,6 +182,9 @@ export function browserTransport(config?: BrowserTransportConfig): AgentTranspor
       };
     } else {
       // ── In-process mode: no Playwright, kernel evaluation ──
+      navigateHandler = function* (): Operation<void> {
+        throw new Error("Browser.navigate requires real-browser mode (provide executor config)");
+      };
       executeHandler = function* (params: ExecuteParams): Operation<Json> {
         return yield* scoped(function* () {
           for (const cap of capabilities) {
@@ -191,6 +205,9 @@ export function browserTransport(config?: BrowserTransportConfig): AgentTranspor
 
     // Create handler object
     const handlers = {
+      *navigate(params: NavigateParams): Operation<void> {
+        return yield* navigateHandler(params);
+      },
       *execute(params: ExecuteParams): Operation<Json> {
         return yield* executeHandler(params);
       },

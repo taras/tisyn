@@ -359,4 +359,74 @@ describe("browser transport", () => {
       expect(mockBrowser.close).toHaveBeenCalled();
     });
   });
+
+  // --- Navigate operation ---
+
+  describe("Navigate operation — real-browser mode", () => {
+    it("navigate({ url }) calls page.goto(url)", function* () {
+      const factory = browserTransport({
+        executor: "/path/to/executor.iife.js",
+      });
+
+      yield* scoped(function* () {
+        yield* installRemoteAgent(Browser, factory);
+        yield* invoke(Browser.navigate({ url: "https://example.com" }));
+      });
+
+      expect(mockPage.goto).toHaveBeenCalledWith("https://example.com");
+    });
+
+    it("navigate then execute operate on same implicit page", function* () {
+      const factory = browserTransport({
+        executor: "/path/to/executor.iife.js",
+      });
+
+      yield* scoped(function* () {
+        yield* installRemoteAgent(Browser, factory);
+        yield* invoke(Browser.navigate({ url: "https://example.com/app" }));
+        yield* invoke(Browser.execute({ workflow: literalWorkflow("test") }));
+      });
+
+      expect(mockPage.goto).toHaveBeenCalledWith("https://example.com/app");
+      expect(mockPage.evaluate).toHaveBeenCalled();
+    });
+
+    it("navigate error propagates", function* () {
+      mockPage.goto.mockRejectedValueOnce(new Error("net::ERR_CONNECTION_REFUSED"));
+
+      const factory = browserTransport({
+        executor: "/path/to/executor.iife.js",
+      });
+
+      yield* scoped(function* () {
+        yield* installRemoteAgent(Browser, factory);
+        try {
+          yield* invoke(Browser.navigate({ url: "https://unreachable.test" }));
+          expect.unreachable("should have thrown");
+        } catch (error) {
+          expect(error).toBeInstanceOf(Error);
+          expect((error as Error).message).toContain("net::ERR_CONNECTION_REFUSED");
+        }
+      });
+    });
+  });
+
+  describe("Navigate operation — in-process mode", () => {
+    it("navigate throws in in-process mode", function* () {
+      const factory = browserTransport({
+        capabilities: [localCapability(Calc, calcHandlers())],
+      });
+
+      yield* scoped(function* () {
+        yield* installRemoteAgent(Browser, factory);
+        try {
+          yield* invoke(Browser.navigate({ url: "https://example.com" }));
+          expect.unreachable("should have thrown");
+        } catch (error) {
+          expect(error).toBeInstanceOf(Error);
+          expect((error as Error).message).toContain("requires real-browser mode");
+        }
+      });
+    });
+  });
 });

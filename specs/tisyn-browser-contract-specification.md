@@ -1,6 +1,6 @@
 # Tisyn Browser Contract Specification
 
-**Version:** 0.2.0
+**Version:** 0.3.0
 **Implements:** Tisyn System Specification 1.0.0
 **Depends on:** Tisyn Blocking Scope Specification 0.1.0,
 Tisyn Scoped Effects Specification 0.1.0
@@ -12,11 +12,18 @@ Tisyn Scoped Effects Specification 0.1.0
 
 This specification defines the browser as a transport-bound
 contract for authored Tisyn workflows. The browser contract
-provides a single cross-boundary operation — `Browser.execute`
-— that sends IR into a browser execution environment for local
-execution. Browser-local agents (like DOM interaction agents)
-are composed at transport setup time via a first-class capability
-composition interface owned by the transport.
+provides two host-visible operations:
+
+- `Browser.navigate({ url })` — moves the browser's implicit
+  current page to a URL.
+- `Browser.execute({ workflow })` — sends IR into the browser
+  execution environment for local execution.
+
+Browser-local agents (like DOM interaction agents) are composed
+at transport setup time via a first-class capability composition
+interface owned by the transport. DOM operations and other
+browser-local actions happen inside `execute`, not as separate
+host-visible browser methods.
 
 The target authored surface is:
 
@@ -27,14 +34,15 @@ yield* scoped(function* () {
   }));
 
   const browser = yield* useAgent(Browser);
+  yield* browser.navigate({ url: "https://example.com" });
   return yield* browser.execute({ workflow: someIr });
 });
 ```
 
-No live browser objects cross the workflow's durability
-boundary. The host journal records one `browser.execute`
-YieldEvent per call. Inner sub-operations dispatched to
-browser-local agents are NOT individually journaled at the
+No live browser objects cross the workflow's durability boundary.
+The host journal records one YieldEvent per `navigate` or
+`execute` call. Inner sub-operations dispatched to browser-local
+agents inside `execute` are NOT individually journaled at the
 host level.
 
 ---
@@ -53,9 +61,17 @@ host level.
 ## 3. Terminology
 
 - **Browser contract** — the `Browser` agent declaration with
-  a single `execute` operation.
+  `navigate` and `execute` operations.
 - **Cross-boundary operation** — an operation that crosses the
-  host-to-browser boundary.
+  host-to-browser boundary. Both `navigate` and `execute` are
+  cross-boundary operations.
+- **Implicit current page** — the single browser page owned by
+  the transport. `navigate` changes its URL; `execute` runs IR
+  against it. No page IDs or multi-page API in v1.
+- **Navigate operation** — host-visible operation that moves the
+  implicit current page to a URL via `page.goto()`.
+- **Execute operation** — host-visible operation that sends IR
+  into the browser for batched local execution.
 - **Browser-local agent** — an agent whose handlers run inside
   the browser execution environment, not on the host.
 - **LocalCapability** — a function that installs agent dispatch
@@ -63,8 +79,10 @@ host level.
   interface for browser-local agents.
 - **In-process mode** — execution mode where IR is executed
   directly in the host process with configured capabilities.
+  Navigate is unsupported in this mode.
 - **Real-browser mode** — execution mode where IR crosses the
   `page.evaluate` boundary into a Playwright-managed browser page.
+  Both navigate and execute operate on the implicit current page.
 - **Executor bundle** — an IIFE script built using
   `createBrowserExecutor()` that defines `window.__tisyn_execute`
   in the browser page.
@@ -73,23 +91,32 @@ host level.
 
 ## 4. Cross-Boundary Contract
 
-### 4.1 Single Operation
+### 4.1 Contract Operations
 
-The browser contract exposes exactly one host-visible operation:
+The browser contract exposes two host-visible operations:
 
 ```typescript
+Browser.navigate({ url: string }): Workflow<void>
 Browser.execute({ workflow: IrInput }): Workflow<Json>
 ```
 
-Where:
-- `IrInput` — the IR expression to execute in the browser
-  environment.
-- `Json` — the serializable return value.
+**Navigate** moves the transport's implicit current page to the
+given URL. It is a host-visible, transport-backed operation that
+produces a YieldEvent in the host journal.
+
+**Execute** sends IR into the browser for local execution against
+the current page. Browser-local agents dispatched inside execute
+are not individually host-journaled. The result is a single
+JSON-serializable value.
 
 ### 4.2 Runtime Declaration
 
 ```typescript
+export interface NavigateParams { url: string }
+export interface ExecuteParams { workflow: IrInput }
+
 export const Browser = agent("browser", {
+  navigate: operation<NavigateParams, void>(),
   execute: operation<ExecuteParams, Json>(),
 });
 ```
@@ -99,16 +126,18 @@ export const Browser = agent("browser", {
 Workflows include an ambient declaration for compiler discovery:
 
 ```typescript
+interface NavigateParams { url: string }
 interface ExecuteParams { workflow: unknown }
 declare function Browser(): {
+  navigate(params: NavigateParams): Workflow<void>;
   execute(params: ExecuteParams): Workflow<unknown>;
 };
 ```
 
 The compiler discovers `Browser` via this `declare function`.
 `toAgentId("Browser")` produces `"browser"`. Method calls lower
-to `Eval("browser.execute", ...)`. No browser-specific compiler
-rules exist.
+to `Eval("browser.navigate", ...)` and `Eval("browser.execute", ...)`
+respectively. No browser-specific compiler rules exist.
 
 ---
 
@@ -151,16 +180,17 @@ identical regardless of execution mode.
 ### 5.4 In-Page Executor
 
 `createBrowserExecutor(capabilities)` is a transport-provided
-function that defines `window.__tisyn_execute` in the browser
-page. Before each IR execution, it installs all configured
-capabilities:
+public function that defines `window.__tisyn_execute` in the
+browser page. Before each IR execution, it installs all
+configured capabilities:
 
 ```typescript
 function createBrowserExecutor(capabilities: LocalCapability[]): void;
 ```
 
-Users import this in their executor script and bundle it into
-an IIFE for browser injection.
+Users import this from `@tisyn/transport/browser-executor` in
+their executor script and bundle it into an IIFE for browser
+injection.
 
 ---
 
@@ -182,27 +212,38 @@ interface BrowserTransportConfig {
 
 ### 6.2 Execution Modes
 
-**In-process mode** (`executor` omitted): the transport
-executes IR directly using `@tisyn/runtime` with the configured
+**In-process mode** (`executor` omitted): the transport executes
+IR directly using the kernel evaluator with the configured
 capabilities. Each execute call creates a fresh scoped
-environment, installs capabilities, and runs the IR.
+environment, installs capabilities, and runs the IR. Navigate
+is unsupported in this mode and throws an error:
+`"Browser.navigate requires real-browser mode (provide executor config)"`.
 
 **Real-browser mode** (`executor` provided): the transport
-injects the executor IIFE into a Playwright page and sends IR
-via `page.evaluate`. The executor bundle must be built using
-`createBrowserExecutor()` with the desired capabilities.
+launches a Playwright browser, creates one browser context with
+one implicit current page, and injects the executor IIFE.
+Navigate calls `page.goto(url)` on the implicit current page.
+Execute calls `page.evaluate(...)` to send IR into the injected
+executor.
 
 ### 6.3 Transport Lifecycle
 
-1. Launch Playwright browser
-2. Create browser context + default page
-3. If `url` configured, navigate to it
-4. If `executor` provided, inject via `page.addScriptTag`
-   and wait for `__tisyn_execute` availability
-5. Register cleanup (`browser.close()`) on scope exit
-6. Wire bidirectional channels + protocol server
+1. If `executor` provided: lazily load playwright-core
+2. Launch Playwright browser
+3. Create browser context + default page (implicit current page)
+4. If `url` configured, navigate to it
+5. Inject executor via `page.addScriptTag` and wait for
+   `__tisyn_execute` availability
+6. Register cleanup (`browser.close()`) on scope exit
+7. Wire bidirectional channels + protocol server
+
+Both `navigate` and `execute` operate on the same implicit
+current page throughout the transport's lifetime.
 
 ### 6.4 Error Propagation
+
+Navigate errors (e.g., network failures from `page.goto`)
+propagate as thrown Errors.
 
 If the executor returns `{ status: "err", error: { message } }`,
 the transport throws an `Error` with the message. This applies
@@ -214,16 +255,17 @@ to both execution modes.
 
 ### 7.1 Host Journal
 
-Each `Browser.execute` call produces one `YieldEvent` in the
-host journal. Inner sub-operations dispatched to browser-local
-agents are not individually journaled at the host level.
+Each `Browser.navigate` and `Browser.execute` call produces one
+`YieldEvent` in the host journal. Inner sub-operations dispatched
+to browser-local agents inside `execute` are not individually
+journaled at the host level.
 
 ### 7.2 Completed Scope Replay
 
-When a completed scope is replayed, all `browser.execute`
-YieldEvents are served from the stored journal. The transport
-is installed at scope entry but receives no dispatch during
-replay. The scope completes with the same result.
+When a completed scope is replayed, all `browser.navigate` and
+`browser.execute` YieldEvents are served from the stored journal.
+The transport is installed at scope entry but receives no dispatch
+during replay. The scope completes with the same result.
 
 ### 7.3 Incomplete Scope Replay
 
@@ -248,8 +290,9 @@ The following are deferred to future versions:
 - Built-in executor bundler
 - Host callbacks from inside browser execution
 - Multi-page management as cross-boundary operations
-- Individual browser operations (navigate, click, fill, etc.)
-  as host-visible effects
+- Individual DOM operations (click, fill, etc.) as host-visible
+  browser methods
+- openPage, selectPage, closePage, screenshot
 
 ---
 
@@ -263,6 +306,12 @@ The following are deferred to future versions:
 | `browserTransport` | Function | Transport factory |
 | `LocalCapability` | Type | Composition primitive |
 | `localCapability` | Function | Capability constructor |
-| `createBrowserExecutor` | Function | In-page executor setup |
+| `NavigateParams` | Interface | Navigate operation params |
 | `ExecuteParams` | Interface | Execute operation params |
 | `BrowserTransportConfig` | Interface | Factory configuration |
+
+`@tisyn/transport/browser-executor` exports:
+
+| Export | Kind | Description |
+|--------|------|-------------|
+| `createBrowserExecutor` | Function | In-page executor setup |

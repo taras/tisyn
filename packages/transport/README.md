@@ -122,11 +122,16 @@ Choose the transport that matches the boundary you need:
 
 ## Browser Transport
 
-The browser transport provides a single cross-boundary operation — `Browser.execute` — that sends IR into a browser execution environment for local execution. Browser-local agents are composed at transport setup time via a first-class capability composition interface.
+The browser transport provides two host-visible operations:
+
+- **`Browser.navigate({ url })`** — moves the browser's implicit current page to a URL. This is host-visible because page location is a durable, replay-significant operation.
+- **`Browser.execute({ workflow })`** — sends IR into the browser for batched local execution against the current page. DOM interactions and other browser-local operations happen inside `execute`, avoiding per-operation wire chatter.
+
+The transport owns one implicit current page. `navigate` changes it, `execute` runs against it. No multi-page API in v1.
 
 ### Requirements
 
-`playwright-core` is an optional peer dependency. Install it when using the browser transport:
+`playwright-core` is an optional peer dependency, required only for real-browser mode:
 
 ```sh
 pnpm add playwright-core
@@ -137,9 +142,11 @@ pnpm add playwright-core
 Workflows must include an ambient declaration for the browser contract:
 
 ```typescript
+interface NavigateParams { url: string }
 interface ExecuteParams { workflow: unknown }
 
 declare function Browser(): {
+  navigate(params: NavigateParams): Workflow<void>;
   execute(params: ExecuteParams): Workflow<unknown>;
 };
 ```
@@ -154,7 +161,7 @@ import { Dom, createDomHandlers } from "./my-dom-agent";
 
 const domCap = localCapability(Dom, createDomHandlers());
 
-// In-process mode (for testing):
+// In-process mode (for testing — navigate unsupported):
 const transport = browserTransport({
   capabilities: [domCap],
 });
@@ -169,7 +176,8 @@ For real-browser mode, build an executor IIFE using the transport-provided `crea
 
 ```typescript
 // my-executor.ts — bundle into IIFE
-import { createBrowserExecutor, localCapability } from "@tisyn/transport/browser";
+import { createBrowserExecutor } from "@tisyn/transport/browser-executor";
+import { localCapability } from "@tisyn/transport/browser";
 import { Dom, createDomHandlers } from "./my-dom-agent";
 
 createBrowserExecutor([
@@ -182,10 +190,11 @@ createBrowserExecutor([
 ```typescript
 yield* scoped(function* () {
   yield* useTransport(Browser, browserTransport({
-    capabilities: [domCapability()],
+    executor: "./dist/my-executor.iife.js",
   }));
 
   const browser = yield* useAgent(Browser);
+  yield* browser.navigate({ url: "https://example.com" });
   return yield* browser.execute({ workflow: someIr });
 });
 ```
@@ -206,12 +215,15 @@ yield* scoped(function* () {
 
 `@tisyn/transport/browser` exports:
 
-- `Browser` — a `DeclaredAgent` for use with `installRemoteAgent(Browser, factory)` and `invoke(Browser.execute(...))`
+- `Browser` — a `DeclaredAgent` for use with `installRemoteAgent(Browser, factory)` and `invoke(Browser.navigate(...))` / `invoke(Browser.execute(...))`
 - `browserTransport` — transport factory
 - `LocalCapability` — composition primitive type
 - `localCapability` — capability constructor
-- `createBrowserExecutor` — in-page executor setup function
-- `ExecuteParams`, `BrowserTransportConfig` — type interfaces
+- `NavigateParams`, `ExecuteParams`, `BrowserTransportConfig` — type interfaces
+
+`@tisyn/transport/browser-executor` exports:
+
+- `createBrowserExecutor` — in-page executor setup function (source-only, bundle with consumer tooling)
 
 ## Relationship to the Rest of Tisyn
 

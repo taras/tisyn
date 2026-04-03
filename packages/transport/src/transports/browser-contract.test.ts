@@ -2,17 +2,19 @@
  * Compiler acceptance tests for the Browser contract.
  *
  * Verifies the compiler handles Browser as an ordinary agent contract
- * with a single execute operation — no browser-specific compilation rules.
+ * with navigate and execute operations — no browser-specific compilation rules.
  */
 
 import { describe, it, expect } from "vitest";
-import { compileOne } from "./index.js";
+import { compileOne } from "@tisyn/compiler";
 
 // Ambient browser contract declaration matching the authored surface
 const BROWSER_PREAMBLE = `
+  interface NavigateParams { url: string }
   interface ExecuteParams { workflow: unknown }
 
   declare function Browser(): {
+    navigate(params: NavigateParams): Workflow<void>;
     execute(params: ExecuteParams): Workflow<unknown>;
   };
 `;
@@ -62,13 +64,14 @@ function findEvalNodes(node: unknown, prefix: string): Record<string, any>[] {
 // ── Tests ──
 
 describe("Browser contract compiler acceptance", () => {
-  it("BC-C-001: minimal browser scope compiles with single execute", () => {
+  it("BC-C-001: browser scope compiles with navigate and execute", () => {
     const ir = compileOne(`
       ${BROWSER_PREAMBLE}
       function* test(browserTransport: () => AgentTransportFactory): Workflow<unknown> {
         return yield* scoped(function* () {
           yield* useTransport(Browser, browserTransport());
           const browser = yield* useAgent(Browser);
+          yield* browser.navigate({ url: "https://example.com" });
           return yield* browser.execute({ workflow: 42 });
         });
       }
@@ -81,10 +84,11 @@ describe("Browser contract compiler acceptance", () => {
     const bindings = scope!.data.expr.bindings;
     expect(bindings).toHaveProperty("browser");
 
-    // Body contains Eval("browser.execute", ...)
+    // Body contains both Eval("browser.navigate", ...) and Eval("browser.execute", ...)
     const evals = findEvalNodes(scope!.data.expr.body, "browser.");
-    expect(evals.length).toBeGreaterThanOrEqual(1);
-    expect(evals[0]!.id).toBe("browser.execute");
+    const ids = evals.map((e) => e.id);
+    expect(ids).toContain("browser.navigate");
+    expect(ids).toContain("browser.execute");
   });
 
   it("BC-C-003: useAgent(Browser) erased from IR", () => {
@@ -105,6 +109,26 @@ describe("Browser contract compiler acceptance", () => {
     // No useAgent node should appear in the IR — useAgent is erased
     const useAgentNodes = findEvalNodes(scope!, "useAgent");
     expect(useAgentNodes).toHaveLength(0);
+  });
+
+  it("BC-C-008: browser.navigate lowers to Eval", () => {
+    const ir = compileOne(`
+      ${BROWSER_PREAMBLE}
+      function* test(browserTransport: () => AgentTransportFactory): Workflow<void> {
+        return yield* scoped(function* () {
+          yield* useTransport(Browser, browserTransport());
+          const browser = yield* useAgent(Browser);
+          yield* browser.navigate({ url: "https://example.com" });
+        });
+      }
+    `);
+
+    const scope = findScopeNode(ir);
+    expect(scope).toBeDefined();
+
+    const evals = findEvalNodes(scope!.data.expr.body, "browser.navigate");
+    expect(evals.length).toBeGreaterThanOrEqual(1);
+    expect(evals[0]!.id).toBe("browser.navigate");
   });
 
   it("BC-C-007: browserTransport() compiled as ordinary call, not built-in", () => {
