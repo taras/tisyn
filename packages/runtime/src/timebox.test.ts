@@ -9,7 +9,6 @@ import { expect } from "vitest";
 import { execute } from "./execute.js";
 import type { IrInput, Val } from "@tisyn/ir";
 import type { DurableEvent, YieldEvent, CloseEvent } from "@tisyn/kernel";
-import { InMemoryStream } from "@tisyn/durable-streams";
 
 // ── IR helpers ──
 
@@ -35,10 +34,6 @@ function refIR(name: string) {
 
 function sleepIR(ms: number) {
   return { tisyn: "eval", id: "sleep", data: [ms] };
-}
-
-function effectIR(id: string, data: unknown = []) {
-  return { tisyn: "eval", id, data };
 }
 
 function spawnIR(body: unknown): IrInput {
