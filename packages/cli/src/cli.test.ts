@@ -19,6 +19,8 @@ import { discoverConfig, validateAndResolveConfig, ConfigError } from "./config.
 import { buildInputSchema } from "@tisyn/compiler";
 import { deriveFlags, parseInputFlags, formatInputHelp } from "./inputs.js";
 import { CliError } from "./load-descriptor.js";
+import { rebaseConfigPaths } from "./run.js";
+import type { ResolvedConfig } from "@tisyn/runtime";
 
 // ── Temp dir helpers ──────────────────────────────────────────────────────────
 
@@ -432,5 +434,73 @@ describe("input flag parsing", () => {
     expect(help).toContain("(required)");
     expect(help).toContain("--debug");
     expect(help).toContain("(optional)");
+  });
+});
+
+// ── rebaseConfigPaths ─────────────────────────────────────────────────────────
+
+describe("rebaseConfigPaths", () => {
+  it("resolves relative local transport module path", function* () {
+    const config: ResolvedConfig = {
+      agents: [{ id: "a", transport: { kind: "local", module: "./agent.js" } }],
+      journal: { kind: "memory" },
+    };
+    rebaseConfigPaths(config, "/project/descriptors");
+    expect(config.agents[0]!.transport.module).toBe("/project/descriptors/agent.js");
+  });
+
+  it("leaves absolute transport module path unchanged", function* () {
+    const config: ResolvedConfig = {
+      agents: [{ id: "a", transport: { kind: "inprocess", module: "/abs/agent.js" } }],
+      journal: { kind: "memory" },
+    };
+    rebaseConfigPaths(config, "/project/descriptors");
+    expect(config.agents[0]!.transport.module).toBe("/abs/agent.js");
+  });
+
+  it("resolves relative server static path", function* () {
+    const config: ResolvedConfig = {
+      agents: [],
+      journal: { kind: "memory" },
+      server: { kind: "http", port: 3000, static: "./public" },
+    };
+    rebaseConfigPaths(config, "/project/descriptors");
+    expect(config.server!.static).toBe("/project/descriptors/public");
+  });
+
+  it("resolves relative file journal path", function* () {
+    const config: ResolvedConfig = {
+      agents: [],
+      journal: { kind: "file", path: "./data/journal.log" },
+    };
+    rebaseConfigPaths(config, "/project/descriptors");
+    expect(config.journal.path).toBe("/project/descriptors/data/journal.log");
+  });
+
+  it("resolves relative worker URL that looks like a file path", function* () {
+    const config: ResolvedConfig = {
+      agents: [{ id: "w", transport: { kind: "worker", url: "./worker.js" } }],
+      journal: { kind: "memory" },
+    };
+    rebaseConfigPaths(config, "/project/descriptors");
+    expect(config.agents[0]!.transport.url).toBe("/project/descriptors/worker.js");
+  });
+
+  it("leaves worker URL with protocol unchanged", function* () {
+    const config: ResolvedConfig = {
+      agents: [{ id: "w", transport: { kind: "worker", url: "http://localhost:4000/worker.js" } }],
+      journal: { kind: "memory" },
+    };
+    rebaseConfigPaths(config, "/project/descriptors");
+    expect(config.agents[0]!.transport.url).toBe("http://localhost:4000/worker.js");
+  });
+
+  it("resolves relative stdio command starting with ./", function* () {
+    const config: ResolvedConfig = {
+      agents: [{ id: "s", transport: { kind: "stdio", command: "./bin/agent" } }],
+      journal: { kind: "memory" },
+    };
+    rebaseConfigPaths(config, "/project/descriptors");
+    expect(config.agents[0]!.transport.command).toBe("/project/descriptors/bin/agent");
   });
 });

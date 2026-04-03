@@ -4,7 +4,7 @@
  * Maps compiler-emitted InputSchema metadata to CLI flags for `tsn run`.
  */
 
-import type { InputSchema, InputFieldSchema } from "@tisyn/compiler";
+import type { InputSchema } from "@tisyn/compiler";
 import { CliError } from "./load-descriptor.js";
 
 export interface FlagDefinition {

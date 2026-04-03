@@ -9,7 +9,7 @@ import { createServer } from "node:http";
 import { readFileSync } from "node:fs";
 import { join, extname } from "node:path";
 import { pathToFileURL } from "node:url";
-import { call, resource } from "effection";
+import { call, resource, withResolvers } from "effection";
 import type { Operation } from "effection";
 import { installAgentTransport } from "@tisyn/transport";
 import { workerTransport } from "@tisyn/transport/worker";
@@ -84,10 +84,10 @@ export function createJournalStream(journal: ResolvedJournal): DurableStream {
       return new InMemoryStream();
 
     case "file":
-      console.warn(
-        `File journal at '${journal.path}' is not yet supported in CLI; using in-memory journal`,
+      throw new CliError(
+        2,
+        `File-backed journaling is not yet implemented (configured path: '${journal.path}'). Use journal.memory() or omit the journal field.`,
       );
-      return new InMemoryStream();
 
     default:
       throw new CliError(2, `Unknown journal kind '${journal.kind}'`);
@@ -107,7 +107,10 @@ const MIME_TYPES: Record<string, string> = {
  * Start an HTTP+WebSocket server from resolved server config.
  * Returns an Effection resource that tears down on scope exit.
  */
-export function* startServer(serverConfig: ResolvedServer): Operation<void> {
+export function* startServer(
+  serverConfig: ResolvedServer,
+  ready?: () => void,
+): Operation<void> {
   yield* resource(function* (provide) {
     const httpServer = createServer((req, res) => {
       if (serverConfig.static && req.url) {
@@ -131,15 +134,13 @@ export function* startServer(serverConfig: ResolvedServer): Operation<void> {
 
     const wss = new WebSocketServer({ server: httpServer });
 
-    yield* call(
-      () =>
-        new Promise<void>((resolve, reject) => {
-          httpServer.listen(serverConfig.port, () => resolve());
-          httpServer.on("error", reject);
-        }),
-    );
+    const listening = withResolvers<void>();
+    httpServer.on("error", (err: Error) => listening.reject(err));
+    httpServer.listen(serverConfig.port, listening.resolve);
+    yield* listening.operation;
 
     console.log(`Server listening on http://localhost:${serverConfig.port}`);
+    ready?.();
 
     try {
       yield* provide(undefined);

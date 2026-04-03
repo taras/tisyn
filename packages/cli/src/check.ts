@@ -18,7 +18,6 @@ import {
   loadDescriptorModule,
   resolveWorkflowModule,
   loadWorkflowExport,
-  CliError,
 } from "./load-descriptor.js";
 import { deriveFlags, formatInputHelp } from "./inputs.js";
 import type { CheckCommandOptions } from "./types.js";
@@ -65,7 +64,11 @@ export function* runCheck(options: CheckCommandOptions, cwd: string): Operation<
   }
 
   // Advisory: print input schema summary
-  if (workflowExport.inputSchema) {
+  if (!workflowExport.inputSchema) {
+    console.warn("Warning: workflow module does not export input schema metadata");
+  } else if (workflowExport.inputSchema.type === "unsupported") {
+    console.warn(`Warning: workflow input parameters are unsupported: ${workflowExport.inputSchema.reason}`);
+  } else if (workflowExport.inputSchema.type === "object") {
     const flags = deriveFlags(workflowExport.inputSchema);
     if (flags.length > 0) {
       console.log(formatInputHelp(flags));
