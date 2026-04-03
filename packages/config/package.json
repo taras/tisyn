@@ -1,11 +1,11 @@
 {
-  "name": "@tisyn/runtime",
+  "name": "@tisyn/config",
   "version": "0.8.0",
   "license": "UNLICENSED",
   "repository": {
     "type": "git",
     "url": "https://github.com/taras/tisyn.git",
-    "directory": "packages/runtime"
+    "directory": "packages/config"
   },
   "files": [
     "dist"
@@ -26,21 +26,7 @@
     "build": "tsc --build",
     "test": "vitest run"
   },
-  "dependencies": {
-    "@tisyn/agent": "workspace:*",
-    "@tisyn/config": "workspace:*",
-    "@tisyn/durable-streams": "workspace:*",
-    "@tisyn/ir": "workspace:*",
-    "@tisyn/kernel": "workspace:*",
-    "@tisyn/transport": "workspace:*",
-    "@tisyn/validate": "workspace:*"
-  },
   "devDependencies": {
-    "@effectionx/vitest": "^0.3.0",
-    "effection": "4.0.2",
     "vitest": "^4"
-  },
-  "peerDependencies": {
-    "effection": "^3 || ^4"
   }
 }

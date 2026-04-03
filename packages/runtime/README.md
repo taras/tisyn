@@ -136,6 +136,39 @@ The runtime only performs live work where replay can no longer satisfy evaluatio
 - [`@tisyn/durable-streams`](../durable-streams/README.md) provides the append-only event log used for replay and continuation.
 - [`@tisyn/agent`](../agent/README.md) provides the installed handlers used for live effect dispatch.
 
+## Config Resolution Helpers
+
+The runtime exports pure functions for resolving `@tisyn/config` descriptors into workflow-visible projections. These implement steps 2-6 of the Configuration Specification §7.1 resolution order.
+
+```ts
+import { applyOverlay, resolveEnv, resolveConfig, projectConfig } from "@tisyn/runtime";
+import { workflow, agent, transport, env, collectEnvNodes } from "@tisyn/config";
+
+const descriptor = workflow({
+  run: "chat",
+  agents: [agent("llm", transport.websocket(env.required("LLM_URL")))],
+});
+
+// Full pipeline: overlay → validate → collect env → resolve → project
+const config = resolveConfig(descriptor, {
+  entrypoint: "dev",
+  processEnv: { LLM_URL: "ws://localhost:4000" },
+});
+// config.agents[0].transport.url === "ws://localhost:4000"
+// config.journal.kind === "memory" (default)
+```
+
+### Exported functions
+
+| Function | Purpose |
+|---|---|
+| `applyOverlay(base, entrypointName?)` | Apply entrypoint overlay (§7.3 merge rules) |
+| `resolveEnv(envNodes, processEnv)` | Resolve env values with coercion (§5.4) |
+| `resolveConfig(descriptor, options?)` | Full resolution pipeline (steps 2-6) |
+| `projectConfig(descriptor, resolvedEnv)` | Strip discriminants, project workflow-visible shape |
+
+> **Note:** Workflow-authored `yield* useConfig()` access is not yet available. These helpers deliver the resolution pipeline as pure functions. Wiring them into a workflow execution context requires compiler support and a config-aware runtime entrypoint, both defined by a companion spec.
+
 ## Boundaries
 
 `@tisyn/runtime` owns:

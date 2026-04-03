@@ -26,6 +26,7 @@
     { "path": "packages/compiler" },
     { "path": "packages/protocol" },
     { "path": "packages/transport" },
-    { "path": "packages/validate" }
+    { "path": "packages/validate" },
+    { "path": "packages/config" }
   ]
 }

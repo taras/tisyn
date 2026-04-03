@@ -43,6 +43,7 @@ Tisyn is easiest to understand as layers:
 1. Program model and validation
    - [`@tisyn/ir`](./packages/ir/README.md): the Tisyn expression/value model
    - [`@tisyn/validate`](./packages/validate/README.md): boundary validation for untrusted or external IR
+   - [`@tisyn/config`](./packages/config/README.md): workflow runtime-topology config descriptors
 
 2. Semantics
    - [`@tisyn/kernel`](./packages/kernel/README.md): evaluation, environments, core errors, and durable event shapes
@@ -76,6 +77,7 @@ Start in different places depending on what you want to learn.
 
 | Package | Purpose |
 | --- | --- |
+| [`@tisyn/config`](./packages/config/README.md) | Workflow config descriptors, constructors, validation, and walking |
 | [`@tisyn/ir`](./packages/ir/README.md) | AST types, constructors, walkers, printers, and value types |
 | [`@tisyn/validate`](./packages/validate/README.md) | IR validation and `MalformedIR` errors |
 | [`@tisyn/kernel`](./packages/kernel/README.md) | Core evaluation, environments, and runtime error/event types |
@@ -120,6 +122,8 @@ For the detailed agent model and API examples, see [`@tisyn/agent`](./packages/a
 
 | Document | Scope |
 | --- | --- |
+| [Configuration Specification](./specs/tisyn-config-specification.md) | Workflow runtime-topology config descriptors, validation, env resolution |
+| [Configuration Test Plan](./specs/tisyn-config-test-plan.md) | Conformance test plan for the configuration specification |
 | [Tisyn Specification 1.0](./specs/tisyn-specification-1.0.md) | Core language: values, expressions, and evaluation rules |
 | [Kernel Specification](./specs/tisyn-kernel-specification.md) | Kernel semantics, environments, and effect dispatch |
 | [Agent Specification 1.1.0](./specs/tisyn-agent-specification-1.1.0.md) | Typed agent declarations, implementations, and invocation |
