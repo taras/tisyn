@@ -140,9 +140,9 @@ export function createSession(options: CreateSessionOptions): Operation<Protocol
             },
           });
 
-          yield* transport.send(request);
-
           try {
+            yield* transport.send(request);
+
             yield* provide({
               *next(): Operation<IteratorResult<Val, ResultPayload>> {
                 const item = yield* signalSub.next();
