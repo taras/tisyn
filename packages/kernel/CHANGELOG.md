@@ -1,5 +1,13 @@
 # @tisyn/kernel
 
+## 0.8.0
+
+### Patch Changes
+
+- b515855: Verify `stream.subscribe` and `stream.next` classify as standard external effects with zero code changes. Added classification tests confirming the kernel's resolve path handles stream effect data correctly.
+  - @tisyn/ir@0.8.0
+  - @tisyn/validate@0.8.0
+
 ## 0.7.0
 
 ### Patch Changes

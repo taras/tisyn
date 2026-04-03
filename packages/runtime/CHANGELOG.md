@@ -1,5 +1,27 @@
 # @tisyn/runtime
 
+## 0.8.0
+
+### Minor Changes
+
+- b515855: Handle `stream.subscribe` and `stream.next` standard external effects in the execution loop.
+
+  - `stream.subscribe` creates an Effection subscription and returns a deterministic capability handle (`sub:{coroutineId}:{counter}`)
+  - `stream.next` iterates the subscription, returning `{ done, value }` results
+  - Stream-aware dispatch added to all three dispatch sites: main driveKernel, resource init, and resource cleanup
+  - Capability enforcement: RV1 rejects cross-coroutine handle use, RV2 rejects handles in non-stream effect data, RV3 rejects handles in any coroutine close value
+  - Replay caches source definitions during `stream.subscribe` replay; lazy subscription reconstruction at the live frontier
+
+### Patch Changes
+
+- Updated dependencies [b515855]
+  - @tisyn/kernel@0.8.0
+  - @tisyn/transport@0.8.0
+  - @tisyn/agent@0.8.0
+  - @tisyn/durable-streams@0.8.0
+  - @tisyn/ir@0.8.0
+  - @tisyn/validate@0.8.0
+
 ## 0.7.0
 
 ### Minor Changes

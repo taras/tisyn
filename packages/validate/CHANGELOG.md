@@ -1,5 +1,11 @@
 # @tisyn/validate
 
+## 0.8.0
+
+### Patch Changes
+
+- @tisyn/ir@0.8.0
+
 ## 0.7.0
 
 ### Patch Changes
