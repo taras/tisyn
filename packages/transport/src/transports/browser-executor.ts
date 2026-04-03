@@ -18,12 +18,45 @@
  * ```
  */
 
+import type { Operation } from "effection";
 import { run } from "effection";
 import { execute } from "@tisyn/runtime";
 import { InMemoryStream } from "@tisyn/durable-streams";
 import { Call } from "@tisyn/ir";
-import type { IrInput } from "@tisyn/ir";
-import type { LocalCapability } from "./browser.js";
+import type { IrInput, Json } from "@tisyn/ir";
+import type { InProcessRunner, LocalCapability } from "./browser.js";
+
+/**
+ * Create an in-process runner for browserTransport's in-process mode.
+ *
+ * The returned function evaluates workflow IR using the full
+ * `@tisyn/runtime` — the same semantics the browser executor uses
+ * in-page. Pass it as the `run` config field of `browserTransport()`.
+ *
+ * @example
+ * ```typescript
+ * import { browserTransport, localCapability } from "@tisyn/transport/browser";
+ * import { createInProcessRunner } from "@tisyn/transport/browser-executor";
+ *
+ * const transport = browserTransport({
+ *   capabilities: [localCapability(MyAgent, handlers)],
+ *   run: createInProcessRunner(),
+ * });
+ * ```
+ */
+export function createInProcessRunner(): InProcessRunner {
+  return function* (workflow: IrInput): Operation<Json> {
+    const stream = new InMemoryStream();
+    const { result } = yield* execute({
+      ir: Call(workflow as any) as IrInput,
+      stream,
+    });
+    if (result.status === "err") {
+      throw new Error((result as any).error?.message ?? "Browser execute failed");
+    }
+    return (result as any).value as Json;
+  };
+}
 
 /**
  * Create a browser executor that runs inside the browser page.

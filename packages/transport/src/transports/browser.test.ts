@@ -7,6 +7,7 @@ import { Fn } from "@tisyn/ir";
 import type { IrInput } from "@tisyn/ir";
 import { installRemoteAgent } from "../install-remote.js";
 import { Browser, browserTransport, localCapability } from "./browser.js";
+import { createInProcessRunner } from "./browser-executor.js";
 
 // ── Test agent for capability composition ──
 
@@ -107,6 +108,7 @@ describe("browser transport", () => {
     it("installed local capability is available to incoming IR", function* () {
       const factory = browserTransport({
         capabilities: [localCapability(Calc, calcHandlers())],
+        run: createInProcessRunner(),
       });
 
       yield* scoped(function* () {
@@ -124,6 +126,7 @@ describe("browser transport", () => {
           localCapability(Calc, calcHandlers()),
           localCapability(Greet, greetHandlers()),
         ],
+        run: createInProcessRunner(),
       });
 
       yield* scoped(function* () {
@@ -143,7 +146,7 @@ describe("browser transport", () => {
 
     it("uninstalled capability causes local error", function* () {
       // No capabilities installed
-      const factory = browserTransport({});
+      const factory = browserTransport({ run: createInProcessRunner() });
 
       yield* scoped(function* () {
         yield* installRemoteAgent(Browser, factory);
@@ -162,6 +165,7 @@ describe("browser transport", () => {
       // Install Calc but NOT Greet — dispatching to greet should fail locally
       const factory = browserTransport({
         capabilities: [localCapability(Calc, calcHandlers())],
+        run: createInProcessRunner(),
       });
 
       yield* scoped(function* () {
@@ -252,6 +256,7 @@ describe("browser transport", () => {
     it("returns JSON-serializable result value", function* () {
       const factory = browserTransport({
         capabilities: [localCapability(Calc, calcHandlers())],
+        run: createInProcessRunner(),
       });
 
       yield* scoped(function* () {
@@ -267,6 +272,7 @@ describe("browser transport", () => {
     it("executor error throws Error with message", function* () {
       const factory = browserTransport({
         capabilities: [localCapability(Calc, calcHandlers())],
+        run: createInProcessRunner(),
       });
 
       yield* scoped(function* () {
@@ -296,6 +302,7 @@ describe("browser transport", () => {
 
       const factory = browserTransport({
         capabilities: [countingCap],
+        run: createInProcessRunner(),
       });
 
       yield* scoped(function* () {
@@ -321,6 +328,7 @@ describe("browser transport", () => {
     it("factory creates transport in in-process mode", function* () {
       const factory = browserTransport({
         capabilities: [localCapability(Calc, calcHandlers())],
+        run: createInProcessRunner(),
       });
 
       yield* scoped(function* () {
@@ -333,6 +341,7 @@ describe("browser transport", () => {
     it("in-process mode does not touch Playwright", function* () {
       const factory = browserTransport({
         capabilities: [localCapability(Calc, calcHandlers())],
+        run: createInProcessRunner(),
       });
 
       yield* scoped(function* () {
@@ -415,6 +424,7 @@ describe("browser transport", () => {
     it("navigate throws in in-process mode", function* () {
       const factory = browserTransport({
         capabilities: [localCapability(Calc, calcHandlers())],
+        run: createInProcessRunner(),
       });
 
       yield* scoped(function* () {

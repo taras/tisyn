@@ -3,7 +3,6 @@ import { call, createChannel, createScope, ensure, scoped } from "effection";
 import type { OperationSpec, AgentDeclaration, ImplementationHandlers } from "@tisyn/agent";
 import { agent, operation, implementAgent } from "@tisyn/agent";
 import type { IrInput, Json } from "@tisyn/ir";
-import { Call } from "@tisyn/ir";
 import type {
   AgentTransport,
   AgentTransportFactory,
@@ -26,6 +25,14 @@ import type { Browser as PWBrowser, BrowserContext, Page } from "playwright-core
  * real-browser execution modes.
  */
 export type LocalCapability = () => Operation<void>;
+
+/**
+ * A function that evaluates a workflow IR using the full runtime
+ * and returns its result as a JSON-serializable value.
+ *
+ * Create one via `createInProcessRunner()` from `@tisyn/transport/browser-executor`.
+ */
+export type InProcessRunner = (workflow: IrInput) => Operation<Json>;
 
 /**
  * Create a browser-local capability from an agent declaration and handlers.
@@ -85,9 +92,16 @@ export interface BrowserTransportConfig {
 
   /**
    * Browser-local capabilities installed before each execute call.
-   * Used in in-process execution mode (when executor is omitted).
+   * Used in in-process execution mode (when run is provided).
    */
   capabilities?: LocalCapability[];
+
+  /**
+   * In-process execution function for running IR without Playwright.
+   * Required when executor path is not provided.
+   * Create one via createInProcessRunner() from @tisyn/transport/browser-executor.
+   */
+  run?: InProcessRunner;
 
   /**
    * Path to executor IIFE bundle for real-browser execution.
@@ -97,8 +111,8 @@ export interface BrowserTransportConfig {
    * When provided: real-browser mode — requires playwright-core,
    * launches browser, injects executor, sends IR via page.evaluate.
    *
-   * When omitted: in-process mode — no Playwright dependency,
-   * executes IR directly with configured capabilities.
+   * When omitted with run: in-process mode — no Playwright dependency,
+   * executes IR using the injected runner with configured capabilities.
    */
   executor?: string;
 }
@@ -109,9 +123,8 @@ const DEFAULT_VIEWPORT = { width: 1280, height: 720 };
  * Create a transport factory for a browser agent.
  *
  * Supports two execution modes:
- * - **In-process** (executor omitted): executes IR using `@tisyn/runtime`
- *   with the configured capabilities. No Playwright dependency. Requires
- *   `@tisyn/runtime` and `@tisyn/durable-streams` (loaded dynamically).
+ * - **In-process** (run provided, executor omitted): executes IR using
+ *   the injected runner with configured capabilities. No Playwright dependency.
  * - **Real-browser** (executor provided): launches a Playwright browser,
  *   injects the executor IIFE, and sends IR via page.evaluate. Requires
  *   playwright-core.
@@ -180,15 +193,9 @@ export function browserTransport(config?: BrowserTransportConfig): AgentTranspor
         }
         return result.value as Json;
       };
-    } else {
-      // ── In-process mode: no Playwright, runtime evaluation ──
-      // Dynamic import — @tisyn/runtime loaded only when needed (avoids circular dep)
-      const { execute: runtimeExecute }: typeof import("@tisyn/runtime") = yield* call(
-        () => import("@tisyn/runtime"),
-      );
-      const { InMemoryStream }: typeof import("@tisyn/durable-streams") = yield* call(
-        () => import("@tisyn/durable-streams"),
-      );
+    } else if (config?.run) {
+      // ── In-process mode: injected runner, no Playwright ──
+      const runner = config.run;
 
       navigateHandler = function* (): Operation<void> {
         throw new Error("Browser.navigate requires real-browser mode (provide executor config)");
@@ -198,17 +205,13 @@ export function browserTransport(config?: BrowserTransportConfig): AgentTranspor
           for (const cap of capabilities) {
             yield* cap();
           }
-          const stream = new InMemoryStream();
-          const { result } = yield* runtimeExecute({
-            ir: Call(params.workflow as any) as IrInput,
-            stream,
-          });
-          if (result.status === "err") {
-            throw new Error((result as any).error?.message ?? "Browser execute failed");
-          }
-          return (result as any).value as Json;
+          return yield* runner(params.workflow);
         });
       };
+    } else {
+      throw new Error(
+        "browserTransport requires either 'executor' (real-browser) or 'run' (in-process)",
+      );
     }
 
     // Create handler object
