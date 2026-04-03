@@ -111,12 +111,7 @@ interface ResourceChild {
  * 5. Write Close event on completion/error
  */
 export function* execute(options: ExecuteOptions): Operation<ExecuteResult> {
-  const {
-    ir,
-    env: envRecord = {},
-    stream = new InMemoryStream(),
-    coroutineId = "root",
-  } = options;
+  const { ir, env: envRecord = {}, stream = new InMemoryStream(), coroutineId = "root" } = options;
 
   // Phase 1: Validate IR before evaluation
   let validatedIr: Expr;
