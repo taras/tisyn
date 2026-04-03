@@ -407,7 +407,9 @@ export const CONSTRUCTOR_TABLE: Record<string, ConstructorEntry> = {
       const pollBody = Let("__probe_0", probe, ifNode as AnyExpr);
       const pollFn = Fn([], pollBody as AnyExpr);
       const callPoll = Call(Ref("__poll_0") as AnyExpr);
-      const inner = Let("__until_0", until,
+      const inner = Let(
+        "__until_0",
+        until,
         Let("__poll_0", pollFn as AnyExpr, callPoll as AnyExpr) as AnyExpr,
       );
       return Timebox(timeout, inner as AnyExpr) as TisynExpr;

@@ -143,9 +143,7 @@ describe("converge compilation", () => {
     const sleepNodes = findAllNodes(ir, "sleep");
     expect(sleepNodes.length).toBeGreaterThanOrEqual(1);
     // One sleep should have interval 200
-    const intervalSleep = sleepNodes.find(
-      (s) => Array.isArray(s.data) && s.data[0] === 200,
-    );
+    const intervalSleep = sleepNodes.find((s) => Array.isArray(s.data) && s.data[0] === 200);
     expect(intervalSleep).toBeDefined();
   });
 

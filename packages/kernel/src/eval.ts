@@ -89,11 +89,7 @@ export function* evaluate(expr: Expr, env: Env): Generator<EffectDescriptor, Val
         const inner = yield* unquote(data, env, evaluate);
         const fields = inner as { duration: unknown; body: unknown };
         const durationVal = yield* evaluate(fields.duration as Expr, env);
-        if (
-          typeof durationVal !== "number" ||
-          !Number.isFinite(durationVal) ||
-          durationVal < 0
-        ) {
+        if (typeof durationVal !== "number" || !Number.isFinite(durationVal) || durationVal < 0) {
           throw new TypeError(
             `timebox: duration must be a non-negative finite number, got ${JSON.stringify(durationVal)}`,
           );

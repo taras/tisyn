@@ -3343,13 +3343,23 @@ function emitResource(callExpr: ts.CallExpression, ctx: EmitContext): Expr {
 
 function emitTimebox(callExpr: ts.CallExpression, ctx: EmitContext): Expr {
   if (callExpr.arguments.length !== 2) {
-    throw error("E-TB-01", "timebox() requires exactly 2 arguments: duration and generator function", callExpr, ctx);
+    throw error(
+      "E-TB-01",
+      "timebox() requires exactly 2 arguments: duration and generator function",
+      callExpr,
+      ctx,
+    );
   }
 
   const [durationArg, bodyArg] = callExpr.arguments;
 
   if (!bodyArg || !ts.isFunctionExpression(bodyArg) || !bodyArg.asteriskToken) {
-    throw error("E-TB-02", "timebox() second argument must be a generator function expression", callExpr, ctx);
+    throw error(
+      "E-TB-02",
+      "timebox() second argument must be a generator function expression",
+      callExpr,
+      ctx,
+    );
   }
 
   const durationExpr = emitExpression(durationArg!, ctx);
@@ -3385,10 +3395,18 @@ function emitConverge(callExpr: ts.CallExpression, ctx: EmitContext): Expr {
   for (const prop of arg.properties) {
     if (!ts.isPropertyAssignment(prop) || !ts.isIdentifier(prop.name)) continue;
     switch (prop.name.text) {
-      case "probe": probeProp = prop; break;
-      case "until": untilProp = prop; break;
-      case "timeout": timeoutProp = prop; break;
-      case "interval": intervalProp = prop; break;
+      case "probe":
+        probeProp = prop;
+        break;
+      case "until":
+        untilProp = prop;
+        break;
+      case "timeout":
+        timeoutProp = prop;
+        break;
+      case "interval":
+        intervalProp = prop;
+        break;
     }
   }
 
@@ -3409,7 +3427,12 @@ function emitConverge(callExpr: ts.CallExpression, ctx: EmitContext): Expr {
   // Validate probe: must be generator function*
   const probeExpr = (probeProp as ts.PropertyAssignment).initializer;
   if (!ts.isFunctionExpression(probeExpr) || !probeExpr.asteriskToken) {
-    throw error("E-CONV-01", "converge() probe must be a generator function expression", probeExpr, ctx);
+    throw error(
+      "E-CONV-01",
+      "converge() probe must be a generator function expression",
+      probeExpr,
+      ctx,
+    );
   }
 
   // Validate until: must be arrow with expression body and exactly one identifier parameter
@@ -3421,10 +3444,20 @@ function emitConverge(callExpr: ts.CallExpression, ctx: EmitContext): Expr {
     throw error("E-CONV-02", "converge() until must accept exactly one parameter", untilExpr, ctx);
   }
   if (!ts.isIdentifier(untilExpr.parameters[0]!.name)) {
-    throw error("E-CONV-02", "converge() until parameter must be a simple identifier", untilExpr.parameters[0]!, ctx);
+    throw error(
+      "E-CONV-02",
+      "converge() until parameter must be a simple identifier",
+      untilExpr.parameters[0]!,
+      ctx,
+    );
   }
   if (ts.isBlock(untilExpr.body)) {
-    throw error("E-CONV-03", "converge() until must have an expression body (not a block body)", untilExpr, ctx);
+    throw error(
+      "E-CONV-03",
+      "converge() until must have an expression body (not a block body)",
+      untilExpr,
+      ctx,
+    );
   }
 
   // Scan for yield* in restricted positions
@@ -3439,7 +3472,12 @@ function emitConverge(callExpr: ts.CallExpression, ctx: EmitContext): Expr {
 
   const intervalInitializer = (intervalProp as ts.PropertyAssignment).initializer;
   if (containsYieldStar(intervalInitializer)) {
-    throw error("E-CONV-08", "converge() interval must not contain yield*", intervalInitializer, ctx);
+    throw error(
+      "E-CONV-08",
+      "converge() interval must not contain yield*",
+      intervalInitializer,
+      ctx,
+    );
   }
 
   // W-CONV-01: effectless probe should emit a warning, but the compiler
@@ -3459,9 +3497,8 @@ function emitConverge(callExpr: ts.CallExpression, ctx: EmitContext): Expr {
 
   // Get the until parameter name
   const untilParam = untilExpr.parameters[0];
-  const untilParamName = untilParam && ts.isIdentifier(untilParam.name)
-    ? untilParam.name.text
-    : "x";
+  const untilParamName =
+    untilParam && ts.isIdentifier(untilParam.name) ? untilParam.name.text : "x";
 
   // Compile until body with its own scope frame containing the parameter
   const untilCtx: EmitContext = {
@@ -3498,18 +3535,30 @@ function emitConverge(callExpr: ts.CallExpression, ctx: EmitContext): Expr {
   //       Call(Ref(__poll), []))))
   return TimeboxEval(
     timeoutExprIr,
-    Let(untilName, Fn([untilParamName], untilBodyIr),
-      Let(pollName, Fn([],
-        Let(probeName, probeBodyIr,
-          If(
-            Call(Ref(untilName), [Ref(probeName)]),
-            Ref(probeName),
-            Let(discardName, ExternalEval("sleep", [intervalExprIr] as unknown as Expr),
-              Call(Ref(pollName), [])),
+    Let(
+      untilName,
+      Fn([untilParamName], untilBodyIr),
+      Let(
+        pollName,
+        Fn(
+          [],
+          Let(
+            probeName,
+            probeBodyIr,
+            If(
+              Call(Ref(untilName), [Ref(probeName)]),
+              Ref(probeName),
+              Let(
+                discardName,
+                ExternalEval("sleep", [intervalExprIr] as unknown as Expr),
+                Call(Ref(pollName), []),
+              ),
+            ),
           ),
         ),
+        Call(Ref(pollName), []),
       ),
-      Call(Ref(pollName), []))),
+    ),
   );
 }
 

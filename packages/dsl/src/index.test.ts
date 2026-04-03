@@ -841,9 +841,7 @@ describe("DSL: Timebox constructor", () => {
 
 describe("DSL: Converge macro", () => {
   it("expands Converge to timebox IR (no 'converge' id)", () => {
-    const result = parseDSLSafe(
-      'Converge(42, Fn(["x"], Gt(Ref("x"), 0)), 100, 5000)',
-    );
+    const result = parseDSLSafe('Converge(42, Fn(["x"], Gt(Ref("x"), 0)), 100, 5000)');
     expect(result.ok).toBe(true);
     if (!result.ok) return;
     const ir = result.value as Record<string, any>;
@@ -855,9 +853,7 @@ describe("DSL: Converge macro", () => {
   });
 
   it("expansion contains __until_0, __poll_0, __probe_0, __discard_0 names", () => {
-    const result = parseDSLSafe(
-      'Converge(42, Fn(["x"], Gt(Ref("x"), 0)), 100, 5000)',
-    );
+    const result = parseDSLSafe('Converge(42, Fn(["x"], Gt(Ref("x"), 0)), 100, 5000)');
     expect(result.ok).toBe(true);
     if (!result.ok) return;
     const text = JSON.stringify(result.value);
@@ -868,9 +864,7 @@ describe("DSL: Converge macro", () => {
   });
 
   it("sleep node uses interval value (3rd arg)", () => {
-    const result = parseDSLSafe(
-      'Converge(42, Fn(["x"], Gt(Ref("x"), 0)), 200, 5000)',
-    );
+    const result = parseDSLSafe('Converge(42, Fn(["x"], Gt(Ref("x"), 0)), 200, 5000)');
     expect(result.ok).toBe(true);
     if (!result.ok) return;
     const text = JSON.stringify(result.value);
@@ -880,24 +874,18 @@ describe("DSL: Converge macro", () => {
   });
 
   it("rejects arity 3 (missing timeout)", () => {
-    const result = parseDSLSafe(
-      'Converge(42, Fn(["x"], Gt(Ref("x"), 0)), 100)',
-    );
+    const result = parseDSLSafe('Converge(42, Fn(["x"], Gt(Ref("x"), 0)), 100)');
     expect(result.ok).toBe(false);
   });
 
   it("rejects arity 5", () => {
-    const result = parseDSLSafe(
-      'Converge(42, Fn(["x"], Gt(Ref("x"), 0)), 100, 5000, "extra")',
-    );
+    const result = parseDSLSafe('Converge(42, Fn(["x"], Gt(Ref("x"), 0)), 100, 5000, "extra")');
     expect(result.ok).toBe(false);
   });
 
   it("DSL Converge and compiler converge produce equivalent IR structure", () => {
     // Build the same converge via DSL macro
-    const dslResult = parseDSLSafe(
-      'Converge(42, Fn(["x"], Gt(Ref("x"), 0)), 100, 5000)',
-    );
+    const dslResult = parseDSLSafe('Converge(42, Fn(["x"], Gt(Ref("x"), 0)), 100, 5000)');
     expect(dslResult.ok).toBe(true);
     if (!dslResult.ok) return;
 

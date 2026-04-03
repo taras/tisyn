@@ -448,11 +448,7 @@ function checkTimeboxConstraints(
   }
   // TB-V4: duration subtree must not contain external Eval nodes
   if ("duration" in fields) {
-    checkNoExternalEvalInSubtree(
-      fields["duration"],
-      [...path, "data", "expr", "duration"],
-      errors,
-    );
+    checkNoExternalEvalInSubtree(fields["duration"], [...path, "data", "expr", "duration"], errors);
   }
 }
 
