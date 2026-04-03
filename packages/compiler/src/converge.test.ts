@@ -1,7 +1,7 @@
 /**
  * Compiler tests for converge.
  *
- * Tests the compilation of `yield* converge({ probe, until, timeout, interval? })`.
+ * Tests the compilation of `yield* converge({ probe, until, timeout, interval })`.
  * Converge lowers entirely to timebox IR — no "converge" id in the output.
  */
 
@@ -44,23 +44,6 @@ function findAllNodes(node: unknown, id: string): Record<string, any>[] {
   return results;
 }
 
-function findFnNode(node: unknown): Record<string, any> | undefined {
-  if (typeof node !== "object" || node === null) return undefined;
-  const obj = node as Record<string, unknown>;
-  if (obj["tisyn"] === "fn") return obj as Record<string, any>;
-  for (const value of Object.values(obj)) {
-    const found = findFnNode(value);
-    if (found) return found;
-    if (Array.isArray(value)) {
-      for (const item of value) {
-        const found = findFnNode(item);
-        if (found) return found;
-      }
-    }
-  }
-  return undefined;
-}
-
 // ── Acceptance tests ──
 
 describe("converge compilation", () => {
@@ -71,6 +54,7 @@ describe("converge compilation", () => {
           probe: function* () { return 42; },
           until: (x) => x > 0,
           timeout: 5000,
+          interval: 100,
         });
       }
     `);
@@ -87,6 +71,7 @@ describe("converge compilation", () => {
           probe: function* () { return 42; },
           until: (x) => x > 0,
           timeout: 3000,
+          interval: 100,
         });
       }
     `);
@@ -101,6 +86,7 @@ describe("converge compilation", () => {
           probe: function* () { return 42; },
           until: (x) => x > 0,
           timeout: 5000,
+          interval: 100,
         });
       }
     `);
@@ -124,6 +110,7 @@ describe("converge compilation", () => {
           probe: function* () { return 42; },
           until: (x) => x > 0,
           timeout: 5000,
+          interval: 100,
         });
       }
     `);
@@ -162,24 +149,6 @@ describe("converge compilation", () => {
     expect(intervalSleep).toBeDefined();
   });
 
-  it("default interval is 100 when not specified", () => {
-    const ir = compileOne(`
-      function* f(): Workflow<any> {
-        return yield* converge({
-          probe: function* () { return 42; },
-          until: (x) => x > 0,
-          timeout: 5000,
-        });
-      }
-    `);
-    const sleepNodes = findAllNodes(ir, "sleep");
-    expect(sleepNodes.length).toBeGreaterThanOrEqual(1);
-    const defaultSleep = sleepNodes.find(
-      (s) => Array.isArray(s.data) && s.data[0] === 100,
-    );
-    expect(defaultSleep).toBeDefined();
-  });
-
   it("free variables preserved as Refs", () => {
     const ir = compileOne(`
       function* f(target: number): Workflow<any> {
@@ -187,6 +156,7 @@ describe("converge compilation", () => {
           probe: function* () { return yield* sleep(10); },
           until: (x) => x > target,
           timeout: 5000,
+          interval: 100,
         });
       }
     `);
@@ -214,6 +184,7 @@ describe("converge compilation", () => {
           probe: function* () { return 42; },
           until: (x) => x > 0,
           timeout: ms,
+          interval: 100,
         });
       }
     `);
@@ -228,6 +199,7 @@ describe("converge compilation", () => {
           probe: function* () { return x; },
           until: (x) => x > 0,
           timeout: 5000,
+          interval: 100,
         });
       }
     `);
@@ -257,6 +229,7 @@ describe("converge rejection", () => {
             probe: () => 42,
             until: (x) => x > 0,
             timeout: 5000,
+            interval: 100,
           });
         }
       `),
@@ -271,6 +244,7 @@ describe("converge rejection", () => {
             probe: function() { return 42; },
             until: (x) => x > 0,
             timeout: 5000,
+            interval: 100,
           });
         }
       `),
@@ -285,6 +259,7 @@ describe("converge rejection", () => {
             probe: function* () { return 42; },
             until: function* (x) { return x > 0; },
             timeout: 5000,
+            interval: 100,
           });
         }
       `),
@@ -299,10 +274,25 @@ describe("converge rejection", () => {
             probe: function* () { return 42; },
             until: (x) => { return x > 0; },
             timeout: 5000,
+            interval: 100,
           });
         }
       `),
     ).toThrow("E-CONV-03");
+  });
+
+  it("rejects missing interval (E-CONV-05)", () => {
+    expect(() =>
+      compileOne(`
+        function* f(): Workflow<any> {
+          return yield* converge({
+            probe: function* () { return 42; },
+            until: (x) => x > 0,
+            timeout: 5000,
+          });
+        }
+      `),
+    ).toThrow("E-CONV-05");
   });
 
   it("rejects missing timeout (E-CONV-06)", () => {
@@ -312,6 +302,7 @@ describe("converge rejection", () => {
           return yield* converge({
             probe: function* () { return 42; },
             until: (x) => x > 0,
+            interval: 100,
           });
         }
       `),
@@ -336,6 +327,7 @@ describe("converge rejection", () => {
             probe: function* () { return 42; },
             until: (x) => (yield* sleep(1)),
             timeout: 5000,
+            interval: 100,
           });
         }
       `),
@@ -365,6 +357,7 @@ describe("converge rejection", () => {
             probe: function* () { return 42; },
             until: (x) => x > 0,
             timeout: (yield* sleep(1)),
+            interval: 100,
           });
         }
       `),

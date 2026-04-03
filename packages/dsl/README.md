@@ -95,8 +95,18 @@ DSLParseError: <message> (line N, col M)
 
 `@tisyn/dsl` owns syntax parsing and truncation recovery. `print` is re-exported here for convenience when working with text round-trips. Semantic validation of IR belongs to `@tisyn/validate`.
 
+## Macro constructors
+
+`Converge(probe, until, interval, timeout)` is a macro constructor — it expands at parse time into a `Timebox` node containing a recursive polling loop. The expansion is identical to the IR produced by the authored `yield* converge({ ... })` form.
+
+```typescript
+import { parseDSL } from "@tisyn/dsl";
+
+const ir = parseDSL('Converge(42, Fn(["x"], Gt(Ref("x"), 0)), 100, 5000)');
+// Produces: Timebox(5000, Let("__until_0", ..., Let("__poll_0", ..., Call(...))))
+```
+
 ## V1 limitations
 
 - No streaming parse.
-- No macro constructors (`Do`, `AllBind`, `RaceBind`).
 - No type checking beyond the constructor-level shape constraints in §5.1 of the spec.

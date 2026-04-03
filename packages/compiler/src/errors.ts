@@ -64,6 +64,7 @@ export const ErrorCodes = {
   "E-CONV-02": "converge() until must be an arrow function",
   "E-CONV-03": "converge() until must have an expression body (not a block body)",
   "E-CONV-04": "converge() until must not contain yield*",
+  "E-CONV-05": "converge() requires an interval property",
   "E-CONV-06": "converge() requires a timeout property",
   "E-CONV-07": "converge() argument must be an object literal",
   "E-CONV-08": "converge() interval must not contain yield*",

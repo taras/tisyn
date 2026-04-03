@@ -3396,6 +3396,9 @@ function emitConverge(callExpr: ts.CallExpression, ctx: EmitContext): Expr {
   if (!timeoutProp || !ts.isPropertyAssignment(timeoutProp)) {
     throw error("E-CONV-06", "converge() requires a timeout property", arg, ctx);
   }
+  if (!intervalProp || !ts.isPropertyAssignment(intervalProp)) {
+    throw error("E-CONV-05", "converge() requires an interval property", arg, ctx);
+  }
   if (!probeProp || !ts.isPropertyAssignment(probeProp)) {
     throw error("E-CONV-01", "converge() probe must be a generator function expression", arg, ctx);
   }
@@ -3428,18 +3431,18 @@ function emitConverge(callExpr: ts.CallExpression, ctx: EmitContext): Expr {
     throw error("E-CONV-09", "converge() timeout must not contain yield*", timeoutInitializer, ctx);
   }
 
-  if (intervalProp && ts.isPropertyAssignment(intervalProp)) {
-    const intervalInitializer = intervalProp.initializer;
-    if (containsYieldStar(intervalInitializer)) {
-      throw error("E-CONV-08", "converge() interval must not contain yield*", intervalInitializer, ctx);
-    }
+  const intervalInitializer = (intervalProp as ts.PropertyAssignment).initializer;
+  if (containsYieldStar(intervalInitializer)) {
+    throw error("E-CONV-08", "converge() interval must not contain yield*", intervalInitializer, ctx);
   }
+
+  // W-CONV-01: effectless probe should emit a warning, but the compiler
+  // currently has no warning channel. Deferred until a warning infrastructure
+  // is added. See converge amendment §5.1/AC1.
 
   // Compile timeout and interval as expressions in the outer context
   const timeoutExprIr = emitExpression(timeoutInitializer, ctx);
-  const intervalExprIr = intervalProp && ts.isPropertyAssignment(intervalProp)
-    ? emitExpression(intervalProp.initializer, ctx)
-    : (100 as unknown as Expr);
+  const intervalExprIr = emitExpression(intervalInitializer, ctx);
 
   // Build child contexts for compilation
   const timeboxBodyCtx: EmitContext = {

@@ -34,6 +34,7 @@ import {
   Eval,
   All,
   Race,
+  Timebox,
 } from "@tisyn/ir";
 import { DSLParseError } from "./errors.js";
 import type { Token } from "./token.js";
@@ -378,6 +379,59 @@ export const CONSTRUCTOR_TABLE: Record<string, ConstructorEntry> = {
     maxArgs: Infinity,
     dispatch(args) {
       return Race(...(args as AnyExpr[])) as TisynExpr;
+    },
+  },
+  Timebox: {
+    minArgs: 2,
+    maxArgs: 2,
+    dispatch(args) {
+      return Timebox(args[0] as AnyExpr, args[1] as AnyExpr) as TisynExpr;
+    },
+  },
+  Converge: {
+    minArgs: 4,
+    maxArgs: 4,
+    dispatch(args) {
+      // Converge(probe, until, interval, timeout) macro expansion.
+      // Lowers to: Timebox(timeout, Let(__until_0, until, Let(__poll_0, Fn([], ...recursive...), Call(__poll_0))))
+      const [probe, until, interval, timeout] = args;
+      // Build IR using Q() to avoid type-level constraints on Call/Fn generics
+      const sleepNode = Eval("sleep", [interval] as AnyExpr);
+      const pollBody = {
+        tisyn: "eval", id: "let",
+        data: { tisyn: "quote", expr: {
+          name: "__probe_0", value: probe,
+          body: {
+            tisyn: "eval", id: "if",
+            data: { tisyn: "quote", expr: {
+              condition: { tisyn: "eval", id: "call", data: { tisyn: "quote", expr: {
+                fn: { tisyn: "ref", name: "__until_0" },
+                args: [{ tisyn: "ref", name: "__probe_0" }],
+              }}},
+              then: { tisyn: "ref", name: "__probe_0" },
+              else: {
+                tisyn: "eval", id: "let",
+                data: { tisyn: "quote", expr: {
+                  name: "__discard_0", value: sleepNode,
+                  body: { tisyn: "eval", id: "call", data: { tisyn: "quote", expr: {
+                    fn: { tisyn: "ref", name: "__poll_0" },
+                    args: [],
+                  }}},
+                }},
+              },
+            }},
+          },
+        }},
+      };
+      const callPoll = { tisyn: "eval", id: "call", data: { tisyn: "quote", expr: {
+        fn: { tisyn: "ref", name: "__poll_0" },
+        args: [],
+      }}};
+      const pollFn = Fn([], pollBody as AnyExpr);
+      const inner = Let("__until_0", until as AnyExpr,
+        Let("__poll_0", pollFn as AnyExpr, callPoll as AnyExpr) as AnyExpr,
+      );
+      return Timebox(timeout as AnyExpr, inner as AnyExpr) as TisynExpr;
     },
   },
 };
