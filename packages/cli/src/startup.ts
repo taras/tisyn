@@ -31,7 +31,7 @@ import { CliError } from "./load-descriptor.js";
 /**
  * Create a transport factory for a resolved agent.
  */
-export async function createTransportFactory(agent: ResolvedAgent): Promise<AgentTransportFactory> {
+export function* createTransportFactory(agent: ResolvedAgent): Operation<AgentTransportFactory> {
   const kind = agent.transport.kind as string;
 
   switch (kind) {
@@ -52,7 +52,9 @@ export async function createTransportFactory(agent: ResolvedAgent): Promise<Agen
       const modulePath = agent.transport.module as string;
       let mod: Record<string, unknown>;
       try {
-        mod = (await import(pathToFileURL(modulePath).href)) as Record<string, unknown>;
+        mod = yield* call(
+          () => import(pathToFileURL(modulePath).href) as Promise<Record<string, unknown>>,
+        );
       } catch (err) {
         const msg = err instanceof Error ? err.message : String(err);
         throw new CliError(3, `Failed to load transport module '${modulePath}': ${msg}`);
@@ -73,7 +75,7 @@ export async function createTransportFactory(agent: ResolvedAgent): Promise<Agen
  */
 export function* installAllTransports(config: ResolvedConfig): Operation<void> {
   for (const agentConfig of config.agents) {
-    const factory: AgentTransportFactory = yield* call(() => createTransportFactory(agentConfig));
+    const factory: AgentTransportFactory = yield* createTransportFactory(agentConfig);
     yield* installAgentTransport(agentConfig.id, factory);
   }
 }

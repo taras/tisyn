@@ -8,6 +8,7 @@
 import { describe, it } from "@effectionx/vitest";
 import { expect, afterEach } from "vitest";
 import { call } from "effection";
+import type { Operation } from "effection";
 import { exec } from "@effectionx/process";
 import { mkdtemp, writeFile, mkdir, rm, readFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
@@ -558,14 +559,14 @@ export default {
 `;
 }
 
-async function writeFixture(
+function* writeFixture(
   dir: string,
   workflow: string,
   descriptorOpts?: { entrypoints?: boolean },
-): Promise<string> {
-  await writeFile(join(dir, "workflow.generated.mjs"), workflow);
+): Operation<string> {
+  yield* call(() => writeFile(join(dir, "workflow.generated.mjs"), workflow));
   const descriptorPath = join(dir, "descriptor.mjs");
-  await writeFile(descriptorPath, descriptorSource(descriptorOpts));
+  yield* call(() => writeFile(descriptorPath, descriptorSource(descriptorOpts)));
   return descriptorPath;
 }
 
@@ -574,7 +575,7 @@ async function writeFixture(
 describe("argv partitioning", () => {
   it("--verbose after module is not rejected as unknown workflow flag", function* () {
     const dir = yield* call(makeTempDir);
-    const descriptorPath = yield* call(() => writeFixture(dir, FIXTURE_WORKFLOW));
+    const descriptorPath = yield* writeFixture(dir, FIXTURE_WORKFLOW);
     const result = yield* exec("node", {
       arguments: [CLI_BIN, "run", descriptorPath, "--verbose", "--max-turns", "5"],
     }).join();
@@ -585,9 +586,7 @@ describe("argv partitioning", () => {
 
   it("--entrypoint after module is not rejected as unknown workflow flag", function* () {
     const dir = yield* call(makeTempDir);
-    const descriptorPath = yield* call(() =>
-      writeFixture(dir, FIXTURE_WORKFLOW, { entrypoints: true }),
-    );
+    const descriptorPath = yield* writeFixture(dir, FIXTURE_WORKFLOW, { entrypoints: true });
     const result = yield* exec("node", {
       arguments: [CLI_BIN, "run", descriptorPath, "--entrypoint", "dev", "--max-turns", "5"],
     }).join();
@@ -598,7 +597,7 @@ describe("argv partitioning", () => {
 
   it("workflow-only flags parse correctly without built-in leakage", function* () {
     const dir = yield* call(makeTempDir);
-    const descriptorPath = yield* call(() => writeFixture(dir, FIXTURE_WORKFLOW));
+    const descriptorPath = yield* writeFixture(dir, FIXTURE_WORKFLOW);
     const result = yield* exec("node", {
       arguments: [CLI_BIN, "run", descriptorPath, "--max-turns", "10"],
     }).join();
@@ -612,7 +611,7 @@ describe("argv partitioning", () => {
 describe("dynamic help", () => {
   it("tsn run <module> --help shows workflow-derived flags", function* () {
     const dir = yield* call(makeTempDir);
-    const descriptorPath = yield* call(() => writeFixture(dir, FIXTURE_WORKFLOW));
+    const descriptorPath = yield* writeFixture(dir, FIXTURE_WORKFLOW);
     const result = yield* exec("node", {
       arguments: [CLI_BIN, "run", descriptorPath, "--help"],
     }).join();
@@ -624,9 +623,7 @@ describe("dynamic help", () => {
 
   it("tsn run <module> --help shows entrypoints", function* () {
     const dir = yield* call(makeTempDir);
-    const descriptorPath = yield* call(() =>
-      writeFixture(dir, FIXTURE_WORKFLOW, { entrypoints: true }),
-    );
+    const descriptorPath = yield* writeFixture(dir, FIXTURE_WORKFLOW, { entrypoints: true });
     const result = yield* exec("node", {
       arguments: [CLI_BIN, "run", descriptorPath, "--help"],
     }).join();
@@ -647,7 +644,7 @@ describe("dynamic help", () => {
 
   it("tsn run <module> --help with unsupported schema shows diagnostic", function* () {
     const dir = yield* call(makeTempDir);
-    const descriptorPath = yield* call(() => writeFixture(dir, FIXTURE_WORKFLOW_UNSUPPORTED));
+    const descriptorPath = yield* writeFixture(dir, FIXTURE_WORKFLOW_UNSUPPORTED);
     const result = yield* exec("node", {
       arguments: [CLI_BIN, "run", descriptorPath, "--help"],
     }).join();
@@ -658,7 +655,7 @@ describe("dynamic help", () => {
 
   it("tsn run <module> --help with missing schema shows diagnostic", function* () {
     const dir = yield* call(makeTempDir);
-    const descriptorPath = yield* call(() => writeFixture(dir, FIXTURE_WORKFLOW_NO_SCHEMA));
+    const descriptorPath = yield* writeFixture(dir, FIXTURE_WORKFLOW_NO_SCHEMA);
     const result = yield* exec("node", {
       arguments: [CLI_BIN, "run", descriptorPath, "--help"],
     }).join();
