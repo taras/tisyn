@@ -24,7 +24,7 @@ import {
   loadWorkflowExport,
   CliError,
 } from "./load-descriptor.js";
-import { deriveFlags, parseInputFlags } from "./inputs.js";
+import { deriveFlags, parseInputFlags, formatInputHelp } from "./inputs.js";
 import { installAllTransports, createJournalStream, startServer } from "./startup.js";
 import type { RunCommandOptions } from "./types.js";
 
@@ -124,6 +124,70 @@ export function* runRun(
 interface FlagInfo {
   flags: ReturnType<typeof deriveFlags>;
   parsed: Record<string, unknown>;
+}
+
+const BUILTIN_HELP = `Usage: tsn run <module> [options]
+
+Options:
+  --entrypoint <name>, -e    Apply a named entrypoint overlay
+  --verbose                  Show detailed diagnostics
+  --help, -h                 Show help`;
+
+/**
+ * Dynamic help for `tsn run <module> --help`.
+ *
+ * Loads the descriptor and workflow metadata to show workflow-derived flags
+ * and entrypoints alongside built-in options. On failure, shows built-in
+ * options plus a diagnostic explaining why workflow flags cannot be shown.
+ */
+export function* runHelp(options: RunCommandOptions, cwd: string): Operation<void> {
+  console.log(BUILTIN_HELP);
+  const modulePath = resolve(cwd, options.module);
+
+  try {
+    const descriptor = yield* call(() => loadDescriptorModule(modulePath));
+    const merged = options.entrypoint ? applyOverlay(descriptor, options.entrypoint) : descriptor;
+    const { modulePath: workflowPath, exportName } = resolveWorkflowModule(merged, modulePath);
+    const workflowExport = yield* call(() => loadWorkflowExport(workflowPath, exportName));
+
+    if (!workflowExport.inputSchema) {
+      console.error(
+        "\nCould not show workflow flags: module does not export input schema metadata.",
+      );
+      yield* exit(2);
+      return;
+    }
+
+    if (workflowExport.inputSchema.type === "unsupported") {
+      console.error(
+        `\nCould not show workflow flags: unsupported input parameters (${workflowExport.inputSchema.reason}).`,
+      );
+      yield* exit(2);
+      return;
+    }
+
+    if (workflowExport.inputSchema.type === "object") {
+      const flags = deriveFlags(workflowExport.inputSchema);
+      if (flags.length > 0) {
+        console.log(formatInputHelp(flags));
+      }
+    }
+
+    if (descriptor.entrypoints && Object.keys(descriptor.entrypoints).length > 0) {
+      console.log("\nEntrypoints:");
+      for (const name of Object.keys(descriptor.entrypoints)) {
+        console.log(`  ${name}`);
+      }
+    }
+  } catch (error) {
+    const msg = error instanceof Error ? error.message : String(error);
+    console.error(`\nCould not load workflow to show dynamic flags: ${msg}`);
+    if (error instanceof CliError) {
+      yield* exit(error.exitCode);
+    } else {
+      yield* exit(2);
+    }
+  }
 }
 
 /**

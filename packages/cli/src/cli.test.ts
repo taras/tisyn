@@ -504,3 +504,166 @@ describe("rebaseConfigPaths", () => {
     expect(config.agents[0]!.transport.command).toBe("/project/descriptors/bin/agent");
   });
 });
+
+// ── Fixture helpers for E2E tests ─────────────────────────────────────────────
+
+const FIXTURE_WORKFLOW = `
+export const myWorkflow = {
+  tisyn: "fn",
+  params: ["input"],
+  body: { tisyn: "eval", code: "Q(null)" },
+};
+export const inputSchemas = {
+  myWorkflow: {
+    type: "object",
+    fields: [
+      { name: "maxTurns", fieldType: "number", optional: false },
+      { name: "modelName", fieldType: "string", optional: true },
+    ],
+  },
+};
+`;
+
+const FIXTURE_WORKFLOW_NO_SCHEMA = `
+export const myWorkflow = {
+  tisyn: "fn",
+  params: ["input"],
+  body: { tisyn: "eval", code: "Q(null)" },
+};
+`;
+
+const FIXTURE_WORKFLOW_UNSUPPORTED = `
+export const myWorkflow = {
+  tisyn: "fn",
+  params: ["input"],
+  body: { tisyn: "eval", code: "Q(null)" },
+};
+export const inputSchemas = {
+  myWorkflow: { type: "unsupported", reason: "tuple parameter" },
+};
+`;
+
+function descriptorSource(opts?: { entrypoints?: boolean }): string {
+  const entrypoints = opts?.entrypoints
+    ? `entrypoints: { dev: { tisyn_config: "entrypoint" }, staging: { tisyn_config: "entrypoint" } },`
+    : "";
+  return `
+export default {
+  tisyn_config: "workflow",
+  run: { export: "myWorkflow", module: "./workflow.generated.mjs" },
+  agents: [],
+  journal: { tisyn_config: "journal", kind: "memory" },
+  ${entrypoints}
+};
+`;
+}
+
+async function writeFixture(
+  dir: string,
+  workflow: string,
+  descriptorOpts?: { entrypoints?: boolean },
+): Promise<string> {
+  await writeFile(join(dir, "workflow.generated.mjs"), workflow);
+  const descriptorPath = join(dir, "descriptor.mjs");
+  await writeFile(descriptorPath, descriptorSource(descriptorOpts));
+  return descriptorPath;
+}
+
+// ── argv partitioning ─────────────────────────────────────────────────────────
+
+describe("argv partitioning", () => {
+  it("--verbose after module is not rejected as unknown workflow flag", function* () {
+    const dir = yield* call(makeTempDir);
+    const descriptorPath = yield* call(() => writeFixture(dir, FIXTURE_WORKFLOW));
+    const result = yield* exec("node", {
+      arguments: [CLI_BIN, "run", descriptorPath, "--verbose", "--max-turns", "5"],
+    }).join();
+    // Must not exit 4 with "Unknown flag: --verbose"
+    expect(result.code).not.toBe(4);
+    expect(result.stderr).not.toContain("Unknown flag: --verbose");
+  });
+
+  it("--entrypoint after module is not rejected as unknown workflow flag", function* () {
+    const dir = yield* call(makeTempDir);
+    const descriptorPath = yield* call(() =>
+      writeFixture(dir, FIXTURE_WORKFLOW, { entrypoints: true }),
+    );
+    const result = yield* exec("node", {
+      arguments: [CLI_BIN, "run", descriptorPath, "--entrypoint", "dev", "--max-turns", "5"],
+    }).join();
+    // Must not exit 4 with "Unknown flag: --entrypoint"
+    expect(result.code).not.toBe(4);
+    expect(result.stderr).not.toContain("Unknown flag: --entrypoint");
+  });
+
+  it("workflow-only flags parse correctly without built-in leakage", function* () {
+    const dir = yield* call(makeTempDir);
+    const descriptorPath = yield* call(() => writeFixture(dir, FIXTURE_WORKFLOW));
+    const result = yield* exec("node", {
+      arguments: [CLI_BIN, "run", descriptorPath, "--max-turns", "10"],
+    }).join();
+    // Must not exit 4 — max-turns is a valid workflow flag
+    expect(result.code).not.toBe(4);
+  });
+});
+
+// ── dynamic help ──────────────────────────────────────────────────────────────
+
+describe("dynamic help", () => {
+  it("tsn run <module> --help shows workflow-derived flags", function* () {
+    const dir = yield* call(makeTempDir);
+    const descriptorPath = yield* call(() => writeFixture(dir, FIXTURE_WORKFLOW));
+    const result = yield* exec("node", {
+      arguments: [CLI_BIN, "run", descriptorPath, "--help"],
+    }).join();
+    expect(result.code ?? 0).toBe(0);
+    expect(result.stdout).toContain("--max-turns");
+    expect(result.stdout).toContain("--model-name");
+    expect(result.stdout).toContain("--entrypoint");
+  });
+
+  it("tsn run <module> --help shows entrypoints", function* () {
+    const dir = yield* call(makeTempDir);
+    const descriptorPath = yield* call(() =>
+      writeFixture(dir, FIXTURE_WORKFLOW, { entrypoints: true }),
+    );
+    const result = yield* exec("node", {
+      arguments: [CLI_BIN, "run", descriptorPath, "--help"],
+    }).join();
+    expect(result.code ?? 0).toBe(0);
+    expect(result.stdout).toContain("Entrypoints:");
+    expect(result.stdout).toContain("dev");
+    expect(result.stdout).toContain("staging");
+  });
+
+  it("tsn run <nonexistent> --help shows built-in help plus diagnostic", function* () {
+    const result = yield* exec("node", {
+      arguments: [CLI_BIN, "run", "/tmp/nonexistent-descriptor-help.mjs", "--help"],
+    }).join();
+    expect(result.code).toBe(3);
+    expect(result.stdout).toContain("Usage: tsn run");
+    expect(result.stderr).toContain("Could not load workflow");
+  });
+
+  it("tsn run <module> --help with unsupported schema shows diagnostic", function* () {
+    const dir = yield* call(makeTempDir);
+    const descriptorPath = yield* call(() => writeFixture(dir, FIXTURE_WORKFLOW_UNSUPPORTED));
+    const result = yield* exec("node", {
+      arguments: [CLI_BIN, "run", descriptorPath, "--help"],
+    }).join();
+    expect(result.code).toBe(2);
+    expect(result.stdout).toContain("Usage: tsn run");
+    expect(result.stderr).toContain("unsupported input parameters");
+  });
+
+  it("tsn run <module> --help with missing schema shows diagnostic", function* () {
+    const dir = yield* call(makeTempDir);
+    const descriptorPath = yield* call(() => writeFixture(dir, FIXTURE_WORKFLOW_NO_SCHEMA));
+    const result = yield* exec("node", {
+      arguments: [CLI_BIN, "run", descriptorPath, "--help"],
+    }).join();
+    expect(result.code).toBe(2);
+    expect(result.stdout).toContain("Usage: tsn run");
+    expect(result.stderr).toContain("input schema metadata");
+  });
+});

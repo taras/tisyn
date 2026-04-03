@@ -14,7 +14,7 @@ import {
   stringSchema,
 } from "./schemas.js";
 import { runCheck } from "./check.js";
-import { runRun } from "./run.js";
+import { runRun, runHelp } from "./run.js";
 import { CliError } from "./load-descriptor.js";
 import type {
   BuildCommandOptions,
@@ -174,8 +174,14 @@ await main(function* () {
           entrypoint: raw.entrypoint as string | undefined,
           verbose: (raw.verbose as boolean) ?? false,
         };
-        // Pass remaining argv (after configliere parsing) as extra flags for workflow inputs
-        const extraArgv = process.argv.slice(process.argv.indexOf(runOptions.module) + 1);
+        const extraArgv = parsed.remainder.args ?? [];
+
+        // Dynamic help: tsn run <module> --help
+        if (extraArgv.includes("--help") || extraArgv.includes("-h")) {
+          yield* runHelp(runOptions, process.cwd());
+          break;
+        }
+
         yield* runRun(runOptions, process.cwd(), extraArgv);
         break;
       }
