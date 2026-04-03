@@ -127,11 +127,6 @@ function mergeAgents(
 
 // ── Env Resolution (§5.4, §7.1 steps 5-6) ──
 
-interface ResolvedEnvEntry {
-  node: EnvDescriptor;
-  value: string | number | boolean;
-}
-
 export function resolveEnv(
   nodes: EnvDescriptor[],
   processEnv: Record<string, string | undefined>,

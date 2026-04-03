@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { validateConfig } from "./validate.js";
-import { workflow, agent, transport, env, journal, entrypoint, server } from "./constructors.js";
+import { workflow, agent, transport, entrypoint, server } from "./constructors.js";
 
 function expectFailure(descriptor: unknown, rule: string) {
   const result = validateConfig(descriptor);
@@ -17,7 +17,7 @@ describe("V1: missing tisyn_config", () => {
   it("node with missing tisyn_config at root → validation catches structural errors", () => {
     // A bare object at root without tisyn_config won't trigger V1 (V1 requires the field to be present
     // but unrecognized). However it will fail V2 since it's not a valid workflow.
-    const result = validateConfig({ run: "hello", agents: [] });
+    validateConfig({ run: "hello", agents: [] });
     // No tisyn_config means no node-specific validation fires, but
     // a top-level object passed as a descriptor that lacks tisyn_config
     // is simply not a workflow node — covered by the caller's responsibility.

@@ -8,7 +8,6 @@ import {
   entrypoint,
   server,
   collectEnvNodes,
-  validateConfig,
 } from "@tisyn/config";
 import {
   applyOverlay,
@@ -17,7 +16,6 @@ import {
   projectConfig,
   ConfigError,
 } from "./config.js";
-import type { EnvDescriptor } from "@tisyn/config";
 
 // ── Helper ──
 
