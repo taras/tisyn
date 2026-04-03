@@ -1,12 +1,12 @@
 /**
- * Tests for ConfigToken<T>, configToken<T>(), and useConfig<T>().
+ * Tests for ConfigToken<T>, configToken<T>(), and Config.useConfig<T>().
  *
  * The type-level assertions use @ts-expect-error to verify that
- * yield* useConfig(Token) returns the token's T at compile time.
+ * yield* Config.useConfig(Token) returns the token's T at compile time.
  */
 
 import { describe, it, expect } from "vitest";
-import { configToken, useConfig } from "./index.js";
+import { configToken, Config } from "./index.js";
 
 describe("configToken", () => {
   it("returns an object", () => {
@@ -16,22 +16,22 @@ describe("configToken", () => {
   });
 });
 
-describe("useConfig (direct invocation)", () => {
+describe("Config.useConfig (direct invocation)", () => {
   it("throws when called outside the compiler", () => {
     const token = configToken<{ debug: boolean }>();
-    const gen = useConfig(token);
+    const gen = Config.useConfig(token);
     expect(() => gen.next()).toThrow("must be compiled by the Tisyn compiler");
   });
 });
 
-describe("useConfig type-level", () => {
-  it("yield* useConfig(Token) returns T", () => {
+describe("Config.useConfig type-level", () => {
+  it("yield* Config.useConfig(Token) returns T", () => {
     type AppConfig = { debug: boolean; model: string };
     const AppToken = configToken<AppConfig>();
 
     // This generator is never executed — it only verifies type inference.
     function* _typeTest(): Generator<unknown, void, unknown> {
-      const cfg = yield* useConfig(AppToken);
+      const cfg = yield* Config.useConfig(AppToken);
 
       // Should type-check:
       const _d: boolean = cfg.debug;

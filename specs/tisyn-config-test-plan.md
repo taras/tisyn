@@ -28,7 +28,7 @@ This test plan covers:
 - Secret handling and redaction
 - Resolution pipeline projection (CT-PROJECT)
 
-> **Partially active:** `useConfig(Token)` semantic contract (R1–R4) is
+> **Partially active:** `Config.useConfig(Token)` semantic contract (R1–R4) is
 > partially covered by integration tests in
 > `packages/cli/src/use-config-integration.test.ts`. CFG-USE-001 through
 > CFG-USE-004 and CFG-USE-009 are active at P1. CFG-USE-005 through
@@ -50,7 +50,7 @@ This test plan does NOT cover:
 | **CT-WALK** | `@tisyn/config` | Descriptor walking discovers env nodes |
 | **CT-RESOLVE** | `@tisyn/runtime` | Environment resolution produces correct values |
 | **CT-OVERLAY** | `@tisyn/runtime` | Entrypoint overlay merge is correct |
-| **CT-USECONFIG** | `@tisyn/compiler` + `@tisyn/runtime` + `@tisyn/cli` | `useConfig(Token)` compiles to `__config` effect and runtime exposes resolved projection — partially active |
+| **CT-USECONFIG** | `@tisyn/compiler` + `@tisyn/runtime` + `@tisyn/cli` | `Config.useConfig(Token)` compiles to `__config` effect and runtime exposes resolved projection — partially active |
 | **CT-PROJECT** | `@tisyn/runtime` | Resolution pipeline produces correct projections (MVP replacement for CT-USECONFIG) |
 
 ## 4. Test Strategy
@@ -94,7 +94,7 @@ conformance requirement.
   Covers constructors, validation, walking.
 - **Integration tests.** Descriptor + runtime resolution.
   Requires process environment manipulation.
-- **Behavioral tests.** `useConfig(Token)` contract
+- **Behavioral tests.** `Config.useConfig(Token)` contract
   verification. Partially active: CFG-USE-001–004 and
   CFG-USE-009 covered by integration tests. CFG-USE-005–008
   remain deferred.
@@ -273,7 +273,7 @@ through CFG-SEC-004 validate the surfaces that config and
 runtime infrastructure produce. Redaction within
 application-level workflow code is outside scope.
 
-### I. `useConfig()` Semantic Contract
+### I. `Config.useConfig()` Semantic Contract
 
 > **Partially active:** CFG-USE-001 through CFG-USE-004 and CFG-USE-009
 > are active at P1, covered by integration tests in
@@ -283,15 +283,15 @@ application-level workflow code is outside scope.
 
 | ID | P | Type | Spec | Assertion |
 | --- | --- | --- | --- | --- |
-| CFG-USE-001 | **P1** | Behavioral | R1 | `useConfig(Token)` returns post-overlay config |
-| CFG-USE-002 | **P1** | Behavioral | R1 | `useConfig(Token)` returns post-resolution config (env nodes resolved) |
+| CFG-USE-001 | **P1** | Behavioral | R1 | `Config.useConfig(Token)` returns post-overlay config |
+| CFG-USE-002 | **P1** | Behavioral | R1 | `Config.useConfig(Token)` returns post-resolution config (env nodes resolved) |
 | CFG-USE-003 | **P1** | Behavioral | R2 | Return value contains no `EnvDescriptor` nodes |
 | CFG-USE-004 | **P1** | Behavioral | R3 | Return value does not contain invocation-time workflow arguments |
 | CFG-USE-005 | **Deferred** | Behavioral | R1 | Workflow does not observe intermediate descriptor forms |
 | CFG-USE-006 | **Deferred** | Behavioral | §7.5.2 | Return value MAY omit `entrypoints` |
 | CFG-USE-007 | **Deferred** | Behavioral | §7.5.2 | Return value MAY omit `tisyn_config` discriminants |
 | CFG-USE-008 | **Deferred** | Behavioral | §7.5.2 | Return value MAY omit `WorkflowRef` metadata |
-| CFG-USE-009 | **P1** | Behavioral | R3 | Invocation args delivered via function parameter, not `useConfig(Token)` |
+| CFG-USE-009 | **P1** | Behavioral | R3 | Invocation args delivered via function parameter, not `Config.useConfig(Token)` |
 
 **Note on projection tests.** CFG-USE-006 through
 CFG-USE-008 are P1 because the spec uses MAY. They
@@ -336,15 +336,15 @@ specs.
 | F. Entrypoint overlays | 9 | 1 | 0 | 10 |
 | G. Environment model | 16 | 0 | 0 | 16 |
 | H. Secret handling | 5 | 0 | 0 | 5 |
-| I. `useConfig(Token)` | 0 | 5 | 4 | 9 |
+| I. `Config.useConfig(Token)` | 0 | 5 | 4 | 9 |
 | J. Resolution order | 5 | 0 | 0 | 5 |
 | K. Worked-example fixtures | 7 | 0 | 0 | 7 |
 | **Total** | **85** | **10** | **8** | **103** |
 
-> **Scope note:** 8 tests remain deferred: 4 `useConfig(Token)` projection
+> **Scope note:** 8 tests remain deferred: 4 `Config.useConfig(Token)` projection
 > shape tests (CFG-USE-005–008), 2 workflow-module resolution tests
 > (require module loader), and 2 transport-module resolution tests (require
-> module resolution at startup). 5 `useConfig(Token)` behavioral tests are
+> module resolution at startup). 5 `Config.useConfig(Token)` behavioral tests are
 > now active at P1, covered by CLI integration tests.
 
 ## 8. Assumptions
@@ -353,7 +353,7 @@ specs.
 - Environment resolution tests require `process.env`
   manipulation. Test infrastructure MUST restore env
   state after each test.
-- `useConfig(Token)` behavioral tests (Category I) are
+- `Config.useConfig(Token)` behavioral tests (Category I) are
   partially active. CFG-USE-001–004 and CFG-USE-009 are
   covered by CLI integration tests. CFG-USE-005–008
   remain deferred (projection shape MAY assertions).
@@ -391,7 +391,7 @@ specs.
    surfaces added later must be re-validated against
    CFG-SEC-002 through CFG-SEC-004.
 
-4. **`useConfig(Token)` / invocation-args separation.**
+4. **`Config.useConfig(Token)` / invocation-args separation.**
    The boundary is the sharpest architectural invariant.
    CFG-USE-004 and CFG-USE-009 prevent silent collapse
    between config projection and invocation arguments.

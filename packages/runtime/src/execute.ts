@@ -8,7 +8,7 @@
  */
 
 import type { Operation } from "effection";
-import { spawn, ensure, scoped, withResolvers } from "effection";
+import { spawn, ensure, scoped, withResolvers, createContext } from "effection";
 import type { TisynExpr as Expr, Val, Json, IrInput } from "@tisyn/ir";
 import {
   type DurableEvent,
@@ -48,7 +48,7 @@ export interface ExecuteOptions {
   stream?: DurableStream;
   /** Coroutine ID for the root task. Defaults to "root". */
   coroutineId?: string;
-  /** Resolved config projection for `yield* useConfig()`. */
+  /** Resolved config projection for `yield* Config.useConfig(Token)`. */
   config?: Record<string, unknown>;
 }
 
@@ -70,9 +70,15 @@ interface DriveContext {
   journal: DurableEvent[];
   /** Stream subscription map shared across all coroutines in the execution. */
   subscriptions: Map<string, SubscriptionEntry>;
-  /** Resolved config projection for `__config` effect. Null if not provided. */
-  config: Record<string, unknown> | null;
 }
+
+/**
+ * Execution-scoped config context.
+ *
+ * Set once at the start of execute() from the resolved config projection.
+ * Read by `__config` effect dispatch via scope.get(ConfigContext).
+ */
+export const ConfigContext = createContext<Record<string, unknown> | null>("$config", null);
 
 interface ScopeInner {
   handler: FnNode | null;
@@ -140,44 +146,49 @@ export function* execute(options: ExecuteOptions): Operation<ExecuteResult> {
     throw error;
   }
 
-  // Phase 2: Read journal, build ReplayIndex
-  const storedEvents = yield* stream.readAll();
-  const replayIndex = new ReplayIndex(storedEvents);
+  return yield* scoped(function* () {
+    // Seed the execution-scoped config context
+    const scope = yield* useScope();
+    scope.set(ConfigContext, configRecord);
 
-  // Track the full journal: replayed events are added as they are
-  // consumed, new events are added as they are appended to stream.
-  const journal: DurableEvent[] = [];
+    // Phase 2: Read journal, build ReplayIndex
+    const storedEvents = yield* stream.readAll();
+    const replayIndex = new ReplayIndex(storedEvents);
 
-  // Build initial environment
-  const env: Env = envFromRecord(envRecord);
+    // Track the full journal: replayed events are added as they are
+    // consumed, new events are added as they are appended to stream.
+    const journal: DurableEvent[] = [];
 
-  // Phase 3: Create kernel generator and drive it
-  const kernel = evaluate(validatedIr, env);
-  const ctx: DriveContext = {
-    replayIndex,
-    stream,
-    journal,
-    subscriptions: new Map(),
-    config: configRecord,
-  };
+    // Build initial environment
+    const env: Env = envFromRecord(envRecord);
 
-  let result: EventResult;
-  try {
-    result = yield* driveKernel(kernel, coroutineId, env, ctx);
-  } catch (error) {
-    if (error instanceof DivergenceError) {
-      return {
-        result: {
-          status: "err" as const,
-          error: { message: error.message, name: "DivergenceError" },
-        },
-        journal,
-      };
+    // Phase 3: Create kernel generator and drive it
+    const kernel = evaluate(validatedIr, env);
+    const ctx: DriveContext = {
+      replayIndex,
+      stream,
+      journal,
+      subscriptions: new Map(),
+    };
+
+    let result: EventResult;
+    try {
+      result = yield* driveKernel(kernel, coroutineId, env, ctx);
+    } catch (error) {
+      if (error instanceof DivergenceError) {
+        return {
+          result: {
+            status: "err" as const,
+            error: { message: error.message, name: "DivergenceError" },
+          },
+          journal,
+        };
+      }
+      throw error;
     }
-    throw error;
-  }
 
-  return { result, journal };
+    return { result, journal };
+  });
 }
 
 // ── Kernel driver ──
@@ -580,7 +591,8 @@ function* driveKernel(
         try {
           let resultValue: Val;
           if (descriptor.id === "__config") {
-            resultValue = (ctx.config ?? null) as Val;
+            const cfgScope = yield* useScope();
+            resultValue = (cfgScope.get(ConfigContext) ?? null) as Val;
           } else if (descriptor.id === "stream.subscribe") {
             const token = `sub:${coroutineId}:${subscriptionCounter++}`;
             const sourceData = descriptor.data as unknown[];
@@ -1240,7 +1252,8 @@ function* orchestrateResourceChild(
         try {
           let resultValue: Val;
           if (descriptor.id === "__config") {
-            resultValue = (ctx.config ?? null) as Val;
+            const cfgScope = yield* useScope();
+            resultValue = (cfgScope.get(ConfigContext) ?? null) as Val;
           } else if (descriptor.id === "stream.subscribe") {
             const token = `sub:${childId}:${subscriptionCounter++}`;
             const sourceData = descriptor.data as unknown[];
@@ -1575,7 +1588,8 @@ function* orchestrateResourceChild(
         try {
           let resultValue: Val;
           if (descriptor.id === "__config") {
-            resultValue = (ctx.config ?? null) as Val;
+            const cfgScope = yield* useScope();
+            resultValue = (cfgScope.get(ConfigContext) ?? null) as Val;
           } else if (descriptor.id === "stream.subscribe") {
             const token = `sub:${childId}:${subscriptionCounter++}`;
             const sourceData = descriptor.data as unknown[];

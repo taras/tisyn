@@ -31,7 +31,7 @@ Workflow input parameters are derived from compiler-emitted `inputSchemas` metad
 
 ### Resolved config
 
-After overlay application and environment resolution, the projected configuration is passed to `execute()`. Workflows access it at runtime via `yield* useConfig(Token)`, where `Token` is a `ConfigToken<T>` that provides static typing.
+After overlay application and environment resolution, the projected configuration is seeded into the runtime config context. Workflows access it via `yield* Config.useConfig(Token)`, where `Token` is a `ConfigToken<T>` that provides static typing.
 
 ## Installation
 

@@ -167,7 +167,7 @@ const config = resolveConfig(descriptor, {
 | `resolveConfig(descriptor, options?)` | Full resolution pipeline (steps 2-6) |
 | `projectConfig(descriptor, resolvedEnv)` | Strip discriminants, project workflow-visible shape |
 
-> **Config-aware execution:** `execute()` accepts an optional `config` field in `ExecuteOptions`. When provided, the resolved config projection is available to workflows via `yield* useConfig(Token)`. The `Token` is a `ConfigToken<T>` that provides static typing and is erased by the compiler. The `__config` effect is journaled for replay safety — replayed executions use the stored config value, not the current one.
+> **Config-aware execution:** The runtime owns an execution-scoped `ConfigContext` for the resolved config projection, available to workflows via `yield* Config.useConfig(Token)`. The `Token` is a `ConfigToken<T>` that provides static typing and is erased by the compiler. The `__config` effect reads from `ConfigContext` and is journaled for replay safety — replayed executions use the stored config value, not the current one.
 
 ## Boundaries
 

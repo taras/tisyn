@@ -18,9 +18,9 @@ working with IR as data.
 
 Compiler-recognized authored forms such as
 `for (const x of yield* each(expr)) { ... }` and
-`yield* useConfig(Token)` belong to the workflow compiler
+`yield* Config.useConfig(Token)` belong to the workflow compiler
 surface, not to the constructor-style authoring layer defined
-in this document. `each(...)` and `useConfig()` are therefore
+in this document. `each(...)` and `Config.useConfig()` are therefore
 not general IR-construction helpers here.
 
 ### 1.1 Design Principles

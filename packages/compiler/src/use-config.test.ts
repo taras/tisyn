@@ -1,7 +1,7 @@
 /**
- * Compiler tests for yield* useConfig(Token).
+ * Compiler tests for yield* Config.useConfig(Token).
  *
- * useConfig(Token) is an authored form that lowers to ExternalEval("__config", Q(null)).
+ * Config.useConfig(Token) is an authored form that lowers to ExternalEval("__config", Q(null)).
  * The token argument provides static typing and is erased by the compiler.
  */
 
@@ -27,12 +27,17 @@ function findNode(node: unknown, id: string): Record<string, any> | undefined {
   return undefined;
 }
 
-describe("useConfig compilation", () => {
-  it("yield* useConfig(Token) compiles to ExternalEval(__config, Q(null))", () => {
+const PREAMBLE = `
+  declare const Config: { useConfig<T>(token: ConfigToken<T>): Generator<unknown, T, unknown> };
+  declare const AppToken: ConfigToken<{debug: boolean}>;
+`;
+
+describe("Config.useConfig compilation", () => {
+  it("yield* Config.useConfig(Token) compiles to ExternalEval(__config, Q(null))", () => {
     const ir = compileOne(`
-      declare const AppToken: ConfigToken<{debug: boolean}>;
+      ${PREAMBLE}
       function* f(): Workflow<void> {
-        yield* useConfig(AppToken);
+        yield* Config.useConfig(AppToken);
       }
     `);
     const configNode = findNode(ir, "__config");
@@ -40,11 +45,11 @@ describe("useConfig compilation", () => {
     expect(configNode!.data).toEqual({ tisyn: "quote", expr: null });
   });
 
-  it("const cfg = yield* useConfig(Token) binds the result to a variable", () => {
+  it("const cfg = yield* Config.useConfig(Token) binds the result to a variable", () => {
     const ir = compileOne(`
-      declare const AppToken: ConfigToken<{debug: boolean}>;
+      ${PREAMBLE}
       function* f(): Workflow<void> {
-        const cfg = yield* useConfig(AppToken);
+        const cfg = yield* Config.useConfig(AppToken);
       }
     `);
     const configNode = findNode(ir, "__config");
@@ -56,44 +61,58 @@ describe("useConfig compilation", () => {
     expect(json).toContain('"__config"');
   });
 
-  it("yield* useConfig() (no args) → compile error UC1", () => {
+  it("yield* Config.useConfig() (no args) → compile error UC1", () => {
     expect(() =>
       compileOne(`
+        declare const Config: { useConfig<T>(token: ConfigToken<T>): Generator<unknown, T, unknown> };
         function* f(): Workflow<void> {
-          yield* useConfig();
+          yield* Config.useConfig();
         }
       `),
     ).toThrow("UC1");
   });
 
-  it("yield* useConfig(a, b) (multiple args) → compile error UC1", () => {
+  it("yield* Config.useConfig(a, b) (multiple args) → compile error UC1", () => {
     expect(() =>
       compileOne(`
+        declare const Config: { useConfig<T>(token: ConfigToken<T>): Generator<unknown, T, unknown> };
         declare const A: ConfigToken<unknown>;
         declare const B: ConfigToken<unknown>;
         function* f(): Workflow<void> {
-          yield* useConfig(A, B);
+          yield* Config.useConfig(A, B);
         }
       `),
     ).toThrow("UC1");
   });
 
-  it('yield* useConfig("string") (non-identifier) → compile error UC2', () => {
+  it('yield* Config.useConfig("string") (non-identifier) → compile error UC2', () => {
     expect(() =>
       compileOne(`
+        declare const Config: { useConfig<T>(token: ConfigToken<T>): Generator<unknown, T, unknown> };
         function* f(): Workflow<void> {
-          yield* useConfig("not-an-identifier");
+          yield* Config.useConfig("not-an-identifier");
         }
       `),
     ).toThrow("UC2");
   });
 
-  it("yield* useConfig(Token) inside spawn body compiles", () => {
+  it("bare yield* useConfig(Token) → compile error UC3", () => {
+    expect(() =>
+      compileOne(`
+        declare const AppToken: ConfigToken<{debug: boolean}>;
+        function* f(): Workflow<void> {
+          yield* useConfig(AppToken);
+        }
+      `),
+    ).toThrow("UC3");
+  });
+
+  it("yield* Config.useConfig(Token) inside spawn body compiles", () => {
     const ir = compileOne(`
-      declare const AppToken: ConfigToken<{debug: boolean}>;
+      ${PREAMBLE}
       function* f(): Workflow<void> {
         yield* spawn(function* () {
-          const cfg = yield* useConfig(AppToken);
+          const cfg = yield* Config.useConfig(AppToken);
         });
       }
     `);

@@ -36,7 +36,7 @@ This document specifies a compiler that transforms a restricted subset of JavaSc
 | Concurrency     | `yield* all([...])` / `yield* race([...])` | Compound Eval                            |
 | Blocking scope  | `yield* scoped(function* () { ... })`      | Compound Eval (`id: "scope"`)            |
 | Sleep           | `yield* sleep(ms)`                         | External Eval                            |
-| Config access   | `yield* useConfig(Token)`                  | External Eval (`id: "__config"`)          |
+| Config access   | `yield* Config.useConfig(Token)`           | External Eval (`id: "__config"`)          |
 | Stream iteration | `for (const x of yield* each(expr)) { ... }` | Recursive `Fn` + `Call` with `stream.subscribe` / `stream.next` |
 | Sub-workflow    | `yield* otherWorkflow(args)`               | Inlined or `call`                        |
 | Variable        | `const x = <expr>`                         | `let`                                    |
@@ -58,7 +58,7 @@ This document specifies a compiler that transforms a restricted subset of JavaSc
 
 ### 2.2 Effects and the Durability Boundary
 
-An **effect** is a `yield*` targeting an Agent method, `all`, `race`, `scoped`, `sleep`, `useConfig(Token)`, `each(...)` in the accepted stream-iteration form, or a sub-workflow containing effects. Each agent method call produces one Yield event.
+An **effect** is a `yield*` targeting an Agent method, `all`, `race`, `scoped`, `sleep`, `Config.useConfig(Token)`, `each(...)` in the accepted stream-iteration form, or a sub-workflow containing effects. Each agent method call produces one Yield event.
 
 The accepted stream-iteration form is intentionally narrow: only `for (const x of yield* each(expr)) { ... }` is supported. The compiler lowers that form to a recursive loop using the standard external effect IDs `stream.subscribe` and `stream.next`. All other `for...of` usage remains rejected.
 
@@ -96,7 +96,7 @@ Compiler names: `__discard_0`, `__all_0`, `__loop_0`, `__sub_0`. User variables 
 | Concurrency  | `yield* all/race([...])`      | Compound Eval (quoted data)   |
 | Blocking scope | `yield* scoped(function*(){ ... })` | Compound Eval (quoted data) |
 | Built-in     | `yield* sleep(ms)`            | External Eval (unquoted data) |
-| Config access | `yield* useConfig(Token)`    | External Eval (quoted null data) |
+| Config access | `yield* Config.useConfig(Token)` | External Eval (quoted null data) |
 
 ### 4.2 Agent Effect
 
@@ -168,7 +168,7 @@ Let("__sub_0", ⟦compile(sub)⟧, Let("n", Call(Ref("__sub_0"), "hello"), ...))
 ### 4.6 Config Access
 
 ```typescript
-yield* useConfig(AppConfigToken)
+yield* Config.useConfig(AppConfigToken)
 ```
 
 ```json
@@ -179,9 +179,9 @@ yield* useConfig(AppConfigToken)
 }
 ```
 
-`useConfig()` requires exactly one argument: a `ConfigToken` identifier (UC1 if wrong arity, UC2 if non-identifier). The token provides static typing for the resolved config projection via `ConfigToken<T>` — it is erased by the compiler and does not appear in the emitted IR. Data is Quote-wrapped null; there is no payload to evaluate.
+`Config.useConfig()` requires exactly one argument: a `ConfigToken` identifier (UC1 if wrong arity, UC2 if non-identifier). The token provides static typing for the resolved config projection via `ConfigToken<T>` — it is erased by the compiler and does not appear in the emitted IR. Data is Quote-wrapped null; there is no payload to evaluate. Bare `useConfig()` without the `Config.` namespace is rejected (UC3).
 
-At runtime, the `__config` effect is resolved from the `config` field of `ExecuteOptions`. The token identity has no runtime effect.
+At runtime, the `__config` effect is resolved from the execution-scoped config context. The token identity has no runtime effect.
 
 ---
 
@@ -1106,8 +1106,9 @@ Inner bindings shadow outer with same name. Outer restored after inner scope.
 | `each()` outside iterable position | | E-STREAM-004 |
 | `each.next()` | | E-STREAM-005 |
 | nested `for (const x of yield* each(expr))` | | E-STREAM-006 |
-| `useConfig()` without token | `useConfig()`   | UC1               |
-| `useConfig()` non-identifier | `useConfig("string")` | UC2        |
+| `Config.useConfig()` without token | `Config.useConfig()` | UC1    |
+| `Config.useConfig()` non-identifier | `Config.useConfig("string")` | UC2 |
+| Bare `useConfig()` without namespace | `useConfig(Token)` | UC3   |
 | User var `__` prefix      | `const __x`       | E028              |
 
 ---

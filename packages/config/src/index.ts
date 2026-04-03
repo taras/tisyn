@@ -32,7 +32,7 @@ export {
   configToken,
 } from "./constructors.js";
 
-export { useConfig } from "./use-config.js";
+export { Config } from "./use-config.js";
 
 export type { ConfigValidationError, ConfigValidationResult } from "./validate.js";
 export { validateConfig } from "./validate.js";

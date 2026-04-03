@@ -3076,15 +3076,7 @@ function emitYieldStar(target: ts.Expression, ctx: EmitContext): Expr {
       }
 
       if (callee.text === "useConfig") {
-        if (target.arguments.length !== 1) {
-          throw error("UC1", "useConfig() requires exactly one ConfigToken argument", target, ctx);
-        }
-        const tokenArg = target.arguments[0]!;
-        if (!ts.isIdentifier(tokenArg)) {
-          throw error("UC2", "useConfig() argument must be a ConfigToken identifier", target, ctx);
-        }
-        // Token is erased — same runtime effect regardless of token identity
-        return ExternalEval("__config", Q(null));
+        throw error("UC3", "useConfig() must be called as Config.useConfig(Token)", target, ctx);
       }
 
       // yield* timebox(duration, function* () { ... })
@@ -3110,6 +3102,34 @@ function emitYieldStar(target: ts.Expression, ctx: EmitContext): Expr {
       // Sub-workflow: yield* fn(args)
       const args = target.arguments.map((a) => emitExpression(a, ctx));
       return Call(Ref(callee.text), args);
+    }
+
+    // yield* Config.useConfig(Token) → ExternalEval("__config", Q(null))
+    if (
+      ts.isPropertyAccessExpression(callee) &&
+      ts.isIdentifier(callee.expression) &&
+      callee.expression.text === "Config" &&
+      callee.name.text === "useConfig"
+    ) {
+      if (target.arguments.length !== 1) {
+        throw error(
+          "UC1",
+          "Config.useConfig() requires exactly one ConfigToken argument",
+          target,
+          ctx,
+        );
+      }
+      const tokenArg = target.arguments[0]!;
+      if (!ts.isIdentifier(tokenArg)) {
+        throw error(
+          "UC2",
+          "Config.useConfig() argument must be a ConfigToken identifier",
+          target,
+          ctx,
+        );
+      }
+      // Token is erased — same runtime effect regardless of token identity
+      return ExternalEval("__config", Q(null));
     }
 
     // yield* each.next(...) → E-STREAM-005
@@ -3144,7 +3164,7 @@ function emitYieldStar(target: ts.Expression, ctx: EmitContext): Expr {
 
   throw error(
     "E010",
-    "yield* target must be an agent call, all/race, resource/provide, sleep, timebox, converge, useConfig, or sub-workflow",
+    "yield* target must be an agent call, all/race, resource/provide, sleep, timebox, converge, Config.useConfig, or sub-workflow",
     target,
     ctx,
   );
@@ -4619,10 +4639,30 @@ function emitCallExpression(node: ts.CallExpression, ctx: EmitContext): Expr {
     );
   }
 
+  // useConfig(...) without yield* → UC3
+  if (ts.isIdentifier(callee) && callee.text === "useConfig") {
+    throw error("UC3", "useConfig() must be called as Config.useConfig(Token)", node, ctx);
+  }
+
   // f(args) → Call(Ref("f"), [args])
   if (ts.isIdentifier(callee)) {
     const args = node.arguments.map((a) => emitExpression(a, ctx));
     return Call(Ref(callee.text), args);
+  }
+
+  // Config.useConfig(...) without yield* → UC1
+  if (
+    ts.isPropertyAccessExpression(callee) &&
+    ts.isIdentifier(callee.expression) &&
+    callee.expression.text === "Config" &&
+    callee.name.text === "useConfig"
+  ) {
+    throw error(
+      "UC1",
+      "Config.useConfig() requires yield* — use yield* Config.useConfig(Token)",
+      node,
+      ctx,
+    );
   }
 
   // Agent().method(args) → ExternalEval("agent-id.method", [args])
