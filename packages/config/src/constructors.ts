@@ -40,8 +40,17 @@ export function workflow(config: {
 
 // ── agent ──
 
-export function agent(id: string, transport: TransportDescriptor): AgentBinding {
-  return { tisyn_config: "agent", id, transport };
+export function agent(
+  id: string,
+  transport: TransportDescriptor,
+  config?: Record<string, unknown>,
+): AgentBinding {
+  return {
+    tisyn_config: "agent",
+    id,
+    transport,
+    ...(config != null ? { config } : {}),
+  };
 }
 
 // ── transport ──

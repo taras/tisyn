@@ -2,16 +2,17 @@
 
 ## Summary
 
-This demo proves that Tisyn can coordinate a host-controlled chat loop across
-multiple boundaries:
+This demo proves that Tisyn can coordinate a workflow-driven chat loop across
+multiple boundaries using `tsn run`:
 
-- browser interaction crosses a WebSocket-backed browser agent boundary
-- the host owns the chat loop
-- the host calls a Worker-backed LLM agent to sample responses
-- the compiler is used to author the host workflow
+- browser interaction crosses a WebSocket-backed App agent boundary
+- the workflow orchestrates all agent interactions
+- a Worker-backed LLM agent samples responses
+- an in-process DB agent persists chat history
+- the compiler is used to author the workflow
 
 This is not an autonomous multi-agent system. Agents do not talk to each
-other. The host is the only orchestrator.
+other. The workflow is the only orchestrator.
 
 The browser-facing contract in this demo is example-specific. It should not be
 read as the canonical generic browser transport contract for Tisyn. The
@@ -22,14 +23,17 @@ generic transport-level browser contract is specified separately in
 
 The demo should prove all of the following:
 
-- the host can explicitly request user input from the browser through an agent
-  boundary
+- the workflow can explicitly request user input from the browser through an
+  agent boundary (`App().elicit(...)`)
 - the browser can return the user's response as the result of that request
-- the host can call an LLM agent in a Worker with `sample(...)`
-- the host can send assistant output back to the browser through the browser
-  agent
-- the host loop can be expressed through the compiler rather than only through
-  hand-written IR or direct TypeScript orchestration
+- the workflow can call an LLM agent in a Worker with `Llm().sample(...)`
+- the workflow can send assistant output back to the browser through the App
+  agent (`App().showAssistantMessage(...)`)
+- chat history persists across process restarts via `DB().loadMessages()` and
+  `DB().appendMessage(...)`
+- the workflow loop can be expressed through the compiler and executed via
+  `tsn run`
+- there is no imperative host orchestrator
 
 ## Non-Goals
 
@@ -38,7 +42,7 @@ Version 1 does not attempt any of the following:
 - direct agent-to-agent communication
 - browser-owned orchestration
 - token streaming
-- durable persistence across refresh or restart
+- journal-based workflow replay across restarts
 - tool-calling graphs or planner/executor architectures
 - a specific local-model runtime in the Worker
 
@@ -46,9 +50,9 @@ Version 1 does not attempt any of the following:
 
 ```text
 +-------------------+      WebSocket       +------------------------+
-| Browser UI        | <------------------> | Browser Agent Gateway  |
+| Browser UI        | <------------------> | App Agent (local)      |
 | - transcript      |                      | - browser boundary     |
-| - input box       |                      | - request/response     |
+| - input box       |                      | - elicit / loadChat    |
 | - send button     |                      +-----------+------------+
 +-------------------+                                  |
                                                        |
@@ -56,30 +60,36 @@ Version 1 does not attempt any of the following:
                                                        |
                                                        v
                                           +------------+------------+
-                                          | Server Host             |
+                                          | Workflow (chat)         |
                                           | - owns the loop         |
-                                          | - compiled workflow     |
-                                          | - coordinates agents    |
-                                          +------------+------------+
-                                                       |
-                                               worker transport
-                                                       |
-                                                       v
-                                          +------------+------------+
-                                          | Worker LLM Agent        |
-                                          | - sample(...)           |
-                                          | - isolated inference    |
-                                          +-------------------------+
+                                          | - compiled from TS      |
+                                          | - executed via tsn run  |
+                                          +---+----------------+----+
+                                              |                |
+                                     worker transport    inprocess transport
+                                              |                |
+                                              v                v
+                                 +------------+--+   +---------+--------+
+                                 | LLM Agent     |   | DB Agent         |
+                                 | - sample(...)  |   | - loadMessages() |
+                                 | - echo stub    |   | - appendMessage()|
+                                 +---------------+   | - JSON file      |
+                                                     +------------------+
 ```
 
 Control flow for one cycle:
 
-1. host asks the browser agent to elicit input
+1. workflow asks the App agent to elicit input
 2. browser renders the request and waits for the user
-3. browser returns the user's response to the host
-4. host calls the Worker LLM agent to sample a reply
-5. host asks the browser agent to display the assistant output
-6. repeat
+3. browser returns the user's response to the workflow
+4. workflow persists the user message via `DB().appendMessage(...)`
+5. workflow calls the Worker LLM agent to sample a reply
+6. workflow persists the assistant message via `DB().appendMessage(...)`
+7. workflow asks the App agent to display the assistant output
+8. repeat
+
+On startup, the workflow loads prior chat from `DB().loadMessages()` and
+pushes it to the browser via `App().loadChat(messages)`.
 
 ## Component Responsibilities
 
@@ -100,240 +110,191 @@ It does not own:
 - prompt construction
 - model sampling
 - agent orchestration
+- chat persistence
 
-### Browser Agent Gateway
+### App Agent
 
-The browser gateway is a real agent boundary between the host and the browser.
+The App agent is a real agent boundary between the workflow and the browser.
 
-For this demo, the gateway exposes app-specific operations like
-`waitForUser(...)` and `showAssistantMessage(...)`. Those are not intended to
-be the generic reusable browser transport API for Tisyn as a whole.
+For this demo, the App agent exposes app-specific operations. Those are not
+intended to be the generic reusable browser transport API for Tisyn.
 
 It owns:
 
-- translating host requests into UI actions
-- waiting for browser user input when the host asks for it
-- returning the user's response to the host
-- displaying assistant output when the host sends it
+- translating workflow requests into UI actions via WebSocket
+- waiting for browser user input when the workflow asks for it (`elicit`)
+- returning the user's response to the workflow
+- displaying assistant output when the workflow sends it (`showAssistantMessage`)
+- delivering chat history to the browser on connect/reconnect (`loadChat`)
+- session identity and owner/observer semantics
 
 It does not own:
 
 - the conversation loop
 - LLM prompting
 - conversation state decisions
-- direct communication with the Worker agent
+- chat persistence
 
-### Server Host
+### Workflow (chat)
 
-The host is the control plane for the demo.
+The workflow is the control plane for the demo.
 
 It owns:
 
 - the chat loop
-- execution of the compiled workflow
-- coordination between Browser and LLM agents
-- conversation state
-- error handling for this demo
+- execution as compiled IR via `tsn run`
+- coordination between App, LLM, and DB agents
+- conversation history accumulation
+- startup restoration (load from DB, push to browser)
 
 It is the only orchestrator.
 
-### Worker LLM Agent
+### LLM Agent (Worker)
 
 The Worker agent is an isolated inference boundary.
 
 It owns:
 
-- receiving prompt/context from the host
+- receiving prompt/context from the workflow
 - returning one complete assistant response
 
-It does not own:
+The inference backend is intentionally pluggable. The demo uses an echo stub.
 
-- the chat loop
-- browser interaction
-- session state
-- communication with the browser agent
+### DB Agent (In-Process)
 
-The inference backend is intentionally pluggable in this spec. The important
-contract is the typed agent boundary, not the backend behind it.
+The DB agent is the persistence boundary.
 
-## Host Workflow Design
+It owns:
 
-The host workflow is the heart of the demo.
+- reading persisted chat history (`loadMessages`)
+- writing individual messages (`appendMessage`)
 
-Semantically, it should model this loop:
+Demo-minimal: JSON file adapter, single conversation per process, synchronous
+file I/O.
 
-1. elicit input from the browser
-2. sample the LLM agent
-3. display the assistant output in the browser
-4. repeat
-
-Recommended source shape:
+## Workflow Source
 
 ```ts
-function* chat(): Workflow<void> {
-  while (true) {
-    const user = yield* Browser().waitForUser({
-      prompt: "Say something",
-    });
+export function* chat() {
+  const prior = yield* DB().loadMessages({});
+  yield* App().loadChat(prior);
 
-    const assistant = yield* LLM().sample({
-      history: [],
+  let history = prior;
+  while (true) {
+    const user = yield* App().elicit({ message: "Say something" });
+    yield* DB().appendMessage({ role: "user", content: user.message });
+
+    const contextForSampling = [
+      ...history,
+      { role: "user", content: user.message },
+    ];
+    const assistant = yield* Llm().sample({
+      history: contextForSampling,
       message: user.message,
     });
+    yield* DB().appendMessage({ role: "assistant", content: assistant.message });
 
-    yield* Browser().showAssistantMessage({
-      message: assistant.message,
-    });
+    history = [
+      ...contextForSampling,
+      { role: "assistant", content: assistant.message },
+    ];
+    yield* App().showAssistantMessage({ message: assistant.message });
   }
 }
 ```
 
-The exact message/state shapes may vary, but this control flow is the intended
-architecture.
-
-## Compiler Role
-
-The compiler should be used for the host workflow rather than only for a tiny
-subroutine.
-
-The implementation may still keep surrounding bootstrapping and server setup in
-ordinary TypeScript, but the core host logic should be compiler-authored.
-
-If the compiler subset forces a narrower shape, that constraint should be
-documented explicitly in the implementation plan and reflected back here.
-
 ## Agent Contracts
 
-### Browser agent
-
-Use explicit browser-facing operations rather than generic socket plumbing.
-
-Recommended contract:
+### App agent
 
 ```ts
-Browser().waitForUser(input: {
-  prompt?: string;
-}): { message: string }
-
-Browser().showAssistantMessage(input: {
-  message: string;
-}): void
+App().elicit(input: { message: string }): { message: string }
+App().showAssistantMessage(input: { message: string }): void
+App().loadChat(messages: Array<{ role: string; content: string }>): void
+App().setReadOnly(input: { reason: string }): void
 ```
-
-Semantics:
-
-- `waitForUser(...)` renders any prompt and resolves only when the browser user
-  submits input
-- `showAssistantMessage(...)` displays the assistant output and completes once
-  the browser has accepted it for rendering
 
 ### LLM agent
 
-Keep the Worker contract narrow.
-
-Recommended contract:
-
 ```ts
-LLM().sample(input: {
-  history: Array<{ role: "user" | "assistant"; content: string }>;
+Llm().sample(input: {
+  history: Array<{ role: string; content: string }>;
   message: string;
 }): { message: string }
 ```
 
-Replies are whole-message, not streaming.
-
-## Conversation State
-
-Version 1 may keep conversation state in memory on the host.
-
-Recommended shape:
+### DB agent
 
 ```ts
-type ChatEntry = {
-  role: "user" | "assistant";
-  content: string;
-};
-
-type SessionState = {
-  sessionId: string;
-  history: ChatEntry[];
-  status: "idle" | "waiting" | "responding" | "error";
-  lastError?: string;
-};
+DB().loadMessages(input: {}): Array<{ role: string; content: string }>
+DB().appendMessage(input: { role: string; content: string }): void
 ```
 
-The host owns this state. Agents do not own canonical session state.
+## Running the Demo
 
-## UX Behavior
+```sh
+pnpm dev
+```
 
-The browser UI should stay minimal:
+This runs `predev` (builds workflow IR, compiles TypeScript, builds browser
+bundle) then `tsn run dist/descriptor.js -e dev`.
 
-- transcript area
-- single input box
-- send button
-- pending indicator while the host is waiting
-- disconnected/error indicator when transport fails
+The descriptor configures three agents, a memory journal, and a dev
+entrypoint with a WebSocket server serving the browser bundle.
 
-The UI exists to make the architecture visible, not to demonstrate product
-polish.
+## Session Behavior
 
-## Failure Behavior
-
-Version 1 failure behavior is explicit and simple.
-
-- If `LLM().sample(...)` fails, the host sends a friendly error message through
-  the browser agent and marks the session state as `error`
-- If the WebSocket connection fails, the browser shows a disconnected state and
-  stops submitting until reconnect
-- There are no hidden retries unless deliberately added later
+- First browser to connect becomes the owner
+- Owner can submit messages; non-owners get read-only view
+- Browser disconnect is non-fatal: the workflow stays blocked on `elicit`
+  across disconnects and resumes when the same browser reconnects
+- On connect/reconnect, the App agent sends `loadChat` with accumulated state
+- On cold restart, the workflow loads prior history from `DB()` and pushes it
+  to the browser via `loadChat`
 
 ## Test Strategy
 
-Validation should happen in stages.
-
 ### 1. Compiler and local agent interaction
 
-Before browser or Worker wiring:
-
-- compile the host workflow
-- install local Browser and LLM agent implementations
-- assert:
-  - the host asks the browser for input
-  - the user's response feeds into `LLM().sample(...)`
-  - the browser receives the assistant output
+- compile the workflow
+- install local App, LLM, and DB agent stubs
+- assert the full call sequence: loadMessages, loadChat, elicit, appendMessage,
+  sample, appendMessage, showAssistantMessage
 
 ### 2. Worker LLM integration
 
-Then prove:
-
-- the host can call the LLM agent through `workerTransport()`
+- the workflow calls the LLM agent through `workerTransport()`
 - the Worker result flows back into browser display behavior
 
-### 3. WebSocket browser gateway integration
+### 3. Session manager reconnect semantics
 
-Then prove:
+- `elicit` suspension and resolution
+- disconnect/reconnect continuation
+- identity-safe detach
+- non-owner read-only view
+- `loadChat` state management
 
-- host `waitForUser(...)` requests are rendered to the browser
-- browser submissions resolve the host-side browser agent call
-- host `showAssistantMessage(...)` results reach the browser UI
+### 4. Full end-to-end
 
-### 4. Full end-to-end demo
-
-Finally prove:
-
-- the host loop runs
-- browser input is elicited by the host
-- Worker LLM is sampled by the host
-- assistant output is displayed back in the browser
+- session manager + worker LLM + compiled workflow
+- simulated browser WebSocket client
+- multi-turn chat completion
 
 ## Acceptance Criteria
 
 The demo is complete when all of the following are true:
 
-- the host owns the loop
-- the browser is exposed through a WebSocket-backed browser agent
-- the Worker is exposed through an LLM agent
-- the host alternates between browser elicitation and LLM sampling
-- the compiler is used for the host workflow
+- `host.ts` is deleted
+- `pnpm dev` runs `tsn run dist/descriptor.js -e dev`
+- the workflow loads chat from `DB()` on startup
+- the workflow calls `App().loadChat(messages)` to populate the browser
+- new user messages persist through `DB().appendMessage()`
+- new assistant messages persist through `DB().appendMessage()`
+- browser receives `loadChat` on connect
+- browser receives `elicit` when workflow requests input
+- browser disconnect/reconnect delivers accumulated chat state
+- non-owner browser receives `loadChat` + `setReadOnly`
+- cold restart: chat history survives (read from JSON file)
+- the compiler is used for the workflow
 - there is no agent-to-agent communication
-- replies are returned as complete messages per turn
+- all existing tests pass with updated contracts

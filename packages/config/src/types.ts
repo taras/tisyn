@@ -19,6 +19,7 @@ export interface AgentBinding {
   readonly tisyn_config: "agent";
   readonly id: string;
   readonly transport: TransportDescriptor;
+  readonly config?: Readonly<Record<string, unknown>>;
 }
 
 // ── Transport Descriptors ──

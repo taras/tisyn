@@ -1,6 +1,6 @@
 /**
- * LLM agent via Worker transport. Browser agent remains local;
- * history is now managed locally in the workflow (no State agent required).
+ * LLM agent via Worker transport. App and DB agents remain local;
+ * history is managed locally in the workflow.
  */
 
 import { describe, it } from "@effectionx/vitest";
@@ -11,7 +11,7 @@ import { execute } from "@tisyn/runtime";
 import { installRemoteAgent } from "@tisyn/transport";
 import { workerTransport } from "@tisyn/transport/worker";
 import { Call } from "@tisyn/ir";
-import { App, Llm, chat } from "../src/workflow.generated.js";
+import { App, Llm, DB, chat } from "../src/workflow.generated.js";
 
 describe("Worker transport", () => {
   it("routes LLM.sample through a real worker thread", function* () {
@@ -20,9 +20,9 @@ describe("Worker transport", () => {
     let userMessageIndex = 0;
     const done = withResolvers<void>();
 
-    // Install local Browser agent
+    // Install local App agent
     const browserImpl = implementAgent(App(), {
-      *waitForUser(_args) {
+      *elicit(_args) {
         if (userMessageIndex >= userMessages.length) {
           done.resolve();
           throw new Error("done");
@@ -32,10 +32,19 @@ describe("Worker transport", () => {
       *showAssistantMessage(args) {
         showCalls.push(args);
       },
-      *hydrateTranscript() {},
+      *loadChat() {},
       *setReadOnly() {},
     });
     yield* browserImpl.install();
+
+    // Install local DB agent (no-op stub)
+    const dbImpl = implementAgent(DB(), {
+      *loadMessages() {
+        return [];
+      },
+      *appendMessage() {},
+    });
+    yield* dbImpl.install();
 
     // Install LLM agent via Worker transport
     const factory = workerTransport({

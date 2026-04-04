@@ -1,7 +1,7 @@
 /**
  * BrowserSessionManager hydration tests.
  *
- * Verifies that history accumulates correctly during live turns so that
+ * Verifies that chatMessages accumulates correctly during live turns so that
  * reconnecting owners and non-owner clients receive current transcripts.
  */
 
@@ -28,53 +28,53 @@ function asFakeWs(ws: FakeWs): WebSocket {
   return ws as unknown as WebSocket;
 }
 
-function getHydrate(
+function getLoadChat(
   ws: FakeWs,
-): { type: "hydrateTranscript"; messages: Array<{ role: string; content: string }> } | undefined {
-  return ws.messages.find((m) => m.type === "hydrateTranscript") as
-    | { type: "hydrateTranscript"; messages: Array<{ role: string; content: string }> }
+): { type: "loadChat"; messages: Array<{ role: string; content: string }> } | undefined {
+  return ws.messages.find((m) => m.type === "loadChat") as
+    | { type: "loadChat"; messages: Array<{ role: string; content: string }> }
     | undefined;
 }
 
 describe("BrowserSessionManager transcript hydration", () => {
   it("non-owner client receives current transcript after a completed turn", function* () {
-    const session = new BrowserSessionManager([]);
+    const session = new BrowserSessionManager();
 
     // Attach owner
     const ownerWs = new FakeWs();
     session.attach("owner", asFakeWs(ownerWs));
 
-    // Set pendingPrompt so handleMessage will save the user message.
-    // We call waitForUser() without yielding — it sets this.pendingPrompt.
-    session.waitForUser("What do you want?");
+    // Set pendingElicit so handleMessage will save the user message.
+    // We call elicit() without yielding — it sets this.pendingElicit.
+    session.elicit("What do you want?");
 
     // Simulate user message arriving on the owner socket
     ownerWs.emit("message", JSON.stringify({ type: "userMessage", message: "hello" }));
 
     // Workflow receives the reply and calls showAssistantMessage —
-    // this should flush the complete pair to this.history.
+    // this should append the assistant message to chatMessages.
     session.showAssistantMessage("world");
 
     // Attach a non-owner socket (different clientSessionId)
     const nonOwnerWs = new FakeWs();
     session.attach("observer", asFakeWs(nonOwnerWs));
 
-    const hydrate = getHydrate(nonOwnerWs);
-    expect(hydrate).toBeDefined();
-    expect(hydrate!.messages).toEqual([
+    const loadChat = getLoadChat(nonOwnerWs);
+    expect(loadChat).toBeDefined();
+    expect(loadChat!.messages).toEqual([
       { role: "user", content: "hello" },
       { role: "assistant", content: "world" },
     ]);
   });
 
   it("owner reconnect receives current transcript after a completed turn", function* () {
-    const session = new BrowserSessionManager([]);
+    const session = new BrowserSessionManager();
 
     // First owner connection
     const ownerWs1 = new FakeWs();
     session.attach("owner", asFakeWs(ownerWs1));
 
-    session.waitForUser("What do you want?");
+    session.elicit("What do you want?");
     ownerWs1.emit("message", JSON.stringify({ type: "userMessage", message: "ping" }));
     session.showAssistantMessage("pong");
 
@@ -82,9 +82,9 @@ describe("BrowserSessionManager transcript hydration", () => {
     const ownerWs2 = new FakeWs();
     session.attach("owner", asFakeWs(ownerWs2));
 
-    const hydrate = getHydrate(ownerWs2);
-    expect(hydrate).toBeDefined();
-    expect(hydrate!.messages).toEqual([
+    const loadChat = getLoadChat(ownerWs2);
+    expect(loadChat).toBeDefined();
+    expect(loadChat!.messages).toEqual([
       { role: "user", content: "ping" },
       { role: "assistant", content: "pong" },
     ]);
