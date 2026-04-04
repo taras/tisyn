@@ -16,7 +16,11 @@ import { installAgentTransport } from "@tisyn/transport";
 import { workerTransport } from "@tisyn/transport/worker";
 import { stdioTransport } from "@tisyn/transport/stdio";
 import { websocketTransport } from "@tisyn/transport/websocket";
-import type { AgentTransportFactory, LocalAgentBinding, LocalServerBinding } from "@tisyn/transport";
+import type {
+  AgentTransportFactory,
+  LocalAgentBinding,
+  LocalServerBinding,
+} from "@tisyn/transport";
 import { InMemoryStream } from "@tisyn/durable-streams";
 import type { DurableStream } from "@tisyn/durable-streams";
 import type {
@@ -78,10 +82,7 @@ export function* loadLocalBinding(modulePath: string): Operation<LocalAgentBindi
     return { transport: (mod.createTransport as () => AgentTransportFactory)() };
   }
 
-  throw new CliError(
-    2,
-    `Module '${modulePath}' must export createBinding() or createTransport()`,
-  );
+  throw new CliError(2, `Module '${modulePath}' must export createBinding() or createTransport()`);
 }
 
 /**
