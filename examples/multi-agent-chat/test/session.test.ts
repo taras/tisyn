@@ -8,6 +8,7 @@
 import { EventEmitter } from "node:events";
 import { describe, it } from "@effectionx/vitest";
 import { expect } from "vitest";
+import { createSignal } from "effection";
 import type { WebSocket } from "ws";
 import { BrowserSessionManager } from "../src/browser-session.js";
 import type { HostToBrowser } from "../src/browser-session.js";
@@ -38,21 +39,20 @@ function getLoadChat(
 
 describe("BrowserSessionManager transcript hydration", () => {
   it("non-owner client receives current transcript after a completed turn", function* () {
-    const session = new BrowserSessionManager();
+    const userInput = createSignal<string, never>();
+    const session = new BrowserSessionManager(userInput);
 
     // Attach owner
     const ownerWs = new FakeWs();
     session.attach("owner", asFakeWs(ownerWs));
 
-    // Set pendingElicit so handleMessage will save the user message.
-    // We call elicit() without yielding — it sets this.pendingElicit.
-    session.elicit("What do you want?");
+    // Set pending prompt so handleMessage will accept the user message
+    session.beginElicit("What do you want?");
 
     // Simulate user message arriving on the owner socket
     ownerWs.emit("message", JSON.stringify({ type: "userMessage", message: "hello" }));
 
-    // Workflow receives the reply and calls showAssistantMessage —
-    // this should append the assistant message to chatMessages.
+    // Workflow receives the reply and calls showAssistantMessage
     session.showAssistantMessage("world");
 
     // Attach a non-owner socket (different clientSessionId)
@@ -68,13 +68,14 @@ describe("BrowserSessionManager transcript hydration", () => {
   });
 
   it("owner reconnect receives current transcript after a completed turn", function* () {
-    const session = new BrowserSessionManager();
+    const userInput = createSignal<string, never>();
+    const session = new BrowserSessionManager(userInput);
 
     // First owner connection
     const ownerWs1 = new FakeWs();
     session.attach("owner", asFakeWs(ownerWs1));
 
-    session.elicit("What do you want?");
+    session.beginElicit("What do you want?");
     ownerWs1.emit("message", JSON.stringify({ type: "userMessage", message: "ping" }));
     session.showAssistantMessage("pong");
 

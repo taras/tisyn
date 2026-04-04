@@ -1,5 +1,3 @@
-import { withResolvers } from "effection";
-import type { Operation } from "effection";
 import type { WebSocket } from "ws";
 import { logInfo, logDebug } from "./logger.js";
 
@@ -17,12 +15,33 @@ export type HostToBrowser =
 
 // --- Session Manager ---
 
+/**
+ * Plain session state container for browser WebSocket connections.
+ *
+ * Owns only synchronous, plain data:
+ * - session identity and ownership
+ * - current WebSocket
+ * - chat transcript
+ * - pending prompt text (for reconnect hydration)
+ *
+ * Does NOT own operation resolvers or continuation state. Pending
+ * operation waiting lives in the Effection scope via a binding-scoped
+ * signal passed at construction.
+ */
 export class BrowserSessionManager {
   private ownerSessionId: string | null = null;
   private socket: WebSocket | null = null;
-  private pendingElicit: { resolve(msg: string): void; message: string } | null = null;
+  private pendingPrompt: string | null = null;
   private chatMessages: Array<{ role: string; content: string }> = [];
   private readOnly: { reason: string } | null = null;
+
+  /**
+   * @param userInput — push-side of a binding-scoped signal. The manager
+   * calls `send(msg)` when the owner browser submits a user message.
+   * The Effection scope owns the signal's lifecycle; the manager just
+   * pushes into it.
+   */
+  constructor(private userInput: { send(msg: string): void }) {}
 
   /**
    * Attach a WebSocket to a session.
@@ -73,9 +92,9 @@ export class BrowserSessionManager {
     logInfo("session", "owner attached", { chatLength: this.chatMessages.length });
     this.safeSend(ws, { type: "loadChat", messages: [...this.chatMessages] });
 
-    if (this.pendingElicit) {
-      logInfo("session", "re-sending pending elicit", { message: this.pendingElicit.message });
-      this.safeSend(ws, { type: "elicit", message: this.pendingElicit.message });
+    if (this.pendingPrompt) {
+      logInfo("session", "re-sending pending elicit", { message: this.pendingPrompt });
+      this.safeSend(ws, { type: "elicit", message: this.pendingPrompt });
     }
 
     if (this.readOnly) {
@@ -105,25 +124,25 @@ export class BrowserSessionManager {
   }
 
   /**
-   * Reconnect-safe elicit. Suspends via withResolvers until the owner
-   * browser sends a userMessage. Survives disconnect — the resolvers stay
-   * pending until a reconnected browser submits.
+   * Set the current elicit prompt as plain data and send to the browser.
+   * The prompt is remembered for reconnect hydration.
+   *
+   * The caller (the binding's elicit handler) must subscribe to the
+   * userInput signal BEFORE calling this — signal does not buffer.
    */
-  elicit(message: string): Operation<{ message: string }> {
-    const { operation, resolve } = withResolvers<string>();
-
-    this.pendingElicit = { resolve, message };
-
+  beginElicit(message: string): void {
+    this.pendingPrompt = message;
     if (this.socket) {
       this.safeSend(this.socket, { type: "elicit", message });
     }
+  }
 
-    return {
-      *[Symbol.iterator]() {
-        const msg = yield* operation;
-        return { message: msg };
-      },
-    };
+  /**
+   * Clear the pending prompt. Called in the binding's finally block
+   * so the prompt is cleaned up on both normal completion and cancellation.
+   */
+  endElicit(): void {
+    this.pendingPrompt = null;
   }
 
   /**
@@ -146,12 +165,11 @@ export class BrowserSessionManager {
   }
 
   private handleMessage(msg: BrowserToHost): void {
-    if (msg.type === "userMessage" && this.pendingElicit) {
+    if (msg.type === "userMessage" && this.pendingPrompt) {
       logInfo("session", "userMessage received", { message: msg.message });
-      const { resolve } = this.pendingElicit;
       this.chatMessages.push({ role: "user", content: msg.message });
-      this.pendingElicit = null;
-      resolve(msg.message);
+      this.pendingPrompt = null;
+      this.userInput.send(msg.message);
     }
   }
 

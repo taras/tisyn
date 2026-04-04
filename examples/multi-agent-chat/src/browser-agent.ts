@@ -4,11 +4,14 @@
  * The transport handles agent operations (elicit, showAssistantMessage, etc.)
  * backed by a BrowserSessionManager. The bindServer hook accepts browser
  * connections from the CLI's server binding.
+ *
+ * Pending user-input waiting is owned by Effection via a binding-scoped
+ * signal. The session manager holds only plain state (prompt text, transcript).
  */
 
 import { inprocessTransport } from "@tisyn/transport";
 import type { LocalAgentBinding, LocalServerBinding } from "@tisyn/transport";
-import { each, spawn, withResolvers } from "effection";
+import { createSignal, each, spawn, withResolvers } from "effection";
 import type { Operation } from "effection";
 import { App } from "./workflow.generated.js";
 import { BrowserSessionManager } from "./browser-session.js";
@@ -16,12 +19,21 @@ import type { BrowserToHost } from "./browser-session.js";
 import { logInfo } from "./logger.js";
 
 export function createBinding(): LocalAgentBinding {
-  const session = new BrowserSessionManager();
+  const userInput = createSignal<string, never>();
+  const session = new BrowserSessionManager(userInput);
 
   return {
     transport: inprocessTransport(App(), {
       *elicit({ input }) {
-        return yield* session.elicit(input.message);
+        // Subscribe BEFORE setting the prompt — signal does not buffer
+        const sub = yield* userInput;
+        session.beginElicit(input.message);
+        try {
+          const item = yield* sub.next();
+          return { message: item.value };
+        } finally {
+          session.endElicit();
+        }
       },
       *showAssistantMessage({ input }) {
         session.showAssistantMessage(input.message);

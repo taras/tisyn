@@ -1,15 +1,18 @@
 /**
- * BrowserSessionManager — reconnect semantics.
+ * Browser session — behavioral tests.
  *
- * Tests the session manager directly without running the full workflow.
- * Verifies: elicit suspension, reconnect continuation, identity-safe
- * detach, non-owner read-only, showAssistantMessage during disconnect,
- * loadChat state management.
+ * Tests the session manager + signal integration without running the full
+ * workflow. Pending user-input waiting lives in the Effection scope via
+ * a signal; the manager owns only plain state.
+ *
+ * Verifies: elicit waits for user input, reconnect re-sends the outstanding
+ * prompt, non-owner gets read-only hydration, disconnect/reconnect does not
+ * lose transcript state.
  */
 
 import { describe, it } from "@effectionx/vitest";
 import { expect } from "vitest";
-import { spawn, withResolvers } from "effection";
+import { createSignal, spawn, withResolvers } from "effection";
 import type { Operation } from "effection";
 import { BrowserSessionManager } from "../src/browser-session.js";
 import { EventEmitter } from "node:events";
@@ -48,7 +51,7 @@ function createMockWs() {
   };
 }
 
-/** Yield a microtask to let withResolvers callbacks propagate. */
+/** Yield a microtask to let signal delivery propagate. */
 function nextTick(): Operation<void> {
   const { operation, resolve } = withResolvers<void>();
   queueMicrotask(() => resolve());
@@ -58,44 +61,49 @@ function nextTick(): Operation<void> {
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type AnyWs = any;
 
-describe("Browser session manager", () => {
-  it("elicit suspends until userMessage arrives", function* () {
-    const session = new BrowserSessionManager();
+describe("Browser session", () => {
+  it("elicit waits for user input via signal", function* () {
+    const userInput = createSignal<string, never>();
+    const session = new BrowserSessionManager(userInput);
     const ws = createMockWs();
-
     session.attach("session-1", ws as AnyWs);
 
-    let result: { message: string } | undefined;
+    let result: string | undefined;
     yield* spawn(function* () {
-      result = yield* session.elicit("Say something");
+      const sub = yield* userInput;
+      session.beginElicit("Say something");
+      const item = yield* sub.next();
+      session.endElicit();
+      result = item.value;
     });
 
-    // Let the spawn start
     yield* nextTick();
 
     // Should have sent elicit to the browser
     const elicitMsg = ws.sent.find((m: any) => m.type === "elicit");
     expect(elicitMsg).toEqual({ type: "elicit", message: "Say something" });
-
-    // Not yet resolved
     expect(result).toBeUndefined();
 
     // Simulate user input
     ws.injectMessage({ type: "userMessage", message: "hello" });
     yield* nextTick();
 
-    expect(result).toEqual({ message: "hello" });
+    expect(result).toBe("hello");
   });
 
-  it("elicit survives disconnect and resumes on reconnect", function* () {
-    const session = new BrowserSessionManager();
+  it("reconnect re-sends the outstanding prompt", function* () {
+    const userInput = createSignal<string, never>();
+    const session = new BrowserSessionManager(userInput);
     const ws1 = createMockWs();
-
     session.attach("session-1", ws1 as AnyWs);
 
-    let result: { message: string } | undefined;
+    let result: string | undefined;
     yield* spawn(function* () {
-      result = yield* session.elicit("Say something");
+      const sub = yield* userInput;
+      session.beginElicit("Say something");
+      const item = yield* sub.next();
+      session.endElicit();
+      result = item.value;
     });
     yield* nextTick();
 
@@ -107,6 +115,7 @@ describe("Browser session manager", () => {
     const ws2 = createMockWs();
     session.attach("session-1", ws2 as AnyWs);
 
+    // Reconnect should hydrate with chat + re-send pending prompt
     const loadChat = ws2.sent.find((m: any) => m.type === "loadChat");
     expect(loadChat).toBeDefined();
     const reSentElicit = ws2.sent.find((m: any) => m.type === "elicit");
@@ -116,40 +125,52 @@ describe("Browser session manager", () => {
     ws2.injectMessage({ type: "userMessage", message: "world" });
     yield* nextTick();
 
-    expect(result).toEqual({ message: "world" });
+    expect(result).toBe("world");
   });
 
-  it("showAssistantMessage during disconnect does not fail", function* () {
-    const session = new BrowserSessionManager();
-    const ws = createMockWs();
+  it("disconnect does not lose transcript state", function* () {
+    const userInput = createSignal<string, never>();
+    const session = new BrowserSessionManager(userInput);
 
-    session.attach("session-1", ws as AnyWs);
+    // Load initial chat
+    session.loadChat([{ role: "user", content: "first" }]);
 
-    session.detach(ws as AnyWs);
-
-    // Should not throw
-    session.showAssistantMessage("Echo: hello");
-  });
-
-  it("second connect with same ID replaces old socket (identity-safe)", function* () {
-    const session = new BrowserSessionManager();
     const ws1 = createMockWs();
-    const ws2 = createMockWs();
-
     session.attach("session-1", ws1 as AnyWs);
 
+    // Complete a turn: user message via elicit + assistant message
+    yield* spawn(function* () {
+      const sub = yield* userInput;
+      session.beginElicit("Say something");
+      yield* sub.next();
+      session.endElicit();
+    });
+    yield* nextTick();
+
+    ws1.injectMessage({ type: "userMessage", message: "second" });
+    yield* nextTick();
+
+    session.showAssistantMessage("reply");
+
+    // Reconnect
+    const ws2 = createMockWs();
     session.attach("session-1", ws2 as AnyWs);
 
-    expect(ws1.closed).toBe(true);
-
     const loadChat = ws2.sent.find((m: any) => m.type === "loadChat");
-    expect(loadChat).toBeDefined();
+    expect(loadChat).toEqual({
+      type: "loadChat",
+      messages: [
+        { role: "user", content: "first" },
+        { role: "user", content: "second" },
+        { role: "assistant", content: "reply" },
+      ],
+    });
   });
 
-  it("non-owner gets read-only view", function* () {
-    const session = new BrowserSessionManager();
+  it("non-owner gets read-only hydration", function* () {
+    const userInput = createSignal<string, never>();
+    const session = new BrowserSessionManager(userInput);
 
-    // Seed chat state
     session.loadChat([
       { role: "user", content: "hello" },
       { role: "assistant", content: "Echo: hello" },
@@ -175,15 +196,47 @@ describe("Browser session manager", () => {
     });
   });
 
+  it("showAssistantMessage during disconnect does not fail", function* () {
+    const userInput = createSignal<string, never>();
+    const session = new BrowserSessionManager(userInput);
+    const ws = createMockWs();
+
+    session.attach("session-1", ws as AnyWs);
+    session.detach(ws as AnyWs);
+
+    // Should not throw
+    session.showAssistantMessage("Echo: hello");
+  });
+
+  it("second connect with same ID replaces old socket (identity-safe)", function* () {
+    const userInput = createSignal<string, never>();
+    const session = new BrowserSessionManager(userInput);
+    const ws1 = createMockWs();
+    const ws2 = createMockWs();
+
+    session.attach("session-1", ws1 as AnyWs);
+    session.attach("session-1", ws2 as AnyWs);
+
+    expect(ws1.closed).toBe(true);
+
+    const loadChat = ws2.sent.find((m: any) => m.type === "loadChat");
+    expect(loadChat).toBeDefined();
+  });
+
   it("stale close from old socket does not clear new socket", function* () {
-    const session = new BrowserSessionManager();
+    const userInput = createSignal<string, never>();
+    const session = new BrowserSessionManager(userInput);
     const ws1 = createMockWs();
 
     session.attach("session-1", ws1 as AnyWs);
 
-    let result: { message: string } | undefined;
+    let result: string | undefined;
     yield* spawn(function* () {
-      result = yield* session.elicit("Prompt");
+      const sub = yield* userInput;
+      session.beginElicit("Prompt");
+      const item = yield* sub.next();
+      session.endElicit();
+      result = item.value;
     });
     yield* nextTick();
 
@@ -198,13 +251,13 @@ describe("Browser session manager", () => {
 
     ws2.injectMessage({ type: "userMessage", message: "answer" });
     yield* nextTick();
-    expect(result).toEqual({ message: "answer" });
+    expect(result).toBe("answer");
   });
 
   it("loadChat stores and delivers messages on connect", function* () {
-    const session = new BrowserSessionManager();
+    const userInput = createSignal<string, never>();
+    const session = new BrowserSessionManager(userInput);
 
-    // Load chat before any connection
     session.loadChat([
       { role: "user", content: "ping" },
       { role: "assistant", content: "pong" },
@@ -219,35 +272,6 @@ describe("Browser session manager", () => {
       messages: [
         { role: "user", content: "ping" },
         { role: "assistant", content: "pong" },
-      ],
-    });
-  });
-
-  it("reconnect delivers accumulated state after showAssistantMessage", function* () {
-    const session = new BrowserSessionManager();
-
-    // Load initial chat
-    session.loadChat([{ role: "user", content: "first" }]);
-
-    const ws1 = createMockWs();
-    session.attach("session-1", ws1 as AnyWs);
-
-    // Simulate a completed turn (user message via elicit + assistant message)
-    session.elicit("Say something");
-    ws1.injectMessage({ type: "userMessage", message: "second" });
-    session.showAssistantMessage("reply");
-
-    // Reconnect
-    const ws2 = createMockWs();
-    session.attach("session-1", ws2 as AnyWs);
-
-    const loadChat = ws2.sent.find((m: any) => m.type === "loadChat");
-    expect(loadChat).toEqual({
-      type: "loadChat",
-      messages: [
-        { role: "user", content: "first" },
-        { role: "user", content: "second" },
-        { role: "assistant", content: "reply" },
       ],
     });
   });

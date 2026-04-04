@@ -9,7 +9,7 @@ import { createServer } from "node:http";
 import type { AddressInfo } from "node:net";
 import { describe, it } from "@effectionx/vitest";
 import { expect } from "vitest";
-import { spawn, withResolvers } from "effection";
+import { createSignal, spawn, withResolvers } from "effection";
 import { WebSocketServer, WebSocket } from "ws";
 import { implementAgent } from "@tisyn/agent";
 import { execute } from "@tisyn/runtime";
@@ -67,13 +67,21 @@ describe("End-to-end chat", () => {
     const serverWs = yield* serverConnected.operation;
 
     // --- Set up agents (same pattern as host.ts) ---
-    const session = new BrowserSessionManager();
+    const userInput = createSignal<string, never>();
+    const session = new BrowserSessionManager(userInput);
     session.attach("e2e-test", serverWs);
 
-    // App agent — local, backed by session manager
+    // App agent — local, backed by session manager + signal
     const browserImpl = implementAgent(App(), {
       *elicit({ input }) {
-        return yield* session.elicit(input.message);
+        const sub = yield* userInput;
+        session.beginElicit(input.message);
+        try {
+          const item = yield* sub.next();
+          return { message: item.value };
+        } finally {
+          session.endElicit();
+        }
       },
       *showAssistantMessage({ input }) {
         session.showAssistantMessage(input.message);
