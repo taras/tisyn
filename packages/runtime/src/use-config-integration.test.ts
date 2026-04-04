@@ -2,14 +2,15 @@
  * Integration tests for authored `yield* Config.useConfig(Token)`.
  *
  * These tests compile TypeScript workflow source containing `Config.useConfig(Token)`,
- * then execute the compiled IR via @tisyn/runtime with a resolved config
+ * then execute the compiled IR via execute() with a resolved config
  * projection. They cover CFG-USE-001 through CFG-USE-004 and CFG-USE-009.
  */
 
 import { describe, it } from "@effectionx/vitest";
 import { expect } from "vitest";
 import { Call, Ref, type Val } from "@tisyn/ir";
-import { execute, resolveConfig, provideConfig } from "@tisyn/runtime";
+import { execute } from "./execute.js";
+import { resolveConfig } from "./config.js";
 import { compileOne } from "@tisyn/compiler";
 import { workflow, agent, transport, env, journal, entrypoint, server } from "@tisyn/config";
 
@@ -43,9 +44,9 @@ describe("Config.useConfig(Token) integration", () => {
       }
     `);
 
-    yield* provideConfig(resolved as Val);
     const { result } = yield* execute({
       ir: Call(ir),
+      config: resolved as unknown as Val,
     });
 
     expect(result.status).toBe("ok");
@@ -84,9 +85,9 @@ describe("Config.useConfig(Token) integration", () => {
       }
     `);
 
-    yield* provideConfig(resolved as Val);
     const { result } = yield* execute({
       ir: Call(ir),
+      config: resolved as unknown as Val,
     });
 
     expect(result.status).toBe("ok");
@@ -104,7 +105,7 @@ describe("Config.useConfig(Token) integration", () => {
   });
 
   it("CFG-USE-004 + CFG-USE-009: invocation args remain separate from useConfig result", function* () {
-    const config = { debug: true, model: "gpt-4" };
+    const config = { debug: true, model: "gpt-4" } as Val;
 
     // Compile a workflow that takes args AND calls Config.useConfig, returning both
     const ir = compileOne(`
@@ -115,10 +116,10 @@ describe("Config.useConfig(Token) integration", () => {
       }
     `);
 
-    yield* provideConfig(config as Val);
     const { result } = yield* execute({
       ir: Call(ir, Ref("input")),
       env: { input: "hello-world" } as never,
+      config,
     });
 
     expect(result.status).toBe("ok");

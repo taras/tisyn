@@ -16,7 +16,6 @@ import {
   applyOverlay,
   resolveConfig,
   execute,
-  provideConfig,
   ConfigError as RuntimeConfigError,
 } from "@tisyn/runtime";
 import type { ResolvedConfig } from "@tisyn/runtime";
@@ -117,10 +116,10 @@ export function* runRun(
   }
 
   // Execute workflow
-  yield* provideConfig(resolvedProjection as unknown as Val);
   const { result } = yield* execute({
     ir: workflowExport.ir,
     env: inputFlags.parsed as never,
+    config: resolvedProjection as unknown as Val,
     stream,
   });
 

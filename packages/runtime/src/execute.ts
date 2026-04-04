@@ -38,7 +38,7 @@ import {
 import { installAgentTransport, type AgentTransportFactory } from "@tisyn/transport";
 import { useScope } from "effection";
 import type { FnNode } from "@tisyn/ir";
-import { readConfig } from "./config-scope.js";
+import { ConfigContext } from "./config-scope.js";
 
 export interface ExecuteOptions {
   /** The IR tree to evaluate. */
@@ -49,6 +49,8 @@ export interface ExecuteOptions {
   stream?: DurableStream;
   /** Coroutine ID for the root task. Defaults to "root". */
   coroutineId?: string;
+  /** Resolved config projection, available to workflows via Config.useConfig(Token). */
+  config?: Val;
 }
 
 export interface ExecuteResult {
@@ -111,7 +113,13 @@ interface ResourceChild {
  * 5. Write Close event on completion/error
  */
 export function* execute(options: ExecuteOptions): Operation<ExecuteResult> {
-  const { ir, env: envRecord = {}, stream = new InMemoryStream(), coroutineId = "root" } = options;
+  const {
+    ir,
+    env: envRecord = {},
+    stream = new InMemoryStream(),
+    coroutineId = "root",
+    config = null,
+  } = options;
 
   // Phase 1: Validate IR before evaluation
   let validatedIr: Expr;
@@ -132,6 +140,10 @@ export function* execute(options: ExecuteOptions): Operation<ExecuteResult> {
   }
 
   return yield* scoped(function* () {
+    if (config != null) {
+      yield* ConfigContext.set(config);
+    }
+
     // Phase 2: Read journal, build ReplayIndex
     const storedEvents = yield* stream.readAll();
     const replayIndex = new ReplayIndex(storedEvents);
@@ -572,7 +584,7 @@ function* driveKernel(
         try {
           let resultValue: Val;
           if (descriptor.id === "__config") {
-            resultValue = yield* readConfig();
+            resultValue = (yield* ConfigContext.expect()) as Val;
           } else if (descriptor.id === "stream.subscribe") {
             const token = `sub:${coroutineId}:${subscriptionCounter++}`;
             const sourceData = descriptor.data as unknown[];
@@ -1232,7 +1244,7 @@ function* orchestrateResourceChild(
         try {
           let resultValue: Val;
           if (descriptor.id === "__config") {
-            resultValue = yield* readConfig();
+            resultValue = (yield* ConfigContext.expect()) as Val;
           } else if (descriptor.id === "stream.subscribe") {
             const token = `sub:${childId}:${subscriptionCounter++}`;
             const sourceData = descriptor.data as unknown[];
@@ -1567,7 +1579,7 @@ function* orchestrateResourceChild(
         try {
           let resultValue: Val;
           if (descriptor.id === "__config") {
-            resultValue = yield* readConfig();
+            resultValue = (yield* ConfigContext.expect()) as Val;
           } else if (descriptor.id === "stream.subscribe") {
             const token = `sub:${childId}:${subscriptionCounter++}`;
             const sourceData = descriptor.data as unknown[];

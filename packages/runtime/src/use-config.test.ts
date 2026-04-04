@@ -6,13 +6,13 @@
  * The token argument is erased at compile time — it does not reach the runtime.
  * The effect is journaled like any standard external effect for replay safety.
  *
- * Tests seed config via provideConfig() before calling execute().
+ * Tests seed config via execute({ config }) which internally sets the config context.
  */
 
 import { describe, it } from "@effectionx/vitest";
 import { expect } from "vitest";
 import { execute } from "./execute.js";
-import { provideConfig } from "./config-scope.js";
+import type { Val } from "@tisyn/ir";
 import { InMemoryStream } from "@tisyn/durable-streams";
 import type { YieldEvent } from "@tisyn/kernel";
 
@@ -25,11 +25,11 @@ const useConfigIr = {
 
 describe("__config effect", () => {
   it("returns projected config when config is provided", function* () {
-    const config = { debug: true, model: "gpt-4", maxTurns: 10 };
+    const config = { debug: true, model: "gpt-4", maxTurns: 10 } as Val;
 
-    yield* provideConfig(config);
     const { result } = yield* execute({
       ir: useConfigIr as never,
+      config,
     });
 
     expect(result).toEqual({ status: "ok", value: config });
@@ -44,12 +44,12 @@ describe("__config effect", () => {
   });
 
   it("is journaled as a YieldEvent", function* () {
-    const config = { debug: true };
+    const config = { debug: true } as Val;
     const stream = new InMemoryStream();
 
-    yield* provideConfig(config);
     const { journal } = yield* execute({
       ir: useConfigIr as never,
+      config,
       stream,
     });
 
@@ -61,19 +61,20 @@ describe("__config effect", () => {
   });
 
   it("on replay with same config: no divergence", function* () {
-    const config = { debug: true };
+    const config = { debug: true } as Val;
     const stream = new InMemoryStream();
 
     // First execution — populates the journal
-    yield* provideConfig(config);
     yield* execute({
       ir: useConfigIr as never,
+      config,
       stream,
     });
 
     // Second execution — replays from the same stream
     const { result } = yield* execute({
       ir: useConfigIr as never,
+      config,
       stream,
     });
 
@@ -81,12 +82,12 @@ describe("__config effect", () => {
   });
 
   it("invocation args (env) remain distinct from config", function* () {
-    const config = { debug: true };
+    const config = { debug: true } as Val;
     const envArgs = { input: "hello" };
 
-    yield* provideConfig(config);
     const { result } = yield* execute({
       ir: useConfigIr as never,
+      config,
       env: envArgs as never,
     });
 
