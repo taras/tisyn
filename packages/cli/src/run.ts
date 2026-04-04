@@ -27,6 +27,7 @@ import {
 } from "./load-descriptor.js";
 import { deriveFlags, parseInputFlags, formatInputHelp } from "./inputs.js";
 import { installAllTransports, createJournalStream, startServer } from "./startup.js";
+import type { LocalServerBinding } from "@tisyn/transport";
 import type { RunCommandOptions } from "./types.js";
 
 /**
@@ -99,14 +100,12 @@ export function* runRun(
   // Phase D: Start resources and execute
   const stream = createJournalStream(resolvedProjection.journal);
 
-  // Install agent transports
-  yield* installAllTransports(resolvedProjection);
-
-  // Start server if present (resource provides after listening)
+  // Start server first if present (bindings may need it)
+  let serverBinding: LocalServerBinding | undefined;
   if (resolvedProjection.server) {
     try {
-      const { address } = yield* startServer(resolvedProjection.server);
-      console.log(`Server listening on http://localhost:${address.port}`);
+      serverBinding = yield* startServer(resolvedProjection.server);
+      console.log(`Server listening on http://localhost:${serverBinding.address.port}`);
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
       console.error(`Server failed to start: ${msg}`);
@@ -114,6 +113,9 @@ export function* runRun(
       return;
     }
   }
+
+  // Install agent transports (with server binding if available)
+  yield* installAllTransports(resolvedProjection, serverBinding);
 
   // Execute workflow
   const { result } = yield* execute({

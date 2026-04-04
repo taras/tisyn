@@ -7,7 +7,7 @@
 
 import { describe, it } from "@effectionx/vitest";
 import { expect, afterEach } from "vitest";
-import { call } from "effection";
+import { call, each, spawn, createScope } from "effection";
 import type { Operation } from "effection";
 import { exec } from "@effectionx/process";
 import { mkdtemp, writeFile, mkdir, rm, readFile } from "node:fs/promises";
@@ -15,11 +15,13 @@ import { tmpdir } from "node:os";
 import { createRequire } from "node:module";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
+import { WebSocket } from "ws";
 import { topoSort, runGenerate, runBuild } from "./compile.js";
 import { discoverConfig, validateAndResolveConfig, ConfigError } from "./config.js";
 import { buildInputSchema } from "@tisyn/compiler";
 import { deriveFlags, parseInputFlags, formatInputHelp } from "./inputs.js";
 import { CliError } from "./load-descriptor.js";
+import { loadLocalBinding, startServer } from "./startup.js";
 import { rebaseConfigPaths } from "./run.js";
 import type { ResolvedConfig } from "@tisyn/runtime";
 
@@ -753,5 +755,222 @@ describe("entrypoint overlay", () => {
     expect(result.code).not.toBe(5);
     expect(result.stderr).not.toContain("V10");
     expect(result.stderr).not.toContain("Config validation failed");
+  });
+});
+
+// ── local agent binding contract ─────────────────────────────────────────────
+
+describe("local agent binding contract", () => {
+  it("prefers createBinding() over createTransport()", function* () {
+    const dir = yield* call(makeTempDir);
+    const modulePath = join(dir, "binding-module.mjs");
+    yield* call(() =>
+      writeFile(
+        modulePath,
+        `
+export function createBinding() {
+  return {
+    transport: function*() {
+      return { send: function*(){}, receive: { [Symbol.iterator](){return this}, next(){return {done:true,value:undefined}} } };
+    },
+    _source: "createBinding",
+  };
+}
+
+export function createTransport() {
+  return function*() {
+    return { send: function*(){}, receive: { [Symbol.iterator](){return this}, next(){return {done:true,value:undefined}} } };
+  };
+}
+`,
+      ),
+    );
+    const binding = yield* loadLocalBinding(modulePath);
+    // Should have used createBinding (has _source marker)
+    expect((binding as Record<string, unknown>)._source).toBe("createBinding");
+    expect(binding.transport).toBeTypeOf("function");
+  });
+
+  it("falls back to createTransport() when createBinding is absent", function* () {
+    const dir = yield* call(makeTempDir);
+    const modulePath = join(dir, "transport-only.mjs");
+    yield* call(() =>
+      writeFile(
+        modulePath,
+        `
+export function createTransport() {
+  const factory = function*() {
+    return { send: function*(){}, receive: { [Symbol.iterator](){return this}, next(){return {done:true,value:undefined}} } };
+  };
+  factory._source = "createTransport";
+  return factory;
+}
+`,
+      ),
+    );
+    const binding = yield* loadLocalBinding(modulePath);
+    expect(binding.transport).toBeTypeOf("function");
+    expect(binding.bindServer).toBeUndefined();
+  });
+
+  it("throws CliError when module exports neither", function* () {
+    const dir = yield* call(makeTempDir);
+    const modulePath = join(dir, "empty-module.mjs");
+    yield* call(() => writeFile(modulePath, `export const nothing = true;\n`));
+    let threw = false;
+    try {
+      yield* loadLocalBinding(modulePath);
+    } catch (err) {
+      threw = true;
+      expect(err).toBeInstanceOf(CliError);
+      expect((err as CliError).message).toContain("createBinding()");
+      expect((err as CliError).message).toContain("createTransport()");
+    }
+    expect(threw).toBe(true);
+  });
+
+  it("returns bindServer when createBinding provides it", function* () {
+    const dir = yield* call(makeTempDir);
+    const modulePath = join(dir, "with-bind.mjs");
+    yield* call(() =>
+      writeFile(
+        modulePath,
+        `
+export function createBinding() {
+  return {
+    transport: function*() {
+      return { send: function*(){}, receive: { [Symbol.iterator](){return this}, next(){return {done:true,value:undefined}} } };
+    },
+    bindServer: function*(server) {
+      // setup hook
+    },
+  };
+}
+`,
+      ),
+    );
+    const binding = yield* loadLocalBinding(modulePath);
+    expect(binding.bindServer).toBeTypeOf("function");
+  });
+});
+
+// ── startServer connection stream ────────────────────────────────────────────
+
+describe("startServer connection stream", () => {
+  it("exposes accepted connections via LocalServerBinding.connections", function* () {
+    const serverBinding = yield* startServer({ kind: "websocket", port: 0 });
+
+    expect(serverBinding.address).toBeDefined();
+    expect(serverBinding.connections).toBeDefined();
+
+    const port = serverBinding.address.port;
+
+    // Spawn a listener that captures the first connection
+    let receivedConnection = false;
+    yield* spawn(function* () {
+      for (const connOp of yield* each(serverBinding.connections!)) {
+        yield* connOp;
+        receivedConnection = true;
+        break;
+        yield* each.next();
+      }
+    });
+
+    // Connect a WebSocket client
+    yield* call(
+      () =>
+        new Promise<void>((resolve, reject) => {
+          const ws = new WebSocket(`ws://localhost:${port}`);
+          ws.on("open", () => {
+            // Small delay to let the server-side process the connection
+            setTimeout(() => {
+              ws.close();
+              resolve();
+            }, 50);
+          });
+          ws.on("error", reject);
+        }),
+    );
+
+    expect(receivedConnection).toBe(true);
+  });
+
+  it("does not expose raw WebSocketServer", function* () {
+    const serverBinding = yield* startServer({ kind: "websocket", port: 0 });
+    expect("wss" in serverBinding).toBe(false);
+  });
+});
+
+// ── bindServer lifecycle ─────────────────────────────────────────────────────
+
+describe("bindServer lifecycle", () => {
+  it("bindServer spawns long-lived work without blocking startup", function* () {
+    const dir = yield* call(makeTempDir);
+    const modulePath = join(dir, "lifecycle-module.mjs");
+    // Top-level await for the import so spawn/each are available in generators
+    yield* call(() =>
+      writeFile(
+        modulePath,
+        `
+import { spawn, each } from "effection";
+
+// Shared state between bindServer and transport
+let bindServerCalled = false;
+
+export function createBinding() {
+  return {
+    transport: function*() {
+      return {
+        send: function*() {},
+        receive: {
+          [Symbol.iterator]() { return this; },
+          next() {
+            return { done: true, value: { bindServerCalled } };
+          },
+        },
+      };
+    },
+    bindServer: function*(server) {
+      bindServerCalled = true;
+      // Spawn a long-lived connection acceptance loop
+      yield* spawn(function*() {
+        if (server.connections) {
+          for (const conn of yield* each(server.connections)) {
+            yield* conn;
+            yield* each.next();
+          }
+        }
+      });
+      // Returns promptly - does NOT block
+    },
+  };
+}
+`,
+      ),
+    );
+
+    // Load the binding
+    const binding = yield* loadLocalBinding(modulePath);
+    expect(binding.bindServer).toBeTypeOf("function");
+
+    // Start a server to get a real LocalServerBinding
+    const serverBinding = yield* startServer({ kind: "websocket", port: 0 });
+
+    // Call bindServer — should return promptly (not block)
+    yield* binding.bindServer!(serverBinding);
+
+    // Verify the spawned loop is running by connecting a client
+    const port = serverBinding.address.port;
+    yield* call(
+      () =>
+        new Promise<void>((resolve, reject) => {
+          const ws = new WebSocket(`ws://localhost:${port}`);
+          ws.on("open", () => {
+            ws.close();
+            resolve();
+          });
+          ws.on("error", reject);
+        }),
+    );
   });
 });

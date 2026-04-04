@@ -80,6 +80,7 @@
     "@tisyn/kernel": "workspace:*",
     "@tisyn/protocol": "workspace:*",
     "@tisyn/validate": "workspace:*",
+    "@types/ws": "^8",
     "remeda": "^2.33.6"
   },
   "devDependencies": {
@@ -89,7 +90,6 @@
     "@tisyn/durable-streams": "workspace:*",
     "@tisyn/runtime": "workspace:*",
     "@types/node": "^25.5.0",
-    "@types/ws": "^8",
     "effection": "4.0.2",
     "playwright-core": "^1.40",
     "vitest": "^4",

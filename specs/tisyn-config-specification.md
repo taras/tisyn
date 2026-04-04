@@ -1029,10 +1029,24 @@ workflow({
 
 ## 10. Open Questions
 
-Q1. **`transport.local()` module contract.** Should the
-    implementation module export a specific shape (e.g.,
-    default export of `AgentImplementation`), or accept a
-    factory function? Needs alignment with `@tisyn/agent`.
+Q1. **`transport.local()` module contract.** *(Resolved.)*
+    A `transport.local()` or `transport.inprocess()` module
+    MUST export one of:
+
+    - `createBinding(): LocalAgentBinding` (preferred) —
+      returns a binding with a transport factory and an
+      optional `bindServer` hook for server ingress.
+    - `createTransport(): AgentTransportFactory`
+      (backward-compatible fallback) — returns a plain
+      transport factory.
+
+    The CLI checks for `createBinding` first. If absent, it
+    falls back to `createTransport`. If neither is found, the
+    CLI fails with exit code 2.
+
+    `LocalAgentBinding` and `LocalServerBinding` are exported
+    from `@tisyn/transport`. See the CLI specification §10.1
+    step 10 for startup lifecycle details.
 
 Q2. **Entrypoint agent append behavior.** §7.3 allows
     entrypoint agents with IDs not in the base to be

@@ -33,6 +33,19 @@ Workflow input parameters are derived from compiler-emitted `inputSchemas` metad
 
 After overlay application and environment resolution, the CLI passes the projected configuration into runtime execution through `ExecuteOptions.config`. Workflows access it via `yield* Config.useConfig(Token)`, where `Token` is a `ConfigToken<T>` that provides static typing. The runtime config context is an internal execution mechanism behind that public bootstrap path.
 
+### Local and inprocess transport modules
+
+Modules referenced by `transport.local()` or `transport.inprocess()` can export either:
+
+- `createBinding()` returning a `LocalAgentBinding` with a transport factory and optional `bindServer` hook (preferred)
+- `createTransport()` returning a plain `AgentTransportFactory` (backward-compatible)
+
+Both types are exported from `@tisyn/transport`.
+
+When a server is configured, the CLI starts the server first and calls `bindServer(serverBinding)` on bindings that support it. The `LocalServerBinding` provides the server address and accepted WebSocket connections as a typed `Stream<Operation<WebSocket>, never>`, letting modules receive browser connections without accessing raw `WebSocketServer` internals.
+
+`bindServer` is a setup-only hook: it spawns any long-lived work (connection loops) and returns promptly so startup can proceed to transport installation and workflow execution.
+
 ## Installation
 
 ```bash

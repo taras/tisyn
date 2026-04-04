@@ -709,8 +709,26 @@ the following steps in order:
 
 **Phase D: Execute**
 
-10. **Resource startup.** Create journal. Start transports.
-    Start server if the merged descriptor includes one.
+10. **Resource startup.** Create journal. Start server if the
+    merged descriptor includes one, producing a
+    `LocalServerBinding` (address and accepted-connection
+    stream). Load local/inprocess module bindings. For each
+    binding that provides a `bindServer` hook, call it with
+    the server binding. `bindServer` is a setup-only hook: it
+    MUST spawn any long-lived work (e.g., connection
+    acceptance loops) and return promptly. Install all agent
+    transports.
+
+    The ordering MUST be: server start, then bind, then
+    transport installation, then workflow execution. This
+    ensures browser connection handling is ready before
+    any workflow can trigger connections.
+
+    `LocalAgentBinding` and `LocalServerBinding` are defined
+    in `@tisyn/transport`. Local/inprocess modules export
+    `createBinding()` (preferred) or `createTransport()`
+    (backward-compatible fallback). See the config
+    specification §10 Q1 for module contract details.
 
 11. **Workflow execution.** Invoke the workflow function with
     validated invocation arguments. Make resolved workflow

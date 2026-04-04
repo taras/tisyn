@@ -402,6 +402,9 @@ importers:
       '@tisyn/validate':
         specifier: workspace:*
         version: link:../validate
+      '@types/ws':
+        specifier: ^8
+        version: 8.18.1
       remeda:
         specifier: ^2.33.6
         version: 2.33.6
@@ -424,9 +427,6 @@ importers:
       '@types/node':
         specifier: ^25.5.0
         version: 25.5.0
-      '@types/ws':
-        specifier: ^8
-        version: 8.18.1
       effection:
         specifier: 4.0.2
         version: 4.0.2

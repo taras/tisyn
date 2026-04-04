@@ -10,13 +10,13 @@ import { readFile } from "node:fs/promises";
 import type { AddressInfo } from "node:net";
 import { join, extname } from "node:path";
 import { pathToFileURL } from "node:url";
-import { call, resource, withResolvers } from "effection";
+import { call, createSignal, resource, withResolvers } from "effection";
 import type { Operation } from "effection";
 import { installAgentTransport } from "@tisyn/transport";
 import { workerTransport } from "@tisyn/transport/worker";
 import { stdioTransport } from "@tisyn/transport/stdio";
 import { websocketTransport } from "@tisyn/transport/websocket";
-import type { AgentTransportFactory } from "@tisyn/transport";
+import type { AgentTransportFactory, LocalAgentBinding, LocalServerBinding } from "@tisyn/transport";
 import { InMemoryStream } from "@tisyn/durable-streams";
 import type { DurableStream } from "@tisyn/durable-streams";
 import type {
@@ -25,11 +25,12 @@ import type {
   ResolvedJournal,
   ResolvedServer,
 } from "@tisyn/runtime";
-import { WebSocketServer } from "ws";
+import { WebSocket, WebSocketServer } from "ws";
 import { CliError } from "./load-descriptor.js";
 
 /**
- * Create a transport factory for a resolved agent.
+ * Create a transport factory for a non-local resolved agent
+ * (worker, stdio, websocket).
  */
 export function* createTransportFactory(agent: ResolvedAgent): Operation<AgentTransportFactory> {
   const kind = agent.transport.kind as string;
@@ -47,36 +48,70 @@ export function* createTransportFactory(agent: ResolvedAgent): Operation<AgentTr
     case "websocket":
       return websocketTransport({ url: agent.transport.url as string });
 
-    case "local":
-    case "inprocess": {
-      const modulePath = agent.transport.module as string;
-      let mod: Record<string, unknown>;
-      try {
-        mod = yield* call(
-          () => import(pathToFileURL(modulePath).href) as Promise<Record<string, unknown>>,
-        );
-      } catch (err) {
-        const msg = err instanceof Error ? err.message : String(err);
-        throw new CliError(3, `Failed to load transport module '${modulePath}': ${msg}`);
-      }
-      if (typeof mod.createTransport !== "function") {
-        throw new CliError(2, `Module '${modulePath}' must export createTransport()`);
-      }
-      return (mod.createTransport as () => AgentTransportFactory)();
-    }
-
     default:
       throw new CliError(2, `Unknown transport kind '${kind}' for agent '${agent.id}'`);
   }
 }
 
 /**
- * Install all agent transports from resolved config.
+ * Load a local/inprocess module and return its binding.
+ *
+ * Prefers `createBinding()` (returns LocalAgentBinding) over
+ * `createTransport()` (returns AgentTransportFactory, wrapped).
  */
-export function* installAllTransports(config: ResolvedConfig): Operation<void> {
+export function* loadLocalBinding(modulePath: string): Operation<LocalAgentBinding> {
+  let mod: Record<string, unknown>;
+  try {
+    mod = yield* call(
+      () => import(pathToFileURL(modulePath).href) as Promise<Record<string, unknown>>,
+    );
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    throw new CliError(3, `Failed to load transport module '${modulePath}': ${msg}`);
+  }
+
+  if (typeof mod.createBinding === "function") {
+    return (mod.createBinding as () => LocalAgentBinding)();
+  }
+
+  if (typeof mod.createTransport === "function") {
+    return { transport: (mod.createTransport as () => AgentTransportFactory)() };
+  }
+
+  throw new CliError(
+    2,
+    `Module '${modulePath}' must export createBinding() or createTransport()`,
+  );
+}
+
+/**
+ * Install all agent transports from resolved config.
+ *
+ * For local/inprocess agents, loads the module binding and calls
+ * `bindServer()` (if present) before installing the transport.
+ * `bindServer` is a setup-only hook: it spawns any long-lived work
+ * and returns promptly so startup can proceed.
+ */
+export function* installAllTransports(
+  config: ResolvedConfig,
+  serverBinding?: LocalServerBinding,
+): Operation<void> {
   for (const agentConfig of config.agents) {
-    const factory: AgentTransportFactory = yield* createTransportFactory(agentConfig);
-    yield* installAgentTransport(agentConfig.id, factory);
+    const kind = agentConfig.transport.kind as string;
+
+    if (kind === "local" || kind === "inprocess") {
+      const modulePath = agentConfig.transport.module as string;
+      const binding = yield* loadLocalBinding(modulePath);
+
+      if (binding.bindServer && serverBinding) {
+        yield* binding.bindServer(serverBinding);
+      }
+
+      yield* installAgentTransport(agentConfig.id, binding.transport);
+    } else {
+      const factory = yield* createTransportFactory(agentConfig);
+      yield* installAgentTransport(agentConfig.id, factory);
+    }
   }
 }
 
@@ -108,16 +143,25 @@ const MIME_TYPES: Record<string, string> = {
   ".svg": "image/svg+xml",
 };
 
-export interface ServerInfo {
-  wss: WebSocketServer;
-  address: AddressInfo;
+/**
+ * Wrap a raw WebSocket as an Effection resource that closes on scope exit.
+ */
+function useConnection(rawWs: WebSocket): Operation<WebSocket> {
+  return resource(function* (provide) {
+    try {
+      yield* provide(rawWs);
+    } finally {
+      rawWs.close();
+    }
+  });
 }
 
 /**
  * Start an HTTP+WebSocket server from resolved server config.
- * Returns an Effection resource that tears down on scope exit.
+ * Returns a LocalServerBinding with the server address and a stream
+ * of accepted WebSocket connections. Does not expose raw WebSocketServer.
  */
-export function startServer(serverConfig: ResolvedServer): Operation<ServerInfo> {
+export function startServer(serverConfig: ResolvedServer): Operation<LocalServerBinding> {
   return resource(function* (provide) {
     const httpServer = createServer(async (req, res) => {
       if (serverConfig.static && req.url) {
@@ -140,6 +184,12 @@ export function startServer(serverConfig: ResolvedServer): Operation<ServerInfo>
     });
 
     const wss = new WebSocketServer({ server: httpServer });
+    const connections = createSignal<Operation<WebSocket>, never>();
+
+    const connectionHandler = (rawWs: WebSocket) => {
+      connections.send(useConnection(rawWs));
+    };
+    wss.on("connection", connectionHandler);
 
     const listening = withResolvers<void>();
     const onError = (err: Error) => listening.reject(err);
@@ -151,8 +201,12 @@ export function startServer(serverConfig: ResolvedServer): Operation<ServerInfo>
     yield* listening.operation;
 
     try {
-      yield* provide({ wss, address: httpServer.address() as AddressInfo });
+      yield* provide({
+        address: httpServer.address() as AddressInfo,
+        connections,
+      });
     } finally {
+      wss.off("connection", connectionHandler);
       wss.close();
       httpServer.close();
     }
