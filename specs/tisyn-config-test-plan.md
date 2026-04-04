@@ -30,7 +30,7 @@ This test plan covers:
 
 > **Partially active:** `Config.useConfig(Token)` semantic contract (R1–R4) is
 > partially covered by integration tests in
-> `packages/cli/src/use-config-integration.test.ts`. CFG-USE-001 through
+> `packages/runtime/src/use-config-integration.test.ts`. CFG-USE-001 through
 > CFG-USE-004 and CFG-USE-009 are active at P1. CFG-USE-005 through
 > CFG-USE-008 (projection shape MAY assertions) remain deferred.
 
@@ -50,7 +50,7 @@ This test plan does NOT cover:
 | **CT-WALK** | `@tisyn/config` | Descriptor walking discovers env nodes |
 | **CT-RESOLVE** | `@tisyn/runtime` | Environment resolution produces correct values |
 | **CT-OVERLAY** | `@tisyn/runtime` | Entrypoint overlay merge is correct |
-| **CT-USECONFIG** | `@tisyn/compiler` + `@tisyn/runtime` + `@tisyn/cli` | `Config.useConfig(Token)` compiles to `__config` effect and runtime exposes resolved projection — partially active |
+| **CT-USECONFIG** | `@tisyn/compiler` + `@tisyn/runtime` | `Config.useConfig(Token)` compiles to `__config` effect and runtime exposes resolved projection — partially active |
 | **CT-PROJECT** | `@tisyn/runtime` | Resolution pipeline produces correct projections (MVP replacement for CT-USECONFIG) |
 
 ## 4. Test Strategy
@@ -277,7 +277,7 @@ application-level workflow code is outside scope.
 
 > **Partially active:** CFG-USE-001 through CFG-USE-004 and CFG-USE-009
 > are active at P1, covered by integration tests in
-> `packages/cli/src/use-config-integration.test.ts`. CFG-USE-005 through
+> `packages/runtime/src/use-config-integration.test.ts`. CFG-USE-005 through
 > CFG-USE-008 (projection shape MAY assertions) remain deferred.
 > CT-PROJECT continues to validate the resolution pipeline independently.
 

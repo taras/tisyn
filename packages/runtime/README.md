@@ -68,7 +68,7 @@ The runtime can also execute IR that has already been received from another proc
 The public surface exported from `src/index.ts` is:
 
 - `execute` — Run IR durably against a stream, replay prior events, and dispatch live effects.
-- `ExecuteOptions` — Configuration accepted by `execute()`, including IR, environment, and stream inputs.
+- `ExecuteOptions` — Configuration accepted by `execute()`, including IR, environment, stream, and resolved config inputs.
 - `ExecuteResult` — Structured result returned by `execute()`.
 - `executeRemote` — Execute received IR in a remote-execution context.
 - `ExecuteRemoteOptions` — Configuration accepted by `executeRemote()`.

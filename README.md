@@ -127,7 +127,7 @@ For the detailed agent model and API examples, see [`@tisyn/agent`](./packages/a
 | [Tisyn Specification 1.0](./specs/tisyn-specification-1.0.md) | Core language: values, expressions, and evaluation rules |
 | [Kernel Specification](./specs/tisyn-kernel-specification.md) | Kernel semantics, environments, and effect dispatch |
 | [Agent Specification 1.1.0](./specs/tisyn-agent-specification-1.1.0.md) | Typed agent declarations, implementations, and invocation |
-| [Compiler Specification 1.1.0](./specs/tisyn-compiler-specification-1.1.0.md) | TypeScript-to-IR compilation rules and restrictions |
+| [Compiler Specification 1.2.0](./specs/tisyn-compiler-specification-1.1.0.md) | TypeScript-to-IR compilation rules and restrictions |
 | [Compound Concurrency Spec](./specs/tisyn-compound-concurrency-spec.md) | `all`, `race`, `spawn`, and `join` orchestration semantics |
 | [Spawn Specification](./specs/tisyn-spawn-specification.md) | Authored `spawn(...)`, task handles, `join`, and structured child-task lifecycle |
 | [Resource Specification](./specs/tisyn-resource-specification.md) | `resource(...)` and `provide(...)` scope-creating primitives for managed initialization and cleanup |

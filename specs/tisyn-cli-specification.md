@@ -1,7 +1,7 @@
 # Tisyn CLI Specification
 
 **Version:** 0.3.4
-**Complements:** Tisyn Compiler Specification 1.1.0, Tisyn Configuration Specification 0.4.1
+**Complements:** Tisyn Compiler Specification 1.2.0, Tisyn Configuration Specification 0.4.1
 **Status:** Draft
 
 ---
@@ -714,7 +714,7 @@ the following steps in order:
 
 11. **Workflow execution.** Invoke the workflow function with
     validated invocation arguments. Make resolved workflow
-    config available through `Config.useConfig()`.
+    config available through `yield* Config.useConfig(Token)`.
 
 12. **Process lifecycle.** Remain alive until the workflow
     completes, errors, or SIGINT/SIGTERM. Map outcome to

@@ -313,8 +313,8 @@ namespacing, this test must be updated.
 | CLI-LIFE-003 | P0 | E2E | §10.3 | Phases A–C before transport startup. Tested by: validation failure exits and `side-effect` fixture transport side effect is not observable. |
 | CLI-LIFE-004 | P0 | E2E | §10.3 | Phases A–C before workflow execution. Tested by: validation failure exits and `side-effect` fixture sentinel file NOT created. |
 | CLI-LIFE-005 | P0 | E2E | §10.1/11 | Workflow receives validated invocation args. Observable: workflow produces output derived from args. |
-| CLI-LIFE-006 | P0 | E2E | §10.1/11 | Resolved config available via `Config.useConfig()` only after pre-execution validation and resolution complete. Observable: workflow accesses `Config.useConfig()` and receives post-overlay, post-resolution config. |
-| CLI-LIFE-007 | P0 | E2E | §10.1/11 | Invocation args and `Config.useConfig()` return value are separate. Observable: workflow asserts the two are distinct. |
+| CLI-LIFE-006 | P0 | E2E | §10.1/11 | Resolved config available via `yield* Config.useConfig(Token)` only after pre-execution validation and resolution complete. Observable: workflow accesses `Config.useConfig(Token)` and receives post-overlay, post-resolution config. |
+| CLI-LIFE-007 | P0 | E2E | §10.1/11 | Invocation args and `Config.useConfig(Token)` return value are separate. Observable: workflow asserts the two are distinct. |
 
 ### M. Exit Code Behavior
 
