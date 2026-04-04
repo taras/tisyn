@@ -1657,4 +1657,30 @@ describe("CompileResult.exports", () => {
     expect(result.exports).toEqual({});
     expect(result.functions).toHaveProperty("a");
   });
+
+  it("tracks re-exports separately from local exports", () => {
+    const result = compile(
+      `
+      export function* a() { return 1; }
+      export { b } from "./other";
+    `,
+      { validate: false },
+    );
+    expect(result.exports).toEqual({ a: "a" });
+    expect(result.reExports).toEqual(["b"]);
+  });
+
+  it("does not conflate re-export with local export", () => {
+    const result = compile(
+      `
+      function* chat() { return 1; }
+      export { chat } from "./other";
+    `,
+      { validate: false },
+    );
+    // "chat" is re-exported from "./other", not a local export of the compiled generator
+    expect(result.exports).toEqual({});
+    expect(result.reExports).toEqual(["chat"]);
+    expect(result.functions).toHaveProperty("chat");
+  });
 });

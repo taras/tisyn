@@ -34,6 +34,8 @@ export interface CompileResult {
   inputSchemas: Record<string, InputSchema>;
   /** Map of exportedName → localFunctionName for compiled generators that are module exports. */
   exports: Record<string, string>;
+  /** Names re-exported from other modules (not compilable from this source file). */
+  reExports: string[];
 }
 
 /**
@@ -104,16 +106,16 @@ export function compile(source: string, options: CompileOptions = {}): CompileRe
     inputSchemas[fn.name] = buildInputSchema(fn.paramTypes);
   }
 
-  // Build export mapping: only include compiled generators that are real module exports
+  // Build export mapping: only include compiled generators that are real local exports
   const moduleExports = collectExportedNames(sourceFile);
   const exports: Record<string, string> = {};
-  for (const [exportedName, localName] of moduleExports) {
+  for (const [exportedName, localName] of moduleExports.local) {
     if (localName in result) {
       exports[exportedName] = localName;
     }
   }
 
-  return { functions: result, inputSchemas, exports };
+  return { functions: result, inputSchemas, exports, reExports: moduleExports.reExports };
 }
 
 /**

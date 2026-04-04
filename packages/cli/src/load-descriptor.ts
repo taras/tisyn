@@ -147,6 +147,13 @@ export function* compileWorkflowFromSource(
   // Resolve exported name → local function name (mirrors JS module semantics)
   const localName = result.exports[exportName];
   if (localName === undefined) {
+    // Distinguish re-exports from truly missing exports
+    if (result.reExports.includes(exportName)) {
+      throw new CliError(
+        2,
+        `'${exportName}' in '${sourcePath}' is re-exported from another module. The .ts runtime-compile path only supports exports defined in the source file.`,
+      );
+    }
     const available = Object.keys(result.exports).join(", ") || "(none)";
     throw new CliError(
       2,

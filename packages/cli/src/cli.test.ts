@@ -1133,4 +1133,42 @@ export default {
     expect(result.code).toBe(2);
     expect(result.stderr).toContain("does not export");
   });
+
+  it("tsn run rejects re-exported workflow with specific diagnostic", function* () {
+    const dir = yield* call(makeTempDir);
+
+    yield* call(() =>
+      writeFile(
+        join(dir, "workflow.ts"),
+        `
+export function* local() {
+  return 1;
+}
+export { chat } from "./other";
+`,
+      ),
+    );
+
+    // Descriptor points to re-exported "chat"
+    yield* call(() =>
+      writeFile(
+        join(dir, "descriptor.mjs"),
+        `
+export default {
+  tisyn_config: "workflow",
+  run: { export: "chat", module: "./workflow.ts" },
+  agents: [{ tisyn_config: "agent", id: "dummy", transport: { tisyn_config: "transport", kind: "stdio", command: "node", args: [${JSON.stringify(NOOP_AGENT)}] } }],
+  journal: { tisyn_config: "journal", kind: "memory" },
+};
+`,
+      ),
+    );
+
+    const result = yield* exec("node", {
+      arguments: [CLI_BIN, "run", join(dir, "descriptor.mjs")],
+    }).join();
+
+    expect(result.code).toBe(2);
+    expect(result.stderr).toContain("re-exported from another module");
+  });
 });
