@@ -11,6 +11,7 @@
  * from the package public surface.
  */
 
+import type { Operation } from "effection";
 import { createContext } from "effection";
 import type { Val } from "@tisyn/ir";
 
@@ -33,6 +34,6 @@ export function provideConfig(config: Record<string, unknown> | null) {
  * Returns the config as a Val (the runtime value type), or null if no
  * config was provided.
  */
-export function* readConfig() {
-  return ((yield* ConfigContext.get()) ?? null) as Val;
+export function readConfig() {
+  return ConfigContext.get() as Operation<Val>;
 }
