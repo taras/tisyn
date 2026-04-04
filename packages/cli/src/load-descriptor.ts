@@ -5,11 +5,13 @@
  * compiled IR exports with input schema metadata.
  */
 
+import { readFile } from "node:fs/promises";
 import { pathToFileURL } from "node:url";
 import { resolve, dirname } from "node:path";
 import { call } from "effection";
 import type { Operation } from "effection";
 import type { TisynExpr as Expr } from "@tisyn/ir";
+import { compile } from "@tisyn/compiler";
 import type { InputSchema } from "@tisyn/compiler";
 import type { WorkflowDescriptor } from "@tisyn/config";
 
@@ -109,6 +111,50 @@ export function* loadWorkflowExport(
   }
 
   return { ir: ir as Expr, inputSchema };
+}
+
+/**
+ * Compile a TypeScript workflow source file and extract a named export's IR
+ * and input schema metadata.
+ *
+ * Used when run.module points to a .ts source file instead of pre-compiled JS.
+ *
+ * Exit codes:
+ * - 3: source file not found / read error
+ * - 1: compilation error
+ * - 2: named export not found in compiled result
+ */
+export function* compileWorkflowFromSource(
+  sourcePath: string,
+  exportName: string,
+): Operation<WorkflowExport> {
+  let source: string;
+  try {
+    source = yield* call(() => readFile(sourcePath, "utf-8"));
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    throw new CliError(3, `Failed to read workflow source '${sourcePath}': ${msg}`);
+  }
+
+  let result;
+  try {
+    result = compile(source, { filename: sourcePath });
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    throw new CliError(1, `Failed to compile workflow source '${sourcePath}': ${msg}`);
+  }
+
+  const ir = result.functions[exportName];
+  if (!ir) {
+    const available = Object.keys(result.functions).join(", ") || "(none)";
+    throw new CliError(
+      2,
+      `Workflow source '${sourcePath}' does not contain function '${exportName}'. Available: ${available}`,
+    );
+  }
+
+  const inputSchema = result.inputSchemas[exportName];
+  return { ir, inputSchema };
 }
 
 /**

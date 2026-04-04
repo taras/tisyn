@@ -286,6 +286,7 @@ export function* greet() {
 // ── CLI entry surface ─────────────────────────────────────────────────────────
 
 const CLI_BIN = join(dirname(fileURLToPath(import.meta.url)), "..", "dist", "cli.js");
+const NOOP_AGENT = join(dirname(fileURLToPath(import.meta.url)), "noop-agent.mjs");
 
 describe("CLI entry surface", () => {
   it("--help exits 0 and prints usage", function* () {
@@ -972,5 +973,99 @@ export function createBinding() {
           ws.on("error", reject);
         }),
     );
+  });
+});
+
+// ── runtime .ts compilation ─────────────────────────────────────────────────
+
+// Descriptor template for .ts workflow compile tests — includes a dummy agent to pass V2 validation.
+// Uses a noop stdio agent that handles the MCP initialize handshake.
+function tsCompileDescriptor(module: string): string {
+  return `
+export default {
+  tisyn_config: "workflow",
+  run: { export: "myWorkflow", module: ${JSON.stringify(module)} },
+  agents: [{ tisyn_config: "agent", id: "dummy", transport: { tisyn_config: "transport", kind: "stdio", command: "node", args: [${JSON.stringify(NOOP_AGENT)}] } }],
+  journal: { tisyn_config: "journal", kind: "memory" },
+};
+`;
+}
+
+describe("runtime .ts workflow compilation", () => {
+  it("tsn run compiles zero-param .ts workflow source", function* () {
+    const dir = yield* call(makeTempDir);
+
+    yield* call(() =>
+      writeFile(
+        join(dir, "workflow.ts"),
+        `
+export function* myWorkflow() {
+  return 42;
+}
+`,
+      ),
+    );
+
+    yield* call(() => writeFile(join(dir, "descriptor.mjs"), tsCompileDescriptor("./workflow.ts")));
+
+    const result = yield* exec("node", {
+      arguments: [CLI_BIN, "run", join(dir, "descriptor.mjs"), "--verbose"],
+    }).join();
+
+    expect(result.code ?? 0).toBe(0);
+    expect(result.stdout).toContain("42");
+  });
+
+  it("tsn run compiles .ts workflow source with input parameter", function* () {
+    const dir = yield* call(makeTempDir);
+
+    yield* call(() =>
+      writeFile(
+        join(dir, "workflow.ts"),
+        `
+import type { Workflow } from "@tisyn/agent";
+
+export function* myWorkflow(input: { maxTurns: number }): Workflow<number> {
+  return input.maxTurns;
+}
+`,
+      ),
+    );
+
+    yield* call(() => writeFile(join(dir, "descriptor.mjs"), tsCompileDescriptor("./workflow.ts")));
+
+    const result = yield* exec("node", {
+      arguments: [CLI_BIN, "run", join(dir, "descriptor.mjs"), "--verbose", "--max-turns", "5"],
+    }).join();
+
+    expect(result.code ?? 0).toBe(0);
+    expect(result.stdout).toContain("5");
+  });
+
+  it("tsn run --help shows flags from .ts workflow source", function* () {
+    const dir = yield* call(makeTempDir);
+
+    yield* call(() =>
+      writeFile(
+        join(dir, "workflow.ts"),
+        `
+import type { Workflow } from "@tisyn/agent";
+
+export function* myWorkflow(input: { maxTurns: number; modelName?: string }): Workflow<void> {
+  return;
+}
+`,
+      ),
+    );
+
+    yield* call(() => writeFile(join(dir, "descriptor.mjs"), tsCompileDescriptor("./workflow.ts")));
+
+    const result = yield* exec("node", {
+      arguments: [CLI_BIN, "run", join(dir, "descriptor.mjs"), "--help"],
+    }).join();
+
+    expect(result.code ?? 0).toBe(0);
+    expect(result.stdout).toContain("--max-turns");
+    expect(result.stdout).toContain("--model-name");
   });
 });

@@ -1,7 +1,7 @@
 import { workflow, agent, transport, env, journal, entrypoint, server } from "@tisyn/config";
 
 export default workflow({
-  run: { export: "chat", module: "./run-entry.js" },
+  run: { export: "chat", module: "../src/workflow.ts" },
   agents: [
     agent("llm", transport.worker("./llm-worker.js")),
     agent("app", transport.local("./browser-agent.js")),
