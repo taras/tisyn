@@ -69,4 +69,8 @@ export const ErrorCodes = {
   "E-CONV-07": "converge() argument must be an object literal",
   "E-CONV-08": "converge() interval must not contain yield*",
   "E-CONV-09": "converge() timeout must not contain yield*",
+  // ── useConfig ──
+  UC1: "Config.useConfig() requires exactly one ConfigToken argument",
+  UC2: "Config.useConfig() argument must be a ConfigToken identifier",
+  UC3: "useConfig() must be called as Config.useConfig(Token)",
 } as const;

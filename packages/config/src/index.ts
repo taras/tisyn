@@ -18,9 +18,21 @@ export type {
   JournalDescriptor,
   EntrypointDescriptor,
   ServerDescriptor,
+  ConfigToken,
 } from "./types.js";
 
-export { workflow, agent, transport, env, journal, entrypoint, server } from "./constructors.js";
+export {
+  workflow,
+  agent,
+  transport,
+  env,
+  journal,
+  entrypoint,
+  server,
+  configToken,
+} from "./constructors.js";
+
+export { Config } from "./use-config.js";
 
 export type { ConfigValidationError, ConfigValidationResult } from "./validate.js";
 export { validateConfig } from "./validate.js";

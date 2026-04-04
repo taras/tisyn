@@ -11,6 +11,7 @@
 import { resolve, dirname, isAbsolute } from "node:path";
 import { exit } from "effection";
 import type { Operation } from "effection";
+import type { Val } from "@tisyn/ir";
 import {
   applyOverlay,
   resolveConfig,
@@ -118,7 +119,7 @@ export function* runRun(
   const { result } = yield* execute({
     ir: workflowExport.ir,
     env: inputFlags.parsed as never,
-    config: resolvedProjection as unknown as Record<string, unknown>,
+    config: resolvedProjection as unknown as Val,
     stream,
   });
 

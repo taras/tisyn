@@ -35,7 +35,7 @@ This test plan does NOT cover:
 
 - Descriptor data model or constructor behavior
   (config test plan)
-- `useConfig()` semantics (config test plan)
+- `Config.useConfig()` semantics (config test plan)
 - Environment resolution rules (config test plan)
 - IR compilation correctness (compiler tests)
 
@@ -281,7 +281,7 @@ namespacing, this test must be updated.
 | CLI-HLP-003 | P0 | E2E | §9.6 | Help includes workflow-derived flags with type indicators |
 | CLI-HLP-004 | P0 | E2E | §9.6 | Help marks required vs optional for each derived flag |
 | CLI-HLP-005 | P1 | E2E | §8.5 | JSDoc descriptions appear in help (SHOULD) |
-| CLI-HLP-006 | P0 | E2E | §9.6 | Help does NOT describe `useConfig()` internals |
+| CLI-HLP-006 | P0 | E2E | §9.6 | Help does NOT describe `Config.useConfig()` internals |
 | CLI-HLP-007 | P1 | E2E | §9.6 | Help lists available entrypoints |
 | CLI-HLP-008 | P0 | E2E | §9.6 | Module load failure → help shows built-in options + diagnostic, exits with error code |
 | CLI-HLP-009 | P0 | E2E | §9.6 | Schema derivation failure → help shows built-in options + diagnostic, exits with error code |
@@ -313,8 +313,8 @@ namespacing, this test must be updated.
 | CLI-LIFE-003 | P0 | E2E | §10.3 | Phases A–C before transport startup. Tested by: validation failure exits and `side-effect` fixture transport side effect is not observable. |
 | CLI-LIFE-004 | P0 | E2E | §10.3 | Phases A–C before workflow execution. Tested by: validation failure exits and `side-effect` fixture sentinel file NOT created. |
 | CLI-LIFE-005 | P0 | E2E | §10.1/11 | Workflow receives validated invocation args. Observable: workflow produces output derived from args. |
-| CLI-LIFE-006 | P0 | E2E | §10.1/11 | Resolved config available via `useConfig()` only after pre-execution validation and resolution complete. Observable: workflow accesses `useConfig()` and receives post-overlay, post-resolution config. |
-| CLI-LIFE-007 | P0 | E2E | §10.1/11 | Invocation args and `useConfig()` return value are separate. Observable: workflow asserts the two are distinct. |
+| CLI-LIFE-006 | P0 | E2E | §10.1/11 | Resolved config available via `yield* Config.useConfig(Token)` only after pre-execution validation and resolution complete. Observable: workflow accesses `Config.useConfig(Token)` and receives post-overlay, post-resolution config. |
+| CLI-LIFE-007 | P0 | E2E | §10.1/11 | Invocation args and `Config.useConfig(Token)` return value are separate. Observable: workflow asserts the two are distinct. |
 
 ### M. Exit Code Behavior
 
@@ -425,7 +425,7 @@ count for planning purposes only.
 3. **Help-path failure behavior.** CLI-HLP-008 through
    CLI-HLP-010 enforce the `--help` failure contract.
 
-4. **Invocation vs `useConfig()` separation.**
+4. **Invocation vs `Config.useConfig()` separation.**
    CLI-LIFE-005 and CLI-LIFE-007 prevent channel collapse.
 
 5. **`tsn check` scope boundary.** CLI-CHK-009 prevents

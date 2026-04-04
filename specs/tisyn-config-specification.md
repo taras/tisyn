@@ -743,27 +743,27 @@ by companion runtime and compiler specifications (§7.5.4).
 This specification establishes only that the projection is
 permitted and that it MUST satisfy the semantic rules below.
 
-#### 7.5.3 `useConfig()` Semantic Contract
+#### 7.5.3 `Config.useConfig()` Semantic Contract
 
 The runtime MUST make the resolved config available to
 workflow code through a dedicated access mechanism referred
-to in this specification as `useConfig()`.
+to in this specification as `Config.useConfig()`.
 
-R1. `useConfig()` MUST return the post-overlay,
+R1. `Config.useConfig()` MUST return the post-overlay,
     post-resolution config for the active execution context.
     Entrypoint overlays MUST already be applied. Environment
     references MUST already be resolved. The workflow MUST
     NOT observe intermediate descriptor forms.
 
-R2. `useConfig()` MUST NOT expose unresolved `EnvDescriptor`
+R2. `Config.useConfig()` MUST NOT expose unresolved `EnvDescriptor`
     nodes. Every deferred reference MUST be replaced with
     its concrete value before the workflow can observe it.
 
-R3. `useConfig()` MUST NOT expose invocation-time inputs.
+R3. `Config.useConfig()` MUST NOT expose invocation-time inputs.
     The resolved config (runtime bindings declared in the
     descriptor) and invocation arguments (parameters passed
     to the workflow function at call time) are separate
-    channels. `useConfig()` exposes the resolved config
+    channels. `Config.useConfig()` exposes the resolved config
     only. Invocation arguments are provided through the
     workflow function's parameters.
 
@@ -775,25 +775,26 @@ R4. Secret values MAY be present in the resolved config in
 
 #### 7.5.4 Typing and Binding
 
-The exact TypeScript signature of `useConfig()`, the
+The exact TypeScript signature of `Config.useConfig()`, the
 resolved config projection shape, the mechanism by which
 the return type is inferred or declared, and how a workflow
 is bound to a specific `WorkflowDescriptor` are defined by
 companion runtime and compiler specifications.
 
 This specification defines only the semantic contract:
-what `useConfig()` returns, when it is valid to call, and
+what `Config.useConfig()` returns, when it is valid to call, and
 what guarantees it provides.
 
-> **MVP Scope (v0.8.0):** Workflow-authored `yield* useConfig()`
-> access is **deferred** to a companion compiler/runtime
-> integration spec. The compiler does not recognize
-> `useConfig()` as an authored form, and the runtime
-> entrypoint does not supply a resolved-config context.
-> This MVP delivers the resolution pipeline
-> (`resolveConfig` → `projectConfig`) as pure functions
-> that a future config-aware entrypoint can use to
-> populate an Effection context.
+> **Implementation (v0.8.0+):** Workflow-authored config
+> access is provided via `yield* Config.useConfig(Token)`, where
+> `Token` is a `ConfigToken<T>` that carries static typing
+> for the resolved config projection. The compiler lowers
+> this to `ExternalEval("__config", Q(null))`, erasing the
+> token. The runtime resolves the `__config` effect from
+> an execution-scoped config context. See Compiler Specification §4.6
+> for lowering details. Automatic type inference from
+> descriptor shape is not yet specified — the token
+> approach provides explicit typing.
 
 ---
 
@@ -969,10 +970,10 @@ export default workflow({
 });
 ```
 
-This MVP does not yet provide authored `yield* useConfig()`
-access inside workflows. Instead, the runtime resolution
-pipeline produces the same workflow-visible projection as a
-plain value:
+The `yield* Config.useConfig(Token)` authored form gives workflow
+code access to the resolved config projection. The runtime
+resolution pipeline produces this projection, which the
+runtime makes available through the `__config` effect:
 
 ```typescript
 const config = resolveConfig(descriptor, {
@@ -999,10 +1000,12 @@ const journalPath: string = config.journal.path;
 // - no tisyn_config discriminant fields
 ```
 
-A future config-aware entrypoint may expose that same
-projection to workflow code through `useConfig()`, as
-described in §7.5.3, but that authored access mechanism is
-not part of this MVP.
+Workflow code accesses this projection via
+`yield* Config.useConfig(Token)`, as described in §7.5.3. The
+`Token` is a `ConfigToken<T>` providing static typing.
+The compiler erases the token and emits an
+`ExternalEval("__config", Q(null))` effect; the runtime
+resolves it from the execution-scoped config context.
 
 ### 9.7 Invalid Config
 
@@ -1099,9 +1102,11 @@ a CLI feature.
   Three modes, coercion rules, discoverability.
 - **Config-owned validation** (§6.1): Implementable
   standalone.
-- **`useConfig()` semantic contract** (§7.5): Semantic
-  rules specified. Typing/binding deferred to companion
-  specs.
+- **`Config.useConfig()` semantic contract** (§7.5): Semantic
+  rules specified. Typed token binding is implemented
+  via `ConfigToken<T>` (see Compiler Specification §4.6).
+  Runtime config is supplied via `ExecuteOptions.config` and
+  accessed by workflow code through `Config.useConfig(Token)`.
 - **Security constraints** (§8): Fully specified.
 
 ### Needs Companion Spec
@@ -1109,9 +1114,10 @@ a CLI feature.
 - **`tsn run` / `tsn check`**: CLI specification for module
   evaluation, entrypoint selection, flag parsing, process
   lifecycle, and Configliere integration.
-- **`useConfig()` typing and binding**: Runtime/compiler
-  specification for the TypeScript signature, type inference,
-  and how a workflow is bound to a specific `WorkflowDescriptor`.
+- **`Config.useConfig()` type inference**: Automatic type inference
+  of the `Config.useConfig()` return type from the descriptor shape
+  is not yet specified. The current approach uses explicit
+  `ConfigToken<T>` typing.
 - **`transport.local()` runtime contract**: Alignment with
   `@tisyn/agent` and transport specification.
 - **Extension transport registration**: How the runtime

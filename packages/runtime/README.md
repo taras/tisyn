@@ -68,7 +68,7 @@ The runtime can also execute IR that has already been received from another proc
 The public surface exported from `src/index.ts` is:
 
 - `execute` — Run IR durably against a stream, replay prior events, and dispatch live effects.
-- `ExecuteOptions` — Configuration accepted by `execute()`, including IR, environment, and stream inputs.
+- `ExecuteOptions` — Configuration accepted by `execute()`, including IR, environment, stream, and resolved config inputs.
 - `ExecuteResult` — Structured result returned by `execute()`.
 - `executeRemote` — Execute received IR in a remote-execution context.
 - `ExecuteRemoteOptions` — Configuration accepted by `executeRemote()`.
@@ -167,7 +167,7 @@ const config = resolveConfig(descriptor, {
 | `resolveConfig(descriptor, options?)` | Full resolution pipeline (steps 2-6) |
 | `projectConfig(descriptor, resolvedEnv)` | Strip discriminants, project workflow-visible shape |
 
-> **Config-aware execution:** `execute()` accepts an optional `config` field in `ExecuteOptions`. When provided, the resolved config projection is available to workflows via `yield* useConfig()`. The `__config` effect is journaled for replay safety — replayed executions use the stored config value, not the current one.
+> **Config-aware execution:** Resolved config is supplied to runtime execution through `ExecuteOptions.config`. Workflow code reads it via `yield* Config.useConfig(Token)`, where `Token` is a `ConfigToken<T>` that provides static typing and is erased by the compiler. The `__config` effect is journaled for replay safety — replayed executions use the stored config value, not the current one.
 
 ## Boundaries
 

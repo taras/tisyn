@@ -1,4 +1,5 @@
 import type {
+  ConfigToken,
   WorkflowDescriptor,
   WorkflowRef,
   AgentBinding,
@@ -129,3 +130,9 @@ export const server = {
     };
   },
 };
+
+// ── configToken ──
+
+export function configToken<T>(): ConfigToken<T> {
+  return {} as ConfigToken<T>;
+}

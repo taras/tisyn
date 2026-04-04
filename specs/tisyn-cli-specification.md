@@ -1,7 +1,7 @@
 # Tisyn CLI Specification
 
 **Version:** 0.3.4
-**Complements:** Tisyn Compiler Specification 1.1.0, Tisyn Configuration Specification 0.4.1
+**Complements:** Tisyn Compiler Specification 1.2.0, Tisyn Configuration Specification 0.4.1
 **Status:** Draft
 
 ---
@@ -44,14 +44,14 @@ The CLI is NOT responsible for:
 - IR lowering or validation (compiler)
 - IR execution, replay, or transport management (runtime)
 - descriptor data model, constructor vocabulary, or
-  `useConfig()` semantics (config specification)
+  `Config.useConfig()` semantics (config specification)
 - transport protocols (transport specification)
 
 ### 1.3 Relationship to the Config Specification
 
 The config specification defines `WorkflowDescriptor` shapes,
 `EnvDescriptor` semantics, entrypoint overlay rules, and the
-`useConfig()` contract.
+`Config.useConfig()` contract.
 
 This CLI specification defines how the CLI loads, validates,
 and acts on those structures. In particular:
@@ -59,11 +59,11 @@ and acts on those structures. In particular:
 - **Invocation inputs** (CLI-derived, user-facing) flow
   through the workflow function's parameters.
 - **Resolved workflow config** (descriptor-derived,
-  deployment-facing) flows through `useConfig()`.
+  deployment-facing) flows through `Config.useConfig()`.
 
 These are separate channels. This specification governs
 invocation inputs. The config specification governs
-`useConfig()`.
+`Config.useConfig()`.
 
 ### 1.4 Normative Language
 
@@ -642,7 +642,7 @@ exits 0. No descriptor or workflow metadata is loaded.
 Dynamic help requires loading the descriptor module and
 deriving the input schema. Help describes invocation inputs
 only. It MUST NOT describe resolved workflow config or
-`useConfig()` internals.
+`Config.useConfig()` internals.
 
 **Help failure behavior.** If module loading, descriptor
 validation, or schema derivation fails during dynamic help,
@@ -714,7 +714,7 @@ the following steps in order:
 
 11. **Workflow execution.** Invoke the workflow function with
     validated invocation arguments. Make resolved workflow
-    config available through `useConfig()`.
+    config available through `yield* Config.useConfig(Token)`.
 
 12. **Process lifecycle.** Remain alive until the workflow
     completes, errors, or SIGINT/SIGTERM. Map outcome to
