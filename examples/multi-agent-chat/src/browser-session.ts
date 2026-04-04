@@ -10,8 +10,8 @@ export type BrowserToHost =
   | { type: "userMessage"; message: string };
 
 export type HostToBrowser =
-  | { type: "hydrateTranscript"; messages: Array<{ role: string; content: string }> }
-  | { type: "waitForUser"; prompt: string }
+  | { type: "loadChat"; messages: Array<{ role: string; content: string }> }
+  | { type: "elicit"; message: string }
   | { type: "assistantMessage"; message: string }
   | { type: "setReadOnly"; reason: string };
 
@@ -20,21 +20,13 @@ export type HostToBrowser =
 export class BrowserSessionManager {
   private ownerSessionId: string | null = null;
   private socket: WebSocket | null = null;
-  private pendingPrompt: { resolve(msg: string): void; prompt: string } | null = null;
-  private pendingUserMessage: string | null = null;
+  private pendingElicit: { resolve(msg: string): void; message: string } | null = null;
+  private chatMessages: Array<{ role: string; content: string }> = [];
   private readOnly: { reason: string } | null = null;
-  private ownerReady = withResolvers<void>();
-
-  constructor(private history: Array<{ role: string; content: string }>) {}
-
-  /** Yields until the first browser sends a connect message. */
-  waitForOwner(): Operation<void> {
-    return this.ownerReady.operation;
-  }
 
   /**
    * Attach a WebSocket to a session.
-   * - First connect sets the owner session ID and resolves waitForOwner.
+   * - First connect sets the owner session ID.
    * - Owner reconnect replaces the old socket (identity-safe).
    * - Non-owner gets read-only hydration only.
    */
@@ -42,14 +34,13 @@ export class BrowserSessionManager {
     // First connection — establish ownership
     if (this.ownerSessionId === null) {
       this.ownerSessionId = clientSessionId;
-      this.ownerReady.resolve();
       logInfo("session", "owner established", { clientSessionId });
     }
 
     // Non-owner — send read-only view and return
     if (clientSessionId !== this.ownerSessionId) {
       logInfo("session", "non-owner connection", { clientSessionId });
-      this.safeSend(ws, { type: "hydrateTranscript", messages: [...this.history] });
+      this.safeSend(ws, { type: "loadChat", messages: [...this.chatMessages] });
       this.safeSend(ws, { type: "setReadOnly", reason: "Session owned by another browser" });
       return;
     }
@@ -79,12 +70,12 @@ export class BrowserSessionManager {
     }
 
     // Send current state to the new socket
-    logInfo("session", "owner attached", { historyLength: this.history.length });
-    this.safeSend(ws, { type: "hydrateTranscript", messages: [...this.history] });
+    logInfo("session", "owner attached", { chatLength: this.chatMessages.length });
+    this.safeSend(ws, { type: "loadChat", messages: [...this.chatMessages] });
 
-    if (this.pendingPrompt) {
-      logInfo("session", "re-sending pending prompt", { prompt: this.pendingPrompt.prompt });
-      this.safeSend(ws, { type: "waitForUser", prompt: this.pendingPrompt.prompt });
+    if (this.pendingElicit) {
+      logInfo("session", "re-sending pending elicit", { message: this.pendingElicit.message });
+      this.safeSend(ws, { type: "elicit", message: this.pendingElicit.message });
     }
 
     if (this.readOnly) {
@@ -104,37 +95,43 @@ export class BrowserSessionManager {
   }
 
   /**
-   * Reconnect-safe waitForUser. Suspends via withResolvers until the owner
+   * Populate browser with chat history. Called by the workflow on startup.
+   */
+  loadChat(messages: Array<{ role: string; content: string }>): void {
+    this.chatMessages = [...messages];
+    if (this.socket) {
+      this.safeSend(this.socket, { type: "loadChat", messages: [...this.chatMessages] });
+    }
+  }
+
+  /**
+   * Reconnect-safe elicit. Suspends via withResolvers until the owner
    * browser sends a userMessage. Survives disconnect — the resolvers stay
    * pending until a reconnected browser submits.
    */
-  waitForUser(prompt: string): Operation<{ message: string }> {
+  elicit(message: string): Operation<{ message: string }> {
     const { operation, resolve } = withResolvers<string>();
 
-    this.pendingPrompt = { resolve, prompt };
+    this.pendingElicit = { resolve, message };
 
     if (this.socket) {
-      this.safeSend(this.socket, { type: "waitForUser", prompt });
+      this.safeSend(this.socket, { type: "elicit", message });
     }
 
     return {
       *[Symbol.iterator]() {
-        const message = yield* operation;
-        return { message };
+        const msg = yield* operation;
+        return { message: msg };
       },
     };
   }
 
   /**
-   * Send assistant message to the browser if connected, and persist the complete
-   * user+assistant pair to history so reconnecting/non-owner clients see it.
+   * Send assistant message to the browser if connected, and append to
+   * chatMessages so reconnecting/non-owner clients see it.
    */
   showAssistantMessage(message: string): void {
-    if (this.pendingUserMessage !== null) {
-      this.history.push({ role: "user", content: this.pendingUserMessage });
-      this.pendingUserMessage = null;
-    }
-    this.history.push({ role: "assistant", content: message });
+    this.chatMessages.push({ role: "assistant", content: message });
     if (this.socket) {
       this.safeSend(this.socket, { type: "assistantMessage", message });
     }
@@ -149,11 +146,11 @@ export class BrowserSessionManager {
   }
 
   private handleMessage(msg: BrowserToHost): void {
-    if (msg.type === "userMessage" && this.pendingPrompt) {
+    if (msg.type === "userMessage" && this.pendingElicit) {
       logInfo("session", "userMessage received", { message: msg.message });
-      const { resolve } = this.pendingPrompt;
-      this.pendingUserMessage = msg.message;
-      this.pendingPrompt = null;
+      const { resolve } = this.pendingElicit;
+      this.chatMessages.push({ role: "user", content: msg.message });
+      this.pendingElicit = null;
       resolve(msg.message);
     }
   }

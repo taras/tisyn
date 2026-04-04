@@ -1,5 +1,5 @@
 import { describe as effDescribe, it as effIt } from "@effectionx/vitest";
-import { describe, it, expect } from "vitest";
+import { expect } from "vitest";
 import { call } from "effection";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
@@ -7,7 +7,6 @@ import { randomUUID } from "node:crypto";
 import { unlink } from "node:fs/promises";
 import type { DurableEvent, YieldEvent } from "@tisyn/kernel";
 import { FileJournalStream } from "../src/file-journal-stream.js";
-import { reconstructHistory } from "../src/reconstruct-history.js";
 
 function tmpJournalPath(): string {
   return join(tmpdir(), `tisyn-test-${randomUUID()}.ndjson`);
@@ -93,99 +92,5 @@ effDescribe("FileJournalStream", () => {
         /* may not exist */
       }
     }
-  });
-});
-
-describe("reconstructHistory", () => {
-  it("empty events returns empty history", () => {
-    expect(reconstructHistory([])).toEqual([]);
-  });
-
-  it("complete pair produces user + assistant entries", () => {
-    const events: DurableEvent[] = [
-      yieldEvent("app", "waitForUser", { message: "hello" }),
-      yieldEvent("llm", "sample", { message: "hi back" }),
-    ];
-    expect(reconstructHistory(events)).toEqual([
-      { role: "user", content: "hello" },
-      { role: "assistant", content: "hi back" },
-    ]);
-  });
-
-  it("multiple pairs in order", () => {
-    const events: DurableEvent[] = [
-      yieldEvent("app", "waitForUser", { message: "a" }),
-      yieldEvent("llm", "sample", { message: "b" }),
-      yieldEvent("app", "waitForUser", { message: "c" }),
-      yieldEvent("llm", "sample", { message: "d" }),
-    ];
-    expect(reconstructHistory(events)).toEqual([
-      { role: "user", content: "a" },
-      { role: "assistant", content: "b" },
-      { role: "user", content: "c" },
-      { role: "assistant", content: "d" },
-    ]);
-  });
-
-  it("trailing unmatched waitForUser is ignored", () => {
-    const events: DurableEvent[] = [
-      yieldEvent("app", "waitForUser", { message: "a" }),
-      yieldEvent("llm", "sample", { message: "b" }),
-      yieldEvent("app", "waitForUser", { message: "orphan" }),
-    ];
-    expect(reconstructHistory(events)).toEqual([
-      { role: "user", content: "a" },
-      { role: "assistant", content: "b" },
-    ]);
-  });
-
-  it("non-ok results are ignored", () => {
-    const events: DurableEvent[] = [
-      yieldEvent("app", "waitForUser", "error msg", "err"),
-      yieldEvent("app", "waitForUser", { message: "real" }),
-      yieldEvent("llm", "sample", { message: "reply" }),
-    ];
-    expect(reconstructHistory(events)).toEqual([
-      { role: "user", content: "real" },
-      { role: "assistant", content: "reply" },
-    ]);
-  });
-
-  it("close events are ignored", () => {
-    const events: DurableEvent[] = [
-      yieldEvent("app", "waitForUser", { message: "a" }),
-      { type: "close", coroutineId: "root", result: { status: "ok", value: null } },
-      yieldEvent("llm", "sample", { message: "b" }),
-    ];
-    expect(reconstructHistory(events)).toEqual([
-      { role: "user", content: "a" },
-      { role: "assistant", content: "b" },
-    ]);
-  });
-
-  it("events with matching name but wrong type are ignored", () => {
-    const events: DurableEvent[] = [
-      yieldEvent("other", "waitForUser", { message: "wrong agent" }),
-      yieldEvent("app", "waitForUser", { message: "right" }),
-      yieldEvent("other", "sample", { message: "wrong agent" }),
-      yieldEvent("llm", "sample", { message: "correct" }),
-    ];
-    expect(reconstructHistory(events)).toEqual([
-      { role: "user", content: "right" },
-      { role: "assistant", content: "correct" },
-    ]);
-  });
-
-  it("interleaved state events do not disrupt pairing", () => {
-    const events: DurableEvent[] = [
-      yieldEvent("app", "waitForUser", { message: "hi" }),
-      yieldEvent("state", "getHistory", []),
-      yieldEvent("llm", "sample", { message: "hello" }),
-      yieldEvent("state", "recordTurn", null),
-    ];
-    expect(reconstructHistory(events)).toEqual([
-      { role: "user", content: "hi" },
-      { role: "assistant", content: "hello" },
-    ]);
   });
 });

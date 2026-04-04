@@ -44,18 +44,18 @@ export function useChat(url = `ws://${window.location.host}`) {
         const msg = JSON.parse(event.data);
 
         switch (msg.type) {
-          case "hydrateTranscript":
+          case "loadChat":
             setMessages(
               msg.messages.map((m: { role: string; content: string }) => ({
                 role: m.role as "user" | "assistant",
                 content: m.content,
               })),
             );
-            setStatus({ text: "Transcript restored", level: "connected" });
+            setStatus({ text: "Chat loaded", level: "connected" });
             break;
 
-          case "waitForUser":
-            setStatus({ text: msg.prompt || "Say something", level: "connected" });
+          case "elicit":
+            setStatus({ text: msg.message || "Say something", level: "connected" });
             setInputEnabled(true);
             break;
 
