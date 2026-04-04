@@ -11,11 +11,10 @@
  * from the package public surface.
  */
 
-import type { Operation } from "effection";
 import { createContext } from "effection";
 import type { Val } from "@tisyn/ir";
 
-const ConfigContext = createContext<Record<string, unknown> | null>("$config", null);
+const ConfigContext = createContext<Val>("$config", null);
 
 /**
  * Seed the resolved config projection into the current execution scope.
@@ -23,7 +22,7 @@ const ConfigContext = createContext<Record<string, unknown> | null>("$config", n
  * Called once at the start of execute(). The config value is inherited
  * by all child scopes within the execution.
  */
-export function provideConfig(config: Record<string, unknown> | null) {
+export function provideConfig(config: Val) {
   return ConfigContext.set(config);
 }
 
@@ -35,5 +34,5 @@ export function provideConfig(config: Record<string, unknown> | null) {
  * config was provided.
  */
 export function readConfig() {
-  return ConfigContext.get() as Operation<Val>;
+  return ConfigContext.expect();
 }
