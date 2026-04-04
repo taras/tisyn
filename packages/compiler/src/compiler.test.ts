@@ -6,7 +6,7 @@
  */
 
 import { describe, it, expect } from "vitest";
-import { compileOne, CompileError, toAgentId } from "./index.js";
+import { compile, compileOne, CompileError, toAgentId } from "./index.js";
 
 // ── Agent ID tests ──
 
@@ -1606,3 +1606,55 @@ function fn_contains_while(node: unknown): boolean {
   }
   return false;
 }
+
+// ── CompileResult.exports ──
+
+describe("CompileResult.exports", () => {
+  it("includes only exported generators", () => {
+    const result = compile(
+      `
+      export function* a() { return 1; }
+      function* b() { return 2; }
+    `,
+      { validate: false },
+    );
+    expect(result.exports).toEqual({ a: "a" });
+    expect(result.functions).toHaveProperty("a");
+    expect(result.functions).toHaveProperty("b");
+  });
+
+  it("handles export { name } declaration", () => {
+    const result = compile(
+      `
+      function* a() { return 1; }
+      export { a };
+    `,
+      { validate: false },
+    );
+    expect(result.exports).toEqual({ a: "a" });
+  });
+
+  it("handles export { local as exported } rename", () => {
+    const result = compile(
+      `
+      function* a() { return 1; }
+      export { a as workflow };
+    `,
+      { validate: false },
+    );
+    expect(result.exports).toEqual({ workflow: "a" });
+    expect(result.functions).toHaveProperty("a");
+    expect(result.exports).not.toHaveProperty("a");
+  });
+
+  it("returns empty exports when no generators are exported", () => {
+    const result = compile(
+      `
+      function* a() { return 1; }
+    `,
+      { validate: false },
+    );
+    expect(result.exports).toEqual({});
+    expect(result.functions).toHaveProperty("a");
+  });
+});

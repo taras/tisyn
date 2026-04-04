@@ -79,6 +79,44 @@ export function parseSource(source: string, filename = "input.ts"): ParsedFuncti
 }
 
 /**
+ * Collect all exported names from a TypeScript source file.
+ *
+ * Returns a map of exportedName → localName covering:
+ * - `export function* chat()` (direct modifier)
+ * - `function* chat(); export { chat };` (named export declaration)
+ * - `function* chat(); export { chat as myWorkflow };` (renamed export)
+ *
+ * Type-only exports are skipped since they are not runtime values.
+ */
+export function collectExportedNames(sourceFile: ts.SourceFile): Map<string, string> {
+  const exports = new Map<string, string>();
+
+  for (const stmt of sourceFile.statements) {
+    // Direct: export function* chat() / export const x / etc.
+    if (
+      ts.isFunctionDeclaration(stmt) &&
+      stmt.modifiers?.some((m) => m.kind === ts.SyntaxKind.ExportKeyword) &&
+      stmt.name
+    ) {
+      exports.set(stmt.name.text, stmt.name.text);
+    }
+
+    // Named: export { chat } / export { chat as myWorkflow }
+    if (ts.isExportDeclaration(stmt) && stmt.exportClause && ts.isNamedExports(stmt.exportClause)) {
+      if (stmt.isTypeOnly) continue;
+      for (const spec of stmt.exportClause.elements) {
+        if (spec.isTypeOnly) continue;
+        const exportedName = spec.name.text;
+        const localName = spec.propertyName?.getText(sourceFile) ?? exportedName;
+        exports.set(exportedName, localName);
+      }
+    }
+  }
+
+  return exports;
+}
+
+/**
  * Get line and column for a node in a source file.
  */
 export function getLocation(

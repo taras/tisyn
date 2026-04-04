@@ -12,7 +12,7 @@
 import ts from "typescript";
 import type { TisynExpr as Expr, TisynFn } from "@tisyn/ir";
 import { assertValidIr } from "@tisyn/validate";
-import { parseSource } from "./parse.js";
+import { parseSource, collectExportedNames } from "./parse.js";
 import { emitBlock, createContext } from "./emit.js";
 import { discoverContracts } from "./discover.js";
 import type { DiscoveredContract } from "./discover.js";
@@ -32,6 +32,8 @@ export interface CompileResult {
   functions: Record<string, Expr>;
   /** Map of function names to derived input schemas. */
   inputSchemas: Record<string, InputSchema>;
+  /** Map of exportedName → localFunctionName for compiled generators that are module exports. */
+  exports: Record<string, string>;
 }
 
 /**
@@ -102,7 +104,16 @@ export function compile(source: string, options: CompileOptions = {}): CompileRe
     inputSchemas[fn.name] = buildInputSchema(fn.paramTypes);
   }
 
-  return { functions: result, inputSchemas };
+  // Build export mapping: only include compiled generators that are real module exports
+  const moduleExports = collectExportedNames(sourceFile);
+  const exports: Record<string, string> = {};
+  for (const [exportedName, localName] of moduleExports) {
+    if (localName in result) {
+      exports[exportedName] = localName;
+    }
+  }
+
+  return { functions: result, inputSchemas, exports };
 }
 
 /**

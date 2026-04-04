@@ -1068,4 +1068,69 @@ export function* myWorkflow(input: { maxTurns: number; modelName?: string }): Wo
     expect(result.stdout).toContain("--max-turns");
     expect(result.stdout).toContain("--model-name");
   });
+
+  it("tsn run accepts export { name } form", function* () {
+    const dir = yield* call(makeTempDir);
+
+    yield* call(() =>
+      writeFile(
+        join(dir, "workflow.ts"),
+        `
+function* myWorkflow() {
+  return 42;
+}
+export { myWorkflow };
+`,
+      ),
+    );
+
+    yield* call(() => writeFile(join(dir, "descriptor.mjs"), tsCompileDescriptor("./workflow.ts")));
+
+    const result = yield* exec("node", {
+      arguments: [CLI_BIN, "run", join(dir, "descriptor.mjs"), "--verbose"],
+    }).join();
+
+    expect(result.code ?? 0).toBe(0);
+    expect(result.stdout).toContain("42");
+  });
+
+  it("tsn run rejects non-exported generator", function* () {
+    const dir = yield* call(makeTempDir);
+
+    yield* call(() =>
+      writeFile(
+        join(dir, "workflow.ts"),
+        `
+export function* chat() {
+  return 1;
+}
+function* helper() {
+  return 0;
+}
+`,
+      ),
+    );
+
+    // Descriptor points to non-exported "helper"
+    yield* call(() =>
+      writeFile(
+        join(dir, "descriptor.mjs"),
+        `
+export default {
+  tisyn_config: "workflow",
+  run: { export: "helper", module: "./workflow.ts" },
+  agents: [{ tisyn_config: "agent", id: "dummy", transport: { tisyn_config: "transport", kind: "stdio", command: "node", args: [${JSON.stringify(NOOP_AGENT)}] } }],
+  journal: { tisyn_config: "journal", kind: "memory" },
+};
+`,
+      ),
+    );
+
+    const result = yield* exec("node", {
+      arguments: [CLI_BIN, "run", join(dir, "descriptor.mjs")],
+    }).join();
+
+    expect(result.code).toBe(2);
+    expect(result.stderr).toContain("does not export");
+  });
 });

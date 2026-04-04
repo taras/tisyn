@@ -144,16 +144,25 @@ export function* compileWorkflowFromSource(
     throw new CliError(1, `Failed to compile workflow source '${sourcePath}': ${msg}`);
   }
 
-  const ir = result.functions[exportName];
-  if (!ir) {
-    const available = Object.keys(result.functions).join(", ") || "(none)";
+  // Resolve exported name → local function name (mirrors JS module semantics)
+  const localName = result.exports[exportName];
+  if (localName === undefined) {
+    const available = Object.keys(result.exports).join(", ") || "(none)";
     throw new CliError(
       2,
-      `Workflow source '${sourcePath}' does not contain function '${exportName}'. Available: ${available}`,
+      `Workflow source '${sourcePath}' does not export '${exportName}'. Exported: ${available}`,
     );
   }
 
-  const inputSchema = result.inputSchemas[exportName];
+  const ir = result.functions[localName];
+  if (!ir) {
+    throw new CliError(
+      2,
+      `Workflow source '${sourcePath}' does not contain compiled function '${localName}'.`,
+    );
+  }
+
+  const inputSchema = result.inputSchemas[localName];
   return { ir, inputSchema };
 }
 
