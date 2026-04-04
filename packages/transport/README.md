@@ -47,6 +47,14 @@ Transport factories provide the boundary over which protocol messages move. The 
 - workers
 - SSE/POST over HTTP
 
+### Transport factories vs. server ingress
+
+Transport factories (`AgentTransportFactory`) remain pure: they create bidirectional message channels for agent communication. Browser/WebSocket connection acceptance is not a transport concern -- it belongs to the CLI/runtime startup layer.
+
+`LocalAgentBinding` and `LocalServerBinding` define the contract for local/inprocess transport modules that need server ingress. A module exports `createBinding()` returning a `LocalAgentBinding`, which includes the transport factory and an optional `bindServer` hook. The CLI calls `bindServer` with a `LocalServerBinding` that provides accepted connections as a typed stream. This keeps transport modules from owning server lifecycle.
+
+`bindServer` is a setup-only hook: it spawns any long-lived work (e.g., connection acceptance loops) and returns promptly. Spawned work inherits the caller's Effection scope and tears down on scope exit.
+
 ### Agent-side serving
 
 On the remote side, adapters such as `createProtocolServer()` and `createStdioAgentTransport()` expose an agent implementation over a concrete transport.
@@ -67,6 +75,8 @@ On the remote side, adapters such as `createProtocolServer()` and `createStdioAg
 - `Transport`: Define the host-side transport contract used to open protocol sessions.
 - `AgentTransport`: Define the agent-side transport contract used by protocol servers.
 - `AgentTransportFactory`: Define a factory that creates agent-side transports on demand.
+- `LocalAgentBinding`: Define the contract for local/inprocess modules: transport factory plus optional `bindServer` hook.
+- `LocalServerBinding`: Define the server binding provided to local modules: address and connection stream.
 
 ### Concrete transports (subpath imports)
 

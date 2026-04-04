@@ -7,6 +7,8 @@ export type {
   Transport,
   AgentTransport,
   AgentTransportFactory,
+  LocalAgentBinding,
+  LocalServerBinding,
   HostMessage,
   AgentMessage,
 } from "./transport.js";
