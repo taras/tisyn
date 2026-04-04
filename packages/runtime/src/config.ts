@@ -26,6 +26,7 @@ export interface ResolvedConfig {
 export interface ResolvedAgent {
   id: string;
   transport: Record<string, unknown>;
+  config?: Record<string, unknown>;
 }
 
 export interface ResolvedJournal {
@@ -262,7 +263,11 @@ function projectAgent(
     if (key === "tisyn_config") continue;
     projected[key] = resolveValue(val, resolvedEnv);
   }
-  return { id: agent.id, transport: projected };
+  const result: ResolvedAgent = { id: agent.id, transport: projected };
+  if (agent.config != null) {
+    result.config = resolveValue(agent.config, resolvedEnv) as Record<string, unknown>;
+  }
+  return result;
 }
 
 function projectJournal(

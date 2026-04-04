@@ -23,7 +23,11 @@ The CLI loads descriptors, resolves environment, installs transports, and hands 
 
 ### Descriptor loading
 
-A descriptor module's default export must be a `WorkflowDescriptor` (tagged with `tisyn_config: "workflow"`). The CLI resolves the workflow module path and export name from the descriptor's `run` field, then loads the compiled IR and input schema metadata.
+A descriptor module's default export must be a `WorkflowDescriptor` (tagged with `tisyn_config: "workflow"`). The CLI resolves the workflow module path and export name from the descriptor's `run` field.
+
+When `run.module` points to a `.ts` source file, `tsn run` compiles the workflow at runtime using the tisyn compiler. The source file should contain ambient factory contract declarations (`declare function AgentName(): { ... }`) and exported generator functions. When `run.module` points to a `.js` file, the CLI loads pre-compiled IR via dynamic import.
+
+Bare `Fn` IR nodes (produced by the compiler) are automatically invoked: zero-parameter workflows are called directly, and single flat-object-parameter workflows receive parsed CLI flags as their argument. Destructured function parameters are not supported — use `(input: { ... })` form.
 
 ### Invocation inputs
 
@@ -37,7 +41,7 @@ After overlay application and environment resolution, the CLI passes the project
 
 Modules referenced by `transport.local()` or `transport.inprocess()` can export either:
 
-- `createBinding()` returning a `LocalAgentBinding` with a transport factory and optional `bindServer` hook (preferred)
+- `createBinding(config?)` returning a `LocalAgentBinding` with a transport factory and optional `bindServer` hook (preferred). If the agent descriptor includes a `config` bag, the resolved config (with env nodes replaced by their values) is passed as the first argument.
 - `createTransport()` returning a plain `AgentTransportFactory` (backward-compatible)
 
 Both types are exported from `@tisyn/transport`.

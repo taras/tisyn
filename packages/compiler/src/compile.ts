@@ -12,11 +12,12 @@
 import ts from "typescript";
 import type { TisynExpr as Expr, TisynFn } from "@tisyn/ir";
 import { assertValidIr } from "@tisyn/validate";
-import { parseSource } from "./parse.js";
+import { parseSource, collectExportedNames } from "./parse.js";
 import { emitBlock, createContext } from "./emit.js";
 import { discoverContracts } from "./discover.js";
 import type { DiscoveredContract } from "./discover.js";
 import { Fn } from "./ir-builders.js";
+import { buildInputSchema, type InputSchema } from "./codegen.js";
 import { CompileError } from "./errors.js";
 
 export interface CompileOptions {
@@ -29,6 +30,12 @@ export interface CompileOptions {
 export interface CompileResult {
   /** Map of function names to compiled IR. */
   functions: Record<string, Expr>;
+  /** Map of function names to derived input schemas. */
+  inputSchemas: Record<string, InputSchema>;
+  /** Map of exportedName → localFunctionName for compiled generators that are module exports. */
+  exports: Record<string, string>;
+  /** Names re-exported from other modules (not compilable from this source file). */
+  reExports: string[];
 }
 
 /**
@@ -67,6 +74,7 @@ export function compile(source: string, options: CompileOptions = {}): CompileRe
   }
 
   const result: Record<string, Expr> = {};
+  const inputSchemas: Record<string, InputSchema> = {};
 
   for (const fn of functions) {
     const ctx = createContext(sourceFile, contractsMap);
@@ -95,9 +103,19 @@ export function compile(source: string, options: CompileOptions = {}): CompileRe
     }
 
     result[fn.name] = irFn;
+    inputSchemas[fn.name] = buildInputSchema(fn.paramTypes);
   }
 
-  return { functions: result };
+  // Build export mapping: only include compiled generators that are real local exports
+  const moduleExports = collectExportedNames(sourceFile);
+  const exports: Record<string, string> = {};
+  for (const [exportedName, localName] of moduleExports.local) {
+    if (localName in result) {
+      exports[exportedName] = localName;
+    }
+  }
+
+  return { functions: result, inputSchemas, exports, reExports: moduleExports.reExports };
 }
 
 /**

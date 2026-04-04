@@ -78,6 +78,62 @@ export function parseSource(source: string, filename = "input.ts"): ParsedFuncti
   return functions;
 }
 
+export interface ModuleExports {
+  /** Local exports: exportedName → localFunctionName. */
+  local: Map<string, string>;
+  /** Names re-exported from other modules (`export { x } from "./other"`). */
+  reExports: string[];
+}
+
+/**
+ * Collect all exported names from a TypeScript source file.
+ *
+ * Local exports cover:
+ * - `export function* chat()` (direct modifier)
+ * - `function* chat(); export { chat };` (named export declaration)
+ * - `function* chat(); export { chat as myWorkflow };` (renamed export)
+ *
+ * Re-exports (`export { x } from "./other"`) are tracked separately because
+ * the single-file compiler cannot resolve cross-module references.
+ *
+ * Type-only exports are skipped since they are not runtime values.
+ */
+export function collectExportedNames(sourceFile: ts.SourceFile): ModuleExports {
+  const local = new Map<string, string>();
+  const reExports: string[] = [];
+
+  for (const stmt of sourceFile.statements) {
+    // Direct: export function* chat()
+    if (
+      ts.isFunctionDeclaration(stmt) &&
+      stmt.modifiers?.some((m) => m.kind === ts.SyntaxKind.ExportKeyword) &&
+      stmt.name
+    ) {
+      local.set(stmt.name.text, stmt.name.text);
+    }
+
+    // Named or re-export: export { chat } / export { chat } from "./other"
+    if (ts.isExportDeclaration(stmt) && stmt.exportClause && ts.isNamedExports(stmt.exportClause)) {
+      if (stmt.isTypeOnly) continue;
+
+      const isReExport = stmt.moduleSpecifier !== undefined;
+      for (const spec of stmt.exportClause.elements) {
+        if (spec.isTypeOnly) continue;
+        const exportedName = spec.name.text;
+
+        if (isReExport) {
+          reExports.push(exportedName);
+        } else {
+          const localName = spec.propertyName?.getText(sourceFile) ?? exportedName;
+          local.set(exportedName, localName);
+        }
+      }
+    }
+  }
+
+  return { local, reExports };
+}
+
 /**
  * Get line and column for a node in a source file.
  */

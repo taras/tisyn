@@ -63,7 +63,10 @@ export function* createTransportFactory(agent: ResolvedAgent): Operation<AgentTr
  * Prefers `createBinding()` (returns LocalAgentBinding) over
  * `createTransport()` (returns AgentTransportFactory, wrapped).
  */
-export function* loadLocalBinding(modulePath: string): Operation<LocalAgentBinding> {
+export function* loadLocalBinding(
+  modulePath: string,
+  agentConfig?: Record<string, unknown>,
+): Operation<LocalAgentBinding> {
   let mod: Record<string, unknown>;
   try {
     mod = yield* call(
@@ -75,7 +78,9 @@ export function* loadLocalBinding(modulePath: string): Operation<LocalAgentBindi
   }
 
   if (typeof mod.createBinding === "function") {
-    return (mod.createBinding as () => LocalAgentBinding)();
+    return (mod.createBinding as (config?: Record<string, unknown>) => LocalAgentBinding)(
+      agentConfig,
+    );
   }
 
   if (typeof mod.createTransport === "function") {
@@ -102,7 +107,7 @@ export function* installAllTransports(
 
     if (kind === "local" || kind === "inprocess") {
       const modulePath = agentConfig.transport.module as string;
-      const binding = yield* loadLocalBinding(modulePath);
+      const binding = yield* loadLocalBinding(modulePath, agentConfig.config);
 
       if (binding.bindServer && serverBinding) {
         yield* binding.bindServer(serverBinding);

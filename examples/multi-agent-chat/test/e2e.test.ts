@@ -2,22 +2,21 @@
  * End-to-end: session manager + worker LLM + compiled workflow.
  * A test WebSocket client simulates the browser.
  *
- * History is now managed locally inside the compiled workflow via SSA let;
- * no State agent is required.
+ * Three agents: App (browser boundary), Llm (worker), DB (in-memory stub).
  */
 
 import { createServer } from "node:http";
 import type { AddressInfo } from "node:net";
 import { describe, it } from "@effectionx/vitest";
 import { expect } from "vitest";
-import { spawn, withResolvers } from "effection";
+import { createSignal, spawn, withResolvers } from "effection";
 import { WebSocketServer, WebSocket } from "ws";
 import { implementAgent } from "@tisyn/agent";
 import { execute } from "@tisyn/runtime";
 import { installRemoteAgent } from "@tisyn/transport";
 import { workerTransport } from "@tisyn/transport/worker";
 import { Call } from "@tisyn/ir";
-import { App, Llm, chat } from "../src/workflow.generated.js";
+import { App, Llm, DB, chat } from "../src/workflow.generated.js";
 import { BrowserSessionManager } from "../src/browser-session.js";
 import type { HostToBrowser } from "../src/browser-session.js";
 
@@ -42,7 +41,7 @@ describe("End-to-end chat", () => {
     clientWs.on("open", () => clientOpen.resolve());
     yield* clientOpen.operation;
 
-    // Collect messages from host and auto-respond to waitForUser
+    // Collect messages from host and auto-respond to elicit
     const assistantMessages: string[] = [];
     const userInputs = ["hello", "how are you?"];
     let inputIndex = 0;
@@ -50,7 +49,7 @@ describe("End-to-end chat", () => {
     clientWs.on("message", (data) => {
       const msg = JSON.parse(data.toString()) as HostToBrowser;
 
-      if (msg.type === "waitForUser") {
+      if (msg.type === "elicit") {
         if (inputIndex < userInputs.length) {
           clientWs.send(JSON.stringify({ type: "userMessage", message: userInputs[inputIndex++] }));
         }
@@ -68,25 +67,44 @@ describe("End-to-end chat", () => {
     const serverWs = yield* serverConnected.operation;
 
     // --- Set up agents (same pattern as host.ts) ---
-    const session = new BrowserSessionManager([]);
+    const userInput = createSignal<string, never>();
+    const session = new BrowserSessionManager(userInput);
     session.attach("e2e-test", serverWs);
 
-    // Browser agent — local, backed by session manager
+    // App agent — local, backed by session manager + signal
     const browserImpl = implementAgent(App(), {
-      *waitForUser({ input }) {
-        return yield* session.waitForUser(input.prompt);
+      *elicit({ input }) {
+        const sub = yield* userInput;
+        session.beginElicit(input.message);
+        try {
+          const item = yield* sub.next();
+          return { message: item.value };
+        } finally {
+          session.endElicit();
+        }
       },
       *showAssistantMessage({ input }) {
         session.showAssistantMessage(input.message);
       },
-      *hydrateTranscript() {
-        // no-op
+      *loadChat({ messages }) {
+        session.loadChat(messages);
       },
       *setReadOnly({ input }) {
         session.setReadOnly(input.reason);
       },
     });
     yield* browserImpl.install();
+
+    // DB agent — in-memory stub
+    const dbImpl = implementAgent(DB(), {
+      *loadMessages() {
+        return [];
+      },
+      *appendMessage() {
+        // no-op for test
+      },
+    });
+    yield* dbImpl.install();
 
     // LLM agent via Worker
     const llmFactory = workerTransport({

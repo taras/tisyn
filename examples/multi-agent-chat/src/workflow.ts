@@ -1,9 +1,9 @@
 import type { Workflow } from "@tisyn/agent";
 
 declare function App(): {
-  waitForUser(input: { prompt: string }): Workflow<{ message: string }>;
+  elicit(input: { message: string }): Workflow<{ message: string }>;
   showAssistantMessage(input: { message: string }): Workflow<void>;
-  hydrateTranscript(input: { messages: Array<{ role: string; content: string }> }): Workflow<void>;
+  loadChat(messages: Array<{ role: string; content: string }>): Workflow<void>;
   setReadOnly(input: { reason: string }): Workflow<void>;
 };
 
@@ -14,19 +14,30 @@ declare function Llm(): {
   }): Workflow<{ message: string }>;
 };
 
+declare function DB(): {
+  loadMessages(input: Record<string, never>): Workflow<Array<{ role: string; content: string }>>;
+  appendMessage(input: { role: string; content: string }): Workflow<void>;
+};
+
 export function* chat() {
-  let history: Array<{ role: string; content: string }> = [];
+  // Restore prior chat state: load from DB, push to browser
+  const prior = yield* DB().loadMessages({});
+  yield* App().loadChat(prior);
+
+  // Chat loop
+  let history = prior;
   while (true) {
-    const user = yield* App().waitForUser({ prompt: "Say something" });
+    const user = yield* App().elicit({ message: "Say something" });
+    yield* DB().appendMessage({ role: "user", content: user.message });
+
+    const contextForSampling = [...history, { role: "user", content: user.message }];
     const assistant = yield* Llm().sample({
-      history: history,
+      history: contextForSampling,
       message: user.message,
     });
-    history = [
-      ...history,
-      { role: "user", content: user.message },
-      { role: "assistant", content: assistant.message },
-    ];
+    yield* DB().appendMessage({ role: "assistant", content: assistant.message });
+
+    history = [...contextForSampling, { role: "assistant", content: assistant.message }];
     yield* App().showAssistantMessage({ message: assistant.message });
   }
 }

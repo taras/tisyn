@@ -11,7 +11,8 @@
 import { resolve, dirname, isAbsolute } from "node:path";
 import { exit } from "effection";
 import type { Operation } from "effection";
-import type { Val } from "@tisyn/ir";
+import type { Val, FnNode, IrInput } from "@tisyn/ir";
+import { Call, Ref, isFnNode } from "@tisyn/ir";
 import {
   applyOverlay,
   resolveConfig,
@@ -23,6 +24,7 @@ import {
   loadDescriptorModule,
   resolveWorkflowModule,
   loadWorkflowExport,
+  compileWorkflowFromSource,
   CliError,
 } from "./load-descriptor.js";
 import { deriveFlags, parseInputFlags, formatInputHelp } from "./inputs.js";
@@ -41,9 +43,11 @@ function* loadRunMetadata(modulePath: string, entrypoint?: string) {
   const descriptor = yield* loadDescriptorModule(modulePath);
   const merged = entrypoint ? applyOverlay(descriptor, entrypoint) : descriptor;
 
-  // Phase B: Resolve workflow module and load export
+  // Phase B: Resolve workflow module and load/compile export
   const { modulePath: workflowPath, exportName } = resolveWorkflowModule(merged, modulePath);
-  const workflowExport = yield* loadWorkflowExport(workflowPath, exportName);
+  const workflowExport = workflowPath.endsWith(".ts")
+    ? yield* compileWorkflowFromSource(workflowPath, exportName)
+    : yield* loadWorkflowExport(workflowPath, exportName);
 
   return { descriptor, merged, workflowPath, exportName, workflowExport };
 }
@@ -117,10 +121,33 @@ export function* runRun(
   // Install agent transports (with server binding if available)
   yield* installAllTransports(resolvedProjection, serverBinding);
 
+  // Auto-invoke bare Fn nodes: the compiler produces Fn(params, body) closures;
+  // the kernel would return the closure as a value rather than executing it.
+  // Wrap in Call with the correct argument model.
+  let executableIr: IrInput;
+  let execEnv: Record<string, unknown>;
+
+  if (isFnNode(workflowExport.ir)) {
+    const fn = workflowExport.ir as FnNode;
+    if (fn.params.length === 0) {
+      executableIr = Call(fn);
+      execEnv = {};
+    } else if (fn.params.length === 1) {
+      const paramName = fn.params[0];
+      executableIr = Call(fn, Ref(paramName));
+      execEnv = { [paramName]: inputFlags.parsed };
+    } else {
+      throw new CliError(2, "Workflows with multiple parameters are not supported");
+    }
+  } else {
+    executableIr = workflowExport.ir;
+    execEnv = inputFlags.parsed;
+  }
+
   // Execute workflow
   const { result } = yield* execute({
-    ir: workflowExport.ir,
-    env: inputFlags.parsed as never,
+    ir: executableIr,
+    env: execEnv as never,
     config: resolvedProjection as unknown as Val,
     stream,
   });

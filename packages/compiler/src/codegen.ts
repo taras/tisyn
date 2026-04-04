@@ -146,7 +146,9 @@ const ALL_IR_CONSTRUCTORS = [
 /** Scan printed constructor-form sources and return only the constructor names actually used. */
 function scanUsedConstructors(printedSources: string[]): string[] {
   const combined = printedSources.join("\n");
-  return ALL_IR_CONSTRUCTORS.filter((name) => new RegExp(`\\b${name}\\(`).test(combined));
+  return ALL_IR_CONSTRUCTORS.filter((name) =>
+    new RegExp(`\\b${name}(?:<[^>]*>)?\\(`).test(combined),
+  );
 }
 
 /**
@@ -167,7 +169,7 @@ export function generateCode(
   const printedMap: Record<string, string> = {};
   if (workflowFormat === "printed") {
     for (const name of sortedWorkflowNames) {
-      printedMap[name] = print(workflows[name]!.ir, { compact: false });
+      printedMap[name] = print(workflows[name]!.ir, { compact: false, refTypeAnnotation: "any" });
     }
   }
 

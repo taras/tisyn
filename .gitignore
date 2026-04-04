@@ -3,3 +3,4 @@ dist/
 *.tsbuildinfo
 .DS_Store
 examples/multi-agent-chat/test/browser/dist-executor/
+examples/multi-agent-chat/src/workflow.generated.ts

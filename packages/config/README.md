@@ -42,7 +42,7 @@ export default workflow({
 | Constructor | Output |
 |---|---|
 | `workflow({ run, agents, journal?, entrypoints? })` | `WorkflowDescriptor` |
-| `agent(id, transport)` | `AgentBinding` |
+| `agent(id, transport, config?)` | `AgentBinding` |
 | `transport.worker(url)` | `WorkerTransportDescriptor` |
 | `transport.local(module)` | `LocalTransportDescriptor` |
 | `transport.stdio(command, args?)` | `StdioTransportDescriptor` |
@@ -57,7 +57,9 @@ export default workflow({
 | `server.websocket({ port, static? })` | `ServerDescriptor` |
 | `configToken<T>()` | `ConfigToken<T>` |
 
-Transport, journal path, server port, and stdio command/args positions accept `EnvDescriptor` nodes for deferred environment resolution.
+The optional `config` bag on `agent()` supports `env()` nodes for deferred environment resolution, letting transport modules receive resolved configuration at startup.
+
+Transport, journal path, server port, and stdio command/args positions also accept `EnvDescriptor` nodes for deferred environment resolution.
 
 ### Config Token and `Config.useConfig()`
 

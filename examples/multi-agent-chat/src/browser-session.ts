@@ -1,5 +1,3 @@
-import { withResolvers } from "effection";
-import type { Operation } from "effection";
 import type { WebSocket } from "ws";
 import { logInfo, logDebug } from "./logger.js";
 
@@ -10,31 +8,44 @@ export type BrowserToHost =
   | { type: "userMessage"; message: string };
 
 export type HostToBrowser =
-  | { type: "hydrateTranscript"; messages: Array<{ role: string; content: string }> }
-  | { type: "waitForUser"; prompt: string }
+  | { type: "loadChat"; messages: Array<{ role: string; content: string }> }
+  | { type: "elicit"; message: string }
   | { type: "assistantMessage"; message: string }
   | { type: "setReadOnly"; reason: string };
 
 // --- Session Manager ---
 
+/**
+ * Plain session state container for browser WebSocket connections.
+ *
+ * Owns only synchronous, plain data:
+ * - session identity and ownership
+ * - current WebSocket
+ * - chat transcript
+ * - pending prompt text (for reconnect hydration)
+ *
+ * Does NOT own operation resolvers or continuation state. Pending
+ * operation waiting lives in the Effection scope via a binding-scoped
+ * signal passed at construction.
+ */
 export class BrowserSessionManager {
   private ownerSessionId: string | null = null;
   private socket: WebSocket | null = null;
-  private pendingPrompt: { resolve(msg: string): void; prompt: string } | null = null;
-  private pendingUserMessage: string | null = null;
+  private pendingPrompt: string | null = null;
+  private chatMessages: Array<{ role: string; content: string }> = [];
   private readOnly: { reason: string } | null = null;
-  private ownerReady = withResolvers<void>();
 
-  constructor(private history: Array<{ role: string; content: string }>) {}
-
-  /** Yields until the first browser sends a connect message. */
-  waitForOwner(): Operation<void> {
-    return this.ownerReady.operation;
-  }
+  /**
+   * @param userInput — push-side of a binding-scoped signal. The manager
+   * calls `send(msg)` when the owner browser submits a user message.
+   * The Effection scope owns the signal's lifecycle; the manager just
+   * pushes into it.
+   */
+  constructor(private userInput: { send(msg: string): void }) {}
 
   /**
    * Attach a WebSocket to a session.
-   * - First connect sets the owner session ID and resolves waitForOwner.
+   * - First connect sets the owner session ID.
    * - Owner reconnect replaces the old socket (identity-safe).
    * - Non-owner gets read-only hydration only.
    */
@@ -42,14 +53,13 @@ export class BrowserSessionManager {
     // First connection — establish ownership
     if (this.ownerSessionId === null) {
       this.ownerSessionId = clientSessionId;
-      this.ownerReady.resolve();
       logInfo("session", "owner established", { clientSessionId });
     }
 
     // Non-owner — send read-only view and return
     if (clientSessionId !== this.ownerSessionId) {
       logInfo("session", "non-owner connection", { clientSessionId });
-      this.safeSend(ws, { type: "hydrateTranscript", messages: [...this.history] });
+      this.safeSend(ws, { type: "loadChat", messages: [...this.chatMessages] });
       this.safeSend(ws, { type: "setReadOnly", reason: "Session owned by another browser" });
       return;
     }
@@ -62,7 +72,7 @@ export class BrowserSessionManager {
     ws.on("message", (data) => {
       try {
         const msg = JSON.parse(data.toString()) as BrowserToHost;
-        this.handleMessage(msg);
+        this.handleMessage(ws, msg);
       } catch {
         logDebug("session", "failed to parse browser message");
       }
@@ -79,12 +89,12 @@ export class BrowserSessionManager {
     }
 
     // Send current state to the new socket
-    logInfo("session", "owner attached", { historyLength: this.history.length });
-    this.safeSend(ws, { type: "hydrateTranscript", messages: [...this.history] });
+    logInfo("session", "owner attached", { chatLength: this.chatMessages.length });
+    this.safeSend(ws, { type: "loadChat", messages: [...this.chatMessages] });
 
     if (this.pendingPrompt) {
-      logInfo("session", "re-sending pending prompt", { prompt: this.pendingPrompt.prompt });
-      this.safeSend(ws, { type: "waitForUser", prompt: this.pendingPrompt.prompt });
+      logInfo("session", "re-sending pending elicit", { message: this.pendingPrompt });
+      this.safeSend(ws, { type: "elicit", message: this.pendingPrompt });
     }
 
     if (this.readOnly) {
@@ -104,37 +114,43 @@ export class BrowserSessionManager {
   }
 
   /**
-   * Reconnect-safe waitForUser. Suspends via withResolvers until the owner
-   * browser sends a userMessage. Survives disconnect — the resolvers stay
-   * pending until a reconnected browser submits.
+   * Populate browser with chat history. Called by the workflow on startup.
    */
-  waitForUser(prompt: string): Operation<{ message: string }> {
-    const { operation, resolve } = withResolvers<string>();
-
-    this.pendingPrompt = { resolve, prompt };
-
+  loadChat(messages: Array<{ role: string; content: string }>): void {
+    this.chatMessages = [...messages];
     if (this.socket) {
-      this.safeSend(this.socket, { type: "waitForUser", prompt });
+      this.safeSend(this.socket, { type: "loadChat", messages: [...this.chatMessages] });
     }
-
-    return {
-      *[Symbol.iterator]() {
-        const message = yield* operation;
-        return { message };
-      },
-    };
   }
 
   /**
-   * Send assistant message to the browser if connected, and persist the complete
-   * user+assistant pair to history so reconnecting/non-owner clients see it.
+   * Set the current elicit prompt as plain data and send to the browser.
+   * The prompt is remembered for reconnect hydration.
+   *
+   * The caller (the binding's elicit handler) must subscribe to the
+   * userInput signal BEFORE calling this — signal does not buffer.
+   */
+  beginElicit(message: string): void {
+    this.pendingPrompt = message;
+    if (this.socket) {
+      this.safeSend(this.socket, { type: "elicit", message });
+    }
+  }
+
+  /**
+   * Clear the pending prompt. Called in the binding's finally block
+   * so the prompt is cleaned up on both normal completion and cancellation.
+   */
+  endElicit(): void {
+    this.pendingPrompt = null;
+  }
+
+  /**
+   * Send assistant message to the browser if connected, and append to
+   * chatMessages so reconnecting/non-owner clients see it.
    */
   showAssistantMessage(message: string): void {
-    if (this.pendingUserMessage !== null) {
-      this.history.push({ role: "user", content: this.pendingUserMessage });
-      this.pendingUserMessage = null;
-    }
-    this.history.push({ role: "assistant", content: message });
+    this.chatMessages.push({ role: "assistant", content: message });
     if (this.socket) {
       this.safeSend(this.socket, { type: "assistantMessage", message });
     }
@@ -148,13 +164,13 @@ export class BrowserSessionManager {
     }
   }
 
-  private handleMessage(msg: BrowserToHost): void {
+  private handleMessage(ws: WebSocket, msg: BrowserToHost): void {
+    if (this.socket !== ws) return; // stale socket — ignore
     if (msg.type === "userMessage" && this.pendingPrompt) {
       logInfo("session", "userMessage received", { message: msg.message });
-      const { resolve } = this.pendingPrompt;
-      this.pendingUserMessage = msg.message;
+      this.chatMessages.push({ role: "user", content: msg.message });
       this.pendingPrompt = null;
-      resolve(msg.message);
+      this.userInput.send(msg.message);
     }
   }
 
