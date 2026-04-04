@@ -1,11 +1,11 @@
 # @tisyn/protocol
 
-## 1.0.0
+## 0.9.0
 
 ### Patch Changes
 
 - Updated dependencies [38d9ffc]
-  - @tisyn/ir@1.0.0
+  - @tisyn/ir@0.9.0
 
 ## 0.8.0
 
