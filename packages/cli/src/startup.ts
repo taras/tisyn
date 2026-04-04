@@ -78,7 +78,9 @@ export function* loadLocalBinding(
   }
 
   if (typeof mod.createBinding === "function") {
-    return (mod.createBinding as (config?: Record<string, unknown>) => LocalAgentBinding)(agentConfig);
+    return (mod.createBinding as (config?: Record<string, unknown>) => LocalAgentBinding)(
+      agentConfig,
+    );
   }
 
   if (typeof mod.createTransport === "function") {

@@ -30,20 +30,14 @@ export function* chat() {
     const user = yield* App().elicit({ message: "Say something" });
     yield* DB().appendMessage({ role: "user", content: user.message });
 
-    const contextForSampling = [
-      ...history,
-      { role: "user", content: user.message },
-    ];
+    const contextForSampling = [...history, { role: "user", content: user.message }];
     const assistant = yield* Llm().sample({
       history: contextForSampling,
       message: user.message,
     });
     yield* DB().appendMessage({ role: "assistant", content: assistant.message });
 
-    history = [
-      ...contextForSampling,
-      { role: "assistant", content: assistant.message },
-    ];
+    history = [...contextForSampling, { role: "assistant", content: assistant.message }];
     yield* App().showAssistantMessage({ message: assistant.message });
   }
 }

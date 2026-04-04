@@ -37,7 +37,7 @@ After overlay application and environment resolution, the CLI passes the project
 
 Modules referenced by `transport.local()` or `transport.inprocess()` can export either:
 
-- `createBinding()` returning a `LocalAgentBinding` with a transport factory and optional `bindServer` hook (preferred)
+- `createBinding(config?)` returning a `LocalAgentBinding` with a transport factory and optional `bindServer` hook (preferred). If the agent descriptor includes a `config` bag, the resolved config (with env nodes replaced by their values) is passed as the first argument.
 - `createTransport()` returning a plain `AgentTransportFactory` (backward-compatible)
 
 Both types are exported from `@tisyn/transport`.

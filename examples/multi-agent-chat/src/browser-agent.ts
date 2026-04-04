@@ -66,9 +66,7 @@ export function createBinding(): LocalAgentBinding {
   };
 }
 
-function waitForFirstMessage(
-  ws: import("ws").WebSocket,
-): Operation<BrowserToHost> {
+function waitForFirstMessage(ws: import("ws").WebSocket): Operation<BrowserToHost> {
   const { operation, resolve } = withResolvers<BrowserToHost>();
   const handler = (data: import("ws").RawData) => {
     ws.off("message", handler);

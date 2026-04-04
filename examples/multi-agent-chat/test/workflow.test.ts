@@ -103,12 +103,13 @@ describe("Compiled workflow", () => {
     expect(appendMessageCalls[0]!.input).toEqual({ role: "user", content: "hello" });
     expect(appendMessageCalls[1]!.input).toEqual({ role: "assistant", content: "Echo: hello" });
     expect(appendMessageCalls[2]!.input).toEqual({ role: "user", content: "how are you?" });
-    expect(appendMessageCalls[3]!.input).toEqual({ role: "assistant", content: "Echo: how are you?" });
+    expect(appendMessageCalls[3]!.input).toEqual({
+      role: "assistant",
+      content: "Echo: how are you?",
+    });
 
     // Cycle 1: contextForSampling includes the current user message
-    expect(sampleCalls[0]!.input.history).toEqual([
-      { role: "user", content: "hello" },
-    ]);
+    expect(sampleCalls[0]!.input.history).toEqual([{ role: "user", content: "hello" }]);
     expect(sampleCalls[0]!.input.message).toBe("hello");
     expect(showCalls[0]!.input.message).toBe("Echo: hello");
 

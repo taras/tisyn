@@ -1,7 +1,4 @@
-import {
-  workflow, agent, transport, env, journal,
-  entrypoint, server,
-} from "@tisyn/config";
+import { workflow, agent, transport, env, journal, entrypoint, server } from "@tisyn/config";
 
 export default workflow({
   run: { export: "chat", module: "./run-entry.js" },
