@@ -1,5 +1,11 @@
 # @tisyn/ir
 
+## 0.9.0
+
+### Minor Changes
+
+- 38d9ffc: Add `TimeboxShape`, `TimeboxNode`, and `Timebox` constructor. Add timebox cases in printer and decompiler.
+
 ## 0.8.0
 
 ## 0.7.0

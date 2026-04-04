@@ -1,5 +1,29 @@
 # @tisyn/runtime
 
+## 0.9.0
+
+### Minor Changes
+
+- 7ad2031: Support config-aware execution via `ExecuteOptions.config` and resolve `__config` as a journaled runtime effect for replay-safe workflow config access.
+- 8eb99d9: Add `config` field to `ExecuteOptions` and handle `__config` as a journaled standard effect for config-aware workflow execution via `yield* useConfig()`.
+- 6b2a66a: Add config resolution helpers — `applyOverlay` (entrypoint merge-by-id), `resolveEnv` (env variable resolution with type coercion), `resolveConfig` (full pipeline: overlay → validate → resolve → project), and `projectConfig` (strips descriptor metadata, produces runtime-ready shape).
+- 38d9ffc: Add `orchestrateTimebox` with structured concurrency — body wins on simultaneous completion (TB-R6), deterministic child ID allocation.
+
+### Patch Changes
+
+- Updated dependencies [6b2a66a]
+- Updated dependencies [7ad2031]
+- Updated dependencies [38d9ffc]
+- Updated dependencies [38d9ffc]
+- Updated dependencies [38d9ffc]
+  - @tisyn/config@0.9.0
+  - @tisyn/ir@0.9.0
+  - @tisyn/kernel@0.9.0
+  - @tisyn/validate@0.9.0
+  - @tisyn/transport@0.9.0
+  - @tisyn/agent@0.9.0
+  - @tisyn/durable-streams@0.9.0
+
 ## 0.8.0
 
 ### Minor Changes

@@ -1,5 +1,24 @@
 # @tisyn/transport
 
+## 0.9.0
+
+### Patch Changes
+
+- Updated dependencies [38d9ffc]
+- Updated dependencies [38d9ffc]
+- Updated dependencies [7ad2031]
+- Updated dependencies [8eb99d9]
+- Updated dependencies [6b2a66a]
+- Updated dependencies [38d9ffc]
+- Updated dependencies [38d9ffc]
+  - @tisyn/ir@0.9.0
+  - @tisyn/kernel@0.9.0
+  - @tisyn/runtime@0.9.0
+  - @tisyn/validate@0.9.0
+  - @tisyn/agent@0.9.0
+  - @tisyn/protocol@0.9.0
+  - @tisyn/durable-streams@0.9.0
+
 ## 0.8.0
 
 ### Patch Changes

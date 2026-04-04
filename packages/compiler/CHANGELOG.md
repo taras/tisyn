@@ -1,5 +1,20 @@
 # @tisyn/compiler
 
+## 0.9.0
+
+### Minor Changes
+
+- 7ad2031: Recognize `yield* Config.useConfig(Token)`, lower it to `ExternalEval("__config", Q(null))`, and add `UC1`/`UC2`/`UC3` diagnostics for invalid config access forms.
+- 38d9ffc: Add `emitTimebox` and `emitConverge` lowering, `TimeboxEval` builder, `containsYieldStar` helper, error codes E-TB-01/02 and E-CONV-01 through E-CONV-09; `interval` is required with no default.
+- 8eb99d9: Add `yield* useConfig()` authored form recognition (lowers to `ExternalEval("__config", Q(null))`) and input schema metadata emission (`inputSchemas` export in generated modules).
+
+### Patch Changes
+
+- Updated dependencies [38d9ffc]
+- Updated dependencies [38d9ffc]
+  - @tisyn/ir@0.9.0
+  - @tisyn/validate@0.9.0
+
 ## 0.8.0
 
 ### Minor Changes
