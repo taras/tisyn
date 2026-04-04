@@ -4,7 +4,7 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "build:workflow": "tsn generate src/workflow.ts -o src/workflow.generated.ts && node scripts/patch-generated.mjs src/workflow.generated.ts",
+    "build:workflow": "tsn generate src/workflow.ts -o src/workflow.generated.ts",
     "build:node": "tsc -p tsconfig.build.json",
     "build": "pnpm run build:workflow && pnpm run build:node",
     "pretest": "pnpm run build:workflow",

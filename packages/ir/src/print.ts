@@ -6,6 +6,8 @@ export interface PrintOptions {
   indent?: number;
   maxWidth?: number;
   compact?: boolean;
+  /** When set, Ref nodes are emitted as `Ref<annotation>("name")` instead of `Ref("name")`. */
+  refTypeAnnotation?: string;
 }
 
 /**
@@ -16,6 +18,7 @@ export function print(expr: TisynExpr, options?: PrintOptions): string {
     indent: options?.indent ?? 2,
     maxWidth: options?.maxWidth ?? 80,
     compact: options?.compact ?? true,
+    refTypeAnnotation: options?.refTypeAnnotation,
   };
   return printNode(expr, 0, opts);
 }
@@ -39,7 +42,8 @@ function printNode(
   }
 
   if (isRefNode(expr)) {
-    return `Ref(${JSON.stringify(expr.name)})`;
+    const typeParam = opts.refTypeAnnotation ? `<${opts.refTypeAnnotation}>` : "";
+    return `Ref${typeParam}(${JSON.stringify(expr.name)})`;
   }
 
   if (isQuoteNode(expr)) {

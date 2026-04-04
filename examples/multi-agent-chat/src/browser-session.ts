@@ -72,7 +72,7 @@ export class BrowserSessionManager {
     ws.on("message", (data) => {
       try {
         const msg = JSON.parse(data.toString()) as BrowserToHost;
-        this.handleMessage(msg);
+        this.handleMessage(ws, msg);
       } catch {
         logDebug("session", "failed to parse browser message");
       }
@@ -164,7 +164,8 @@ export class BrowserSessionManager {
     }
   }
 
-  private handleMessage(msg: BrowserToHost): void {
+  private handleMessage(ws: WebSocket, msg: BrowserToHost): void {
+    if (this.socket !== ws) return; // stale socket — ignore
     if (msg.type === "userMessage" && this.pendingPrompt) {
       logInfo("session", "userMessage received", { message: msg.message });
       this.chatMessages.push({ role: "user", content: msg.message });

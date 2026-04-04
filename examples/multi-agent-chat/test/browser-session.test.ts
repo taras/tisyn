@@ -254,6 +254,37 @@ describe("Browser session", () => {
     expect(result).toBe("answer");
   });
 
+  it("stale socket message does not satisfy pending prompt", function* () {
+    const userInput = createSignal<string, never>();
+    const session = new BrowserSessionManager(userInput);
+    const wsA = createMockWs();
+    session.attach("session-1", wsA as AnyWs);
+
+    let result: string | undefined;
+    yield* spawn(function* () {
+      const sub = yield* userInput;
+      session.beginElicit("Prompt");
+      const item = yield* sub.next();
+      session.endElicit();
+      result = item.value;
+    });
+    yield* nextTick();
+
+    // Reconnect with a new socket — wsA is now stale
+    const wsB = createMockWs();
+    session.attach("session-1", wsB as AnyWs);
+
+    // Stale socket message must be ignored
+    wsA.injectMessage({ type: "userMessage", message: "stale" });
+    yield* nextTick();
+    expect(result).toBeUndefined();
+
+    // Current socket message must be accepted
+    wsB.injectMessage({ type: "userMessage", message: "fresh" });
+    yield* nextTick();
+    expect(result).toBe("fresh");
+  });
+
   it("loadChat stores and delivers messages on connect", function* () {
     const userInput = createSignal<string, never>();
     const session = new BrowserSessionManager(userInput);

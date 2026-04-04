@@ -2,7 +2,7 @@ import { describe, it, expect } from "vitest";
 import type { TisynExpr } from "./types.js";
 import { print } from "./print.js";
 import { decompile } from "./decompile.js";
-import { Ref, Let, Add, Eval, Fn, If, Eq, Call } from "./constructors.js";
+import { Ref, Let, Add, Eval, Fn, If, Eq, Call, Construct } from "./constructors.js";
 
 describe("print", () => {
   it("print literal", () => {
@@ -57,6 +57,20 @@ describe("print", () => {
     const result = print(expr, { compact: false });
     expect(result).toContain('Eval("svc.op",');
     expect(result).toContain('Ref("x")');
+  });
+
+  it("refTypeAnnotation emits typed Ref calls", () => {
+    const expr = Let("x", Ref("y"), Ref("x")) as TisynExpr;
+    const result = print(expr, { refTypeAnnotation: "any" });
+    expect(result).toContain('Ref<any>("y")');
+    expect(result).toContain('Ref<any>("x")');
+  });
+
+  it("refTypeAnnotation does not affect string literals", () => {
+    const expr = Construct({ msg: "Ref(foo)" }) as unknown as TisynExpr;
+    const result = print(expr, { refTypeAnnotation: "any" });
+    expect(result).toContain('"Ref(foo)"');
+    expect(result).not.toContain("Ref<any>(foo)");
   });
 });
 

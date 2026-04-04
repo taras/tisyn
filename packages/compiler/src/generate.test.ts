@@ -967,7 +967,7 @@ describe("generateWorkflowModule", () => {
           // IR constructors used by printed mode
           export declare function Fn(...args: any[]): any;
           export declare function Q(...args: any[]): any;
-          export declare function Ref(...args: any[]): any;
+          export declare function Ref<T = any>(...args: any[]): any;
           export declare function Eval(...args: any[]): any;
           export declare function Let(...args: any[]): any;
           export declare function Seq(...args: any[]): any;
