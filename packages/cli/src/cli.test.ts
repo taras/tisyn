@@ -7,7 +7,7 @@
 
 import { describe, it } from "@effectionx/vitest";
 import { expect, afterEach } from "vitest";
-import { call, each, spawn, createScope } from "effection";
+import { call, each, spawn } from "effection";
 import type { Operation } from "effection";
 import { exec } from "@effectionx/process";
 import { mkdtemp, writeFile, mkdir, rm, readFile } from "node:fs/promises";
