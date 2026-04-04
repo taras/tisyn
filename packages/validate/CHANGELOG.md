@@ -1,5 +1,16 @@
 # @tisyn/validate
 
+## 1.0.0
+
+### Minor Changes
+
+- 38d9ffc: Add duration subtree restriction that rejects external Evals; `TIMEBOX_DURATION_EXTERNAL` error code.
+
+### Patch Changes
+
+- Updated dependencies [38d9ffc]
+  - @tisyn/ir@1.0.0
+
 ## 0.8.0
 
 ### Patch Changes

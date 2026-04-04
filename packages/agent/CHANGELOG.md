@@ -1,5 +1,14 @@
 # @tisyn/agent
 
+## 1.0.0
+
+### Patch Changes
+
+- Updated dependencies [38d9ffc]
+- Updated dependencies [38d9ffc]
+  - @tisyn/ir@1.0.0
+  - @tisyn/kernel@1.0.0
+
 ## 0.8.0
 
 ### Patch Changes

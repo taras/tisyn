@@ -1,5 +1,31 @@
 # @tisyn/cli
 
+## 0.2.0
+
+### Minor Changes
+
+- 8eb99d9: Add `tsn run` and `tsn check` commands with full startup lifecycle including descriptor loading, input schema flag derivation, transport/server installation, and config-aware workflow execution.
+- 7ad2031: Make `tsn run` expose resolved descriptor config to workflows through `Config.useConfig(Token)` while keeping invocation inputs separate from workflow config.
+
+### Patch Changes
+
+- Updated dependencies [7ad2031]
+- Updated dependencies [38d9ffc]
+- Updated dependencies [8eb99d9]
+- Updated dependencies [6b2a66a]
+- Updated dependencies [7ad2031]
+- Updated dependencies [38d9ffc]
+- Updated dependencies [7ad2031]
+- Updated dependencies [8eb99d9]
+- Updated dependencies [6b2a66a]
+- Updated dependencies [38d9ffc]
+  - @tisyn/compiler@1.0.0
+  - @tisyn/config@0.9.0
+  - @tisyn/ir@1.0.0
+  - @tisyn/runtime@1.0.0
+  - @tisyn/transport@1.0.0
+  - @tisyn/durable-streams@1.0.0
+
 ## 0.1.8
 
 ### Patch Changes

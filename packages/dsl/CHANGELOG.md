@@ -1,5 +1,19 @@
 # @tisyn/dsl
 
+## 0.4.0
+
+### Minor Changes
+
+- 8c4a62e: Add `Timebox` constructor and `Converge` macro to the Constructor DSL.
+
+  - `Timebox(duration, body)` — 2-arg base constructor for timebox IR
+  - `Converge(probe, until, interval, timeout)` — 4-arg macro that expands to the same IR shape as the compiler's `converge` lowering (timebox + recursive Fn + Call + sleep)
+
+### Patch Changes
+
+- Updated dependencies [38d9ffc]
+  - @tisyn/ir@1.0.0
+
 ## 0.3.7
 
 ### Patch Changes

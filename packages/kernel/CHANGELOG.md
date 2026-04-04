@@ -1,5 +1,18 @@
 # @tisyn/kernel
 
+## 1.0.0
+
+### Minor Changes
+
+- 38d9ffc: Add per-ID timebox evaluation rule — evaluates duration synchronously, keeps body as unevaluated Expr.
+
+### Patch Changes
+
+- Updated dependencies [38d9ffc]
+- Updated dependencies [38d9ffc]
+  - @tisyn/ir@1.0.0
+  - @tisyn/validate@1.0.0
+
 ## 0.8.0
 
 ### Patch Changes
