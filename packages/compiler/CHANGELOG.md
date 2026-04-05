@@ -1,5 +1,16 @@
 # @tisyn/compiler
 
+## 1.0.0
+
+### Minor Changes
+
+- f7c4d57: `CompileResult` now includes `inputSchemas` field, exposing derived input schema metadata from `compile()`
+
+### Patch Changes
+
+- @tisyn/ir@1.0.0
+- @tisyn/validate@1.0.0
+
 ## 0.9.0
 
 ### Minor Changes

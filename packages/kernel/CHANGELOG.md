@@ -1,5 +1,12 @@
 # @tisyn/kernel
 
+## 1.0.0
+
+### Patch Changes
+
+- @tisyn/ir@1.0.0
+- @tisyn/validate@1.0.0
+
 ## 0.9.0
 
 ### Minor Changes
