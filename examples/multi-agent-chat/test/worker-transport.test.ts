@@ -6,7 +6,7 @@
 import { describe, it } from "@effectionx/vitest";
 import { expect } from "vitest";
 import { spawn, withResolvers } from "effection";
-import { implementAgent } from "@tisyn/agent";
+import { Agents } from "@tisyn/agent";
 import { execute } from "@tisyn/runtime";
 import { installRemoteAgent } from "@tisyn/transport";
 import { workerTransport } from "@tisyn/transport/worker";
@@ -21,7 +21,7 @@ describe("Worker transport", () => {
     const done = withResolvers<void>();
 
     // Install local App agent
-    const browserImpl = implementAgent(App(), {
+    yield* Agents.use(App(), {
       *elicit(_args) {
         if (userMessageIndex >= userMessages.length) {
           done.resolve();
@@ -35,16 +35,14 @@ describe("Worker transport", () => {
       *loadChat() {},
       *setReadOnly() {},
     });
-    yield* browserImpl.install();
 
     // Install local DB agent (no-op stub)
-    const dbImpl = implementAgent(DB(), {
+    yield* Agents.use(DB(), {
       *loadMessages() {
         return [];
       },
       *appendMessage() {},
     });
-    yield* dbImpl.install();
 
     // Install LLM agent via Worker transport
     const factory = workerTransport({

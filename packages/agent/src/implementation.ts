@@ -3,8 +3,10 @@ import type { Val } from "@tisyn/ir";
 import type {
   AgentDeclaration,
   AgentImplementation,
+  ArgsOf,
   ImplementationHandlers,
   OperationSpec,
+  ResultOf,
 } from "./types.js";
 import { parseEffectId } from "@tisyn/kernel";
 import { Effects } from "./dispatch.js";
@@ -45,13 +47,12 @@ export function implementAgent<Ops extends Record<string, OperationSpec>>(
         },
       });
     },
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    *call(name: string, args: any): Operation<any> {
+    *call<K extends keyof Ops & string>(name: K, args: ArgsOf<Ops[K]>): Operation<ResultOf<Ops[K]>> {
       const handler = (handlers as Record<string, (args: Val) => Operation<Val>>)[name];
       if (!handler) {
         throw new Error(`Agent "${id}" has no handler for operation: ${name}`);
       }
-      return yield* handler(args);
+      return (yield* handler(args as Val)) as ResultOf<Ops[K]>;
     },
   };
 }

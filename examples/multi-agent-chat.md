@@ -245,6 +245,12 @@ workflow source. All behavioral extension (tracing, budgets,
 guards) uses the single `.around()` primitive from the Context API
 model — there is no separate enforcement mechanism.
 
+When the demo binds local host-side handlers directly, it now uses
+`Agents.use(Agent, handlers)` rather than constructing a separate
+`implementAgent(...).install()` value first. The lower-level
+`implementAgent()` helper remains for transport/server internals
+such as protocol-server wiring.
+
 See `packages/agent/README.md` for the runtime-facing facade API
 and middleware examples.
 

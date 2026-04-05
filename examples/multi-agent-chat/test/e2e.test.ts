@@ -11,7 +11,7 @@ import { describe, it } from "@effectionx/vitest";
 import { expect } from "vitest";
 import { createSignal, spawn, withResolvers } from "effection";
 import { WebSocketServer, WebSocket } from "ws";
-import { implementAgent } from "@tisyn/agent";
+import { Agents } from "@tisyn/agent";
 import { execute } from "@tisyn/runtime";
 import { installRemoteAgent } from "@tisyn/transport";
 import { workerTransport } from "@tisyn/transport/worker";
@@ -72,7 +72,7 @@ describe("End-to-end chat", () => {
     session.attach("e2e-test", serverWs);
 
     // App agent — local, backed by session manager + signal
-    const browserImpl = implementAgent(App(), {
+    yield* Agents.use(App(), {
       *elicit({ input }) {
         const sub = yield* userInput;
         session.beginElicit(input.message);
@@ -93,10 +93,9 @@ describe("End-to-end chat", () => {
         session.setReadOnly(input.reason);
       },
     });
-    yield* browserImpl.install();
 
     // DB agent — in-memory stub
-    const dbImpl = implementAgent(DB(), {
+    yield* Agents.use(DB(), {
       *loadMessages() {
         return [];
       },
@@ -104,7 +103,6 @@ describe("End-to-end chat", () => {
         // no-op for test
       },
     });
-    yield* dbImpl.install();
 
     // LLM agent via Worker
     const llmFactory = workerTransport({

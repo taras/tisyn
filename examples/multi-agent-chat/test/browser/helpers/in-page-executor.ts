@@ -1,5 +1,5 @@
 import { run } from "effection";
-import { implementAgent } from "@tisyn/agent";
+import { Agents } from "@tisyn/agent";
 import { execute } from "@tisyn/runtime";
 import { InMemoryStream } from "@tisyn/durable-streams";
 import { Call } from "@tisyn/ir";
@@ -15,8 +15,7 @@ import { createDomAgentHandlers } from "./dom-agent.js";
   error?: { message: string };
 }> => {
   return run(function* () {
-    const domImpl = implementAgent(Dom(), createDomAgentHandlers());
-    yield* domImpl.install();
+    yield* Agents.use(Dom(), createDomAgentHandlers());
 
     const stream = new InMemoryStream();
     const { result } = yield* execute({

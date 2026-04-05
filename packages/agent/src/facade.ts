@@ -110,12 +110,11 @@ export function buildFacade<Ops extends Record<string, OperationSpec>>(
   declaration: AgentDeclaration<Ops>,
 ): AgentFacade<Ops> {
   const facade = {} as AgentFacade<Ops>;
+  const operations = api.operations as Record<string, (args: Val) => Operation<Val>>;
 
   for (const name of Object.keys(declaration.operations) as (keyof Ops & string)[]) {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    (facade as any)[name] = (args: unknown): Operation<unknown> =>
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      (api.operations as any)[name](args as Val);
+    facade[name] = ((args: ArgsOf<Ops[typeof name]>): Operation<ResultOf<Ops[typeof name]>> =>
+      operations[name](args as Val) as Operation<ResultOf<Ops[typeof name]>>) as AgentFacade<Ops>[typeof name];
   }
 
   // Attach the backing Api's around method directly
