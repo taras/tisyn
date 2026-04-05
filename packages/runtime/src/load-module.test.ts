@@ -27,9 +27,7 @@ describe("shared module loader", () => {
   it("loads .ts module", function* () {
     const dir = yield* call(makeTempDir);
     const filePath = join(dir, "test.ts");
-    yield* call(() =>
-      writeFile(filePath, 'const x: string = "hello"; export default { x };'),
-    );
+    yield* call(() => writeFile(filePath, 'const x: string = "hello"; export default { x };'));
     const mod = yield* call(() => loadModule(filePath));
     expect((mod.default as Record<string, unknown>).x).toBe("hello");
   });

@@ -27,9 +27,7 @@ export class ModuleLoadError extends Error {
 /** Thrown when the file extension is not in the supported set. */
 export class UnsupportedExtensionError extends ModuleLoadError {
   constructor(ext: string) {
-    super(
-      `Unsupported file extension '${ext}'. Supported: .ts, .mts, .cts, .js, .mjs, .cjs`,
-    );
+    super(`Unsupported file extension '${ext}'. Supported: .ts, .mts, .cts, .js, .mjs, .cjs`);
     this.name = "UnsupportedExtensionError";
   }
 }

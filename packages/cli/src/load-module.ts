@@ -6,11 +6,7 @@
  * as `CliError(3)` for CLI exit-code semantics.
  */
 
-import {
-  loadModule as runtimeLoadModule,
-  isTypeScriptFile,
-  ModuleLoadError,
-} from "@tisyn/runtime";
+import { loadModule as runtimeLoadModule, isTypeScriptFile, ModuleLoadError } from "@tisyn/runtime";
 import { CliError } from "./load-descriptor.js";
 
 export { isTypeScriptFile };
