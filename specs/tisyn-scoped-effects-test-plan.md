@@ -385,6 +385,23 @@ deferred scope.
 
 ---
 
+## 13.2 Agents Setup API
+
+Tests for the `Agents.use()` local binding primitive and the
+routing-owned `resolve` operation that replaces the former
+`BoundAgentsContext` registry.
+
+| ID | Tier | Spec ref | Title | Setup | Expected |
+|---|---|---|---|---|---|
+| AG-001 | Core | §6.1 | `Agents.use()` makes `useAgent()` succeed | Bind agent locally via `Agents.use()`, then call `useAgent()` | Facade returned, dispatch succeeds |
+| AG-002 | Core | §6.2 | `useAgent()` without binding throws descriptive error | Call `useAgent()` without prior binding | Error contains agent ID and "not bound" |
+| AG-003 | Core | §4.2, §6.1 | Child scope inherits parent's `Agents.use()` binding | Bind in parent, `useAgent()` in child scope | Facade available in child |
+| AG-004 | Core | §4.2, §6.1 | Child scope binding doesn't affect parent | Bind agent B in child scope | Parent `useAgent(B)` throws |
+| AG-005 | Core | §6.1, §5.2 | Root `Effects.around()` intercepts locally-bound dispatch | Install Effects middleware, bind, dispatch | Middleware fires |
+| AG-006 | Core | §6.1 | Two agents bound in same scope — both accessible | `Agents.use()` for two agents | Both `useAgent()` calls succeed, dispatches route correctly |
+
+---
+
 ## 14. Acceptance Criteria
 
 The scoped-effects middleware/facade slice is considered
@@ -411,7 +428,9 @@ correctly implemented when:
 
 9. All Core tier replay transparency tests (MR-*) pass.
 
-10. No Core tier test produces an unexpected error, hang,
+10. All Core tier Agents setup API tests (AG-*) pass.
+
+11. No Core tier test produces an unexpected error, hang,
     or crash.
 
 11. Cross-boundary constraints are expressible and
@@ -437,6 +456,7 @@ correctly implemented when:
 | §4.3 Scope as shared configuration / §7.5 monotonic narrowing | Host middleware | MH-001–005 | Covered |
 | §5.1 Installation / §7.3 child install / §7.5 monotonic narrowing | Single mechanism | MM-001–003 | Covered |
 | §9 Durability and replay | Replay | MR-001–004 | Covered |
+| §6.1 Agent binding / §6.2 lookup | Agents setup API | AG-001–006 | Covered |
 | §14 Deferred extensions | Deferred | MI-001–005 | Deferred |
 
 ### 15.2 Test Count Summary
@@ -455,5 +475,6 @@ correctly implemented when:
 | Host middleware | 4 | 1 | 5 |
 | Single mechanism | 3 | 0 | 3 |
 | Replay transparency | 3 | 1 | 4 |
+| Agents setup API | 6 | 0 | 6 |
 | Deferred (impl-side) | 0 | 0 | 0 |
-| **Total** | **46** | **6** | **52** |
+| **Total** | **52** | **6** | **58** |

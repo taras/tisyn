@@ -40,7 +40,6 @@ describe("all", () => {
     const values = [10, 20, 30];
     let callIndex = 0;
     yield* Effects.around({
-      // biome-ignore lint/correctness/useYield: mock
       *dispatch([_effectId, _data]: [string, any]) {
         const val = values[callIndex++];
         return val;
@@ -69,7 +68,6 @@ describe("all", () => {
 
   it("child failure propagates error", function* () {
     yield* Effects.around({
-      // biome-ignore lint/correctness/useYield: mock
       *dispatch([effectId, _data]: [string, any]) {
         const { name } = parseEffectId(effectId);
         if (name === "fail") {
@@ -91,7 +89,6 @@ describe("all", () => {
 
   it("lowest-index error wins when multiple children fail", function* () {
     yield* Effects.around({
-      // biome-ignore lint/correctness/useYield: mock
       *dispatch([effectId, _data]: [string, any]) {
         const { name } = parseEffectId(effectId);
         if (name === "fail1") {
@@ -116,7 +113,6 @@ describe("all", () => {
 
   it("child close events appear in journal", function* () {
     yield* Effects.around({
-      // biome-ignore lint/correctness/useYield: mock
       *dispatch([effectId, _data]: [string, any]) {
         const { name } = parseEffectId(effectId);
         if (name === "fail") {
@@ -143,7 +139,6 @@ describe("all", () => {
 describe("race", () => {
   it("first complete wins", function* () {
     yield* Effects.around({
-      // biome-ignore lint/correctness/useYield: mock
       *dispatch([effectId, _data]: [string, any]) {
         const { name } = parseEffectId(effectId);
         if (name === "fast") {
@@ -166,7 +161,6 @@ describe("race", () => {
 
   it("all children have close events in journal", function* () {
     yield* Effects.around({
-      // biome-ignore lint/correctness/useYield: mock
       *dispatch([_effectId, _data]: [string, any]) {
         return 42;
       },
@@ -187,7 +181,6 @@ describe("race", () => {
 
   it("failure does not win", function* () {
     yield* Effects.around({
-      // biome-ignore lint/correctness/useYield: mock
       *dispatch([effectId, _data]: [string, any]) {
         const { name } = parseEffectId(effectId);
         if (name === "fail") {
@@ -209,7 +202,6 @@ describe("race", () => {
 
   it("all fail -> lowest-index error", function* () {
     yield* Effects.around({
-      // biome-ignore lint/correctness/useYield: mock
       *dispatch([effectId, _data]: [string, any]) {
         const { name } = parseEffectId(effectId);
         if (name === "fail1") {

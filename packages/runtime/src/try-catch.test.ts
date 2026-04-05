@@ -44,7 +44,6 @@ describe("try/catch runtime integration", () => {
   it("does not catch when body succeeds — result is body value", function* () {
     // Effect always succeeds
     yield* Effects.around({
-      // biome-ignore lint/correctness/useYield: mock
       *dispatch([_effectId, _data]: [string, unknown]) {
         return 42;
       },
@@ -66,7 +65,6 @@ describe("try/catch runtime integration", () => {
 
     // Effect always succeeds; use a second effect as side-channel for "finally ran"
     yield* Effects.around({
-      // biome-ignore lint/correctness/useYield: mock
       *dispatch([effectId, _data]: [string, unknown]) {
         if ((effectId as string).includes("finally")) {
           finallyCalled = true;
@@ -205,7 +203,6 @@ describe("try/catch runtime integration", () => {
     let finallyCalled = false;
 
     yield* Effects.around({
-      // biome-ignore lint/correctness/useYield: mock
       *dispatch([effectId]: [string, unknown]) {
         if (effectId === "cap.finally") {
           finallyCalled = true;

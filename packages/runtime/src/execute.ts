@@ -29,7 +29,7 @@ import {
 import { assertValidIr } from "@tisyn/validate";
 import { evaluate, type Env, envFromRecord } from "@tisyn/kernel";
 import { type DurableStream, InMemoryStream, ReplayIndex } from "@tisyn/durable-streams";
-import { dispatch, Effects, evaluateMiddlewareFn, BoundAgentsContext } from "@tisyn/agent";
+import { dispatch, Effects, evaluateMiddlewareFn } from "@tisyn/agent";
 import { installAgentTransport, type AgentTransportFactory } from "@tisyn/transport";
 import type { FnNode } from "@tisyn/ir";
 import { ConfigContext } from "./config-scope.js";
@@ -920,9 +920,8 @@ function* orchestrateTimebox(
  *
  * Mirrors the authored `yield* useTransport(Contract, factory)` + scoped() pattern:
  * 1. Optional cross-boundary middleware via Effects.around (outermost max, runs first)
- * 2. installAgentTransport (opens transport, runs session, installs Effects.around middleware)
- * 3. BoundAgentsContext mutation
- * 4. Drive child kernel for the body
+ * 2. installAgentTransport (opens transport, installs Effects.around dispatch + resolve middleware)
+ * 3. Drive child kernel for the body
  *
  * Cross-boundary middleware is installed BEFORE transport bindings so it is
  * the outermost max-priority Effects middleware. collectMiddleware's prototype
@@ -936,9 +935,6 @@ function orchestrateScope(
   ctx: DriveContext,
 ): Operation<Val> {
   return scoped(function* () {
-    const current = yield* BoundAgentsContext.expect();
-    const next = new Set(current);
-
     // Install cross-boundary middleware FIRST (outermost max in this scope)
     if (inner.handler !== null) {
       const handler = inner.handler;
@@ -965,10 +961,8 @@ function orchestrateScope(
         ctx.journal.push(closeEvent);
         throw new EffectError(err.message, err.name);
       }
-      next.add(prefix);
       yield* installAgentTransport(prefix, factory as unknown as AgentTransportFactory);
     }
-    yield* BoundAgentsContext.set(next);
 
     const childKernel = evaluate(inner.body, env);
     const result = yield* driveKernel(childKernel, childId, env, ctx);

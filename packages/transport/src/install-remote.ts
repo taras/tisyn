@@ -58,6 +58,12 @@ export function* installAgentTransport(
       }
       return yield* next(effectId, data);
     },
+    *resolve([id]: [string], next) {
+      if (id === agentId) {
+        return true;
+      }
+      return yield* next(id);
+    },
   });
 }
 
@@ -119,6 +125,12 @@ export function* installRemoteAgent<Ops extends Record<string, OperationSpec>>(
         }
       }
       return yield* next(effectId, data);
+    },
+    *resolve([agentId]: [string], next) {
+      if (agentId === id) {
+        return true;
+      }
+      return yield* next(agentId);
     },
   });
 }

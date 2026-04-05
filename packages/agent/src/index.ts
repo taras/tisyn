@@ -4,10 +4,12 @@ export { implementAgent } from "./implementation.js";
 export {
   Effects,
   dispatch,
+  resolve,
   installCrossBoundaryMiddleware,
   getCrossBoundaryMiddleware,
 } from "./dispatch.js";
-export { useAgent, BoundAgentsContext } from "./use-agent.js";
+export { useAgent } from "./use-agent.js";
+export { Agents } from "./agents.js";
 export type { AgentHandle } from "./use-agent.js";
 export type { AgentFacade } from "./facade.js";
 export { evaluateMiddlewareFn } from "./middleware-eval.js";

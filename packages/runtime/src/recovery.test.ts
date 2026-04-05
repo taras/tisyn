@@ -77,7 +77,6 @@ describe("Recovery", () => {
 
     let agentCalled = false;
     yield* Effects.around({
-      // biome-ignore lint/correctness/useYield: mock
       *dispatch([_effectId, _data]: [string, any]) {
         agentCalled = true;
         return 999;
@@ -106,7 +105,6 @@ describe("Recovery", () => {
 
     let liveCallCount = 0;
     yield* Effects.around({
-      // biome-ignore lint/correctness/useYield: mock
       *dispatch([_effectId, _data]: [string, any]) {
         liveCallCount++;
         return 20;
@@ -134,7 +132,6 @@ describe("Recovery", () => {
 
     let liveCallCount = 0;
     yield* Effects.around({
-      // biome-ignore lint/correctness/useYield: mock
       *dispatch([_effectId, _data]: [string, any]) {
         liveCallCount++;
         return liveCallCount * 10;
@@ -160,7 +157,6 @@ describe("Recovery", () => {
     const { journal: journal1 } = yield* scoped(function* () {
       let callCount = 0;
       yield* Effects.around({
-        // biome-ignore lint/correctness/useYield: mock
         *dispatch([_effectId, _data]: [string, any]) {
           return ++callCount * 10;
         },
@@ -172,7 +168,6 @@ describe("Recovery", () => {
     const { journal: journal2 } = yield* scoped(function* () {
       let callCount = 0;
       yield* Effects.around({
-        // biome-ignore lint/correctness/useYield: mock
         *dispatch([_effectId, _data]: [string, any]) {
           return ++callCount * 10;
         },
@@ -202,7 +197,6 @@ describe("Recovery", () => {
 
     let agentCalled = false;
     yield* Effects.around({
-      // biome-ignore lint/correctness/useYield: mock
       *dispatch([_effectId, _data]: [string, any]) {
         agentCalled = true;
         return 999;

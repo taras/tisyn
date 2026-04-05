@@ -147,7 +147,6 @@ describe("spawn orchestration", () => {
   it("spawned child inherits parent transport", function* () {
     let childDispatched = false;
     yield* Effects.around({
-      // biome-ignore lint/correctness/useYield: mock
       *dispatch([effectId, _data]: [string, any]) {
         if (effectId === "test.op") {
           childDispatched = true;

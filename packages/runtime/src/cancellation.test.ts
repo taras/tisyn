@@ -38,7 +38,6 @@ function raceIR(...exprs: unknown[]) {
 describe("Cancellation", () => {
   it("normal completion writes Close(ok), not Close(cancelled)", function* () {
     yield* Effects.around({
-      // biome-ignore lint/correctness/useYield: mock
       *dispatch([_effectId, _data]: [string, any]) {
         return 42;
       },
@@ -59,7 +58,6 @@ describe("Cancellation", () => {
 
   it("error completion writes Close(err), not Close(cancelled)", function* () {
     yield* Effects.around({
-      // biome-ignore lint/correctness/useYield: mock
       *dispatch([_effectId, _data]: [string, any]) {
         throw new Error("boom");
       },
@@ -79,7 +77,6 @@ describe("Cancellation", () => {
 
   it("all children have close events in journal", function* () {
     yield* Effects.around({
-      // biome-ignore lint/correctness/useYield: mock
       *dispatch([_effectId, _data]: [string, any]) {
         return 42;
       },
@@ -100,7 +97,6 @@ describe("Cancellation", () => {
 
   it("race losers have close events in journal", function* () {
     yield* Effects.around({
-      // biome-ignore lint/correctness/useYield: mock
       *dispatch([_effectId, _data]: [string, any]) {
         return 42;
       },
@@ -123,7 +119,6 @@ describe("Cancellation", () => {
     const stream = new InMemoryStream();
 
     yield* Effects.around({
-      // biome-ignore lint/correctness/useYield: mock
       *dispatch([_effectId, _data]: [string, any]) {
         return 42;
       },
@@ -149,7 +144,6 @@ describe("Cancellation", () => {
 
   it("child close events precede root close in journal", function* () {
     yield* Effects.around({
-      // biome-ignore lint/correctness/useYield: mock
       *dispatch([_effectId, _data]: [string, any]) {
         return 42;
       },

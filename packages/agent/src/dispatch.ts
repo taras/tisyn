@@ -38,6 +38,9 @@ const EffectsApi = createApi("Effects", {
     }
     throw new Error(`No agent registered for effect: ${effectId}`);
   },
+  *resolve(_agentId: string): Operation<boolean> {
+    return false;
+  },
   *sleep(ms: number): Operation<Val> {
     return yield* dispatch("sleep", [ms] as unknown as Val);
   },
@@ -55,3 +58,9 @@ export const Effects = Object.assign(EffectsApi, {
  */
 export const dispatch: (effectId: string, data: Val) => Operation<Val> =
   EffectsApi.operations.dispatch;
+
+/**
+ * Query the Effects middleware chain to check if an agent is bound.
+ * Returns true if any routing middleware handles the given agent ID.
+ */
+export const resolve: (agentId: string) => Operation<boolean> = EffectsApi.operations.resolve;

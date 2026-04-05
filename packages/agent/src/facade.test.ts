@@ -2,30 +2,7 @@ import { describe, it } from "@effectionx/vitest";
 import { expect } from "vitest";
 import { scoped } from "effection";
 import type { Val } from "@tisyn/ir";
-import {
-  agent,
-  operation,
-  implementAgent,
-  Effects,
-  useAgent,
-  BoundAgentsContext,
-} from "./index.js";
-import type { AgentDeclaration, AgentImplementation, OperationSpec } from "./types.js";
-
-/**
- * Bind an agent in the current scope: register its ID in BoundAgentsContext
- * and install the implementation as dispatch middleware.
- */
-function* bindAgent<Ops extends Record<string, OperationSpec>>(
-  declaration: AgentDeclaration<Ops>,
-  impl: AgentImplementation<Ops>,
-) {
-  const current = yield* BoundAgentsContext.expect();
-  const next = new Set(current);
-  next.add(declaration.id);
-  yield* BoundAgentsContext.set(next);
-  yield* impl.install();
-}
+import { agent, operation, implementAgent, Agents, Effects, useAgent } from "./index.js";
 
 describe("agent facade", () => {
   // F-1: useAgent() returns object with direct methods AND .around()
@@ -36,17 +13,15 @@ describe("agent facade", () => {
     });
 
     const impl = implementAgent(reviewer, {
-      // biome-ignore lint/correctness/useYield: mock handler
       *review({ text }) {
         return `reviewed: ${text}`;
       },
-      // biome-ignore lint/correctness/useYield: mock handler
       *summarize({ text }) {
         return `summary: ${text}`;
       },
     });
 
-    yield* bindAgent(reviewer, impl);
+    yield* Agents.use(reviewer, impl);
     const facade = yield* useAgent(reviewer);
 
     // Direct methods exist and are functions
@@ -70,7 +45,6 @@ describe("agent facade", () => {
     });
 
     const impl = implementAgent(calc, {
-      // biome-ignore lint/correctness/useYield: mock handler
       *add({ a, b }) {
         return a + b;
       },
@@ -85,7 +59,7 @@ describe("agent facade", () => {
     });
 
     // Then bind the agent (impl installs as next max, inner)
-    yield* bindAgent(calc, impl);
+    yield* Agents.use(calc, impl);
 
     const facade = yield* useAgent(calc);
 
@@ -111,13 +85,12 @@ describe("agent facade", () => {
     });
 
     const impl = implementAgent(calc, {
-      // biome-ignore lint/correctness/useYield: mock handler
       *add({ a, b }) {
         return a + b;
       },
     });
 
-    yield* bindAgent(calc, impl);
+    yield* Agents.use(calc, impl);
 
     const facade1 = yield* useAgent(calc);
     const facade2 = yield* useAgent(calc);
@@ -143,13 +116,12 @@ describe("agent facade", () => {
     });
 
     const impl = implementAgent(calc, {
-      // biome-ignore lint/correctness/useYield: mock handler
       *add({ a, b }) {
         return a + b;
       },
     });
 
-    yield* bindAgent(calc, impl);
+    yield* Agents.use(calc, impl);
 
     const parentFacade = yield* useAgent(calc);
 
@@ -213,13 +185,12 @@ describe("agent facade", () => {
 
     // Install core handler AFTER effects MW so it's inner
     const impl = implementAgent(calc, {
-      // biome-ignore lint/correctness/useYield: mock handler
       *add({ a, b }) {
         order.push("core");
         return a + b;
       },
     });
-    yield* bindAgent(calc, impl);
+    yield* Agents.use(calc, impl);
 
     const facade = yield* useAgent(calc);
 
@@ -256,13 +227,12 @@ describe("agent facade", () => {
     });
 
     const impl = implementAgent(calc, {
-      // biome-ignore lint/correctness/useYield: mock handler
       *add({ a, b }) {
         return a + b;
       },
     });
 
-    yield* bindAgent(calc, impl);
+    yield* Agents.use(calc, impl);
 
     const facade = yield* useAgent(calc);
     const result = yield* facade.add({ a: 21, b: 21 });

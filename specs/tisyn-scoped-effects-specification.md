@@ -20,6 +20,8 @@ MUST provide:
   and isolation region.
 - **Middleware installation primitive** — installs middleware
   within the current scope.
+- **Local binding primitive** — binds an agent identity to a
+  local implementation within the current scope.
 - **Transport binding primitive** — binds an agent identity to
   a transport within the current scope.
 - **Agent facade lookup** — obtains a callable facade for an
@@ -30,6 +32,7 @@ The current reference API surface for these roles is:
 ````
 scoped(...)                          → scope boundary
 Effects.around(...)                  → middleware installation
+Agents.use(Agent, impl)             → local binding
 useTransport(Agent, transport(...))  → transport binding
 useAgent(Agent)                      → agent facade
 ````
@@ -64,7 +67,8 @@ compiler lowering, and its runtime teardown/replay rules are
 specified separately in the blocking-scope specification.
 
 The **exact API names** (`scoped`, `Effects.around`,
-`useTransport`, `useAgent`) are the current reference surface.
+`Agents.use`, `useTransport`, `useAgent`) are the current
+reference surface.
 They MAY evolve as the authored workflow syntax is finalized.
 The semantic requirements they express are stable regardless
 of final naming.
@@ -373,13 +377,28 @@ making it outermost via prototype chain traversal (§7.5). See
 
 ---
 
-## 6. Agent Identity and Transport Binding
+## 6. Agent Identity and Binding
 
-### 6.1 Transport Binding
+### 6.1 Agent Binding
 
-The transport binding primitive (reference API:
+An agent binding associates an agent identity with either a
+local implementation or a transport within the current scope.
+Both binding forms install `Effects.around()` middleware that
+routes matching effects and reports binding status via the
+`resolve` operation.
+
+**Local binding** (reference API: `Agents.use(Agent, impl)`)
+installs the implementation's dispatch and resolve middleware
+directly in the current scope:
+
+````typescript
+// Reference API example
+yield* Agents.use(Coder, coderImpl);
+````
+
+**Transport binding** (reference API:
 `useTransport(Agent, transport(...))`) binds an agent identity
-to a transport within the current scope.
+to a transport within the current scope:
 
 ````typescript
 // Reference API example
@@ -387,8 +406,8 @@ yield* useTransport(Coder, stdio("node", ["./agents/coder.js"]));
 yield* useTransport(Reviewer, websocket("ws://localhost:8080"));
 ````
 
-Agent identity and transport binding are separate concerns.
-The transport binding primitive connects them within a scope.
+Agent identity and binding mechanism are separate concerns.
+The binding primitives connect them within a scope.
 
 Transport descriptors (`stdio(...)`, `websocket(...)`, etc.)
 are plain functions that return JSON data. They MUST NOT be
@@ -403,7 +422,7 @@ exits, the runtime MUST shut down the transport.
 
 The agent facade lookup primitive (reference API:
 `useAgent(Agent)`) obtains a callable facade for dispatching to
-a transport-bound agent:
+a bound agent:
 
 ````typescript
 // Reference API example
@@ -412,9 +431,16 @@ const patch = yield* coder.implement(spec);
 ````
 
 Agent facade lookup is a lookup, not an installation. The agent
-MUST already be transport-bound in the current scope or an
-ancestor scope. If no binding exists, the lookup MUST fail with
-a descriptive error.
+MUST already be bound (locally or via transport) in the current
+scope or an ancestor scope. If no binding exists, the lookup
+MUST fail with a descriptive error.
+
+Binding availability is determined by querying the `resolve`
+operation on the Effects middleware chain. Each binding
+primitive installs a `resolve` handler that reports `true` for
+its agent ID. The default `resolve` handler returns `false`.
+This ensures the binding check derives from the routing layer
+rather than a separate registry.
 
 The returned facade MUST expose one direct top-level method per
 declared agent operation. Each direct method MUST delegate to a
@@ -442,6 +468,7 @@ MUST NOT affect the parent after scope exit.
 
 | Concern | Semantic role | Reference API | Phase |
 |---|---|---|---|
+| Local binding | Local binding primitive | `Agents.use(Agent, impl)` | Scope setup |
 | Transport binding | Transport binding primitive | `useTransport(Agent, transport(...))` | Scope setup |
 | Middleware | Middleware installation primitive | `Effects.around(...)` | Scope setup |
 | Agent facade | Agent facade lookup | `useAgent(Agent)` | Workflow logic |

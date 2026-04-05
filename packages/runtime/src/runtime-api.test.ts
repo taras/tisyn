@@ -109,7 +109,6 @@ describe("Runtime.loadModule", () => {
     it("can deny by throwing", function* () {
       let threw = false;
       yield* Runtime.around({
-        // biome-ignore lint/correctness/useYield: test mock
         *loadModule(_args: [string, string], _next) {
           throw new Error("denied");
         },

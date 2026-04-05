@@ -56,7 +56,6 @@ describe("parent middleware non-bypassability", () => {
     // Core handler at min priority (innermost)
     yield* Effects.around(
       {
-        // biome-ignore lint/correctness/useYield: mock core handler
         *dispatch([_e, _d]: [string, Val]) {
           log.push("core");
           return "core" as Val;
@@ -90,7 +89,6 @@ describe("parent middleware non-bypassability", () => {
     // Core handler at min priority
     yield* Effects.around(
       {
-        // biome-ignore lint/correctness/useYield: mock core handler
         *dispatch([_e, _d]: [string, Val]) {
           log.push("core");
           return "core" as Val;
@@ -129,7 +127,6 @@ describe("parent middleware non-bypassability", () => {
     // Core handler at min priority
     yield* Effects.around(
       {
-        // biome-ignore lint/correctness/useYield: mock core handler
         *dispatch([_e, _d]: [string, Val]) {
           return "core" as Val;
         },
@@ -189,7 +186,6 @@ describe("parent middleware non-bypassability", () => {
   it("IR denyEffect middleware denies specific effect", function* () {
     yield* Effects.around(
       {
-        // biome-ignore lint/correctness/useYield: mock core handler
         *dispatch([_e, _d]: [string, Val]) {
           return "core" as Val;
         },
@@ -216,7 +212,6 @@ describe("parent middleware non-bypassability", () => {
   it("IR middleware that yields non-dispatch effect throws ProhibitedEffectError", function* () {
     yield* Effects.around(
       {
-        // biome-ignore lint/correctness/useYield: mock core handler
         *dispatch([_e, _d]: [string, Val]) {
           return "core" as Val;
         },
@@ -247,7 +242,6 @@ describe("parent middleware non-bypassability", () => {
 
     yield* Effects.around(
       {
-        // biome-ignore lint/correctness/useYield: mock core handler
         *dispatch([_e, _d]: [string, Val]) {
           log.push("core");
           return "core" as Val;
@@ -285,7 +279,6 @@ describe("parent middleware non-bypassability", () => {
 
     yield* Effects.around(
       {
-        // biome-ignore lint/correctness/useYield: mock core handler
         *dispatch([_e, _d]: [string, Val]) {
           log.push("core");
           return "core" as Val;
@@ -345,7 +338,6 @@ describe("parent middleware non-bypassability", () => {
 
     yield* Effects.around(
       {
-        // biome-ignore lint/correctness/useYield: mock core handler
         *dispatch([_e, _d]: [string, Val]) {
           log.push("core");
           return "core" as Val;
@@ -375,7 +367,6 @@ describe("parent middleware non-bypassability", () => {
 
     yield* Effects.around(
       {
-        // biome-ignore lint/correctness/useYield: mock core handler
         *dispatch([_e, _d]: [string, Val]) {
           log.push("core");
           return "core" as Val;
@@ -409,7 +400,6 @@ describe("parent middleware non-bypassability", () => {
 
     yield* Effects.around(
       {
-        // biome-ignore lint/correctness/useYield: mock core handler
         *dispatch([_e, _d]: [string, Val]) {
           log.push("core");
           return "core" as Val;

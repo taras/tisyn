@@ -50,9 +50,7 @@ function yieldEvent(type: string, name: string, value: unknown, coroutineId: str
 describe("Browser scope — fresh execution", () => {
   it("scope with browser binding executes body", function* () {
     const factory = inprocessTransport(browserAgent, {
-      // biome-ignore lint/correctness/useYield: mock
       *navigate() {},
-      // biome-ignore lint/correctness/useYield: mock
       *execute() {
         return { result: "executed" };
       },
@@ -62,7 +60,6 @@ describe("Browser scope — fresh execution", () => {
     const ir = scope(42, null, { browser: Get(Ref("envObj"), "transport") });
     const { result } = yield* execute({
       ir,
-      // biome-ignore lint/suspicious/noExplicitAny: factory is not Json-serializable
       env: { envObj: { transport: factory } as any },
     });
     expect(result).toEqual({ status: "ok", value: 42 });
@@ -71,9 +68,7 @@ describe("Browser scope — fresh execution", () => {
   it("browser.execute effect dispatches through bound transport", function* () {
     let executeCalled = false;
     const factory = inprocessTransport(browserAgent, {
-      // biome-ignore lint/correctness/useYield: mock
       *navigate() {},
-      // biome-ignore lint/correctness/useYield: mock
       *execute(params: { workflow: unknown }) {
         executeCalled = true;
         return { workflow: params.workflow, status: "done" };
@@ -84,7 +79,6 @@ describe("Browser scope — fresh execution", () => {
     const ir = scope(body, null, { browser: Get(Ref("envObj"), "transport") });
     const { result } = yield* execute({
       ir,
-      // biome-ignore lint/suspicious/noExplicitAny: factory is not Json-serializable
       env: { envObj: { transport: factory } as any },
     });
     expect(executeCalled).toBe(true);
@@ -101,12 +95,10 @@ describe("Browser scope — fresh execution", () => {
     let navigateCalled = false;
     let navigateUrl = "";
     const factory = inprocessTransport(browserAgent, {
-      // biome-ignore lint/correctness/useYield: mock
       *navigate(params: { url: string }) {
         navigateCalled = true;
         navigateUrl = params.url;
       },
-      // biome-ignore lint/correctness/useYield: mock
       *execute() {
         return {};
       },
@@ -116,7 +108,6 @@ describe("Browser scope — fresh execution", () => {
     const ir = scope(body, null, { browser: Get(Ref("envObj"), "transport") });
     const { result, journal } = yield* execute({
       ir,
-      // biome-ignore lint/suspicious/noExplicitAny: factory is not Json-serializable
       env: { envObj: { transport: factory } as any },
     });
     expect(navigateCalled).toBe(true);
@@ -134,9 +125,7 @@ describe("Browser scope — fresh execution", () => {
   it("multiple browser.execute effects dispatch sequentially", function* () {
     const calls: number[] = [];
     const factory = inprocessTransport(browserAgent, {
-      // biome-ignore lint/correctness/useYield: mock
       *navigate() {},
-      // biome-ignore lint/correctness/useYield: mock
       *execute(params: { workflow: unknown }) {
         const n = (params.workflow as any).n;
         calls.push(n);
@@ -157,7 +146,6 @@ describe("Browser scope — fresh execution", () => {
     const ir = scope(body, null, { browser: Get(Ref("envObj"), "transport") });
     const { result, journal } = yield* execute({
       ir,
-      // biome-ignore lint/suspicious/noExplicitAny: factory is not Json-serializable
       env: { envObj: { transport: factory } as any },
     });
 
@@ -177,9 +165,7 @@ describe("Browser scope — fresh execution", () => {
 describe("Browser scope — replay", () => {
   it("completed browser scope replays from journal without live dispatch (RP3/RP4/RP6/RP7)", function* () {
     const factory = inprocessTransport(browserAgent, {
-      // biome-ignore lint/correctness/useYield: mock
       *navigate() {},
-      // biome-ignore lint/correctness/useYield: mock
       *execute(params: { workflow: unknown }) {
         return { result: params.workflow };
       },
@@ -187,7 +173,6 @@ describe("Browser scope — replay", () => {
 
     const body = effectIR("browser", "execute", { workflow: "hello" });
     const ir = scope(body, null, { browser: Get(Ref("envObj"), "transport") });
-    // biome-ignore lint/suspicious/noExplicitAny: factory is not Json-serializable
     const env = { envObj: { transport: factory } as any };
 
     // Run 1: fresh execution — capture journal
@@ -200,11 +185,9 @@ describe("Browser scope — replay", () => {
     // Run 2: replay from stored journal with a spy transport
     let spyCalled = false;
     const spyFactory = inprocessTransport(browserAgent, {
-      // biome-ignore lint/correctness/useYield: mock
       *navigate() {
         spyCalled = true;
       },
-      // biome-ignore lint/correctness/useYield: mock
       *execute() {
         spyCalled = true;
         return { result: "spy" };
@@ -215,7 +198,6 @@ describe("Browser scope — replay", () => {
     const run2 = yield* scoped(function* () {
       return yield* execute({
         ir,
-        // biome-ignore lint/suspicious/noExplicitAny: factory is not Json-serializable
         env: { envObj: { transport: spyFactory } as any },
         stream,
       });
@@ -227,9 +209,7 @@ describe("Browser scope — replay", () => {
 
   it("completed browser scope replay produces same result value (RP7)", function* () {
     const factory = inprocessTransport(browserAgent, {
-      // biome-ignore lint/correctness/useYield: mock
       *navigate() {},
-      // biome-ignore lint/correctness/useYield: mock
       *execute(params: { workflow: unknown }) {
         return { computed: "value", input: params.workflow };
       },
@@ -242,7 +222,6 @@ describe("Browser scope — replay", () => {
       Ref("execResult"),
     );
     const ir = scope(body, null, { browser: Get(Ref("envObj"), "transport") });
-    // biome-ignore lint/suspicious/noExplicitAny: factory is not Json-serializable
     const env = { envObj: { transport: factory } as any };
 
     // Run 1: fresh
@@ -257,9 +236,7 @@ describe("Browser scope — replay", () => {
 
     // Run 2: replay — should produce identical result
     const spyFactory = inprocessTransport(browserAgent, {
-      // biome-ignore lint/correctness/useYield: mock
       *navigate() {},
-      // biome-ignore lint/correctness/useYield: mock
       *execute() {
         return { computed: "spy", input: "spy" };
       },
@@ -269,7 +246,6 @@ describe("Browser scope — replay", () => {
     const run2 = yield* scoped(function* () {
       return yield* execute({
         ir,
-        // biome-ignore lint/suspicious/noExplicitAny: factory is not Json-serializable
         env: { envObj: { transport: spyFactory } as any },
         stream,
       });
@@ -287,9 +263,7 @@ describe("Browser scope — replay", () => {
 
     let liveCalled = false;
     const factory = inprocessTransport(browserAgent, {
-      // biome-ignore lint/correctness/useYield: mock
       *navigate() {},
-      // biome-ignore lint/correctness/useYield: mock
       *execute() {
         liveCalled = true;
         return { result: "live" };
@@ -307,7 +281,6 @@ describe("Browser scope — replay", () => {
     const stream = new InMemoryStream(stored);
     const { result } = yield* execute({
       ir,
-      // biome-ignore lint/suspicious/noExplicitAny: factory is not Json-serializable
       env: { envObj: { transport: factory } as any },
       stream,
     });
@@ -322,9 +295,7 @@ describe("Browser scope — replay", () => {
 
   it("completed replay covers both navigate and execute", function* () {
     const factory = inprocessTransport(browserAgent, {
-      // biome-ignore lint/correctness/useYield: mock
       *navigate() {},
-      // biome-ignore lint/correctness/useYield: mock
       *execute(params: { workflow: unknown }) {
         return { result: params.workflow };
       },
@@ -337,7 +308,6 @@ describe("Browser scope — replay", () => {
       effectIR("browser", "execute", { workflow: "payload" }),
     );
     const ir = scope(body, null, { browser: Get(Ref("envObj"), "transport") });
-    // biome-ignore lint/suspicious/noExplicitAny: factory is not Json-serializable
     const env = { envObj: { transport: factory } as any };
 
     // Run 1: fresh execution — capture journal
@@ -355,11 +325,9 @@ describe("Browser scope — replay", () => {
     // Run 2: replay from stored journal with spy transport
     let spyCalled = false;
     const spyFactory = inprocessTransport(browserAgent, {
-      // biome-ignore lint/correctness/useYield: mock
       *navigate() {
         spyCalled = true;
       },
-      // biome-ignore lint/correctness/useYield: mock
       *execute() {
         spyCalled = true;
         return { result: "spy" };
@@ -370,7 +338,6 @@ describe("Browser scope — replay", () => {
     const run2 = yield* scoped(function* () {
       return yield* execute({
         ir,
-        // biome-ignore lint/suspicious/noExplicitAny: factory is not Json-serializable
         env: { envObj: { transport: spyFactory } as any },
         stream,
       });

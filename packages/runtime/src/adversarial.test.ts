@@ -7,15 +7,22 @@
  * NEG-6:  outermost middleware receives the correct effectId and data
  * NEG-7:  outermost middleware can modify effectId before forwarding
  * NEG-8:  multiple dispatches with middleware — each dispatch goes through middleware
- * NEG-9:  BoundAgentsContext is empty Set by default (no bound agents without useTransport)
- * NEG-10: useAgent with agent not in BoundAgentsContext still throws
- * NEG-11: useAgent returns typed handle when agent is bound
+ * NEG-10: useAgent throws when a different agent is bound (not the requested one)
+ * NEG-11: useAgent returns typed handle when agent is bound via Agents.use()
  */
 
 import { describe, it } from "@effectionx/vitest";
 import { expect } from "vitest";
 import type { Val } from "@tisyn/ir";
-import { Effects, dispatch, useAgent, BoundAgentsContext } from "@tisyn/agent";
+import {
+  Effects,
+  dispatch,
+  useAgent,
+  Agents,
+  agent,
+  operation,
+  implementAgent,
+} from "@tisyn/agent";
 import type { AgentDeclaration, OperationSpec } from "@tisyn/agent";
 
 describe("Adversarial / edge cases", () => {
@@ -49,7 +56,6 @@ describe("Adversarial / edge cases", () => {
   it("outermost middleware denial error propagates — not swallowed", function* () {
     yield* Effects.around(
       {
-        // biome-ignore lint/correctness/useYield: mock
         *dispatch([_e, _d]: [string, Val]) {
           return "core" as Val;
         },
@@ -58,7 +64,6 @@ describe("Adversarial / edge cases", () => {
     );
 
     yield* Effects.around({
-      // biome-ignore lint/correctness/useYield: denying middleware
       *dispatch([_e, _d]: [string, Val], _next) {
         throw new Error("middleware-denied");
       },
@@ -76,7 +81,6 @@ describe("Adversarial / edge cases", () => {
   it("outermost middleware receives correct effectId and data", function* () {
     yield* Effects.around(
       {
-        // biome-ignore lint/correctness/useYield: mock
         *dispatch([_e, _d]: [string, Val]) {
           return "core" as Val;
         },
@@ -105,7 +109,6 @@ describe("Adversarial / edge cases", () => {
     let seenInCore: string | null = null;
     yield* Effects.around(
       {
-        // biome-ignore lint/correctness/useYield: mock
         *dispatch([e, _d]: [string, Val]) {
           seenInCore = e;
           return "ok" as Val;
@@ -129,7 +132,6 @@ describe("Adversarial / edge cases", () => {
     let mwCallCount = 0;
     yield* Effects.around(
       {
-        // biome-ignore lint/correctness/useYield: mock
         *dispatch([_e, _d]: [string, Val]) {
           return "ok" as Val;
         },
@@ -151,16 +153,19 @@ describe("Adversarial / edge cases", () => {
     expect(mwCallCount).toBe(3);
   });
 
-  // NEG-9
-  it("BoundAgentsContext is empty Set by default", function* () {
-    const bound = yield* BoundAgentsContext.expect();
-    expect(bound).toBeInstanceOf(Set);
-    expect(bound.size).toBe(0);
-  });
+  // NEG-10: useAgent throws when a different agent is bound
+  it("useAgent throws for agent not bound even when another agent is", function* () {
+    const OtherAgent = agent("other-agent", {
+      run: operation<null, string>(),
+    });
 
-  // NEG-10
-  it("useAgent throws for agent not in BoundAgentsContext", function* () {
-    yield* BoundAgentsContext.set(new Set(["other-agent"]));
+    const otherImpl = implementAgent(OtherAgent, {
+      *run() {
+        return "ok";
+      },
+    });
+
+    yield* Agents.use(OtherAgent, otherImpl);
 
     const MyAgent: AgentDeclaration<{ go: OperationSpec<null, string> }> = {
       id: "my-agent",
@@ -175,22 +180,19 @@ describe("Adversarial / edge cases", () => {
     }
   });
 
-  // NEG-11
-  it("useAgent returns typed handle when agent is bound in BoundAgentsContext", function* () {
-    yield* BoundAgentsContext.set(new Set(["echo-agent"]));
+  // NEG-11: useAgent returns typed handle when agent is bound
+  it("useAgent returns typed handle when agent is bound via Agents.use()", function* () {
+    const EchoAgent = agent("echo-agent", {
+      echo: operation<string, string>(),
+    });
 
-    // Install a handler that echoes data back
-    yield* Effects.around({
-      // biome-ignore lint/correctness/useYield: mock
-      *dispatch([_e, d]: [string, Val]) {
-        return d;
+    const impl = implementAgent(EchoAgent, {
+      *echo(data: string) {
+        return data;
       },
     });
 
-    const EchoAgent: AgentDeclaration<{ echo: OperationSpec<string, string> }> = {
-      id: "echo-agent",
-      operations: { echo: {} },
-    };
+    yield* Agents.use(EchoAgent, impl);
 
     const handle = yield* useAgent(EchoAgent);
     expect(handle).toBeDefined();

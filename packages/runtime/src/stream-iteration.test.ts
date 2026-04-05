@@ -339,7 +339,6 @@ describe("stream capability enforcement", () => {
   it("SI-V-010: subscription handle in non-stream effect data is rejected (RV2)", function* () {
     // Subscribe, then try to pass the handle to a regular agent effect
     yield* Effects.around({
-      // biome-ignore lint/correctness/useYield: mock
       *dispatch([_effectId, _data]: [string, any]) {
         return "ok";
       },

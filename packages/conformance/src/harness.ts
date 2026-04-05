@@ -202,7 +202,6 @@ function* installMockDispatch(
   let effectIndex = 0;
 
   yield* Effects.around({
-    // biome-ignore lint/correctness/useYield: synchronous for mock
     *dispatch([_effectId, _data]: [string, any]) {
       if (effectIndex >= effects.length) {
         throw new Error("More effects than expected");

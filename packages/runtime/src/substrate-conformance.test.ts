@@ -43,7 +43,6 @@ describe("Substrate Conformance", () => {
     it("child Close events appear in journal before post-compound Yield", function* () {
       let callCount = 0;
       yield* Effects.around({
-        // biome-ignore lint/correctness/useYield: mock
         *dispatch([_effectId, _data]: [string, any]) {
           return ++callCount * 10;
         },

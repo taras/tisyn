@@ -73,7 +73,6 @@ describe("End-to-end crash/replay", () => {
     const firstResult = yield* scoped(function* () {
       let firstRunCallCount = 0;
       yield* Effects.around({
-        // biome-ignore lint/correctness/useYield: mock
         *dispatch([_effectId, _data]: [string, any]) {
           firstRunCallCount++;
           if (firstRunCallCount === 1) {
@@ -113,7 +112,6 @@ describe("End-to-end crash/replay", () => {
     let secondRunCallCount = 0;
     const secondResult = yield* scoped(function* () {
       yield* Effects.around({
-        // biome-ignore lint/correctness/useYield: mock
         *dispatch([_effectId, _data]: [string, any]) {
           secondRunCallCount++;
           // This should only be called for step3 (the live effect)

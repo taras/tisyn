@@ -19,10 +19,12 @@ This package sits between authored workflow logic and concrete side effects.
 - `agent(id, operations)` declares a named capability boundary.
 - `operation<Spec>()` declares one typed operation on that boundary.
 - `implementAgent()` binds handlers to a declaration.
+- `Agents.use()` binds a local implementation in the current scope, installing routing and resolve middleware.
 - `Effects.around()` installs Effection middleware layers that intercept or route effect invocations.
 - `dispatch()` performs an effect call through the current `Effects` middleware boundary.
+- `resolve()` queries the Effects middleware chain to check if an agent is bound in the current scope.
 - `invoke()` executes a declared operation against the current dispatch stack.
-- `useAgent()` retrieves a typed facade for an agent bound in the current scope via `useTransport()`. The facade exposes direct methods for each operation plus `.around()` for per-operation middleware.
+- `useAgent()` retrieves a typed facade for an agent bound in the current scope via `Agents.use()` or `useTransport()`. The facade exposes direct methods for each operation plus `.around()` for per-operation middleware.
 
 Agent declarations are typed metadata plus call helpers. They describe invocations, but do not execute anything by themselves.
 
@@ -33,10 +35,12 @@ The public surface exported from `src/index.ts` includes:
 - `agent` — declare a named agent boundary and its available operations
 - `operation` — declare the typed input/output contract for one operation
 - `implementAgent` — bind handlers to a declaration so the runtime can dispatch them
+- `Agents` — setup namespace; `Agents.use(declaration, impl)` binds a local implementation in the current scope
 - `Effects` — the Effection middleware context for invocation routing; use `Effects.around()` to install intercept layers
 - `dispatch` — perform an effect call through the current `Effects` middleware boundary
+- `resolve` — query the Effects middleware chain to check if an agent is bound
 - `invoke` — execute a declared operation against the current dispatch stack
-- `useAgent` — retrieve a typed facade for an agent previously bound via `useTransport()`; returns an object with one method per operation plus `.around()`
+- `useAgent` — retrieve a typed facade for an agent previously bound via `Agents.use()` or `useTransport()`; returns an object with one method per operation plus `.around()`
 - `installCrossBoundaryMiddleware` — install an IR function node as the cross-boundary middleware carrier for further remote delegation
 - `getCrossBoundaryMiddleware` — read the current cross-boundary middleware carrier from scope (returns `null` if not set)
 - `evaluateMiddlewareFn` — drive an IR function node as a middleware function with scope-local dispatch semantics

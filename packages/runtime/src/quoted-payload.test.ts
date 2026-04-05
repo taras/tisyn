@@ -29,7 +29,6 @@ describe("Quoted payload in standard external effects", () => {
     const receivedData: Val[] = [];
 
     yield* Effects.around({
-      // biome-ignore lint/correctness/useYield: mock
       *dispatch([effectId, data]: [string, Val]) {
         dispatched.push(effectId);
         receivedData.push(data);
@@ -56,7 +55,6 @@ describe("Quoted payload in standard external effects", () => {
     const receivedData: Val[] = [];
 
     yield* Effects.around({
-      // biome-ignore lint/correctness/useYield: mock
       *dispatch([effectId, data]: [string, Val]) {
         dispatched.push(effectId);
         receivedData.push(data);

@@ -37,6 +37,12 @@ export function implementAgent<Ops extends Record<string, OperationSpec>>(
           }
           return yield* next(effectId, data);
         },
+        *resolve([agentId]: [string], next) {
+          if (agentId === id) {
+            return true;
+          }
+          return yield* next(agentId);
+        },
       });
     },
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
