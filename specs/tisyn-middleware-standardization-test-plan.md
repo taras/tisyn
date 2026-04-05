@@ -154,7 +154,7 @@ interface MiddlewareAction {
   call: {
     agent_id: string;
     operation: string;
-    args: Val[];
+    args: Val;
   };
   scope?: string;
 }
@@ -228,10 +228,8 @@ backing Context API core handlers to `Effects.dispatch()`.
 
 | ID | Tier | Rule | Description | Setup | Expected |
 |---|---|---|---|---|---|
-| MD-001 | Core | §3.3.2 | Single-arg operation dispatches as array | Install Effects `min` capturing dispatch args. Call `reviewer.review(patch)`. | `dispatched_data` is `[patch]` (array of one element) |
-| MD-002 | Core | §3.3.2 | Multi-arg operation dispatches as array | Agent with operation `compare(a, b)`. Call `reviewer.compare(x, y)`. | `dispatched_data` is `[x, y]` |
-| MD-003 | Core | §3.3.2 | Zero-arg operation dispatches as empty array | Agent with operation `status()`. Call `reviewer.status()`. | `dispatched_data` is `[]` |
-| MD-004 | Core | §3.3.2 | Effect ID format is `agentId.operationName` | Call `reviewer.review(patch)` where agent ID is `"reviewer"`. | `dispatched_effect_id` is `"reviewer.review"` |
+| MD-001 | Core | §3.3.2 | Operation dispatches single payload value | Install Effects `min` capturing dispatch args. Call `reviewer.review(patch)`. | `dispatched_data` is `patch` (the value itself, not wrapped in an array) |
+| MD-002 | Core | §3.3.2 | Effect ID format is `agentId.operationName` | Call `reviewer.review(patch)` where agent ID is `"reviewer"`. | `dispatched_effect_id` is `"reviewer.review"` |
 
 > **Note.** Instance-qualified agent IDs (e.g.,
 > `Reviewer("team-a")`) are defined by the existing agent
@@ -283,7 +281,7 @@ architectural call path (§3.3.3).
 | MC-001 | Core | §3.3.3 | Empty façade stack still reaches Effects | No façade middleware. Effects middleware logs. Call façade operation. | Effects log present — backing API core handler delegated |
 | MC-002 | Core | §3.3.3 | Empty Effects stack still reaches core handler | No Effects middleware. Core handler returns value. Call façade operation. | Return value received — core handler executed |
 | MC-003 | Core | §3.3.3 | Both stacks empty: call still completes | No middleware at all. Core handler returns value. | Return value received |
-| MC-004 | Core | §3.3.3 | Façade middleware can observe args before Effects sees them | Façade middleware logs args. Effects middleware logs effect data. | Both logs present, façade log has typed args, Effects log has array-of-args |
+| MC-004 | Core | §3.3.3 | Façade middleware can observe args before Effects sees them | Façade middleware logs args. Effects middleware logs effect data. | Both logs present, façade log has typed args, Effects log has payload value |
 | MC-005 | Extended | §3.3.3 | Façade middleware can short-circuit before Effects | Façade middleware returns without calling next. | Effects middleware does NOT fire |
 
 ---
@@ -432,7 +430,7 @@ correctly implemented when:
 | §3.2.1 Local ordering | Middleware ordering | MO-001–009 | Covered |
 | §3.2.2 Architectural placement | Cross-API ordering | MO-010–014 | Covered |
 | §3.3.2 Façade shape | Façade shape | MF-001–006 | Covered |
-| §3.3.2 Dispatch shape | Dispatch shape | MD-001–004 | Covered |
+| §3.3.2 Dispatch shape | Dispatch shape | MD-001–002 | Covered |
 | §3.3.3 Composition order | Cross-API ordering | MO-010–014 | Covered |
 | §3.3.3 Call path | Call path | MC-001–005 | Covered |
 | §3.3.4 Middleware visibility | Scope visibility | MS-007–009 | Covered |
@@ -450,7 +448,7 @@ correctly implemented when:
 |---|---|---|---|
 | Façade shape | 5 | 1 | 6 |
 | Backing Context API | 4 | 0 | 4 |
-| Dispatch shape | 4 | 0 | 4 |
+| Dispatch shape | 2 | 0 | 2 |
 | Ordering — single API | 8 | 1 | 9 |
 | Ordering — cross API | 5 | 0 | 5 |
 | Call path | 4 | 1 | 5 |
@@ -461,4 +459,4 @@ correctly implemented when:
 | Single mechanism | 3 | 0 | 3 |
 | Replay transparency | 3 | 1 | 4 |
 | Deferred (impl-side) | 0 | 0 | 0 |
-| **Total** | **48** | **6** | **54** |
+| **Total** | **46** | **6** | **52** |

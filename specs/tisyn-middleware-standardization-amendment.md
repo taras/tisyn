@@ -239,12 +239,14 @@ operations.
 API instance via `createApi(\`agent:${id}\`, handler)` with
 one operation per declared agent operation. The core handler
 for each operation MUST delegate to `Effects.dispatch()`
-using the standard Tisyn external-effect data shape for
-agent operations: an array of arguments. A core handler
-for an operation with parameters `(a, b, c)` MUST call
-`dispatch(\`${agentId}.${opName}\`, [a, b, c])`. This
-matches the compiler's lowering of agent effects and the
-agent protocol's wire format.
+using the agent's effect ID and the operation's single
+payload value. A core handler for an operation with
+payload `args` MUST call
+`dispatch(\`${agentId}.${opName}\`, args)`. The payload
+is the single value passed by the workflow author; the
+runtime does not wrap or unwrap it. The transport
+protocol's `args: [data]` wire shape is an adapter
+detail, not the authored operation model.
 
 **Façade shape.** The façade MUST expose:
 
@@ -268,7 +270,7 @@ ergonomics while retaining Context API middleware semantics.
 // Backing Context API (internal, not directly returned)
 const backingApi = createApi(`agent:${Reviewer.id}`, {
   *review(patch: Patch): Operation<ReviewResult> {
-    return yield* dispatch(`${Reviewer.id}.review`, [patch]);
+    return yield* dispatch(`${Reviewer.id}.review`, patch);
   },
 });
 
@@ -299,6 +301,8 @@ const reviewer = yield* useAgent(Reviewer);
 const result = yield* reviewer.review(patch);
 
 // Per-agent middleware now possible via .around()
+// Note: [patch] is Context API tuple destructuring of the
+// single-parameter handler, not array-of-args dispatch format.
 yield* reviewer.around({
   *review([patch], next) {
     console.log("intercepting review");
@@ -730,7 +734,7 @@ Effects Specification and transport specification.
    consistent target that Effects `min` middleware wraps.
 
 3. Specify the interface contract: what the boundary
-   receives (effect ID, array-of-arguments data), what
+   receives (effect ID, single payload value), what
    it returns, and how errors propagate.
 
 4. Audit existing transport implementations (`stdio`,
@@ -857,6 +861,9 @@ yield* scoped(function* () {
 
   const llm = yield* useAgent(LLM);
   const reviewer = yield* useAgent(Reviewer);
+
+  // Note: [request] is Context API tuple destructuring of the
+  // single-parameter handler, not array-of-args dispatch format.
 
   // Installed first at max → outermost (M1 per §3.2.1)
   yield* llm.around({

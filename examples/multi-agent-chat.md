@@ -230,6 +230,24 @@ DB().loadMessages(input: {}): Array<{ role: string; content: string }>
 DB().appendMessage(input: { role: string; content: string }): void
 ```
 
+## Runtime API Note
+
+The workflow source above uses the compiled authored surface:
+`App().elicit(...)`, `Llm().sample(...)`, `DB().loadMessages(...)`.
+These compile down to IR that the runtime dispatches through agent
+boundaries.
+
+At the runtime/host level, agent access uses `useAgent()`, which
+returns a typed facade with direct operation methods and an
+`.around()` method for per-agent middleware. This is the API used
+by runtime infrastructure and transport bindings, not by compiled
+workflow source. All behavioral extension (tracing, budgets,
+guards) uses the single `.around()` primitive from the Context API
+model — there is no separate enforcement mechanism.
+
+See `packages/agent/README.md` for the runtime-facing facade API
+and middleware examples.
+
 ## Running the Demo
 
 ```sh
