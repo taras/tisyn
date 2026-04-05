@@ -106,6 +106,21 @@ enclosing scope.
 variable with an agent contract. Erased during compilation;
 does not appear in IR.
 
+> **Note:** The Handle definition above describes the compiled
+> path: a compile-time binding erased from IR, with method calls
+> lowered to `Eval` nodes. On the runtime facade path,
+> `useAgent()` returns a live facade object as defined by the
+> scoped-effects specification (§6.2). This section specifies
+> compile-time lowering and erasure; it does not deny or preclude
+> the runtime facade model.
+>
+> **Terminology:** In this specification, "handle" refers to the
+> compile-time binding concept (erased during compilation). In the
+> scoped-effects specification, "facade" refers to the runtime
+> object returned by `useAgent()`. Both terms describe access to
+> the same agent, from the perspective of their respective
+> specifications.
+
 ---
 
 ## 3. Authored-Language Rules
