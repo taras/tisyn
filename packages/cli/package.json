@@ -40,6 +40,7 @@
     "@tisyn/transport": "workspace:*",
     "configliere": "^0.3.0",
     "effection": "4.0.2",
+    "tsx": "^4.21.0",
     "typescript": "~5.8.0",
     "ws": "^8.18.0",
     "zod": "^3"

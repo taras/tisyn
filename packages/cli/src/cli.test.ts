@@ -21,6 +21,7 @@ import { discoverConfig, validateAndResolveConfig, ConfigError } from "./config.
 import { buildInputSchema } from "@tisyn/compiler";
 import { deriveFlags, parseInputFlags, formatInputHelp } from "./inputs.js";
 import { CliError } from "./load-descriptor.js";
+import { loadModule, isTypeScriptFile } from "./load-module.js";
 import { loadLocalBinding, startServer } from "./startup.js";
 import { rebaseConfigPaths } from "./run.js";
 import type { ResolvedConfig } from "@tisyn/runtime";
@@ -509,6 +510,66 @@ describe("rebaseConfigPaths", () => {
   });
 });
 
+// ── shared module loader ────────────────────────────────────────────────────────
+
+describe("shared module loader", () => {
+  it("loads a .js module", function* () {
+    const dir = yield* call(makeTempDir);
+    const modulePath = join(dir, "test-module.mjs");
+    yield* call(() => writeFile(modulePath, `export default { hello: "world" };\n`));
+    const mod = yield* call(() => loadModule(modulePath));
+    expect((mod.default as Record<string, unknown>).hello).toBe("world");
+  });
+
+  it("loads a .ts module", function* () {
+    const dir = yield* call(makeTempDir);
+    const modulePath = join(dir, "test-module.ts");
+    yield* call(() =>
+      writeFile(modulePath, `const x: string = "hello";\nexport default { x };\n`),
+    );
+    const mod = yield* call(() => loadModule(modulePath));
+    expect((mod.default as Record<string, unknown>).x).toBe("hello");
+  });
+
+  it("rejects unsupported extension", function* () {
+    const dir = yield* call(makeTempDir);
+    const modulePath = join(dir, "test-module.tsx");
+    yield* call(() => writeFile(modulePath, `export default {};\n`));
+    let threw = false;
+    try {
+      yield* call(() => loadModule(modulePath));
+    } catch (err) {
+      threw = true;
+      expect(err).toBeInstanceOf(CliError);
+      expect((err as CliError).exitCode).toBe(3);
+      expect((err as CliError).message).toContain("Unsupported");
+    }
+    expect(threw).toBe(true);
+  });
+
+  it("reports not found for missing file", function* () {
+    let threw = false;
+    try {
+      yield* call(() => loadModule("/tmp/nonexistent-cli-test-xyz.ts"));
+    } catch (err) {
+      threw = true;
+      expect(err).toBeInstanceOf(CliError);
+      expect((err as CliError).exitCode).toBe(3);
+      expect((err as CliError).message).toContain("not found");
+    }
+    expect(threw).toBe(true);
+  });
+
+  it("classifies TypeScript and JavaScript extensions", function* () {
+    expect(isTypeScriptFile("foo.ts")).toBe(true);
+    expect(isTypeScriptFile("foo.mts")).toBe(true);
+    expect(isTypeScriptFile("foo.cts")).toBe(true);
+    expect(isTypeScriptFile("foo.js")).toBe(false);
+    expect(isTypeScriptFile("foo.mjs")).toBe(false);
+    expect(isTypeScriptFile("foo.cjs")).toBe(false);
+  });
+});
+
 // ── Fixture helpers for E2E tests ─────────────────────────────────────────────
 
 const FIXTURE_WORKFLOW = `
@@ -853,6 +914,27 @@ export function createBinding() {
     const binding = yield* loadLocalBinding(modulePath);
     expect(binding.bindServer).toBeTypeOf("function");
   });
+
+  it("loads a TypeScript transport binding module", function* () {
+    const dir = yield* call(makeTempDir);
+    const modulePath = join(dir, "binding.ts");
+    yield* call(() =>
+      writeFile(
+        modulePath,
+        `
+export function createBinding() {
+  return {
+    transport: function*() {
+      return { send: function*(){}, receive: { [Symbol.iterator](){return this}, next(){return {done:true,value:undefined}} } };
+    },
+  };
+}
+`,
+      ),
+    );
+    const binding = yield* loadLocalBinding(modulePath);
+    expect(binding.transport).toBeTypeOf("function");
+  });
 });
 
 // ── startServer connection stream ────────────────────────────────────────────
@@ -1170,5 +1252,135 @@ export default {
 
     expect(result.code).toBe(2);
     expect(result.stderr).toContain("re-exported from another module");
+  });
+});
+
+// ── TypeScript descriptor module loading ────────────────────────────────────
+
+function tsDescriptorSource(opts?: { entrypoints?: boolean; sameModule?: boolean }): string {
+  const agentJson = `{ tisyn_config: "agent", id: "dummy", transport: { tisyn_config: "transport", kind: "stdio", command: "node", args: [${JSON.stringify(NOOP_AGENT)}] } }`;
+  if (opts?.sameModule) {
+    // Descriptor with workflow export in the same module (no run.module)
+    return `
+export const myWorkflow = {
+  tisyn: "fn",
+  params: [],
+  body: { tisyn: "eval", code: "Q(null)" },
+};
+export const inputSchemas = {
+  myWorkflow: { type: "none" },
+};
+export default {
+  tisyn_config: "workflow",
+  run: { export: "myWorkflow" },
+  agents: [${agentJson}],
+  journal: { tisyn_config: "journal", kind: "memory" },
+};
+`;
+  }
+  let entrypoints = "";
+  if (opts?.entrypoints) {
+    entrypoints = `entrypoints: { dev: { tisyn_config: "entrypoint" }, staging: { tisyn_config: "entrypoint" } },`;
+  }
+  return `
+export default {
+  tisyn_config: "workflow",
+  run: { export: "myWorkflow", module: "./workflow.generated.mjs" },
+  agents: [${agentJson}],
+  journal: { tisyn_config: "journal", kind: "memory" },
+  ${entrypoints}
+};
+`;
+}
+
+function* writeTsFixture(
+  dir: string,
+  workflow: string,
+  descriptorOpts?: { entrypoints?: boolean; sameModule?: boolean },
+): Operation<string> {
+  if (!descriptorOpts?.sameModule) {
+    yield* call(() => writeFile(join(dir, "workflow.generated.mjs"), workflow));
+  }
+  const descriptorPath = join(dir, "descriptor.ts");
+  yield* call(() => writeFile(descriptorPath, tsDescriptorSource(descriptorOpts)));
+  return descriptorPath;
+}
+
+describe("TypeScript descriptor module loading", () => {
+  it("tsn check accepts TypeScript descriptor + generated JS workflow", function* () {
+    const dir = yield* call(makeTempDir);
+    const descriptorPath = yield* writeTsFixture(dir, FIXTURE_WORKFLOW_NONE);
+    const result = yield* exec("node", {
+      arguments: [CLI_BIN, "check", descriptorPath],
+    }).join();
+    expect(result.code ?? 0).toBe(0);
+    expect(result.stdout).toContain("Check passed");
+  });
+
+  it("tsn check accepts TypeScript descriptor + generated JS workflow", function* () {
+    const dir = yield* call(makeTempDir);
+    const descriptorPath = yield* writeTsFixture(dir, FIXTURE_WORKFLOW_NONE);
+    const result = yield* exec("node", {
+      arguments: [CLI_BIN, "check", descriptorPath],
+    }).join();
+    expect(result.code ?? 0).toBe(0);
+    expect(result.stdout).toContain("Check passed");
+  });
+
+  it("tsn check compiles explicit TS workflow source", function* () {
+    const dir = yield* call(makeTempDir);
+
+    yield* call(() =>
+      writeFile(
+        join(dir, "workflow.ts"),
+        `
+export function* myWorkflow() {
+  return 42;
+}
+`,
+      ),
+    );
+
+    yield* call(() =>
+      writeFile(
+        join(dir, "descriptor.mjs"),
+        tsCompileDescriptor("./workflow.ts"),
+      ),
+    );
+
+    const result = yield* exec("node", {
+      arguments: [CLI_BIN, "check", join(dir, "descriptor.mjs")],
+    }).join();
+
+    expect(result.code ?? 0).toBe(0);
+    expect(result.stdout).toContain("Check passed");
+  });
+
+  it("TS descriptor with omitted run.module loads same-module export", function* () {
+    const dir = yield* call(makeTempDir);
+    const descriptorPath = yield* writeTsFixture(dir, "", { sameModule: true });
+    const result = yield* exec("node", {
+      arguments: [CLI_BIN, "check", descriptorPath],
+    }).join();
+    expect(result.code ?? 0).toBe(0);
+    expect(result.stdout).toContain("Check passed");
+  });
+
+  it("existing JS descriptor workflow remains unchanged", function* () {
+    const dir = yield* call(makeTempDir);
+    const descriptorPath = yield* writeFixture(dir, FIXTURE_WORKFLOW_NONE);
+    const result = yield* exec("node", {
+      arguments: [CLI_BIN, "check", descriptorPath],
+    }).join();
+    expect(result.code ?? 0).toBe(0);
+    expect(result.stdout).toContain("Check passed");
+  });
+
+  it("missing .ts descriptor reports clear not-found diagnostic", function* () {
+    const result = yield* exec("node", {
+      arguments: [CLI_BIN, "run", "/tmp/nonexistent-tisyn-descriptor.ts"],
+    }).join();
+    expect(result.code).toBe(3);
+    expect(result.stderr).toContain("not found");
   });
 });
