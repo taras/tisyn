@@ -435,4 +435,50 @@ describe("parent middleware non-bypassability", () => {
     expect(log.indexOf("parent-mw")).toBeLessThan(log.indexOf("child-mw"));
     expect(log.indexOf("child-mw")).toBeLessThan(log.indexOf("core"));
   });
+
+  // PNB-13: cross-boundary IR middleware → child max → child min → core ordering
+  it("cross-boundary IR middleware runs before child max, child min, and core", function* () {
+    const log: string[] = [];
+
+    // Core handler (first min — innermost)
+    yield* Effects.around(
+      {
+        *dispatch([_e, d]: [string, Val]) {
+          log.push(`core:${d}`);
+          return "done" as Val;
+        },
+      },
+      { at: "min" },
+    );
+
+    // Cross-boundary IR middleware (first max — outermost): transforms data to "transformed"
+    const transform = Fn(
+      ["effectId", "data"],
+      Eval("dispatch", Arr(Ref("effectId"), Q("transformed"))),
+    );
+    yield* withCrossBoundaryMiddleware(transform);
+
+    // Child max middleware (second max — inner)
+    yield* Effects.around({
+      *dispatch([e, d]: [string, Val], next) {
+        log.push(`child-max:${d}`);
+        return yield* next(e, d);
+      },
+    });
+
+    // Child min middleware (second min — outer min, runs before core)
+    yield* Effects.around(
+      {
+        *dispatch([e, d]: [string, Val], next) {
+          log.push(`child-min:${d}`);
+          return yield* next(e, d);
+        },
+      },
+      { at: "min" },
+    );
+
+    yield* dispatch("test.op", "original" as Val);
+
+    expect(log).toEqual(["child-max:transformed", "child-min:transformed", "core:transformed"]);
+  });
 });

@@ -209,6 +209,14 @@ identical in both paths — it does not know which path was taken.
 **Steps 13-15** are the persist-before-resume sequence. The Yield
 is durably acknowledged before the kernel sees the result.
 
+> **Note:** The walkthrough above illustrates the compiled path,
+> where authored `yield*` calls lower to `Eval` nodes in IR and
+> the kernel yields effect descriptors. The runtime facade path —
+> where `useAgent()` returns a callable facade whose methods enter
+> the Effects dispatch boundary directly — is defined in the
+> scoped-effects specification (§3.1, §6.2). Both paths converge
+> at the same dispatch boundary.
+
 ### 3.2 Correlation ID Flow
 
 Each effect dispatch carries a correlation ID that flows through

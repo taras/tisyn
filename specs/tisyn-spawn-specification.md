@@ -266,12 +266,18 @@ SP11. Three categories of outer values apply to spawned bodies:
         site
 
       **B. Parent handle bindings (NOT inherited).** Handle
-      variables obtained via `useAgent(...)` in the parent
-      scope are NOT visible inside the spawned body. These
-      are compile-time bindings tracked in the parent's scope
-      context; the spawned body has its own scope context and
-      must make its own `useAgent(...)` calls to obtain
-      handles.
+      variables and facade objects obtained via `useAgent(...)`
+      in the parent scope are NOT visible inside the spawned
+      body.
+
+      - *Compiled path:* parent handle bindings are compile-time
+        bindings tracked in the parent's scope context. They are
+        erased from IR and are not visible in the child.
+      - *Runtime facade path:* parent facades are scope-local
+        objects. They do not propagate into child scopes.
+
+      In both cases, the spawned body must make its own
+      `useAgent(...)` calls to obtain handles or facades.
 
       **C. Inherited contract availability.** If the parent
       scope has a transport binding for a contract (established

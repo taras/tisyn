@@ -9,6 +9,8 @@
  * CBP-3: Parent middleware short-circuits → child returns value without executing handler
  * CBP-4: Malformed middleware IR via direct protocol message → InvalidRequest error
  * CBP-5: Middleware re-propagates to grandchild on re-delegation
+ * CBP-6: Propagated middleware runs outermost — before child max and child min
+ * CBP-7: Propagated middleware preserves standard (effectId, data) shape in child
  */
 
 import { describe, it } from "@effectionx/vitest";
@@ -23,6 +25,7 @@ import {
   invoke,
   implementAgent,
   installCrossBoundaryMiddleware,
+  Effects,
   dispatch,
 } from "@tisyn/agent";
 import { installRemoteAgent } from "./install-remote.js";
@@ -238,6 +241,111 @@ describe("cross-boundary middleware", () => {
         expect(error).toBeInstanceOf(Error);
         expect((error as Error).message).toContain("denied");
       }
+    });
+  });
+
+  // CBP-6: propagated middleware runs outermost — before child max and child min
+  it("propagated middleware transforms payload before child max and child min", function* () {
+    // IR middleware that replaces the data payload with "transformed" and delegates
+    const transform = Fn(
+      ["effectId", "data"],
+      Eval("dispatch", [Ref("effectId"), Q("transformed")]),
+    );
+
+    const probe = agent("probe-cbp6", {
+      run: operation<void, Val>(),
+    });
+
+    // Child handler installs local max, local min, and core — all log the data they see.
+    // If propagated middleware is outermost, all layers see "transformed" (not "original").
+    const factory = inprocessTransport(probe, {
+      *run() {
+        const log: string[] = [];
+
+        // Core handler (first min — innermost)
+        yield* Effects.around(
+          {
+            *dispatch([_e, d]: [string, Val]) {
+              log.push(`core:${d}`);
+              return log as unknown as Val;
+            },
+          },
+          { at: "min" },
+        );
+
+        // Child max middleware
+        yield* Effects.around({
+          *dispatch([e, d]: [string, Val], next) {
+            log.push(`child-max:${d}`);
+            return yield* next(e, d);
+          },
+        });
+
+        // Child min middleware
+        yield* Effects.around(
+          {
+            *dispatch([e, d]: [string, Val], next) {
+              log.push(`child-min:${d}`);
+              return yield* next(e, d);
+            },
+          },
+          { at: "min" },
+        );
+
+        // Dispatch with "original" data — propagated middleware should rewrite to "transformed"
+        return yield* dispatch("cbp6.sentinel", "original" as Val);
+      },
+    });
+
+    yield* scoped(function* () {
+      yield* installRemoteAgent(probe, factory);
+      yield* installCrossBoundaryMiddleware(transform);
+
+      const log = (yield* invoke(probe.run())) as unknown as string[];
+      expect(log).toEqual(["child-max:transformed", "child-min:transformed", "core:transformed"]);
+    });
+  });
+
+  // CBP-7: propagated middleware preserves standard (effectId, data) shape in child
+  it("propagated middleware preserves standard (effectId, data) shape at child boundary", function* () {
+    // IR middleware that delegates via Eval("dispatch", [effectId, data]) — standard shape
+    const passthrough = Fn(["effectId", "data"], Eval("dispatch", [Ref("effectId"), Ref("data")]));
+
+    const probe = agent("probe-cbp7", {
+      run: operation<{ x: number }, Val>(),
+    });
+
+    // Child core handler records the exact effectId and data it receives.
+    const factory = inprocessTransport(probe, {
+      *run({ x }: { x: number }) {
+        let receivedEffectId: string | null = null;
+        let receivedData: Val = null as Val;
+
+        yield* Effects.around(
+          {
+            *dispatch([effectId, data]: [string, Val]) {
+              receivedEffectId = effectId;
+              receivedData = data;
+              return { receivedEffectId, receivedData } as unknown as Val;
+            },
+          },
+          { at: "min" },
+        );
+
+        return yield* dispatch("cbp7.sentinel", { x } as unknown as Val);
+      },
+    });
+
+    yield* scoped(function* () {
+      yield* installRemoteAgent(probe, factory);
+      yield* installCrossBoundaryMiddleware(passthrough);
+
+      const result = (yield* invoke(probe.run({ x: 42 }))) as unknown as {
+        receivedEffectId: string;
+        receivedData: { x: number };
+      };
+      expect(result.receivedEffectId).toBe("cbp7.sentinel");
+      expect(result.receivedData).toEqual({ x: 42 });
     });
   });
 });

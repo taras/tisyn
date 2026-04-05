@@ -161,6 +161,23 @@ middleware. Middleware installed via the middleware installation
 primitive MUST intercept built-in effect calls the same way it
 intercepts user-defined effect calls.
 
+> **Non-normative.** Two valid paths reach the dispatch boundary
+> defined above:
+>
+> 1. **Compiled path.** Authored `yield* handle.method(args)` is
+>    lowered by the compiler to `Eval("agent.method", ...)`. The
+>    kernel suspends. The runtime routes the resulting effect
+>    descriptor through the Effects middleware chain.
+>
+> 2. **Runtime facade path.** `useAgent()` returns a facade
+>    (§6.2). Facade direct methods delegate through a backing
+>    per-agent Context API. The call enters the same Effects
+>    dispatch boundary without compiler-generated IR for the
+>    call site.
+>
+> `Effects.around()` middleware applies at the shared dispatch
+> boundary regardless of which path an effect takes to reach it.
+
 ### 3.2 Effect ID Namespace
 
 Effects are identified by string IDs. The `tisyn.*` namespace
@@ -457,6 +474,16 @@ composes structurally before the `Effects` chain. Both facade
 `max` and facade `min` middleware are host-side because the
 facade core handler delegates into `Effects` rather than being
 the terminal dispatch boundary.
+
+> **Note:** Facade-local middleware — installed via
+> `facade.around()` — applies only to calls initiated through
+> that facade, not to calls arriving via the compiled path.
+> Effects-level middleware — installed via `Effects.around()` —
+> applies at the shared dispatch boundary regardless of whether
+> the call arrived via the compiled path or the runtime facade
+> path. A call through a facade traverses the facade's local
+> middleware first, then enters the Effects dispatch boundary
+> where Effects-level middleware applies.
 
 The facade is not a raw Context API result. The `.operations`
 namespace remains an implementation detail of the backing API;
