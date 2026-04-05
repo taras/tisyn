@@ -442,10 +442,13 @@ correctly implemented when:
 
 10. All Core tier Agents setup API tests (AG-*) pass.
 
-11. No Core tier test produces an unexpected error, hang,
+11. All Core tier cross-boundary middleware tests (MI-*)
+    pass.
+
+12. No Core tier test produces an unexpected error, hang,
     or crash.
 
-11. Cross-boundary constraints are expressible and
+13. Cross-boundary constraints are expressible and
     enforceable as ordinary Effects middleware installed
     in the runtime's root scope, with no separate API
     required.

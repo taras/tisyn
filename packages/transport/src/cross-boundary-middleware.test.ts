@@ -10,6 +10,7 @@
  * CBP-4: Malformed middleware IR via direct protocol message → InvalidRequest error
  * CBP-5: Middleware re-propagates to grandchild on re-delegation
  * CBP-6: Propagated middleware runs outermost — before child max and child min
+ * CBP-7: Propagated middleware preserves standard (effectId, data) shape in child
  */
 
 import { describe, it } from "@effectionx/vitest";
@@ -302,6 +303,49 @@ describe("cross-boundary middleware", () => {
 
       const log = (yield* invoke(probe.run())) as unknown as string[];
       expect(log).toEqual(["child-max:transformed", "child-min:transformed", "core:transformed"]);
+    });
+  });
+
+  // CBP-7: propagated middleware preserves standard (effectId, data) shape in child
+  it("propagated middleware preserves standard (effectId, data) shape at child boundary", function* () {
+    // IR middleware that delegates via Eval("dispatch", [effectId, data]) — standard shape
+    const passthrough = Fn(["effectId", "data"], Eval("dispatch", [Ref("effectId"), Ref("data")]));
+
+    const probe = agent("probe-cbp7", {
+      run: operation<{ x: number }, Val>(),
+    });
+
+    // Child core handler records the exact effectId and data it receives.
+    const factory = inprocessTransport(probe, {
+      *run({ x }: { x: number }) {
+        let receivedEffectId: string | null = null;
+        let receivedData: Val = null as Val;
+
+        yield* Effects.around(
+          {
+            *dispatch([effectId, data]: [string, Val]) {
+              receivedEffectId = effectId;
+              receivedData = data;
+              return { receivedEffectId, receivedData } as unknown as Val;
+            },
+          },
+          { at: "min" },
+        );
+
+        return yield* dispatch("cbp7.sentinel", { x } as unknown as Val);
+      },
+    });
+
+    yield* scoped(function* () {
+      yield* installRemoteAgent(probe, factory);
+      yield* installCrossBoundaryMiddleware(passthrough);
+
+      const result = (yield* invoke(probe.run({ x: 42 }))) as unknown as {
+        receivedEffectId: string;
+        receivedData: { x: number };
+      };
+      expect(result.receivedEffectId).toBe("cbp7.sentinel");
+      expect(result.receivedData).toEqual({ x: 42 });
     });
   });
 });
