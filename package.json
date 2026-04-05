@@ -4,7 +4,7 @@
     "build": "tsc --build",
     "test": "pnpm -r run test && pnpm run test:oxlint-plugin",
     "test:oxlint-plugin": "node --test tools/oxlint/test/*.test.mjs",
-    "lint": "pnpm exec oxlint . --deny-warnings && pnpm exec oxlint -c oxlint.config.mjs . -A all -D tisyn/no-local-call-wrapper -D tisyn/no-trivial-generator-wrapper --deny-warnings",
+    "lint": "pnpm exec oxlint . --deny-warnings && pnpm exec oxlint -c oxlint.config.mjs . -A all -D curly -D tisyn/no-local-call-wrapper -D tisyn/no-trivial-generator-wrapper --deny-warnings",
     "format": "npx oxfmt . --write",
     "format:check": "npx oxfmt . --check",
     "changeset": "changeset",
