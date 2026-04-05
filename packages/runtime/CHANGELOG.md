@@ -1,5 +1,24 @@
 # @tisyn/runtime
 
+## 1.0.0
+
+### Minor Changes
+
+- e6696fb: Resolve per-agent `config` through env resolution pipeline and expose on `ResolvedAgent`
+- 8d82f9c: Add `Runtime` context API with `Runtime.loadModule(specifier, parentURL)` and `Runtime.around(...)` for middleware-interceptable module loading. Export shared default loader (`loadModule`, `isTypeScriptFile`) and error types (`ModuleLoadError`, `UnsupportedExtensionError`, `ModuleNotFoundError`, `LoaderInitError`).
+
+### Patch Changes
+
+- Updated dependencies [e6696fb]
+- Updated dependencies [34533e6]
+  - @tisyn/config@0.10.0
+  - @tisyn/transport@1.0.0
+  - @tisyn/agent@1.0.0
+  - @tisyn/ir@1.0.0
+  - @tisyn/kernel@1.0.0
+  - @tisyn/validate@1.0.0
+  - @tisyn/durable-streams@1.0.0
+
 ## 0.9.0
 
 ### Minor Changes

@@ -1,5 +1,23 @@
 # @tisyn/transport
 
+## 1.0.0
+
+### Minor Changes
+
+- 34533e6: Add `LocalAgentBinding` and `LocalServerBinding` types as the stable contract for local/inprocess transport modules. `LocalAgentBinding` pairs a transport factory with an optional `bindServer` hook for receiving browser connections. `LocalServerBinding` provides the server address and accepted WebSocket connections as a typed stream. Move `@types/ws` to dependencies for the `WebSocket` type in `LocalServerBinding`.
+
+### Patch Changes
+
+- Updated dependencies [e6696fb]
+- Updated dependencies [8d82f9c]
+  - @tisyn/runtime@1.0.0
+  - @tisyn/agent@1.0.0
+  - @tisyn/ir@1.0.0
+  - @tisyn/kernel@1.0.0
+  - @tisyn/protocol@1.0.0
+  - @tisyn/validate@1.0.0
+  - @tisyn/durable-streams@1.0.0
+
 ## 0.9.0
 
 ### Patch Changes
