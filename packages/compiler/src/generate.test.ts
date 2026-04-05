@@ -1028,7 +1028,9 @@ describe("generateWorkflowModule", () => {
         // Check if any virtual file starts with this directory
         const prefix = dirName.endsWith("/") ? dirName : dirName + "/";
         for (const key of Object.keys(files)) {
-          if (key.startsWith(prefix)) return true;
+          if (key.startsWith(prefix)) {
+            return true;
+          }
         }
         return originalDirectoryExists?.(dirName) ?? false;
       };

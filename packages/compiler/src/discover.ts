@@ -45,18 +45,28 @@ export function discoverContracts(sourceFile: ts.SourceFile): DiscoveryResult {
   const seen = new Set<string>();
 
   for (const stmt of sourceFile.statements) {
-    if (!ts.isFunctionDeclaration(stmt)) continue;
-    if (!stmt.name) continue;
+    if (!ts.isFunctionDeclaration(stmt)) {
+      continue;
+    }
+    if (!stmt.name) {
+      continue;
+    }
 
     // Must have DeclareKeyword modifier
     const isDeclare = stmt.modifiers?.some((m) => m.kind === ts.SyntaxKind.DeclareKeyword);
-    if (!isDeclare) continue;
+    if (!isDeclare) {
+      continue;
+    }
 
     // Must not have a body (ambient declarations don't)
-    if (stmt.body) continue;
+    if (stmt.body) {
+      continue;
+    }
 
     // Must not be a generator
-    if (stmt.asteriskToken) continue;
+    if (stmt.asteriskToken) {
+      continue;
+    }
 
     const name = stmt.name.text;
 
@@ -255,7 +265,9 @@ export function collectReferencedTypeImports(
     referencedIds.delete(m);
   }
 
-  if (referencedIds.size === 0 && nsQualifiers.size === 0) return [];
+  if (referencedIds.size === 0 && nsQualifiers.size === 0) {
+    return [];
+  }
 
   // Reject source-local types
   const localTypes = collectLocalTypeNames(sourceFile);
@@ -276,10 +288,14 @@ export function collectReferencedTypeImports(
   const resolvedNsQualifiers = new Set<string>();
 
   for (const stmt of sourceFile.statements) {
-    if (!ts.isImportDeclaration(stmt)) continue;
+    if (!ts.isImportDeclaration(stmt)) {
+      continue;
+    }
 
     const clause = stmt.importClause;
-    if (!clause) continue;
+    if (!clause) {
+      continue;
+    }
 
     const moduleSpecifier = (stmt.moduleSpecifier as ts.StringLiteral).text;
 
@@ -313,7 +329,9 @@ export function collectReferencedTypeImports(
             )
             .join(", ");
           imports.push(`import type { ${names} } from "${moduleSpecifier}";`);
-          for (const el of matchingSpecifiers) resolvedIds.add(el.name.text);
+          for (const el of matchingSpecifiers) {
+            resolvedIds.add(el.name.text);
+          }
         }
       }
       continue;
@@ -331,7 +349,9 @@ export function collectReferencedTypeImports(
           )
           .join(", ");
         imports.push(`import type { ${names} } from "${moduleSpecifier}";`);
-        for (const el of typeSpecifiers) resolvedIds.add(el.name.text);
+        for (const el of typeSpecifiers) {
+          resolvedIds.add(el.name.text);
+        }
       }
     }
   }
@@ -368,7 +388,9 @@ export function collectReferencedTypeImports(
 function validateFactoryParams(decl: ts.FunctionDeclaration, sourceFile: ts.SourceFile): boolean {
   const params = decl.parameters;
 
-  if (params.length === 0) return false;
+  if (params.length === 0) {
+    return false;
+  }
 
   if (params.length > 1) {
     const loc = getLocation(decl, sourceFile);
@@ -473,7 +495,9 @@ function extractMethods(
 
     // Collect AST type nodes for import resolution
     for (const p of member.parameters) {
-      if (p.type) typeNodes.push(p.type);
+      if (p.type) {
+        typeNodes.push(p.type);
+      }
     }
     typeNodes.push(typeArg);
 

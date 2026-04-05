@@ -73,10 +73,18 @@ function decompileExpr(
   depth: number,
   opts: { indent: number; typeAnnotations: boolean },
 ): string {
-  if (expr === null) return "null";
-  if (typeof expr === "string") return JSON.stringify(expr);
-  if (typeof expr === "number") return String(expr);
-  if (typeof expr === "boolean") return String(expr);
+  if (expr === null) {
+    return "null";
+  }
+  if (typeof expr === "string") {
+    return JSON.stringify(expr);
+  }
+  if (typeof expr === "number") {
+    return String(expr);
+  }
+  if (typeof expr === "boolean") {
+    return String(expr);
+  }
 
   if (Array.isArray(expr)) {
     const items = expr.map((e) => decompileExpr(e as TisynExpr, depth, opts));
@@ -338,9 +346,15 @@ function unquoteShape(data: TisynExpr): Record<string, unknown> {
 }
 
 function isLoopPattern(name: string, value: TisynExpr, body: TisynExpr): boolean {
-  if (!name.startsWith("__loop_")) return false;
-  if (!isFnNode(value)) return false;
-  if (!isEvalNode(body) || body.id !== "call") return false;
+  if (!name.startsWith("__loop_")) {
+    return false;
+  }
+  if (!isFnNode(value)) {
+    return false;
+  }
+  if (!isEvalNode(body) || body.id !== "call") {
+    return false;
+  }
   const callShape = unquoteShape(body.data as TisynExpr) as { fn: TisynExpr };
   return isRefNode(callShape.fn) && callShape.fn.name === name;
 }
@@ -350,7 +364,9 @@ function decompileLoop(
   depth: number,
   opts: { indent: number; typeAnnotations: boolean },
 ): string {
-  if (!isFnNode(fnExpr)) return decompileExpr(fnExpr, depth, opts);
+  if (!isFnNode(fnExpr)) {
+    return decompileExpr(fnExpr, depth, opts);
+  }
   const pad = " ".repeat(depth * opts.indent);
   const body = decompileLoopBody(fnExpr.body as TisynExpr, depth + 1, opts);
   return `${pad}while (true) {\n${body}\n${pad}}`;

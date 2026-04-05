@@ -28,15 +28,25 @@ function printNode(
   depth: number,
   opts: PrintOptions & { indent: number; maxWidth: number; compact: boolean },
 ): string {
-  if (expr === null) return "null";
-  if (typeof expr === "string") return JSON.stringify(expr);
-  if (typeof expr === "number" || typeof expr === "boolean") return String(expr);
+  if (expr === null) {
+    return "null";
+  }
+  if (typeof expr === "string") {
+    return JSON.stringify(expr);
+  }
+  if (typeof expr === "number" || typeof expr === "boolean") {
+    return String(expr);
+  }
 
   if (Array.isArray(expr)) {
-    if (expr.length === 0) return "[]";
+    if (expr.length === 0) {
+      return "[]";
+    }
     const items = expr.map((e) => printNode(e as TisynExpr, depth + 1, opts));
     const inline = `[${items.join(", ")}]`;
-    if (opts.compact && inline.length <= opts.maxWidth) return inline;
+    if (opts.compact && inline.length <= opts.maxWidth) {
+      return inline;
+    }
     const pad = " ".repeat((depth + 1) * opts.indent);
     return `[\n${items.map((i) => `${pad}${i}`).join(",\n")}\n${" ".repeat(depth * opts.indent)}]`;
   }
@@ -54,7 +64,9 @@ function printNode(
     const params = `[${expr.params.map((p) => JSON.stringify(p)).join(", ")}]`;
     const body = printNode(expr.body as TisynExpr, depth + 1, opts);
     const inline = `Fn(${params}, ${body})`;
-    if (opts.compact && inline.length <= opts.maxWidth) return inline;
+    if (opts.compact && inline.length <= opts.maxWidth) {
+      return inline;
+    }
     const pad = " ".repeat((depth + 1) * opts.indent);
     return `Fn(${params},\n${pad}${body})`;
   }
@@ -87,7 +99,9 @@ function printEval(
   const name = `Eval(${JSON.stringify(id)}`;
   const inner = printNode(data, depth + 1, opts);
   const inline = `${name}, ${inner})`;
-  if (opts.compact && inline.length <= opts.maxWidth) return inline;
+  if (opts.compact && inline.length <= opts.maxWidth) {
+    return inline;
+  }
   const pad = " ".repeat((depth + 1) * opts.indent);
   return `${name},\n${pad}${inner})`;
 }
@@ -135,7 +149,9 @@ function printStructural(
       const condArg = printNode(s.condition, depth + 1, opts);
       const exprsArg = s.exprs.map((e) => printNode(e, depth + 1, opts));
       const inline = `${name}(${condArg}, [${exprsArg.join(", ")}])`;
-      if (opts.compact && inline.length <= opts.maxWidth) return inline;
+      if (opts.compact && inline.length <= opts.maxWidth) {
+        return inline;
+      }
       const pad = " ".repeat((depth + 1) * opts.indent);
       return `${name}(${condArg}, [\n${exprsArg.map((a) => `${pad}${a}`).join(",\n")}\n${" ".repeat(depth * opts.indent)}])`;
     }
@@ -180,7 +196,9 @@ function printStructural(
         ([k, v]) => `${k}: ${printNode(v, depth + 2, opts)}`,
       );
       const inline = `Construct({ ${entries.join(", ")} })`;
-      if (opts.compact && inline.length <= opts.maxWidth) return inline;
+      if (opts.compact && inline.length <= opts.maxWidth) {
+        return inline;
+      }
       const pad = " ".repeat((depth + 1) * opts.indent);
       return `Construct({\n${entries.map((e) => `${pad}${e}`).join(",\n")}\n${" ".repeat(depth * opts.indent)}})`;
     }
@@ -383,7 +401,9 @@ function formatCall(
   opts: { indent: number; maxWidth: number; compact: boolean },
 ): string {
   const inline = `${name}(${args.join(", ")})`;
-  if (opts.compact && inline.length <= opts.maxWidth) return inline;
+  if (opts.compact && inline.length <= opts.maxWidth) {
+    return inline;
+  }
   const pad = " ".repeat((depth + 1) * opts.indent);
   return `${name}(\n${args.map((a) => `${pad}${a}`).join(",\n")}\n${" ".repeat(depth * opts.indent)})`;
 }
@@ -396,9 +416,13 @@ function printObject(
   const entries = Object.entries(obj).map(
     ([k, v]) => `${JSON.stringify(k)}: ${printNode(v, depth + 1, opts)}`,
   );
-  if (entries.length === 0) return "{}";
+  if (entries.length === 0) {
+    return "{}";
+  }
   const inline = `{ ${entries.join(", ")} }`;
-  if (opts.compact && inline.length <= opts.maxWidth) return inline;
+  if (opts.compact && inline.length <= opts.maxWidth) {
+    return inline;
+  }
   const pad = " ".repeat((depth + 1) * opts.indent);
   return `{\n${entries.map((e) => `${pad}${e}`).join(",\n")}\n${" ".repeat(depth * opts.indent)}}`;
 }

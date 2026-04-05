@@ -46,7 +46,9 @@ describe("Built-in sleep effect", () => {
     yield* Effects.around({
       // biome-ignore lint/correctness/useYield: mock
       *dispatch([effectId, _data]: [string, Val], _next) {
-        if (effectId === "sleep") return 42;
+        if (effectId === "sleep") {
+          return 42;
+        }
         return yield* _next(effectId, _data);
       },
     });

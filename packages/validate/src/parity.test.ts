@@ -234,12 +234,18 @@ const fixtures: Fixture[] = [
 // ── Helper: recursive classifyNode walk ──
 
 function classifyAccepts(input: unknown): boolean {
-  if (input === null || typeof input !== "object") return true;
-  if (Array.isArray(input)) return input.every(classifyAccepts);
+  if (input === null || typeof input !== "object") {
+    return true;
+  }
+  if (Array.isArray(input)) {
+    return input.every(classifyAccepts);
+  }
 
   const obj = input as Record<string, unknown>;
   const classification = classifyNode(obj);
-  if (classification === "malformed") return false;
+  if (classification === "malformed") {
+    return false;
+  }
 
   if (classification === "literal") {
     return Object.values(obj).every(classifyAccepts);

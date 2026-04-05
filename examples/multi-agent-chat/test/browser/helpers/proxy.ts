@@ -70,7 +70,9 @@ export function useProxy(distDir: string, initialWsUrl: string): Operation<Proxy
             `Sec-WebSocket-Accept: ${_res.headers["sec-websocket-accept"]}\r\n` +
             "\r\n",
         );
-        if (targetHead.length) socket.write(targetHead);
+        if (targetHead.length) {
+          socket.write(targetHead);
+        }
         socket.on("error", () => socket.destroy());
         targetSocket.on("error", () => targetSocket.destroy());
         socket.pipe(targetSocket);

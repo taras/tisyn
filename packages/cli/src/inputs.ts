@@ -23,7 +23,9 @@ const BUILT_IN_FLAGS = new Set(["help", "entrypoint", "env-example", "verbose"])
  * Derive CLI flag definitions from an InputSchema.
  */
 export function deriveFlags(schema: InputSchema): FlagDefinition[] {
-  if (schema.type !== "object") return [];
+  if (schema.type !== "object") {
+    return [];
+  }
 
   return schema.fields.map((field) => {
     const flag = camelToKebab(field.name);
@@ -128,7 +130,9 @@ export function parseInputFlags(flags: FlagDefinition[], argv: string[]): Record
  * Format input schema as help text.
  */
 export function formatInputHelp(flags: FlagDefinition[]): string {
-  if (flags.length === 0) return "";
+  if (flags.length === 0) {
+    return "";
+  }
 
   const lines: string[] = ["", "Workflow inputs:"];
   for (const def of flags) {

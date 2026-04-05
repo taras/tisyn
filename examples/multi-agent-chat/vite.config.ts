@@ -13,7 +13,9 @@ export default defineConfig({
       configureServer(server) {
         server.httpServer?.on("upgrade", (req: IncomingMessage, socket: Socket, head: Buffer) => {
           // Don't proxy Vite's own HMR WebSocket
-          if (req.headers["sec-websocket-protocol"]?.includes("vite-hmr")) return;
+          if (req.headers["sec-websocket-protocol"]?.includes("vite-hmr")) {
+            return;
+          }
           const proxyReq = request({
             hostname: "localhost",
             port: 3000,
@@ -31,7 +33,9 @@ export default defineConfig({
                   `Sec-WebSocket-Accept: ${_res.headers["sec-websocket-accept"]}\r\n` +
                   "\r\n",
               );
-              if (proxyHead.length) socket.write(proxyHead);
+              if (proxyHead.length) {
+                socket.write(proxyHead);
+              }
               socket.on("error", () => socket.destroy());
               proxySocket.on("error", () => proxySocket.destroy());
               socket.pipe(proxySocket);
@@ -40,7 +44,9 @@ export default defineConfig({
           );
           proxyReq.on("error", () => socket.destroy());
           proxyReq.end();
-          if (head.length) proxyReq.socket?.write(head);
+          if (head.length) {
+            proxyReq.socket?.write(head);
+          }
         });
       },
     },

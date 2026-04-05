@@ -76,8 +76,12 @@ describe("End-to-end crash/replay", () => {
         // biome-ignore lint/correctness/useYield: mock
         *dispatch([_effectId, _data]: [string, any]) {
           firstRunCallCount++;
-          if (firstRunCallCount === 1) return 10;
-          if (firstRunCallCount === 2) return 20;
+          if (firstRunCallCount === 1) {
+            return 10;
+          }
+          if (firstRunCallCount === 2) {
+            return 20;
+          }
           // "Crash" on the 3rd call — simulate by throwing
           throw new Error("SIMULATED_CRASH");
         },

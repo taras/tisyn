@@ -2,8 +2,12 @@ import { useEffect, useRef } from "react";
 import type { Message } from "../useChat.ts";
 
 function formatMessage(msg: Message): string {
-  if (msg.role === "user") return `You: ${msg.content}`;
-  if (msg.role === "assistant") return `Assistant: ${msg.content}`;
+  if (msg.role === "user") {
+    return `You: ${msg.content}`;
+  }
+  if (msg.role === "assistant") {
+    return `Assistant: ${msg.content}`;
+  }
   return msg.content;
 }
 

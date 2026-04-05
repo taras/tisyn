@@ -53,7 +53,9 @@ export function applyOverlay(
   base: WorkflowDescriptor,
   entrypointName?: string,
 ): WorkflowDescriptor {
-  if (!entrypointName) return base;
+  if (!entrypointName) {
+    return base;
+  }
 
   const entrypoints = base.entrypoints;
   if (!entrypoints || !(entrypointName in entrypoints)) {
@@ -82,15 +84,23 @@ function mergeOverlay(base: WorkflowDescriptor, overlay: EntrypointDescriptor): 
     run: base.run,
     agents: mergedAgents,
   };
-  if (mergedJournal != null) result.journal = mergedJournal;
-  if (base.entrypoints != null) result.entrypoints = base.entrypoints;
-  if (mergedServer != null) result.server = mergedServer;
+  if (mergedJournal != null) {
+    result.journal = mergedJournal;
+  }
+  if (base.entrypoints != null) {
+    result.entrypoints = base.entrypoints;
+  }
+  if (mergedServer != null) {
+    result.server = mergedServer;
+  }
 
   return result as unknown as WorkflowDescriptor;
 }
 
 function mergeAgents(baseAgents: AgentBinding[], overlayAgents?: AgentBinding[]): AgentBinding[] {
-  if (!overlayAgents || overlayAgents.length === 0) return [...baseAgents];
+  if (!overlayAgents || overlayAgents.length === 0) {
+    return [...baseAgents];
+  }
 
   const overlayById = new Map<string, AgentBinding>();
   for (const a of overlayAgents) {
@@ -162,7 +172,9 @@ function coerce(
   defaultValue: string | number | boolean,
   name: string,
 ): string | number | boolean {
-  if (typeof defaultValue === "string") return raw;
+  if (typeof defaultValue === "string") {
+    return raw;
+  }
 
   if (typeof defaultValue === "number") {
     const n = parseFloat(raw);
@@ -173,8 +185,12 @@ function coerce(
   }
 
   // boolean
-  if (raw === "true" || raw === "1") return true;
-  if (raw === "false" || raw === "0") return false;
+  if (raw === "true" || raw === "1") {
+    return true;
+  }
+  if (raw === "false" || raw === "0") {
+    return false;
+  }
   throw new ConfigError(
     `Environment variable '${name}': cannot coerce '${raw}' to boolean (expected true/false/1/0)`,
   );
@@ -260,7 +276,9 @@ function projectAgent(
   }
   const projected: Record<string, unknown> = {};
   for (const [key, val] of Object.entries(transportObj)) {
-    if (key === "tisyn_config") continue;
+    if (key === "tisyn_config") {
+      continue;
+    }
     projected[key] = resolveValue(val, resolvedEnv);
   }
   const result: ResolvedAgent = { id: agent.id, transport: projected };
@@ -274,9 +292,13 @@ function projectJournal(
   journal: JournalDescriptor | undefined,
   resolvedEnv: Map<EnvDescriptor, string | number | boolean>,
 ): ResolvedJournal {
-  if (!journal) return { kind: "memory" };
+  if (!journal) {
+    return { kind: "memory" };
+  }
 
-  if (journal.kind === "memory") return { kind: "memory" };
+  if (journal.kind === "memory") {
+    return { kind: "memory" };
+  }
 
   return {
     kind: "file",
@@ -297,7 +319,9 @@ function projectServer(
     kind: serverDesc.kind,
     port: resolveValue(serverDesc.port, resolvedEnv) as number,
   };
-  if (serverDesc.static != null) result.static = serverDesc.static;
+  if (serverDesc.static != null) {
+    result.static = serverDesc.static;
+  }
   return result;
 }
 
@@ -305,12 +329,16 @@ function resolveValue(
   value: unknown,
   resolvedEnv: Map<EnvDescriptor, string | number | boolean>,
 ): unknown {
-  if (value === null || typeof value !== "object") return value;
+  if (value === null || typeof value !== "object") {
+    return value;
+  }
 
   const obj = value as Record<string, unknown>;
   if (obj.tisyn_config === "env") {
     const resolved = resolvedEnv.get(value as EnvDescriptor);
-    if (resolved !== undefined) return resolved;
+    if (resolved !== undefined) {
+      return resolved;
+    }
     return value;
   }
 

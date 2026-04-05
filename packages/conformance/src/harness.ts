@@ -102,7 +102,9 @@ function canonicalEqual(actual: Json, expected: Json): boolean {
  * Applies "<any>" sentinel for error.message.
  */
 function resultMatches(actual: EventResult, expected: EventResult): boolean {
-  if (actual.status !== expected.status) return false;
+  if (actual.status !== expected.status) {
+    return false;
+  }
 
   if (actual.status === "ok" && expected.status === "ok") {
     return canonicalEqual(actual.value, expected.value);
@@ -213,7 +215,9 @@ function* installMockDispatch(
       }
       if (effect.result.status === "err") {
         const err = new Error(effect.result.error.message);
-        if (effect.result.error.name) err.name = effect.result.error.name;
+        if (effect.result.error.name) {
+          err.name = effect.result.error.name;
+        }
         throw err;
       }
       throw new Error("Unexpected cancelled result in mock");

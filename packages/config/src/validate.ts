@@ -52,8 +52,12 @@ function walk(
     errors.push({ rule: "V8", path, message: "undefined is not in the serializable data domain" });
     return;
   }
-  if (value === null) return;
-  if (typeof value === "boolean" || typeof value === "string") return;
+  if (value === null) {
+    return;
+  }
+  if (typeof value === "boolean" || typeof value === "string") {
+    return;
+  }
   if (typeof value === "number") {
     if (!Number.isFinite(value)) {
       errors.push({ rule: "V8", path, message: `${value} is not in the serializable data domain` });
@@ -68,7 +72,9 @@ function walk(
     });
     return;
   }
-  if (typeof value !== "object") return;
+  if (typeof value !== "object") {
+    return;
+  }
 
   // V8: non-plain objects
   if (
@@ -138,10 +144,15 @@ function walk(
       });
     } else {
       const kind = obj.tisyn_config as string;
-      if (kind === "workflow") validateWorkflowRules(obj, path, errors);
-      else if (kind === "agent") validateAgentRules(obj, path, errors);
-      else if (kind === "transport") validateTransportRules(obj, path, errors);
-      else if (kind === "env") validateEnvRules(obj, path, errors);
+      if (kind === "workflow") {
+        validateWorkflowRules(obj, path, errors);
+      } else if (kind === "agent") {
+        validateAgentRules(obj, path, errors);
+      } else if (kind === "transport") {
+        validateTransportRules(obj, path, errors);
+      } else if (kind === "env") {
+        validateEnvRules(obj, path, errors);
+      }
     }
   }
 

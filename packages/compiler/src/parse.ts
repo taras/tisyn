@@ -35,14 +35,24 @@ export function parseSource(source: string, filename = "input.ts"): ParsedFuncti
   const functions: ParsedFunction[] = [];
 
   for (const stmt of sourceFile.statements) {
-    if (!ts.isFunctionDeclaration(stmt)) continue;
-    if (!stmt.asteriskToken) continue; // must be generator
-    if (!stmt.name) continue; // must be named
-    if (!stmt.body) continue; // must have body
+    if (!ts.isFunctionDeclaration(stmt)) {
+      continue;
+    }
+    if (!stmt.asteriskToken) {
+      continue;
+    } // must be generator
+    if (!stmt.name) {
+      continue;
+    } // must be named
+    if (!stmt.body) {
+      continue;
+    } // must have body
 
     // Check for async — not allowed
     const isAsync = stmt.modifiers?.some((m) => m.kind === ts.SyntaxKind.AsyncKeyword);
-    if (isAsync) continue; // async generators are rejected in discover
+    if (isAsync) {
+      continue;
+    } // async generators are rejected in discover
 
     const params: string[] = [];
     const paramTypes: string[] = [];
@@ -114,11 +124,15 @@ export function collectExportedNames(sourceFile: ts.SourceFile): ModuleExports {
 
     // Named or re-export: export { chat } / export { chat } from "./other"
     if (ts.isExportDeclaration(stmt) && stmt.exportClause && ts.isNamedExports(stmt.exportClause)) {
-      if (stmt.isTypeOnly) continue;
+      if (stmt.isTypeOnly) {
+        continue;
+      }
 
       const isReExport = stmt.moduleSpecifier !== undefined;
       for (const spec of stmt.exportClause.elements) {
-        if (spec.isTypeOnly) continue;
+        if (spec.isTypeOnly) {
+          continue;
+        }
         const exportedName = spec.name.text;
 
         if (isReExport) {
@@ -142,7 +156,9 @@ export function getLocation(
   sourceFile?: ts.SourceFile,
 ): { line: number; column: number } {
   const sf = sourceFile ?? node.getSourceFile();
-  if (!sf) return { line: 0, column: 0 };
+  if (!sf) {
+    return { line: 0, column: 0 };
+  }
   const { line, character } = sf.getLineAndCharacterOfPosition(node.getStart(sf));
   return { line: line + 1, column: character + 1 };
 }

@@ -54,8 +54,12 @@ function joinIR(refName: string): IrInput {
 
 function tryIR(body: unknown, catchParam?: string, catchBody?: unknown): IrInput {
   const fields: Record<string, unknown> = { body };
-  if (catchParam !== undefined) fields["catchParam"] = catchParam;
-  if (catchBody !== undefined) fields["catchBody"] = catchBody;
+  if (catchParam !== undefined) {
+    fields["catchParam"] = catchParam;
+  }
+  if (catchBody !== undefined) {
+    fields["catchBody"] = catchBody;
+  }
   return {
     tisyn: "eval",
     id: "try",

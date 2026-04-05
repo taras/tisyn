@@ -11,16 +11,24 @@ import { compileOne } from "./index.js";
 // ── Helpers ──
 
 function findNode(node: unknown, id: string): Record<string, any> | undefined {
-  if (typeof node !== "object" || node === null) return undefined;
+  if (typeof node !== "object" || node === null) {
+    return undefined;
+  }
   const obj = node as Record<string, unknown>;
-  if (obj["tisyn"] === "eval" && obj["id"] === id) return obj as Record<string, any>;
+  if (obj["tisyn"] === "eval" && obj["id"] === id) {
+    return obj as Record<string, any>;
+  }
   for (const value of Object.values(obj)) {
     const found = findNode(value, id);
-    if (found) return found;
+    if (found) {
+      return found;
+    }
     if (Array.isArray(value)) {
       for (const item of value) {
         const found = findNode(item, id);
-        if (found) return found;
+        if (found) {
+          return found;
+        }
       }
     }
   }
@@ -30,13 +38,19 @@ function findNode(node: unknown, id: string): Record<string, any> | undefined {
 function findAllNodes(node: unknown, id: string): Record<string, any>[] {
   const results: Record<string, any>[] = [];
   function walk(n: unknown) {
-    if (typeof n !== "object" || n === null) return;
+    if (typeof n !== "object" || n === null) {
+      return;
+    }
     const obj = n as Record<string, unknown>;
-    if (obj["tisyn"] === "eval" && obj["id"] === id) results.push(obj as Record<string, any>);
+    if (obj["tisyn"] === "eval" && obj["id"] === id) {
+      results.push(obj as Record<string, any>);
+    }
     for (const value of Object.values(obj)) {
       walk(value);
       if (Array.isArray(value)) {
-        for (const item of value) walk(item);
+        for (const item of value) {
+          walk(item);
+        }
       }
     }
   }
@@ -164,11 +178,17 @@ describe("converge compilation", () => {
     const untilFn = body.data.expr.value;
     // Find a ref to "target" somewhere in the until body
     function findRef(node: unknown, name: string): boolean {
-      if (typeof node !== "object" || node === null) return false;
+      if (typeof node !== "object" || node === null) {
+        return false;
+      }
       const obj = node as Record<string, unknown>;
-      if (obj["tisyn"] === "ref" && obj["name"] === name) return true;
+      if (obj["tisyn"] === "ref" && obj["name"] === name) {
+        return true;
+      }
       return Object.values(obj).some((v) => {
-        if (Array.isArray(v)) return v.some((item) => findRef(item, name));
+        if (Array.isArray(v)) {
+          return v.some((item) => findRef(item, name));
+        }
         return findRef(v, name);
       });
     }

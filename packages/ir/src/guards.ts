@@ -23,9 +23,13 @@ export function isFnNode(expr: unknown): expr is FnNode {
 }
 
 export function isLiteral(expr: unknown): boolean {
-  if (!isPlainObject(expr)) return true;
+  if (!isPlainObject(expr)) {
+    return true;
+  }
   const tisyn = expr["tisyn"];
-  if (typeof tisyn !== "string") return true;
+  if (typeof tisyn !== "string") {
+    return true;
+  }
   return !IR_DISCRIMINANTS.has(tisyn);
 }
 
@@ -38,7 +42,9 @@ export function isTaggedNode(expr: unknown): expr is EvalNode | QuoteNode | RefN
 export type NodeClassification = "eval" | "quote" | "ref" | "fn" | "literal" | "malformed";
 
 export function classifyNode(value: unknown): NodeClassification {
-  if (!isPlainObject(value)) return "literal";
+  if (!isPlainObject(value)) {
+    return "literal";
+  }
 
   const tisyn = value["tisyn"];
   if (typeof tisyn !== "string" || !IR_DISCRIMINANTS.has(tisyn)) {
@@ -47,23 +53,36 @@ export function classifyNode(value: unknown): NodeClassification {
 
   switch (tisyn) {
     case "eval":
-      if (typeof value["id"] !== "string" || value["id"] === "" || !("data" in value))
+      if (typeof value["id"] !== "string" || value["id"] === "" || !("data" in value)) {
         return "malformed";
+      }
       return "eval";
     case "quote":
-      if (!("expr" in value)) return "malformed";
+      if (!("expr" in value)) {
+        return "malformed";
+      }
       return "quote";
     case "ref":
-      if (typeof value["name"] !== "string" || value["name"] === "") return "malformed";
+      if (typeof value["name"] !== "string" || value["name"] === "") {
+        return "malformed";
+      }
       return "ref";
     case "fn": {
       const params = value["params"];
-      if (!Array.isArray(params)) return "malformed";
-      for (const p of params) {
-        if (typeof p !== "string" || p === "") return "malformed";
+      if (!Array.isArray(params)) {
+        return "malformed";
       }
-      if (new Set(params).size !== params.length) return "malformed";
-      if (!("body" in value)) return "malformed";
+      for (const p of params) {
+        if (typeof p !== "string" || p === "") {
+          return "malformed";
+        }
+      }
+      if (new Set(params).size !== params.length) {
+        return "malformed";
+      }
+      if (!("body" in value)) {
+        return "malformed";
+      }
       return "fn";
     }
     default:

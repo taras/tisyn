@@ -171,7 +171,9 @@ function* evalStructural(id: string, data: Expr, env: Env): Generator<EffectDesc
       let result: Val = null;
       for (;;) {
         const cond = yield* evaluate(condExpr, env);
-        if (!truthy(cond)) return result;
+        if (!truthy(cond)) {
+          return result;
+        }
         for (const expr of bodyExprs) {
           result = yield* evaluate(expr, env);
         }
@@ -221,9 +223,15 @@ function* evalStructural(id: string, data: Expr, env: Env): Generator<EffectDesc
     case "mod": {
       const a = yield* evaluate(fields["a"] as Expr, env);
       const b = yield* evaluate(fields["b"] as Expr, env);
-      if (typeof a !== "number") throw new TypeError(`${id}: left operand is not a number`);
-      if (typeof b !== "number") throw new TypeError(`${id}: right operand is not a number`);
-      if ((id === "div" || id === "mod") && b === 0) throw new DivisionByZero();
+      if (typeof a !== "number") {
+        throw new TypeError(`${id}: left operand is not a number`);
+      }
+      if (typeof b !== "number") {
+        throw new TypeError(`${id}: right operand is not a number`);
+      }
+      if ((id === "div" || id === "mod") && b === 0) {
+        throw new DivisionByZero();
+      }
       switch (id) {
         case "add":
           return a + b;
@@ -246,8 +254,12 @@ function* evalStructural(id: string, data: Expr, env: Env): Generator<EffectDesc
     case "lte": {
       const a = yield* evaluate(fields["a"] as Expr, env);
       const b = yield* evaluate(fields["b"] as Expr, env);
-      if (typeof a !== "number") throw new TypeError(`${id}: left operand is not a number`);
-      if (typeof b !== "number") throw new TypeError(`${id}: right operand is not a number`);
+      if (typeof a !== "number") {
+        throw new TypeError(`${id}: left operand is not a number`);
+      }
+      if (typeof b !== "number") {
+        throw new TypeError(`${id}: right operand is not a number`);
+      }
       switch (id) {
         case "gt":
           return a > b;
@@ -273,13 +285,17 @@ function* evalStructural(id: string, data: Expr, env: Env): Generator<EffectDesc
     // §5.10 Short-circuit — return operand values, NOT booleans
     case "and": {
       const a = yield* evaluate(fields["a"] as Expr, env);
-      if (!truthy(a)) return a; // short-circuit: return A itself
+      if (!truthy(a)) {
+        return a;
+      } // short-circuit: return A itself
       return yield* evaluate(fields["b"] as Expr, env);
     }
 
     case "or": {
       const a = yield* evaluate(fields["a"] as Expr, env);
-      if (truthy(a)) return a; // short-circuit: return A itself
+      if (truthy(a)) {
+        return a;
+      } // short-circuit: return A itself
       return yield* evaluate(fields["b"] as Expr, env);
     }
 
@@ -291,7 +307,9 @@ function* evalStructural(id: string, data: Expr, env: Env): Generator<EffectDesc
 
     case "neg": {
       const a = yield* evaluate(fields["a"] as Expr, env);
-      if (typeof a !== "number") throw new TypeError("neg: operand is not a number");
+      if (typeof a !== "number") {
+        throw new TypeError("neg: operand is not a number");
+      }
       return -a;
     }
 
@@ -338,7 +356,9 @@ function* evalStructural(id: string, data: Expr, env: Env): Generator<EffectDesc
       const result: Val[] = [];
       for (const arr of arrays) {
         const val = yield* evaluate(arr, env);
-        if (!Array.isArray(val)) throw new TypeError(`concat-arrays: operand is not an array`);
+        if (!Array.isArray(val)) {
+          throw new TypeError(`concat-arrays: operand is not an array`);
+        }
         result.push(...(val as Val[]));
       }
       return result;
@@ -350,8 +370,9 @@ function* evalStructural(id: string, data: Expr, env: Env): Generator<EffectDesc
       const result: Record<string, Val> = {};
       for (const obj of objects) {
         const val = yield* evaluate(obj, env);
-        if (typeof val !== "object" || val === null || Array.isArray(val))
+        if (typeof val !== "object" || val === null || Array.isArray(val)) {
           throw new TypeError(`merge-objects: operand is not an object`);
+        }
         Object.assign(result, val as Record<string, Val>);
       }
       return result;
@@ -400,7 +421,9 @@ function* evalStructural(id: string, data: Expr, env: Env): Generator<EffectDesc
         yield* evaluate(finallyBody, finallyEnv);
       }
 
-      if (outcome.ok) return outcome.value;
+      if (outcome.ok) {
+        return outcome.value;
+      }
       throw outcome.error;
     }
 

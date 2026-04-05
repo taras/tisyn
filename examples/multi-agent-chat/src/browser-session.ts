@@ -165,7 +165,9 @@ export class BrowserSessionManager {
   }
 
   private handleMessage(ws: WebSocket, msg: BrowserToHost): void {
-    if (this.socket !== ws) return; // stale socket — ignore
+    if (this.socket !== ws) {
+      return;
+    } // stale socket — ignore
     if (msg.type === "userMessage" && this.pendingPrompt) {
       logInfo("session", "userMessage received", { message: msg.message });
       this.chatMessages.push({ role: "user", content: msg.message });

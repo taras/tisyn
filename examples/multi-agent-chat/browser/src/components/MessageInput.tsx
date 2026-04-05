@@ -18,7 +18,9 @@ export function MessageInput({
 
   const handleSend = () => {
     const trimmed = text.trim();
-    if (!trimmed || !enabled) return;
+    if (!trimmed || !enabled) {
+      return;
+    }
     setText("");
     onSend(trimmed);
   };
@@ -35,7 +37,9 @@ export function MessageInput({
         value={text}
         onChange={(e) => setText(e.target.value)}
         onKeyDown={(e) => {
-          if (e.key === "Enter") handleSend();
+          if (e.key === "Enter") {
+            handleSend();
+          }
         }}
       />
       <button disabled={!enabled} onClick={handleSend}>

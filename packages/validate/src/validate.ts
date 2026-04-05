@@ -46,7 +46,9 @@ export function validateGrammar(json: unknown): ValidationResult {
 }
 
 function walkGrammar(value: unknown, path: string[], errors: ValidationError[]): void {
-  if (value === null || typeof value !== "object") return;
+  if (value === null || typeof value !== "object") {
+    return;
+  }
 
   if (Array.isArray(value)) {
     for (let i = 0; i < value.length; i++) {
@@ -164,7 +166,9 @@ function walkGrammar(value: unknown, path: string[], errors: ValidationError[]):
 
 export function validateIr(json: unknown): ValidationResult {
   const grammarResult = validateGrammar(json);
-  if (!grammarResult.ok) return grammarResult;
+  if (!grammarResult.ok) {
+    return grammarResult;
+  }
 
   const errors: ValidationError[] = [];
   walkSemantic(json, [], errors);
@@ -175,7 +179,9 @@ export function validateIr(json: unknown): ValidationResult {
 }
 
 function walkSemantic(value: unknown, path: string[], errors: ValidationError[]): void {
-  if (value === null || typeof value !== "object") return;
+  if (value === null || typeof value !== "object") {
+    return;
+  }
 
   if (Array.isArray(value)) {
     for (let i = 0; i < value.length; i++) {
@@ -457,7 +463,9 @@ function checkNoExternalEvalInSubtree(
   path: string[],
   errors: ValidationError[],
 ): void {
-  if (value === null || typeof value !== "object") return;
+  if (value === null || typeof value !== "object") {
+    return;
+  }
 
   if (Array.isArray(value)) {
     for (let i = 0; i < value.length; i++) {
@@ -540,19 +548,29 @@ function getEvaluationPositions(id: string, fields: Record<string, unknown>): un
       const positions: unknown[] = [fields["condition"], fields["then"]].filter(
         (x) => x !== undefined,
       );
-      if ("else" in fields) positions.push(fields["else"]);
+      if ("else" in fields) {
+        positions.push(fields["else"]);
+      }
       return positions;
     }
     case "while": {
       const p: unknown[] = [];
-      if (fields["condition"] !== undefined) p.push(fields["condition"]);
-      if (Array.isArray(fields["exprs"])) p.push(...fields["exprs"]);
+      if (fields["condition"] !== undefined) {
+        p.push(fields["condition"]);
+      }
+      if (Array.isArray(fields["exprs"])) {
+        p.push(...fields["exprs"]);
+      }
       return p;
     }
     case "call": {
       const p: unknown[] = [];
-      if (fields["fn"] !== undefined) p.push(fields["fn"]);
-      if (Array.isArray(fields["args"])) p.push(...fields["args"]);
+      if (fields["fn"] !== undefined) {
+        p.push(fields["fn"]);
+      }
+      if (Array.isArray(fields["args"])) {
+        p.push(...fields["args"]);
+      }
       return p;
     }
     case "get":
@@ -588,14 +606,22 @@ function getEvaluationPositions(id: string, fields: Record<string, unknown>): un
       return Array.isArray(fields["objects"]) ? (fields["objects"] as unknown[]) : [];
     case "try": {
       const p: unknown[] = [];
-      if (fields["body"] !== undefined) p.push(fields["body"]);
-      if (fields["catchBody"] !== undefined) p.push(fields["catchBody"]);
-      if (fields["finally"] !== undefined) p.push(fields["finally"]);
+      if (fields["body"] !== undefined) {
+        p.push(fields["body"]);
+      }
+      if (fields["catchBody"] !== undefined) {
+        p.push(fields["catchBody"]);
+      }
+      if (fields["finally"] !== undefined) {
+        p.push(fields["finally"]);
+      }
       return p;
     }
     case "scope": {
       const positions: unknown[] = [];
-      if (fields["body"] !== undefined) positions.push(fields["body"]);
+      if (fields["body"] !== undefined) {
+        positions.push(fields["body"]);
+      }
       const bindings = fields["bindings"];
       if (isPlainObject(bindings)) {
         positions.push(...Object.values(bindings));
