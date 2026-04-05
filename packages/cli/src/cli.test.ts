@@ -1315,14 +1315,14 @@ describe("TypeScript descriptor module loading", () => {
     expect(result.stdout).toContain("Check passed");
   });
 
-  it("tsn check accepts TypeScript descriptor + generated JS workflow", function* () {
+  it("tsn run --help loads TypeScript descriptor and shows workflow flags", function* () {
     const dir = yield* call(makeTempDir);
-    const descriptorPath = yield* writeTsFixture(dir, FIXTURE_WORKFLOW_NONE);
+    const descriptorPath = yield* writeTsFixture(dir, FIXTURE_WORKFLOW);
     const result = yield* exec("node", {
-      arguments: [CLI_BIN, "check", descriptorPath],
+      arguments: [CLI_BIN, "run", descriptorPath, "--help"],
     }).join();
     expect(result.code ?? 0).toBe(0);
-    expect(result.stdout).toContain("Check passed");
+    expect(result.stdout).toContain("--max-turns");
   });
 
   it("tsn check compiles explicit TS workflow source", function* () {

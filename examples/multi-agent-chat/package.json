@@ -10,7 +10,7 @@
     "pretest": "pnpm run build:workflow",
     "test": "vitest run",
     "predev": "pnpm run build && pnpm run build:browser",
-    "dev": "tsn run dist/descriptor.js -e dev",
+    "dev": "tsn run src/workflow.ts -e dev",
     "dev:browser": "vite",
     "build:browser": "vite build",
     "build:test-workflows": "tsn build -c tisyn.config.ts",
