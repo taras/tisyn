@@ -11,16 +11,24 @@ import { compileOne } from "./index.js";
 // ── Helpers ──
 
 function findNode(node: unknown, id: string): Record<string, any> | undefined {
-  if (typeof node !== "object" || node === null) return undefined;
+  if (typeof node !== "object" || node === null) {
+    return undefined;
+  }
   const obj = node as Record<string, unknown>;
-  if (obj["tisyn"] === "eval" && obj["id"] === id) return obj as Record<string, any>;
+  if (obj["tisyn"] === "eval" && obj["id"] === id) {
+    return obj as Record<string, any>;
+  }
   for (const value of Object.values(obj)) {
     const found = findNode(value, id);
-    if (found) return found;
+    if (found) {
+      return found;
+    }
     if (Array.isArray(value)) {
       for (const item of value) {
         const found = findNode(item, id);
-        if (found) return found;
+        if (found) {
+          return found;
+        }
       }
     }
   }

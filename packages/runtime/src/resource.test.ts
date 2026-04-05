@@ -120,7 +120,9 @@ describe("resource orchestration", () => {
   it("init effects journaled under child coroutineId", function* () {
     yield* Effects.around({
       *dispatch([effectId, _data]: [string, unknown]) {
-        if (effectId === "db.connect") return "conn-handle";
+        if (effectId === "db.connect") {
+          return "conn-handle";
+        }
         return null;
       },
     });
@@ -277,7 +279,9 @@ describe("resource orchestration", () => {
   it("replay produces identical results", function* () {
     yield* Effects.around({
       *dispatch([effectId, _data]: [string, unknown]) {
-        if (effectId === "db.connect") return "handle";
+        if (effectId === "db.connect") {
+          return "handle";
+        }
         return null;
       },
     });

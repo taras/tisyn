@@ -69,7 +69,9 @@ export function createSession(options: CreateSessionOptions): Operation<Protocol
       try {
         for (;;) {
           const { value, done } = yield* sub.next();
-          if (done) break;
+          if (done) {
+            break;
+          }
 
           if ("result" in value && "ok" in value.result) {
             const req = pending.get(String(value.id));

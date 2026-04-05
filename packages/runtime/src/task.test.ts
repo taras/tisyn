@@ -94,8 +94,12 @@ describe("all", () => {
       // biome-ignore lint/correctness/useYield: mock
       *dispatch([effectId, _data]: [string, any]) {
         const { name } = parseEffectId(effectId);
-        if (name === "fail1") throw new Error("error from child 0");
-        if (name === "fail2") throw new Error("error from child 1");
+        if (name === "fail1") {
+          throw new Error("error from child 0");
+        }
+        if (name === "fail2") {
+          throw new Error("error from child 1");
+        }
         return 42;
       },
     });
@@ -115,7 +119,9 @@ describe("all", () => {
       // biome-ignore lint/correctness/useYield: mock
       *dispatch([effectId, _data]: [string, any]) {
         const { name } = parseEffectId(effectId);
-        if (name === "fail") throw new Error("boom");
+        if (name === "fail") {
+          throw new Error("boom");
+        }
         return 42;
       },
     });
@@ -140,7 +146,9 @@ describe("race", () => {
       // biome-ignore lint/correctness/useYield: mock
       *dispatch([effectId, _data]: [string, any]) {
         const { name } = parseEffectId(effectId);
-        if (name === "fast") return "winner";
+        if (name === "fast") {
+          return "winner";
+        }
         return "loser";
       },
     });
@@ -182,7 +190,9 @@ describe("race", () => {
       // biome-ignore lint/correctness/useYield: mock
       *dispatch([effectId, _data]: [string, any]) {
         const { name } = parseEffectId(effectId);
-        if (name === "fail") throw new Error("nope");
+        if (name === "fail") {
+          throw new Error("nope");
+        }
         return "success";
       },
     });
@@ -202,8 +212,12 @@ describe("race", () => {
       // biome-ignore lint/correctness/useYield: mock
       *dispatch([effectId, _data]: [string, any]) {
         const { name } = parseEffectId(effectId);
-        if (name === "fail1") throw new Error("error 0");
-        if (name === "fail2") throw new Error("error 1");
+        if (name === "fail1") {
+          throw new Error("error 0");
+        }
+        if (name === "fail2") {
+          throw new Error("error 1");
+        }
         throw new Error("unknown");
       },
     });

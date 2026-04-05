@@ -50,7 +50,9 @@ describe("inprocessTransport scope isolation", () => {
           yield* dispatch(PROBE_ID, null as Val);
         } catch (e) {
           const msg = (e as Error).message ?? "";
-          if (msg === "host-leaked") throw e; // host middleware leaked — test should fail
+          if (msg === "host-leaked") {
+            throw e;
+          } // host middleware leaked — test should fail
           // "No agent registered..." → expected in isolated scope, continue
         }
         return a + b;

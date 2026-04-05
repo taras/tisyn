@@ -17,7 +17,9 @@ export interface ExecuteRemoteOptions {
  */
 export function* executeRemote(options: ExecuteRemoteOptions): Operation<Json> {
   const { result } = yield* execute({ ir: options.program, env: options.env });
-  if (result.status === "ok") return result.value;
+  if (result.status === "ok") {
+    return result.value;
+  }
   if (result.status === "err") {
     throw new Error(result.error.message, { cause: result });
   }

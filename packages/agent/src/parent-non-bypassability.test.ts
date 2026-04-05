@@ -106,7 +106,9 @@ describe("parent enforcement non-bypassability", () => {
 
     // Enforcement denies "blocked.op" in the same scope
     yield* installEnforcement(function* (effectId, data, inner) {
-      if (effectId === "blocked.op") throw new Error("denied by enforcement");
+      if (effectId === "blocked.op") {
+        throw new Error("denied by enforcement");
+      }
       return yield* inner(effectId, data);
     });
 

@@ -54,7 +54,9 @@ function roundTrip(expr: any) {
   expect(result.ok, `parseDSL(print(expr)) failed: ${!result.ok && result.error.message}`).toBe(
     true,
   );
-  if (result.ok) expect(result.value).toEqual(expr);
+  if (result.ok) {
+    expect(result.value).toEqual(expr);
+  }
 }
 
 // ── §11.4 Core Fixtures — Literals ───────────────────────────────────────────
@@ -125,7 +127,9 @@ describe("DSL-020: Ref", () => {
   it('parses Ref("x")', () => {
     const result = parseDSLSafe('Ref("x")');
     expect(result.ok).toBe(true);
-    if (result.ok) expect(result.value).toEqual({ tisyn: "ref", name: "x" });
+    if (result.ok) {
+      expect(result.value).toEqual({ tisyn: "ref", name: "x" });
+    }
   });
   it("round-trips", () => roundTrip(Ref("x") as never));
 });
@@ -135,7 +139,9 @@ describe("DSL-021: Add", () => {
     const expected = Add(1, 2);
     const result = parseDSLSafe("Add(1, 2)");
     expect(result.ok).toBe(true);
-    if (result.ok) expect(result.value).toEqual(expected);
+    if (result.ok) {
+      expect(result.value).toEqual(expected);
+    }
   });
 });
 
@@ -144,7 +150,9 @@ describe("DSL-022: Not", () => {
     const expected = Not(true as never);
     const result = parseDSLSafe("Not(true)");
     expect(result.ok).toBe(true);
-    if (result.ok) expect(result.value).toEqual(expected);
+    if (result.ok) {
+      expect(result.value).toEqual(expected);
+    }
   });
 });
 
@@ -153,7 +161,9 @@ describe("DSL-023: Throw", () => {
     const expected = Throw("bad" as never);
     const result = parseDSLSafe('Throw("bad")');
     expect(result.ok).toBe(true);
-    if (result.ok) expect(result.value).toEqual(expected);
+    if (result.ok) {
+      expect(result.value).toEqual(expected);
+    }
   });
 });
 
@@ -164,7 +174,9 @@ describe("DSL-030: Let + Ref", () => {
     const expected = Let("x", 1, Ref("x"));
     const result = parseDSLSafe('Let("x", 1, Ref("x"))');
     expect(result.ok).toBe(true);
-    if (result.ok) expect(result.value).toEqual(expected);
+    if (result.ok) {
+      expect(result.value).toEqual(expected);
+    }
   });
   it("round-trips", () => roundTrip(Let("x", 1, Ref("x")) as never));
 });
@@ -174,7 +186,9 @@ describe("DSL-031: If with else", () => {
     const expected = If(Eq(1, 2), "yes", "no");
     const result = parseDSLSafe('If(Eq(1, 2), "yes", "no")');
     expect(result.ok).toBe(true);
-    if (result.ok) expect(result.value).toEqual(expected);
+    if (result.ok) {
+      expect(result.value).toEqual(expected);
+    }
   });
   it("round-trips", () => roundTrip(If(Eq(1, 2), "yes", "no") as never));
 });
@@ -184,7 +198,9 @@ describe("DSL-032: If without else", () => {
     const expected = If(true as never, 1);
     const result = parseDSLSafe("If(true, 1)");
     expect(result.ok).toBe(true);
-    if (result.ok) expect(result.value).toEqual(expected);
+    if (result.ok) {
+      expect(result.value).toEqual(expected);
+    }
   });
   it("round-trips", () => roundTrip(If(true as never, 1) as never));
 });
@@ -194,7 +210,9 @@ describe("DSL-033: nested binary ops", () => {
     const expected = Add(Add(1, 2) as never, 3);
     const result = parseDSLSafe("Add(Add(1, 2), 3)");
     expect(result.ok).toBe(true);
-    if (result.ok) expect(result.value).toEqual(expected);
+    if (result.ok) {
+      expect(result.value).toEqual(expected);
+    }
   });
   it("round-trips", () => roundTrip(Add(Add(1, 2) as never, 3) as never));
 });
@@ -206,7 +224,9 @@ describe("DSL-040: Eval with Ref payload", () => {
     const expected = Eval("svc.op", Ref("x"));
     const result = parseDSLSafe('Eval("svc.op", Ref("x"))');
     expect(result.ok).toBe(true);
-    if (result.ok) expect(result.value).toEqual(expected);
+    if (result.ok) {
+      expect(result.value).toEqual(expected);
+    }
   });
   it("round-trips", () => roundTrip(Eval("svc.op", Ref("x")) as never));
 });
@@ -216,7 +236,9 @@ describe("DSL-041: Eval with array payload", () => {
     const expected = Eval("svc.op", [Ref("x"), 42]);
     const result = parseDSLSafe('Eval("svc.op", [Ref("x"), 42])');
     expect(result.ok).toBe(true);
-    if (result.ok) expect(result.value).toEqual(expected);
+    if (result.ok) {
+      expect(result.value).toEqual(expected);
+    }
   });
   it("round-trips", () => roundTrip(Eval("svc.op", [Ref("x"), 42]) as never));
 });
@@ -226,7 +248,9 @@ describe("DSL-042: Eval with null payload", () => {
     const expected = Eval("svc.op", null);
     const result = parseDSLSafe('Eval("svc.op", null)');
     expect(result.ok).toBe(true);
-    if (result.ok) expect(result.value).toEqual(expected);
+    if (result.ok) {
+      expect(result.value).toEqual(expected);
+    }
   });
   it("round-trips", () => roundTrip(Eval("svc.op", null) as never));
 });
@@ -238,7 +262,9 @@ describe("DSL-050: All", () => {
     const expected = All(Eval("a.b", null) as never, Eval("c.d", null) as never);
     const result = parseDSLSafe('All(Eval("a.b", null), Eval("c.d", null))');
     expect(result.ok).toBe(true);
-    if (result.ok) expect(result.value).toEqual(expected);
+    if (result.ok) {
+      expect(result.value).toEqual(expected);
+    }
   });
   it("round-trips", () => {
     roundTrip(All(Eval("a.b", null) as never, Eval("c.d", null) as never) as never);
@@ -250,7 +276,9 @@ describe("DSL-051: Race", () => {
     const expected = Race(Eval("a.b", null) as never, Eval("c.d", null) as never);
     const result = parseDSLSafe('Race(Eval("a.b", null), Eval("c.d", null))');
     expect(result.ok).toBe(true);
-    if (result.ok) expect(result.value).toEqual(expected);
+    if (result.ok) {
+      expect(result.value).toEqual(expected);
+    }
   });
   it("round-trips", () => {
     roundTrip(Race(Eval("a.b", null) as never, Eval("c.d", null) as never) as never);
@@ -262,7 +290,9 @@ describe("DSL-052: Arr", () => {
     const expected = Arr(1, 2, 3);
     const result = parseDSLSafe("Arr(1, 2, 3)");
     expect(result.ok).toBe(true);
-    if (result.ok) expect(result.value).toEqual(expected);
+    if (result.ok) {
+      expect(result.value).toEqual(expected);
+    }
   });
   it("round-trips", () => roundTrip(Arr(1, 2, 3) as never));
 });
@@ -272,7 +302,9 @@ describe("DSL-053: Construct", () => {
     const expected = Construct({ name: "test" as never, value: 42 as never });
     const result = parseDSLSafe('Construct({ name: "test", value: 42 })');
     expect(result.ok).toBe(true);
-    if (result.ok) expect(result.value).toEqual(expected);
+    if (result.ok) {
+      expect(result.value).toEqual(expected);
+    }
   });
   it("round-trips", () => {
     roundTrip(Construct({ name: "test" as never, value: 42 as never }) as never);
@@ -286,7 +318,9 @@ describe('DSL-060: Fn(["x"], Add(Ref("x"), 1))', () => {
     const expected = Fn(["x"], Add(Ref("x"), 1) as never);
     const result = parseDSLSafe('Fn(["x"], Add(Ref("x"), 1))');
     expect(result.ok).toBe(true);
-    if (result.ok) expect(result.value).toEqual(expected);
+    if (result.ok) {
+      expect(result.value).toEqual(expected);
+    }
   });
   it("round-trips", () => {
     roundTrip(Fn(["x"], Add(Ref("x"), 1) as never) as never);
@@ -299,7 +333,9 @@ describe("DSL-061: Let + Fn + Call", () => {
     const expected = Let("f", Fn(["x"], Add(Ref("x"), 1) as never), (Call as any)(Ref("f"), [42]));
     const result = parseDSLSafe('Let("f", Fn(["x"], Add(Ref("x"), 1)), Call(Ref("f"), [42]))');
     expect(result.ok).toBe(true);
-    if (result.ok) expect(result.value).toEqual(expected);
+    if (result.ok) {
+      expect(result.value).toEqual(expected);
+    }
   });
 });
 
@@ -345,7 +381,9 @@ describe("DSL-070: poll-job pattern", () => {
     const src = print(pollJobIR);
     const result = parseDSLSafe(src);
     expect(result.ok).toBe(true);
-    if (result.ok) expect(result.value).toEqual(pollJobIR);
+    if (result.ok) {
+      expect(result.value).toEqual(pollJobIR);
+    }
   });
 });
 
@@ -355,7 +393,9 @@ describe("DSL-080: too few args for Let", () => {
   it("reports arity error mentioning at least 3", () => {
     const result = parseDSLSafe('Let("x", 1)');
     expect(result.ok).toBe(false);
-    if (!result.ok) expect(result.error.message).toMatch(/at least 3/);
+    if (!result.ok) {
+      expect(result.error.message).toMatch(/at least 3/);
+    }
   });
 });
 
@@ -363,7 +403,9 @@ describe("DSL-081: too many args for Add", () => {
   it("reports arity error mentioning at most 2", () => {
     const result = parseDSLSafe("Add(1, 2, 3)");
     expect(result.ok).toBe(false);
-    if (!result.ok) expect(result.error.message).toMatch(/at most 2/);
+    if (!result.ok) {
+      expect(result.error.message).toMatch(/at most 2/);
+    }
   });
 });
 
@@ -371,7 +413,9 @@ describe("DSL-082: too few args for Ref", () => {
   it("reports arity error mentioning at least 1", () => {
     const result = parseDSLSafe("Ref()");
     expect(result.ok).toBe(false);
-    if (!result.ok) expect(result.error.message).toMatch(/at least 1/);
+    if (!result.ok) {
+      expect(result.error.message).toMatch(/at least 1/);
+    }
   });
 });
 
@@ -381,7 +425,9 @@ describe("DSL-090: unknown constructor", () => {
   it("reports unknown constructor error", () => {
     const result = parseDSLSafe("Foo(1, 2)");
     expect(result.ok).toBe(false);
-    if (!result.ok) expect(result.error.message).toMatch(/Unknown constructor/);
+    if (!result.ok) {
+      expect(result.error.message).toMatch(/Unknown constructor/);
+    }
   });
 });
 
@@ -389,7 +435,9 @@ describe("DSL-091: bare identifier suggests Ref", () => {
   it('suggests Ref("orderId")', () => {
     const result = parseDSLSafe("orderId");
     expect(result.ok).toBe(false);
-    if (!result.ok) expect(result.error.message).toMatch(/Ref\("orderId"\)/);
+    if (!result.ok) {
+      expect(result.error.message).toMatch(/Ref\("orderId"\)/);
+    }
   });
 });
 
@@ -397,7 +445,9 @@ describe("DSL-092: unterminated string", () => {
   it("reports a lexical error", () => {
     const result = parseDSLSafe('Ref("hello');
     expect(result.ok).toBe(false);
-    if (!result.ok) expect(result.error).toBeInstanceOf(DSLParseError);
+    if (!result.ok) {
+      expect(result.error).toBeInstanceOf(DSLParseError);
+    }
   });
 });
 
@@ -405,7 +455,9 @@ describe("DSL-093: unexpected character", () => {
   it("reports unexpected character error", () => {
     const result = parseDSLSafe("Add(1 @ 2)");
     expect(result.ok).toBe(false);
-    if (!result.ok) expect(result.error.message).toMatch(/Unexpected character/);
+    if (!result.ok) {
+      expect(result.error.message).toMatch(/Unexpected character/);
+    }
   });
 });
 
@@ -413,7 +465,9 @@ describe("DSL-094: trailing tokens after expression", () => {
   it("reports unexpected token error", () => {
     const result = parseDSLSafe("Add(1, 2) Add(3, 4)");
     expect(result.ok).toBe(false);
-    if (!result.ok) expect(result.error.message).toMatch(/Unexpected token/);
+    if (!result.ok) {
+      expect(result.error.message).toMatch(/Unexpected token/);
+    }
   });
 });
 
@@ -421,7 +475,9 @@ describe("DSL-095: error position is accurate", () => {
   it("reports error on line 3 for @@@", () => {
     const result = parseDSLSafe('Let("x",\n  1,\n  @@@)');
     expect(result.ok).toBe(false);
-    if (!result.ok) expect((result.error as DSLParseError).line).toBe(3);
+    if (!result.ok) {
+      expect((result.error as DSLParseError).line).toBe(3);
+    }
   });
 });
 
@@ -492,7 +548,9 @@ describe("DSL-110: cannot recover missing semantic content", () => {
   it("parseDSLWithRecovery reports arity error", () => {
     const result = parseDSLWithRecovery('Let("x", Add(1, 2)');
     expect(result.ok).toBe(false);
-    if (!result.ok) expect(result.error.message).toMatch(/at least 3/);
+    if (!result.ok) {
+      expect(result.error.message).toMatch(/at least 3/);
+    }
   });
 });
 
@@ -517,7 +575,9 @@ describe("DSL-113: nested delimiters inside one arg do not inflate pending count
   it("parseDSLWithRecovery: does not attempt repair and returns failure", () => {
     const result = parseDSLWithRecovery('Let("x", [[1');
     expect(result.ok).toBe(false);
-    if (!result.ok) expect(result.repaired).toBeUndefined();
+    if (!result.ok) {
+      expect(result.repaired).toBeUndefined();
+    }
   });
 });
 
@@ -593,7 +653,9 @@ describe("DSL-204: Seq with zero args", () => {
     const expected = (Seq as any)();
     const result = parseDSLSafe("Seq()");
     expect(result.ok).toBe(true);
-    if (result.ok) expect(result.value).toEqual(expected);
+    if (result.ok) {
+      expect(result.value).toEqual(expected);
+    }
   });
 });
 
@@ -741,7 +803,9 @@ describe("DSL-080: Try — try/catch form", () => {
     const expected = Try(Throw("boom" as never), "e", Ref("e") as never);
     const result = parseDSLSafe('Try(Throw("boom"), "e", Ref("e"))');
     expect(result.ok).toBe(true);
-    if (result.ok) expect(result.value).toEqual(expected);
+    if (result.ok) {
+      expect(result.value).toEqual(expected);
+    }
   });
   it("round-trips", () => {
     roundTrip(Try(Throw("boom" as never), "e", Ref("e") as never) as never);
@@ -753,7 +817,9 @@ describe("DSL-081: Try — try/finally form", () => {
     const expected = Try(Ref("x") as never, undefined, undefined, Ref("y") as never);
     const result = parseDSLSafe('Try(Ref("x"), undefined, undefined, Ref("y"))');
     expect(result.ok).toBe(true);
-    if (result.ok) expect(result.value).toEqual(expected);
+    if (result.ok) {
+      expect(result.value).toEqual(expected);
+    }
   });
   it("round-trips", () => {
     roundTrip(Try(Ref("x") as never, undefined, undefined, Ref("y") as never) as never);
@@ -765,7 +831,9 @@ describe("DSL-082: Try — try/catch/finally form", () => {
     const expected = Try(Throw("boom" as never), "e", Ref("e") as never, Ref("y") as never);
     const result = parseDSLSafe('Try(Throw("boom"), "e", Ref("e"), Ref("y"))');
     expect(result.ok).toBe(true);
-    if (result.ok) expect(result.value).toEqual(expected);
+    if (result.ok) {
+      expect(result.value).toEqual(expected);
+    }
   });
   it("round-trips", () => {
     roundTrip(Try(Throw("boom" as never), "e", Ref("e") as never, Ref("y") as never) as never);
@@ -812,14 +880,18 @@ describe("DSL: Timebox constructor", () => {
     const expected = Timebox(5000 as never, 42 as never);
     const result = parseDSLSafe("Timebox(5000, 42)");
     expect(result.ok).toBe(true);
-    if (result.ok) expect(result.value).toEqual(expected);
+    if (result.ok) {
+      expect(result.value).toEqual(expected);
+    }
   });
 
   it("parses Timebox with nested expressions", () => {
     const expected = Timebox(Ref("t") as never, Eval("sleep", [100] as never) as never);
     const result = parseDSLSafe('Timebox(Ref("t"), Eval("sleep", [100]))');
     expect(result.ok).toBe(true);
-    if (result.ok) expect(result.value).toEqual(expected);
+    if (result.ok) {
+      expect(result.value).toEqual(expected);
+    }
   });
 
   it("round-trips", () => {
@@ -843,7 +915,9 @@ describe("DSL: Converge macro", () => {
   it("expands Converge to timebox IR (no 'converge' id)", () => {
     const result = parseDSLSafe('Converge(42, Fn(["x"], Gt(Ref("x"), 0)), 100, 5000)');
     expect(result.ok).toBe(true);
-    if (!result.ok) return;
+    if (!result.ok) {
+      return;
+    }
     const ir = result.value as Record<string, any>;
     // Top-level should be timebox
     expect(ir.tisyn).toBe("eval");
@@ -855,7 +929,9 @@ describe("DSL: Converge macro", () => {
   it("expansion contains __until_0, __poll_0, __probe_0, __discard_0 names", () => {
     const result = parseDSLSafe('Converge(42, Fn(["x"], Gt(Ref("x"), 0)), 100, 5000)');
     expect(result.ok).toBe(true);
-    if (!result.ok) return;
+    if (!result.ok) {
+      return;
+    }
     const text = JSON.stringify(result.value);
     expect(text).toContain("__until_0");
     expect(text).toContain("__poll_0");
@@ -866,7 +942,9 @@ describe("DSL: Converge macro", () => {
   it("sleep node uses interval value (3rd arg)", () => {
     const result = parseDSLSafe('Converge(42, Fn(["x"], Gt(Ref("x"), 0)), 200, 5000)');
     expect(result.ok).toBe(true);
-    if (!result.ok) return;
+    if (!result.ok) {
+      return;
+    }
     const text = JSON.stringify(result.value);
     // The sleep data should contain the interval 200
     expect(text).toContain('"id":"sleep"');
@@ -887,7 +965,9 @@ describe("DSL: Converge macro", () => {
     // Build the same converge via DSL macro
     const dslResult = parseDSLSafe('Converge(42, Fn(["x"], Gt(Ref("x"), 0)), 100, 5000)');
     expect(dslResult.ok).toBe(true);
-    if (!dslResult.ok) return;
+    if (!dslResult.ok) {
+      return;
+    }
 
     // The DSL macro uses fixed names __until_0, __poll_0, etc.
     // Verify the structure matches the expected lowering shape

@@ -18,7 +18,9 @@ export class FileJournalStream implements DurableStream {
     try {
       content = yield* call(() => readFile(this.path, "utf-8"));
     } catch (e: unknown) {
-      if ((e as NodeJS.ErrnoException).code === "ENOENT") return [];
+      if ((e as NodeJS.ErrnoException).code === "ENOENT") {
+        return [];
+      }
       throw e;
     }
     return content

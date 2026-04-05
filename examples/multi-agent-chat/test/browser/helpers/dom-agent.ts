@@ -10,7 +10,9 @@ export function createDomAgentHandlers() {
             const el = screen.getByRole("textbox", {
               name: input.name,
             }) as HTMLInputElement;
-            if (el.disabled) throw new Error(`Textbox "${input.name}" is disabled`);
+            if (el.disabled) {
+              throw new Error(`Textbox "${input.name}" is disabled`);
+            }
             const nativeSetter = Object.getOwnPropertyDescriptor(
               HTMLInputElement.prototype,
               "value",
@@ -30,7 +32,9 @@ export function createDomAgentHandlers() {
             const el = screen.getByRole(input.role as any, {
               name: input.name,
             }) as HTMLButtonElement;
-            if (el.disabled) throw new Error(`${input.role} "${input.name}" is disabled`);
+            if (el.disabled) {
+              throw new Error(`${input.role} "${input.name}" is disabled`);
+            }
             el.click();
           },
           { timeout: 5000 },
@@ -42,7 +46,9 @@ export function createDomAgentHandlers() {
       yield* call(() =>
         waitFor(() => {
           const active = document.activeElement;
-          if (!active) throw new Error("No focused element");
+          if (!active) {
+            throw new Error("No focused element");
+          }
           active.dispatchEvent(new KeyboardEvent("keydown", { key: input.key, bubbles: true }));
           active.dispatchEvent(new KeyboardEvent("keyup", { key: input.key, bubbles: true }));
         }),
@@ -65,7 +71,9 @@ export function createDomAgentHandlers() {
         waitFor(
           () => {
             const el = screen.queryByText(input.text);
-            if (el) throw new Error(`Expected "${input.text}" to not be visible`);
+            if (el) {
+              throw new Error(`Expected "${input.text}" to not be visible`);
+            }
           },
           { timeout: 5000 },
         ),
@@ -79,8 +87,9 @@ export function createDomAgentHandlers() {
             const el = screen.getByRole(input.role as any, {
               name: input.name,
             }) as HTMLInputElement;
-            if (!el.disabled)
+            if (!el.disabled) {
               throw new Error(`Expected ${input.role} "${input.name}" to be disabled`);
+            }
           },
           { timeout: 5000 },
         ),
@@ -94,8 +103,9 @@ export function createDomAgentHandlers() {
             const el = screen.getByRole(input.role as any, {
               name: input.name,
             }) as HTMLInputElement;
-            if (el.disabled)
+            if (el.disabled) {
               throw new Error(`Expected ${input.role} "${input.name}" to be enabled`);
+            }
           },
           { timeout: 5000 },
         ),

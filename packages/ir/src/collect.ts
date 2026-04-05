@@ -48,7 +48,9 @@ function collectFreeRefsSet(expr: TisynExpr, bound: Set<string>): Set<string> {
   }
 
   if (isRefNode(expr)) {
-    if (bound.has(expr.name)) return new Set();
+    if (bound.has(expr.name)) {
+      return new Set();
+    }
     return new Set([expr.name]);
   }
 

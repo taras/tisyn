@@ -98,7 +98,9 @@ export function tokenize(source: string): Token[] {
     // '-' only starts a number if immediately followed by a digit.
     if ((ch === "-" && isDigit(peek(1))) || isDigit(ch)) {
       let raw = "";
-      if (source[i] === "-") raw += advance(); // optional leading minus
+      if (source[i] === "-") {
+        raw += advance();
+      } // optional leading minus
       // Integer part: JSON forbids leading zeroes — '0' may not be followed by another digit
       if (source[i] === "0") {
         raw += advance(); // consume the '0'
@@ -111,7 +113,9 @@ export function tokenize(source: string): Token[] {
           );
         }
       } else {
-        while (i < source.length && isDigit(source[i])) raw += advance();
+        while (i < source.length && isDigit(source[i])) {
+          raw += advance();
+        }
       }
       // Fractional part: '.' must be followed by at least one digit
       if (i < source.length && source[i] === ".") {
@@ -124,12 +128,16 @@ export function tokenize(source: string): Token[] {
           );
         }
         raw += advance(); // '.'
-        while (i < source.length && isDigit(source[i])) raw += advance();
+        while (i < source.length && isDigit(source[i])) {
+          raw += advance();
+        }
       }
       // Exponent part: 'e'/'E' must be followed by at least one digit (with optional sign)
       if (i < source.length && (source[i] === "e" || source[i] === "E")) {
         raw += advance(); // 'e' or 'E'
-        if (i < source.length && (source[i] === "+" || source[i] === "-")) raw += advance();
+        if (i < source.length && (source[i] === "+" || source[i] === "-")) {
+          raw += advance();
+        }
         if (!isDigit(source[i] ?? "")) {
           throw new DSLParseError(
             `Invalid number: at least one digit required after exponent`,
@@ -138,7 +146,9 @@ export function tokenize(source: string): Token[] {
             startOffset,
           );
         }
-        while (i < source.length && isDigit(source[i])) raw += advance();
+        while (i < source.length && isDigit(source[i])) {
+          raw += advance();
+        }
       }
       tokens.push(makeToken("NUMBER", raw, startOffset, startLine, startCol));
       continue;
@@ -205,7 +215,9 @@ export function tokenize(source: string): Token[] {
               }
               decoded += String.fromCharCode(code);
               // advance 4 chars manually (they may not be newlines)
-              for (let k = 0; k < 4; k++) advance();
+              for (let k = 0; k < 4; k++) {
+                advance();
+              }
               break;
             }
             default:
@@ -226,7 +238,9 @@ export function tokenize(source: string): Token[] {
     // Identifier
     if (isIdentStart(ch)) {
       let ident = "";
-      while (i < source.length && isIdentContinue(source[i])) ident += advance();
+      while (i < source.length && isIdentContinue(source[i])) {
+        ident += advance();
+      }
       tokens.push(makeToken("IDENT", ident, startOffset, startLine, startCol));
       continue;
     }

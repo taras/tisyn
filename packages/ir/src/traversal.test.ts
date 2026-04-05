@@ -57,7 +57,9 @@ describe("walk", () => {
     const paths: string[][] = [];
     walk(Let("x", 1, Ref("x")) as TisynExpr, {
       enter(node, path) {
-        if (isRefNode(node)) paths.push([...path]);
+        if (isRefNode(node)) {
+          paths.push([...path]);
+        }
       },
     });
     expect(paths[0]).toEqual(["data", "expr", "body"]);
@@ -67,8 +69,12 @@ describe("walk", () => {
     const order: string[] = [];
     walk(Add(1, 2) as TisynExpr, {
       leave(node) {
-        if (typeof node === "number") order.push(String(node));
-        if (isEvalNode(node)) order.push("add");
+        if (typeof node === "number") {
+          order.push(String(node));
+        }
+        if (isEvalNode(node)) {
+          order.push("add");
+        }
       },
     });
     expect(order).toEqual(["1", "2", "add"]);

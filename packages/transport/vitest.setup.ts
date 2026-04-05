@@ -5,6 +5,8 @@
 // surface as uncaught exceptions. This is harmless — the process is
 // already exiting.
 process.on("uncaughtException", (err) => {
-  if ((err as NodeJS.ErrnoException).code === "EPIPE") return;
+  if ((err as NodeJS.ErrnoException).code === "EPIPE") {
+    return;
+  }
   throw err;
 });

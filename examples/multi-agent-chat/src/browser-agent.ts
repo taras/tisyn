@@ -47,7 +47,9 @@ export function createBinding(): LocalAgentBinding {
     }),
 
     *bindServer(server: LocalServerBinding) {
-      if (!server.connections) return;
+      if (!server.connections) {
+        return;
+      }
 
       yield* spawn(function* () {
         for (const connection of yield* each(server.connections!)) {

@@ -9,7 +9,9 @@ process.stdin.on("data", (chunk: string) => {
   buffer = lines.pop() ?? "";
 
   for (const line of lines) {
-    if (!line.trim()) continue;
+    if (!line.trim()) {
+      continue;
+    }
     const msg = JSON.parse(line);
 
     if (msg.method === "initialize") {

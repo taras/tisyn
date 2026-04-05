@@ -325,7 +325,9 @@ export function formatCompileError(error: unknown): string {
     const text = ce.message.replace(/^\S+ at \d+:\d+: /, "");
     let out = `error[${ce.code}]: ${text}`;
     const parts = [ce.inputFile, ce.line, ce.column].filter((v) => v != null);
-    if (parts.length > 0) out += `\n  --> ${parts.join(":")}`;
+    if (parts.length > 0) {
+      out += `\n  --> ${parts.join(":")}`;
+    }
     return out;
   }
   return error instanceof Error ? error.message : String(error);

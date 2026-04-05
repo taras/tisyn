@@ -110,7 +110,9 @@ function lookupBinding(
   for (let i = ctx.scopeStack.length - 1; i >= 0; i--) {
     const frame = ctx.scopeStack[i]!;
     const info = frame.get(name);
-    if (info !== undefined) return { frame, info };
+    if (info !== undefined) {
+      return { frame, info };
+    }
   }
   return undefined;
 }
@@ -154,7 +156,9 @@ function isForbiddenCaptureBinding(name: string, ctx: EmitContext): boolean {
 
 function resolveRef(name: string, ctx: EmitContext): string {
   const found = lookupBinding(name, ctx);
-  if (found) return versionedName(name, found.info);
+  if (found) {
+    return versionedName(name, found.info);
+  }
   return name; // untracked (e.g. const declared before SSA, external)
 }
 
@@ -186,7 +190,9 @@ function cloneScopeStackForSpawnBody(stack: ScopeFrame[]): ScopeFrame[] {
 
 /** Check if an AST subtree contains any `yield*` expression. */
 function containsYieldStar(node: ts.Node): boolean {
-  if (ts.isYieldExpression(node) && node.asteriskToken) return true;
+  if (ts.isYieldExpression(node) && node.asteriskToken) {
+    return true;
+  }
   return ts.forEachChild(node, containsYieldStar) ?? false;
 }
 
@@ -254,7 +260,9 @@ export function createStrictContext(
 // ── Statement compilation (Spec §5.1) ──
 
 function emitStatementList(stmts: ts.Statement[], index: number, ctx: EmitContext): Expr {
-  if (index >= stmts.length) return null as unknown as Expr;
+  if (index >= stmts.length) {
+    return null as unknown as Expr;
+  }
 
   const stmt = stmts[index]!;
   const rest = () => emitStatementList(stmts, index + 1, ctx);
@@ -330,7 +338,9 @@ function emitStatementList(stmts: ts.Statement[], index: number, ctx: EmitContex
   // ── Block (nested) ──
   if (ts.isBlock(stmt)) {
     const blockResult = emitBlock(stmt.statements, ctx);
-    if (isLast) return blockResult;
+    if (isLast) {
+      return blockResult;
+    }
     const name = ctx.counter.next("discard");
     return Let(name, blockResult, rest());
   }
@@ -413,7 +423,9 @@ function emitVariableStatement(
   // Process declarations left-to-right so each binding is in scope before rest() is called.
   // This is critical: rest() must see all bindings from this statement.
   function processDecl(i: number): Expr {
-    if (i >= declList.declarations.length) return rest();
+    if (i >= declList.declarations.length) {
+      return rest();
+    }
 
     const decl = declList.declarations[i]!;
     if (!ts.isIdentifier(decl.name)) {
@@ -508,8 +520,12 @@ function emitVariableStatement(
  * Used for branch-join and early-return transforms.
  */
 function alwaysTerminates(stmt: ts.Statement): boolean {
-  if (ts.isReturnStatement(stmt)) return true;
-  if (ts.isThrowStatement(stmt)) return true;
+  if (ts.isReturnStatement(stmt)) {
+    return true;
+  }
+  if (ts.isThrowStatement(stmt)) {
+    return true;
+  }
   if (ts.isBlock(stmt)) {
     // Block always terminates if any top-level statement always terminates
     // (sequential: once a terminating statement is hit, rest is dead code)
@@ -517,12 +533,16 @@ function alwaysTerminates(stmt: ts.Statement): boolean {
   }
   if (ts.isIfStatement(stmt)) {
     // If-with-else terminates only when both branches always terminate
-    if (!stmt.elseStatement) return false;
+    if (!stmt.elseStatement) {
+      return false;
+    }
     return alwaysTerminates(stmt.thenStatement) && alwaysTerminates(stmt.elseStatement);
   }
   if (ts.isTryStatement(stmt)) {
     const bodyTerminates = alwaysTerminates(stmt.tryBlock);
-    if (!stmt.catchClause) return bodyTerminates;
+    if (!stmt.catchClause) {
+      return bodyTerminates;
+    }
     return bodyTerminates && alwaysTerminates(stmt.catchClause.block);
   }
   return false;
@@ -537,8 +557,12 @@ function alwaysTerminates(stmt: ts.Statement): boolean {
  */
 function alwaysReturnsStatementList(stmts: readonly ts.Statement[]): boolean {
   for (const s of stmts) {
-    if (alwaysReturns(s)) return true;
-    if (alwaysTerminates(s)) return false; // always throws — return is unreachable
+    if (alwaysReturns(s)) {
+      return true;
+    }
+    if (alwaysTerminates(s)) {
+      return false;
+    } // always throws — return is unreachable
   }
   return false;
 }
@@ -548,19 +572,31 @@ function alwaysReturnsStatementList(stmts: readonly ts.Statement[]): boolean {
  * Used to gate the always-return fast path in packing mode.
  */
 function alwaysReturns(stmt: ts.Statement): boolean {
-  if (ts.isReturnStatement(stmt)) return true;
-  if (ts.isThrowStatement(stmt)) return false; // terminal, but not a return
-  if (ts.isBlock(stmt)) return alwaysReturnsStatementList(stmt.statements);
+  if (ts.isReturnStatement(stmt)) {
+    return true;
+  }
+  if (ts.isThrowStatement(stmt)) {
+    return false;
+  } // terminal, but not a return
+  if (ts.isBlock(stmt)) {
+    return alwaysReturnsStatementList(stmt.statements);
+  }
   if (ts.isIfStatement(stmt)) {
-    if (!stmt.elseStatement) return false;
+    if (!stmt.elseStatement) {
+      return false;
+    }
     return alwaysReturns(stmt.thenStatement) && alwaysReturns(stmt.elseStatement);
   }
   if (ts.isTryStatement(stmt)) {
     // If finally always terminates it must always throw (return in finally is rejected by E033).
     // An always-throwing finally overrides any packed "return" outcome.
-    if (stmt.finallyBlock && alwaysTerminates(stmt.finallyBlock)) return false;
+    if (stmt.finallyBlock && alwaysTerminates(stmt.finallyBlock)) {
+      return false;
+    }
     const bodyReturns = alwaysReturns(stmt.tryBlock);
-    if (!stmt.catchClause) return bodyReturns;
+    if (!stmt.catchClause) {
+      return bodyReturns;
+    }
     return bodyReturns && alwaysReturns(stmt.catchClause.block);
   }
   return false;
@@ -607,7 +643,9 @@ function emitStatementListWithTerminal(
   ctx: EmitContext,
   terminal: () => Expr,
 ): Expr {
-  if (index >= stmts.length) return terminal();
+  if (index >= stmts.length) {
+    return terminal();
+  }
 
   const stmt = stmts[index]!;
   const rest = () => emitStatementListWithTerminal(stmts, index + 1, ctx, terminal);
@@ -615,7 +653,9 @@ function emitStatementListWithTerminal(
 
   // Return statement
   if (ts.isReturnStatement(stmt)) {
-    if (stmt.expression) return emitExpression(stmt.expression, ctx);
+    if (stmt.expression) {
+      return emitExpression(stmt.expression, ctx);
+    }
     return null as unknown as Expr;
   }
 
@@ -644,7 +684,9 @@ function emitStatementListWithTerminal(
     }
     const newValue = emitExpression(expr.right, ctx);
     const newIrName = bumpVersion(lhsName, ctx);
-    if (isLast) return Let(newIrName, newValue, terminal());
+    if (isLast) {
+      return Let(newIrName, newValue, terminal());
+    }
     return Let(newIrName, newValue, rest());
   }
 
@@ -654,10 +696,14 @@ function emitStatementListWithTerminal(
     checkUnsupportedExpression(expr, ctx);
     if (ts.isYieldExpression(expr) && expr.asteriskToken && expr.expression) {
       const effect = emitYieldStar(expr.expression, ctx);
-      if (isLast) return Let(ctx.counter.next("discard"), effect, terminal());
+      if (isLast) {
+        return Let(ctx.counter.next("discard"), effect, terminal());
+      }
       return Let(ctx.counter.next("discard"), effect, rest());
     }
-    if (isLast) return Let(ctx.counter.next("discard"), emitExpression(expr, ctx), terminal());
+    if (isLast) {
+      return Let(ctx.counter.next("discard"), emitExpression(expr, ctx), terminal());
+    }
     return Let(ctx.counter.next("discard"), emitExpression(expr, ctx), rest());
   }
 
@@ -779,13 +825,14 @@ function emitIfStatementInList(
   const dryThenCtx: EmitContext = { ...ctx, scopeStack: cloneScopeStack(ctx.scopeStack) };
   const dryElseCtx: EmitContext = { ...ctx, scopeStack: cloneScopeStack(ctx.scopeStack) };
   compileBranchBodyToJoin(getBodyStatements(stmt.thenStatement), allLetVars, snapshot, dryThenCtx);
-  if (stmt.elseStatement)
+  if (stmt.elseStatement) {
     compileBranchBodyToJoin(
       getBodyStatements(stmt.elseStatement),
       allLetVars,
       snapshot,
       dryElseCtx,
     );
+  }
 
   const joinVars = allLetVars.filter((v) => {
     const thenVer = getVersion(v, dryThenCtx);
@@ -859,7 +906,9 @@ function emitIfStatement(
   if (thenTerminates && !stmt.elseStatement) {
     const thenCtx: EmitContext = { ...ctx, scopeStack: cloneScopeStack(ctx.scopeStack) };
     const thenBranch = emitStatementBody(stmt.thenStatement, thenCtx);
-    if (!hasMore) return If(condition, thenBranch);
+    if (!hasMore) {
+      return If(condition, thenBranch);
+    }
     return If(condition, thenBranch, rest());
   }
 
@@ -900,7 +949,9 @@ function emitIfStatement(
   const thenBodyStmts = getBodyStatements(stmt.thenStatement);
   const elseBodyStmts = stmt.elseStatement ? getBodyStatements(stmt.elseStatement) : [];
   compileBranchBodyToJoin(thenBodyStmts, allLetVars, snapshot, dryThenCtx);
-  if (stmt.elseStatement) compileBranchBodyToJoin(elseBodyStmts, allLetVars, snapshot, dryElseCtx);
+  if (stmt.elseStatement) {
+    compileBranchBodyToJoin(elseBodyStmts, allLetVars, snapshot, dryElseCtx);
+  }
 
   const joinVars = allLetVars.filter((v) => {
     const thenVersion = getVersion(v, dryThenCtx);
@@ -914,12 +965,16 @@ function emitIfStatement(
       const thenBranch = emitStatementBody(stmt.thenStatement, ctx);
       const elseBranch = emitStatementBody(stmt.elseStatement, ctx);
       const ifExpr = If(condition, thenBranch, elseBranch);
-      if (!hasMore) return ifExpr;
+      if (!hasMore) {
+        return ifExpr;
+      }
       return Let(ctx.counter.next("discard"), ifExpr, rest());
     }
     const thenBranch = emitStatementBody(stmt.thenStatement, ctx);
     const ifExpr = If(condition, thenBranch);
-    if (!hasMore) return ifExpr;
+    if (!hasMore) {
+      return ifExpr;
+    }
     return Let(ctx.counter.next("discard"), ifExpr, rest());
   }
 
@@ -938,7 +993,9 @@ function emitIfStatement(
     const v = joinVars[0]!;
     const joinIrName = resolveRef(v, ctx);
     const ifExpr = If(condition, thenJoinExpr, elseJoinExpr);
-    if (!hasMore) return Let(joinIrName, ifExpr, null as unknown as Expr);
+    if (!hasMore) {
+      return Let(joinIrName, ifExpr, null as unknown as Expr);
+    }
     return Let(joinIrName, ifExpr, rest());
   }
 
@@ -956,17 +1013,26 @@ function emitIfStatement(
 
 /** Return true if the statement (or any descendant) contains a return statement. */
 function blockContainsReturn(stmt: ts.Statement | undefined): boolean {
-  if (!stmt) return false;
+  if (!stmt) {
+    return false;
+  }
   let found = false;
   function visit(node: ts.Node): void {
-    if (found) return;
+    if (found) {
+      return;
+    }
     if (ts.isReturnStatement(node)) {
       found = true;
       return;
     }
     // Do not descend into nested function bodies (they have their own returns)
-    if (ts.isFunctionDeclaration(node) || ts.isFunctionExpression(node) || ts.isArrowFunction(node))
+    if (
+      ts.isFunctionDeclaration(node) ||
+      ts.isFunctionExpression(node) ||
+      ts.isArrowFunction(node)
+    ) {
       return;
+    }
     ts.forEachChild(node, visit);
   }
   visit(stmt);
@@ -977,7 +1043,9 @@ function blockContainsReturn(stmt: ts.Statement | undefined): boolean {
 function finallyContainsOuterAssignment(stmt: ts.Statement, ctx: EmitContext): string | undefined {
   let found: string | undefined;
   function visit(node: ts.Node): void {
-    if (found) return;
+    if (found) {
+      return;
+    }
     if (
       ts.isBinaryExpression(node) &&
       node.operatorToken.kind === ts.SyntaxKind.EqualsToken &&
@@ -1092,7 +1160,9 @@ function emitTryStatement(
         })()
       : undefined;
     const tryIr = Try(bodyExpr, catchParam, catchExpr, finallyExpr);
-    if (!hasMore) return tryIr;
+    if (!hasMore) {
+      return tryIr;
+    }
     return Let(ctx.counter.next("discard"), tryIr, rest());
   }
 
@@ -1169,7 +1239,9 @@ function emitTryStatement(
   if (joinVars.length === 1) {
     const v = joinVars[0]!;
     const joinIrName = resolveRef(v, ctx);
-    if (!hasMore) return Let(joinIrName, tryIr, null as unknown as Expr);
+    if (!hasMore) {
+      return Let(joinIrName, tryIr, null as unknown as Expr);
+    }
     return Let(joinIrName, tryIr, rest());
   }
 
@@ -1352,7 +1424,9 @@ function emitStatementListWithTerminalPacked(
   joinVars: string[],
   terminal: () => Expr,
 ): Expr {
-  if (index >= stmts.length) return terminal();
+  if (index >= stmts.length) {
+    return terminal();
+  }
 
   const stmt = stmts[index]!;
   const rest = () => emitStatementListWithTerminalPacked(stmts, index + 1, ctx, joinVars, terminal);
@@ -1398,7 +1472,9 @@ function emitStatementListWithTerminalPacked(
     }
     const newValue = emitExpression(expr.right, ctx);
     const newIrName = bumpVersion(lhsName, ctx);
-    if (isLast) return Let(newIrName, newValue, terminal());
+    if (isLast) {
+      return Let(newIrName, newValue, terminal());
+    }
     return Let(newIrName, newValue, rest());
   }
 
@@ -1408,10 +1484,14 @@ function emitStatementListWithTerminalPacked(
     checkUnsupportedExpression(expr, ctx);
     if (ts.isYieldExpression(expr) && expr.asteriskToken && expr.expression) {
       const effect = emitYieldStar(expr.expression, ctx);
-      if (isLast) return Let(ctx.counter.next("discard"), effect, terminal());
+      if (isLast) {
+        return Let(ctx.counter.next("discard"), effect, terminal());
+      }
       return Let(ctx.counter.next("discard"), effect, rest());
     }
-    if (isLast) return Let(ctx.counter.next("discard"), emitExpression(expr, ctx), terminal());
+    if (isLast) {
+      return Let(ctx.counter.next("discard"), emitExpression(expr, ctx), terminal());
+    }
     return Let(ctx.counter.next("discard"), emitExpression(expr, ctx), rest());
   }
 
@@ -1573,13 +1653,14 @@ function emitIfStatementInListPacked(
   const dryThenCtx: EmitContext = { ...ctx, scopeStack: cloneScopeStack(ctx.scopeStack) };
   const dryElseCtx: EmitContext = { ...ctx, scopeStack: cloneScopeStack(ctx.scopeStack) };
   compileBranchBodyToJoin(getBodyStatements(stmt.thenStatement), allLetVars, snapshot, dryThenCtx);
-  if (stmt.elseStatement)
+  if (stmt.elseStatement) {
     compileBranchBodyToJoin(
       getBodyStatements(stmt.elseStatement),
       allLetVars,
       snapshot,
       dryElseCtx,
     );
+  }
 
   const ifJoinVars = allLetVars.filter((v) => {
     const thenVer = getVersion(v, dryThenCtx);
@@ -1778,7 +1859,9 @@ function emitTryStatementInPackedBranch(
       catchJoinExprNP = compileBranchToExpr(catchBlock, innerJoinVars, catchCtxNP);
     }
     const preTrialRefsNP = new Map<string, string>();
-    for (const v of innerJoinVars) preTrialRefsNP.set(v, resolveRef(v, ctx));
+    for (const v of innerJoinVars) {
+      preTrialRefsNP.set(v, resolveRef(v, ctx));
+    }
     applyJoinVersions(innerJoinVars, ctx);
     let finallyExprNP: Expr | undefined;
     let finallyPayloadNP: string | undefined;
@@ -1799,7 +1882,9 @@ function emitTryStatementInPackedBranch(
         const errFpNP = ctx.counter.next("err_fp");
         const fpEffNP = ctx.counter.next("fp_eff");
         const preTrialConstructNP: Record<string, Expr> = {};
-        for (const v of innerJoinVars) preTrialConstructNP[v] = Ref(preTrialRefsNP.get(v)!);
+        for (const v of innerJoinVars) {
+          preTrialConstructNP[v] = Ref(preTrialRefsNP.get(v)!);
+        }
         let innerChainNP = compiledFinallyNP;
         for (let i = innerJoinVars.length - 1; i >= 0; i--) {
           const v = innerJoinVars[i]!;
@@ -1853,7 +1938,9 @@ function emitTryStatementInPackedBranch(
   }
 
   const innerPreTrialRefs = new Map<string, string>();
-  for (const v of innerJoinVars) innerPreTrialRefs.set(v, resolveRef(v, ctx));
+  for (const v of innerJoinVars) {
+    innerPreTrialRefs.set(v, resolveRef(v, ctx));
+  }
 
   applyJoinVersions(innerJoinVars, ctx);
 
@@ -1866,7 +1953,9 @@ function emitTryStatementInPackedBranch(
     const errFpInner = ctx.counter.next("err_fp");
     const fpEffInner = ctx.counter.next("fp_eff");
     const innerPreTrialConstruct: Record<string, Expr> = {};
-    for (const v of innerJoinVars) innerPreTrialConstruct[v] = Ref(innerPreTrialRefs.get(v)!);
+    for (const v of innerJoinVars) {
+      innerPreTrialConstruct[v] = Ref(innerPreTrialRefs.get(v)!);
+    }
     let innerFinallyChain = innerCompiledFinally;
     for (let i = innerJoinVars.length - 1; i >= 0; i--) {
       const v = innerJoinVars[i]!;
@@ -1963,7 +2052,9 @@ function getAllLetVars(ctx: EmitContext): string[] {
 /** Get current version number for a let binding. */
 function getVersion(name: string, ctx: EmitContext): number {
   const found = lookupBinding(name, ctx);
-  if (found && found.info.kind === "let") return found.info.version;
+  if (found && found.info.kind === "let") {
+    return found.info.version;
+  }
   return -1;
 }
 
@@ -1981,7 +2072,9 @@ function compileBranchBodyToJoin(
 
 /** Build a join expression using snapshot versions (for the "no else" case). */
 function buildJoinExprFromSnapshot(vars: string[], snapshot: Map<string, number>): Expr {
-  if (vars.length === 0) return null as unknown as Expr;
+  if (vars.length === 0) {
+    return null as unknown as Expr;
+  }
   if (vars.length === 1) {
     const v = vars[0]!;
     const version = snapshot.get(v) ?? 0;
@@ -2033,7 +2126,9 @@ function emitWhileStatement(
   const bodyExpr = emitStatementList(bodyStmts, 0, ctx);
   const whileExpr = While(condition, [bodyExpr]);
 
-  if (isLast) return whileExpr;
+  if (isLast) {
+    return whileExpr;
+  }
   const name = ctx.counter.next("while");
   return Let(name, whileExpr, rest());
 }
@@ -2488,13 +2583,19 @@ function getBodyStatements(stmt: ts.Statement): ts.Statement[] {
 
 /** Recursively check if a statement body contains a return. */
 function bodyContainsReturn(stmt: ts.Statement): boolean {
-  if (ts.isReturnStatement(stmt)) return true;
+  if (ts.isReturnStatement(stmt)) {
+    return true;
+  }
   if (ts.isBlock(stmt)) {
     return stmt.statements.some((s) => bodyContainsReturn(s));
   }
   if (ts.isIfStatement(stmt)) {
-    if (bodyContainsReturn(stmt.thenStatement)) return true;
-    if (stmt.elseStatement && bodyContainsReturn(stmt.elseStatement)) return true;
+    if (bodyContainsReturn(stmt.thenStatement)) {
+      return true;
+    }
+    if (stmt.elseStatement && bodyContainsReturn(stmt.elseStatement)) {
+      return true;
+    }
     return false;
   }
   return false;
@@ -2627,14 +2728,18 @@ function validateForOfEach(
 
 /** Check if a statement body contains break or continue (not descending into nested functions). */
 function bodyContainsBreakOrContinue(node: ts.Node): boolean {
-  if (ts.isBreakStatement(node) || ts.isContinueStatement(node)) return true;
+  if (ts.isBreakStatement(node) || ts.isContinueStatement(node)) {
+    return true;
+  }
   // Do not descend into function expressions / arrow functions / generators
   if (ts.isFunctionExpression(node) || ts.isArrowFunction(node) || ts.isFunctionDeclaration(node)) {
     return false;
   }
   let found = false;
   ts.forEachChild(node, (child) => {
-    if (!found && bodyContainsBreakOrContinue(child)) found = true;
+    if (!found && bodyContainsBreakOrContinue(child)) {
+      found = true;
+    }
   });
   return found;
 }
@@ -3426,7 +3531,9 @@ function emitConverge(callExpr: ts.CallExpression, ctx: EmitContext): Expr {
   let intervalProp: ts.ObjectLiteralElementLike | undefined;
 
   for (const prop of arg.properties) {
-    if (!ts.isPropertyAssignment(prop) || !ts.isIdentifier(prop.name)) continue;
+    if (!ts.isPropertyAssignment(prop) || !ts.isIdentifier(prop.name)) {
+      continue;
+    }
     switch (prop.name.text) {
       case "probe":
         probeProp = prop;
@@ -3666,10 +3773,16 @@ function validateProvideInResourceBody(body: ts.Block, ctx: EmitContext): void {
 
 /** Check if a statement is `yield* provide(expr)` */
 function isProvideStatement(stmt: ts.Statement): boolean {
-  if (!ts.isExpressionStatement(stmt)) return false;
+  if (!ts.isExpressionStatement(stmt)) {
+    return false;
+  }
   const expr = stmt.expression;
-  if (!ts.isYieldExpression(expr) || !expr.asteriskToken || !expr.expression) return false;
-  if (!ts.isCallExpression(expr.expression)) return false;
+  if (!ts.isYieldExpression(expr) || !expr.asteriskToken || !expr.expression) {
+    return false;
+  }
+  if (!ts.isCallExpression(expr.expression)) {
+    return false;
+  }
   const callee = expr.expression.expression;
   return ts.isIdentifier(callee) && callee.text === "provide";
 }
@@ -3677,7 +3790,9 @@ function isProvideStatement(stmt: ts.Statement): boolean {
 /** Find a provide statement in a try body's statements (first level only) */
 function findProvideInTryBody(block: ts.Block): ts.Statement | null {
   for (const stmt of block.statements) {
-    if (isProvideStatement(stmt)) return stmt;
+    if (isProvideStatement(stmt)) {
+      return stmt;
+    }
   }
   return null;
 }
@@ -3867,32 +3982,51 @@ function emitScoped(callExpr: ts.CallExpression, ctx: EmitContext): Expr {
 
 /** Extract (contractIdent, factoryIdent) from `yield* useTransport(Contract, factory)` stmt. */
 function tryExtractUseTransportCall(stmt: ts.Statement): [ts.Identifier, ts.Expression] | null {
-  if (!ts.isExpressionStatement(stmt)) return null;
+  if (!ts.isExpressionStatement(stmt)) {
+    return null;
+  }
   const expr = stmt.expression;
-  if (!ts.isYieldExpression(expr) || !expr.asteriskToken || !expr.expression) return null;
-  if (!ts.isCallExpression(expr.expression)) return null;
+  if (!ts.isYieldExpression(expr) || !expr.asteriskToken || !expr.expression) {
+    return null;
+  }
+  if (!ts.isCallExpression(expr.expression)) {
+    return null;
+  }
   const callee = expr.expression.expression;
-  if (!ts.isIdentifier(callee) || callee.text !== "useTransport") return null;
+  if (!ts.isIdentifier(callee) || callee.text !== "useTransport") {
+    return null;
+  }
   const args = expr.expression.arguments;
-  if (args.length !== 2 || !args[0] || !args[1]) return null;
-  if (!ts.isIdentifier(args[0])) return null;
+  if (args.length !== 2 || !args[0] || !args[1]) {
+    return null;
+  }
+  if (!ts.isIdentifier(args[0])) {
+    return null;
+  }
   return [args[0], args[1]];
 }
 
 /** Extract the CallExpression from `yield* Effects.around({...})` stmt. */
 function tryExtractEffectsAroundCall(stmt: ts.Statement): ts.CallExpression | null {
-  if (!ts.isExpressionStatement(stmt)) return null;
+  if (!ts.isExpressionStatement(stmt)) {
+    return null;
+  }
   const expr = stmt.expression;
-  if (!ts.isYieldExpression(expr) || !expr.asteriskToken || !expr.expression) return null;
-  if (!ts.isCallExpression(expr.expression)) return null;
+  if (!ts.isYieldExpression(expr) || !expr.asteriskToken || !expr.expression) {
+    return null;
+  }
+  if (!ts.isCallExpression(expr.expression)) {
+    return null;
+  }
   const callee = expr.expression.expression;
   if (
     !ts.isPropertyAccessExpression(callee) ||
     !ts.isIdentifier(callee.expression) ||
     callee.expression.text !== "Effects" ||
     callee.name.text !== "around"
-  )
+  ) {
     return null;
+  }
   return expr.expression;
 }
 
@@ -4153,11 +4287,21 @@ function emitMiddlewareBody(
  */
 function emitMExpr(node: ts.Expression, allowedRefs: Set<string>, ctx: EmitContext): Expr {
   // Literals
-  if (ts.isStringLiteral(node)) return node.text;
-  if (ts.isNumericLiteral(node)) return Number(node.text);
-  if (node.kind === ts.SyntaxKind.TrueKeyword) return true;
-  if (node.kind === ts.SyntaxKind.FalseKeyword) return false;
-  if (node.kind === ts.SyntaxKind.NullKeyword) return null as unknown as Expr;
+  if (ts.isStringLiteral(node)) {
+    return node.text;
+  }
+  if (ts.isNumericLiteral(node)) {
+    return Number(node.text);
+  }
+  if (node.kind === ts.SyntaxKind.TrueKeyword) {
+    return true;
+  }
+  if (node.kind === ts.SyntaxKind.FalseKeyword) {
+    return false;
+  }
+  if (node.kind === ts.SyntaxKind.NullKeyword) {
+    return null as unknown as Expr;
+  }
 
   // Identifier — must be in allowedRefs
   if (ts.isIdentifier(node)) {
@@ -4198,10 +4342,14 @@ function emitMExpr(node: ts.Expression, allowedRefs: Set<string>, ctx: EmitConte
   // Template literal: `...${e}...`
   if (ts.isTemplateExpression(node)) {
     const parts: Expr[] = [];
-    if (node.head.text) parts.push(node.head.text);
+    if (node.head.text) {
+      parts.push(node.head.text);
+    }
     for (const span of node.templateSpans) {
       parts.push(emitMExpr(span.expression, allowedRefs, ctx));
-      if (span.literal.text) parts.push(span.literal.text);
+      if (span.literal.text) {
+        parts.push(span.literal.text);
+      }
     }
     return Concat(parts);
   }
@@ -4250,8 +4398,12 @@ function emitMExpr(node: ts.Expression, allowedRefs: Set<string>, ctx: EmitConte
   // Prefix unary: ! or -
   if (ts.isPrefixUnaryExpression(node)) {
     const operand = emitMExpr(node.operand, allowedRefs, ctx);
-    if (node.operator === ts.SyntaxKind.ExclamationToken) return Not(operand);
-    if (node.operator === ts.SyntaxKind.MinusToken) return Neg(operand);
+    if (node.operator === ts.SyntaxKind.ExclamationToken) {
+      return Not(operand);
+    }
+    if (node.operator === ts.SyntaxKind.MinusToken) {
+      return Neg(operand);
+    }
     throw error("EA3", "Unsupported prefix operator in dispatch handler", node, ctx);
   }
 

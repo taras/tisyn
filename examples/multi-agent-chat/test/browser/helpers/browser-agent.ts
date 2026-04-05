@@ -17,7 +17,9 @@ export interface BrowserAgentState {
 
 function activePage(state: BrowserAgentState): Page {
   const session = state.sessions.get(state.activeSessionId);
-  if (!session) throw new Error(`No session "${state.activeSessionId}"`);
+  if (!session) {
+    throw new Error(`No session "${state.activeSessionId}"`);
+  }
   return session.page;
 }
 

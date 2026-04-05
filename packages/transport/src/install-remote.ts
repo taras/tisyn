@@ -49,7 +49,9 @@ export function* installAgentTransport(
           const item = yield* sub.next();
           if (item.done) {
             const result = item.value;
-            if (result.ok) return result.value as Val;
+            if (result.ok) {
+              return result.value as Val;
+            }
             throw new Error(result.error.message);
           }
         }

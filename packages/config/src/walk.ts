@@ -12,7 +12,9 @@ export function walkConfig(descriptor: unknown, visitor: ConfigVisitor): void {
 }
 
 function walkValue(value: unknown, path: string, visitor: ConfigVisitor): void {
-  if (value === null || typeof value !== "object") return;
+  if (value === null || typeof value !== "object") {
+    return;
+  }
 
   if (Array.isArray(value)) {
     for (let i = 0; i < value.length; i++) {

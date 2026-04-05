@@ -21,10 +21,14 @@ function expectCompileError(source: string, expectedCode: string) {
 }
 
 function walkIR(node: unknown, visitor: (n: unknown) => void): void {
-  if (node === null || node === undefined || typeof node !== "object") return;
+  if (node === null || node === undefined || typeof node !== "object") {
+    return;
+  }
   visitor(node);
   if (Array.isArray(node)) {
-    for (const item of node) walkIR(item, visitor);
+    for (const item of node) {
+      walkIR(item, visitor);
+    }
     return;
   }
   const obj = node as Record<string, unknown>;
@@ -35,19 +39,27 @@ function walkIR(node: unknown, visitor: (n: unknown) => void): void {
 
 /** Find a node in the IR tree matching a predicate. */
 function findIR(ir: unknown, pred: (n: any) => boolean): unknown | undefined {
-  if (ir === null || ir === undefined || typeof ir !== "object") return undefined;
-  if (pred(ir)) return ir;
+  if (ir === null || ir === undefined || typeof ir !== "object") {
+    return undefined;
+  }
+  if (pred(ir)) {
+    return ir;
+  }
   if (Array.isArray(ir)) {
     for (const item of ir) {
       const found = findIR(item, pred);
-      if (found !== undefined) return found;
+      if (found !== undefined) {
+        return found;
+      }
     }
     return undefined;
   }
   const obj = ir as Record<string, unknown>;
   for (const key of Object.keys(obj)) {
     const found = findIR(obj[key], pred);
-    if (found !== undefined) return found;
+    if (found !== undefined) {
+      return found;
+    }
   }
   return undefined;
 }

@@ -56,8 +56,12 @@ export function* startHost(cwd: string, journalPath: string): Operation<HostHand
 
   function formatDiagnostics(): string {
     const parts: string[] = [];
-    if (stdoutLines.length) parts.push(`stdout:\n${stdoutLines.join("\n")}`);
-    if (stderrLines.length) parts.push(`stderr:\n${stderrLines.join("\n")}`);
+    if (stdoutLines.length) {
+      parts.push(`stdout:\n${stdoutLines.join("\n")}`);
+    }
+    if (stderrLines.length) {
+      parts.push(`stderr:\n${stderrLines.join("\n")}`);
+    }
     return parts.length ? "\n" + parts.join("\n") : "";
   }
 

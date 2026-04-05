@@ -629,11 +629,17 @@ describe("SSA: if-branch join lowering", () => {
     expect(ir.tisyn).toBe("fn");
     // Find the __j let node
     function findLetById(node: any, namePrefix: string): any {
-      if (!node || typeof node !== "object") return null;
-      if (node.id === "let" && node.data?.expr?.name?.startsWith(namePrefix)) return node;
+      if (!node || typeof node !== "object") {
+        return null;
+      }
+      if (node.id === "let" && node.data?.expr?.name?.startsWith(namePrefix)) {
+        return node;
+      }
       for (const v of Object.values(node)) {
         const found = findLetById(v, namePrefix);
-        if (found) return found;
+        if (found) {
+          return found;
+        }
       }
       return null;
     }
@@ -776,11 +782,17 @@ describe("Try/catch/finally compilation", () => {
     // The body starts with a Let that wraps the discard of the Try result
     // Walk to find the try node
     function findTry(node: any): any {
-      if (!node || typeof node !== "object") return undefined;
-      if (node.id === "try") return node;
+      if (!node || typeof node !== "object") {
+        return undefined;
+      }
+      if (node.id === "try") {
+        return node;
+      }
       for (const val of Object.values(node)) {
         const found = findTry(val);
-        if (found) return found;
+        if (found) {
+          return found;
+        }
       }
       return undefined;
     }
@@ -803,11 +815,17 @@ describe("Try/catch/finally compilation", () => {
       }
     `) as any;
     function findTry(node: any): any {
-      if (!node || typeof node !== "object") return undefined;
-      if (node.id === "try") return node;
+      if (!node || typeof node !== "object") {
+        return undefined;
+      }
+      if (node.id === "try") {
+        return node;
+      }
       for (const val of Object.values(node)) {
         const found = findTry(val);
-        if (found) return found;
+        if (found) {
+          return found;
+        }
       }
       return undefined;
     }
@@ -832,11 +850,17 @@ describe("Try/catch/finally compilation", () => {
       }
     `) as any;
     function findTry(node: any): any {
-      if (!node || typeof node !== "object") return undefined;
-      if (node.id === "try") return node;
+      if (!node || typeof node !== "object") {
+        return undefined;
+      }
+      if (node.id === "try") {
+        return node;
+      }
       for (const val of Object.values(node)) {
         const found = findTry(val);
-        if (found) return found;
+        if (found) {
+          return found;
+        }
       }
       return undefined;
     }
@@ -933,12 +957,18 @@ describe("Try/catch/finally compilation", () => {
     `) as any;
     // Walk to find the try node (nested inside Let chains)
     function findTry(node: unknown): Record<string, any> | undefined {
-      if (typeof node !== "object" || node === null) return undefined;
+      if (typeof node !== "object" || node === null) {
+        return undefined;
+      }
       const obj = node as Record<string, any>;
-      if (obj["tisyn"] === "eval" && obj["id"] === "try") return obj;
+      if (obj["tisyn"] === "eval" && obj["id"] === "try") {
+        return obj;
+      }
       for (const v of Object.values(obj)) {
         const found = findTry(v);
-        if (found) return found;
+        if (found) {
+          return found;
+        }
       }
       return undefined;
     }
@@ -972,12 +1002,18 @@ describe("Try/catch/finally compilation", () => {
       }
     `) as any;
     function findTry(node: unknown): Record<string, any> | undefined {
-      if (typeof node !== "object" || node === null) return undefined;
+      if (typeof node !== "object" || node === null) {
+        return undefined;
+      }
       const obj = node as Record<string, any>;
-      if (obj["tisyn"] === "eval" && obj["id"] === "try") return obj;
+      if (obj["tisyn"] === "eval" && obj["id"] === "try") {
+        return obj;
+      }
       for (const v of Object.values(obj)) {
         const found = findTry(v);
-        if (found) return found;
+        if (found) {
+          return found;
+        }
       }
       return undefined;
     }
@@ -1003,12 +1039,18 @@ describe("Try/catch/finally compilation", () => {
       }
     `) as any;
     function findTry(node: unknown): Record<string, any> | undefined {
-      if (typeof node !== "object" || node === null) return undefined;
+      if (typeof node !== "object" || node === null) {
+        return undefined;
+      }
       const obj = node as Record<string, any>;
-      if (obj["tisyn"] === "eval" && obj["id"] === "try") return obj;
+      if (obj["tisyn"] === "eval" && obj["id"] === "try") {
+        return obj;
+      }
       for (const v of Object.values(obj)) {
         const found = findTry(v);
-        if (found) return found;
+        if (found) {
+          return found;
+        }
       }
       return undefined;
     }
@@ -1031,12 +1073,18 @@ describe("Try/catch/finally compilation", () => {
       }
     `) as any;
     function findTry(node: unknown): Record<string, any> | undefined {
-      if (typeof node !== "object" || node === null) return undefined;
+      if (typeof node !== "object" || node === null) {
+        return undefined;
+      }
       const obj = node as Record<string, any>;
-      if (obj["tisyn"] === "eval" && obj["id"] === "try") return obj;
+      if (obj["tisyn"] === "eval" && obj["id"] === "try") {
+        return obj;
+      }
       for (const v of Object.values(obj)) {
         const found = findTry(v);
-        if (found) return found;
+        if (found) {
+          return found;
+        }
       }
       return undefined;
     }
@@ -1051,27 +1099,39 @@ describe("Try/catch/finally compilation", () => {
 
 // Helpers shared by return-in-try tests
 function findTryNode(node: unknown): Record<string, any> | undefined {
-  if (typeof node !== "object" || node === null) return undefined;
+  if (typeof node !== "object" || node === null) {
+    return undefined;
+  }
   const obj = node as Record<string, any>;
-  if (obj["tisyn"] === "eval" && obj["id"] === "try") return obj;
+  if (obj["tisyn"] === "eval" && obj["id"] === "try") {
+    return obj;
+  }
   for (const v of Object.values(obj)) {
     const found = findTryNode(v);
-    if (found) return found;
+    if (found) {
+      return found;
+    }
   }
   return undefined;
 }
 
 /** Find a Construct node that has a __tag field anywhere in the IR tree. */
 function findPackedConstruct(node: unknown): Record<string, any> | undefined {
-  if (typeof node !== "object" || node === null) return undefined;
+  if (typeof node !== "object" || node === null) {
+    return undefined;
+  }
   const obj = node as Record<string, any>;
   if (obj["tisyn"] === "eval" && obj["id"] === "construct") {
     const fields = obj["data"]?.["expr"] as Record<string, any> | undefined;
-    if (fields && "__tag" in fields) return obj;
+    if (fields && "__tag" in fields) {
+      return obj;
+    }
   }
   for (const v of Object.values(obj)) {
     const found = findPackedConstruct(v);
-    if (found) return found;
+    if (found) {
+      return found;
+    }
   }
   return undefined;
 }
@@ -1081,11 +1141,15 @@ function findAllPackedConstructs(
   node: unknown,
   result: Record<string, any>[] = [],
 ): Record<string, any>[] {
-  if (typeof node !== "object" || node === null) return result;
+  if (typeof node !== "object" || node === null) {
+    return result;
+  }
   const obj = node as Record<string, any>;
   if (obj["tisyn"] === "eval" && obj["id"] === "construct") {
     const fields = obj["data"]?.["expr"] as Record<string, any> | undefined;
-    if (fields && "__tag" in fields) result.push(obj);
+    if (fields && "__tag" in fields) {
+      result.push(obj);
+    }
   }
   for (const v of Object.values(obj)) {
     findAllPackedConstructs(v, result);
@@ -1095,7 +1159,9 @@ function findAllPackedConstructs(
 
 /** Find an If(Eq(Get(..., "__tag"), "return"), ...) dispatch node. */
 function findTagDispatch(node: unknown): Record<string, any> | undefined {
-  if (typeof node !== "object" || node === null) return undefined;
+  if (typeof node !== "object" || node === null) {
+    return undefined;
+  }
   const obj = node as Record<string, any>;
   if (obj["tisyn"] === "eval" && obj["id"] === "if") {
     // If node uses "condition" key (not "cond")
@@ -1105,13 +1171,17 @@ function findTagDispatch(node: unknown): Record<string, any> | undefined {
       const getNode = cond["data"]?.["expr"]?.["a"];
       if (getNode?.["tisyn"] === "eval" && getNode?.["id"] === "get") {
         const key = getNode["data"]?.["expr"]?.["key"];
-        if (key === "__tag") return obj;
+        if (key === "__tag") {
+          return obj;
+        }
       }
     }
   }
   for (const v of Object.values(obj)) {
     const found = findTagDispatch(v);
-    if (found) return found;
+    if (found) {
+      return found;
+    }
   }
   return undefined;
 }
@@ -1255,15 +1325,21 @@ describe("Return-in-try: D — Finally interaction (structural)", () => {
     expect(finallyExpr).toBeDefined();
     // Walk the finally chain to find the inner Try
     function findInnerTry(node: unknown): Record<string, any> | undefined {
-      if (typeof node !== "object" || node === null) return undefined;
+      if (typeof node !== "object" || node === null) {
+        return undefined;
+      }
       const obj = node as Record<string, any>;
       if (obj["tisyn"] === "eval" && obj["id"] === "try") {
         const body = obj["data"]?.["expr"]?.["body"];
-        if (body?.["tisyn"] === "ref" && body?.["name"] === fp) return obj;
+        if (body?.["tisyn"] === "ref" && body?.["name"] === fp) {
+          return obj;
+        }
       }
       for (const v of Object.values(obj)) {
         const found = findInnerTry(v);
-        if (found) return found;
+        if (found) {
+          return found;
+        }
       }
       return undefined;
     }
@@ -1291,15 +1367,21 @@ describe("Return-in-try: D — Finally interaction (structural)", () => {
     expect(finallyExpr).toBeDefined();
     // Find inner Try — its catch fallback must be a bare Ref (scalar shortcut)
     function findInnerTryD04(node: unknown): Record<string, any> | undefined {
-      if (typeof node !== "object" || node === null) return undefined;
+      if (typeof node !== "object" || node === null) {
+        return undefined;
+      }
       const obj = node as Record<string, any>;
       if (obj["tisyn"] === "eval" && obj["id"] === "try") {
         const body = obj["data"]?.["expr"]?.["body"];
-        if (body?.["tisyn"] === "ref" && body?.["name"] === fp) return obj;
+        if (body?.["tisyn"] === "ref" && body?.["name"] === fp) {
+          return obj;
+        }
       }
       for (const v of Object.values(obj)) {
         const found = findInnerTryD04(v);
-        if (found) return found;
+        if (found) {
+          return found;
+        }
       }
       return undefined;
     }
@@ -1326,15 +1408,21 @@ describe("Return-in-try: D — Finally interaction (structural)", () => {
     const finallyExpr = tryNode!.data.expr["finally"];
     expect(finallyExpr).toBeDefined();
     function findInnerTryD05(node: unknown): Record<string, any> | undefined {
-      if (typeof node !== "object" || node === null) return undefined;
+      if (typeof node !== "object" || node === null) {
+        return undefined;
+      }
       const obj = node as Record<string, any>;
       if (obj["tisyn"] === "eval" && obj["id"] === "try") {
         const body = obj["data"]?.["expr"]?.["body"];
-        if (body?.["tisyn"] === "ref" && body?.["name"] === fp) return obj;
+        if (body?.["tisyn"] === "ref" && body?.["name"] === fp) {
+          return obj;
+        }
       }
       for (const v of Object.values(obj)) {
         const found = findInnerTryD05(v);
-        if (found) return found;
+        if (found) {
+          return found;
+        }
       }
       return undefined;
     }
@@ -1559,16 +1647,24 @@ describe("useTransport factory expression widening", () => {
 // ── Helpers ──
 
 function findScopeNode(node: unknown): Record<string, any> | undefined {
-  if (typeof node !== "object" || node === null) return undefined;
+  if (typeof node !== "object" || node === null) {
+    return undefined;
+  }
   const obj = node as Record<string, unknown>;
-  if (obj["tisyn"] === "eval" && obj["id"] === "scope") return obj as Record<string, any>;
+  if (obj["tisyn"] === "eval" && obj["id"] === "scope") {
+    return obj as Record<string, any>;
+  }
   for (const value of Object.values(obj)) {
     const found = findScopeNode(value);
-    if (found) return found;
+    if (found) {
+      return found;
+    }
     if (Array.isArray(value)) {
       for (const item of value) {
         const found = findScopeNode(item);
-        if (found) return found;
+        if (found) {
+          return found;
+        }
       }
     }
   }
@@ -1576,16 +1672,24 @@ function findScopeNode(node: unknown): Record<string, any> | undefined {
 }
 
 function findWhileNode(node: unknown): Record<string, any> | undefined {
-  if (typeof node !== "object" || node === null) return undefined;
+  if (typeof node !== "object" || node === null) {
+    return undefined;
+  }
   const obj = node as Record<string, unknown>;
-  if (obj["tisyn"] === "eval" && obj["id"] === "while") return obj as Record<string, any>;
+  if (obj["tisyn"] === "eval" && obj["id"] === "while") {
+    return obj as Record<string, any>;
+  }
   for (const value of Object.values(obj)) {
     const found = findWhileNode(value);
-    if (found) return found;
+    if (found) {
+      return found;
+    }
     if (Array.isArray(value)) {
       for (const item of value) {
         const found = findWhileNode(item);
-        if (found) return found;
+        if (found) {
+          return found;
+        }
       }
     }
   }
@@ -1593,14 +1697,22 @@ function findWhileNode(node: unknown): Record<string, any> | undefined {
 }
 
 function fn_contains_while(node: unknown): boolean {
-  if (typeof node !== "object" || node === null) return false;
+  if (typeof node !== "object" || node === null) {
+    return false;
+  }
   const obj = node as Record<string, unknown>;
-  if (obj["tisyn"] === "eval" && obj["id"] === "while") return true;
+  if (obj["tisyn"] === "eval" && obj["id"] === "while") {
+    return true;
+  }
   for (const value of Object.values(obj)) {
-    if (fn_contains_while(value)) return true;
+    if (fn_contains_while(value)) {
+      return true;
+    }
     if (Array.isArray(value)) {
       for (const item of value) {
-        if (fn_contains_while(item)) return true;
+        if (fn_contains_while(item)) {
+          return true;
+        }
       }
     }
   }

@@ -81,10 +81,16 @@ interface ScopeInner {
 
 /** Recursively check if a value tree contains a subscription handle. */
 function containsSubscriptionHandle(value: unknown): boolean {
-  if (value === null || value === undefined || typeof value !== "object") return false;
-  if (Array.isArray(value)) return value.some(containsSubscriptionHandle);
+  if (value === null || value === undefined || typeof value !== "object") {
+    return false;
+  }
+  if (Array.isArray(value)) {
+    return value.some(containsSubscriptionHandle);
+  }
   const obj = value as Record<string, unknown>;
-  if ("__tisyn_subscription" in obj) return true;
+  if ("__tisyn_subscription" in obj) {
+    return true;
+  }
   return Object.values(obj).some(containsSubscriptionHandle);
 }
 
@@ -740,7 +746,9 @@ function* orchestrateAll(
   env: Env,
   ctx: DriveContext,
 ): Operation<Val> {
-  if (exprs.length === 0) return [] as Val;
+  if (exprs.length === 0) {
+    return [] as Val;
+  }
 
   const N = exprs.length;
   const { operation, resolve, reject } = withResolvers<Val>();
@@ -964,7 +972,9 @@ function orchestrateScope(
     const childKernel = evaluate(inner.body, env);
     const result = yield* driveKernel(childKernel, childId, env, ctx);
 
-    if (result.status === "ok") return result.value as Val;
+    if (result.status === "ok") {
+      return result.value as Val;
+    }
     const errResult = result as { status: "err"; error: { message: string; name?: string } };
     throw new EffectError(errResult.error.message, errResult.error.name);
   });
@@ -980,7 +990,9 @@ function evaluateScopeBinding(expr: Expr, env: Env): Val {
   const gen = evaluate(expr, env);
   for (;;) {
     const step = gen.next(null as Val);
-    if (step.done) return step.value as Val;
+    if (step.done) {
+      return step.value as Val;
+    }
     throw new ScopeBindingEffectError(step.value.id);
   }
 }

@@ -53,7 +53,9 @@ function CallIR(fn: unknown, ...args: unknown[]) {
 
 function IfIR(condition: unknown, then_: unknown, else_?: unknown) {
   const fields: Record<string, unknown> = { condition, then: then_ };
-  if (else_ !== undefined) fields["else"] = else_;
+  if (else_ !== undefined) {
+    fields["else"] = else_;
+  }
   return {
     tisyn: "eval" as const,
     id: "if",

@@ -26,7 +26,9 @@ export function* whenReady(wsUrl: string, appUrl: string): Operation<void> {
       yield* probeWebSocket(wsUrl);
 
       const res = yield* call(() => fetch(appUrl));
-      if (res.status !== 200) throw new Error(`App returned ${res.status}`);
+      if (res.status !== 200) {
+        throw new Error(`App returned ${res.status}`);
+      }
     },
     { timeout: 10000 },
   );

@@ -55,18 +55,26 @@ export function parseDSLSafe(source: string): Result<TisynExpr> {
  */
 export function parseDSLWithRecovery(source: string): Result<TisynExpr> & { repaired?: string } {
   const first = parseDSLSafe(source);
-  if (first.ok) return first;
+  if (first.ok) {
+    return first;
+  }
 
   // Only attempt recovery when the parser's frame simulation confirmed every
   // open frame can be satisfied by closing pending delimiters.
   const parseError = first.error instanceof DSLParseError ? first.error : null;
-  if (!parseError?.recovery?.autoClosable) return first;
+  if (!parseError?.recovery?.autoClosable) {
+    return first;
+  }
 
   const repaired = tryAutoCloseImpl(source, parseDSLSafe);
-  if (repaired === null) return first;
+  if (repaired === null) {
+    return first;
+  }
 
   const second = parseDSLSafe(repaired);
-  if (!second.ok) return first;
+  if (!second.ok) {
+    return first;
+  }
 
   return { ...second, repaired };
 }

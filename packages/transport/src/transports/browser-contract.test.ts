@@ -22,16 +22,24 @@ const BROWSER_PREAMBLE = `
 // ── Helpers ──
 
 function findScopeNode(node: unknown): Record<string, any> | undefined {
-  if (typeof node !== "object" || node === null) return undefined;
+  if (typeof node !== "object" || node === null) {
+    return undefined;
+  }
   const obj = node as Record<string, unknown>;
-  if (obj["tisyn"] === "eval" && obj["id"] === "scope") return obj as Record<string, any>;
+  if (obj["tisyn"] === "eval" && obj["id"] === "scope") {
+    return obj as Record<string, any>;
+  }
   for (const value of Object.values(obj)) {
     const found = findScopeNode(value);
-    if (found) return found;
+    if (found) {
+      return found;
+    }
     if (Array.isArray(value)) {
       for (const item of value) {
         const found = findScopeNode(item);
-        if (found) return found;
+        if (found) {
+          return found;
+        }
       }
     }
   }
@@ -41,7 +49,9 @@ function findScopeNode(node: unknown): Record<string, any> | undefined {
 function findEvalNodes(node: unknown, prefix: string): Record<string, any>[] {
   const results: Record<string, any>[] = [];
   function walk(n: unknown) {
-    if (typeof n !== "object" || n === null) return;
+    if (typeof n !== "object" || n === null) {
+      return;
+    }
     const obj = n as Record<string, unknown>;
     if (
       obj["tisyn"] === "eval" &&
@@ -53,7 +63,9 @@ function findEvalNodes(node: unknown, prefix: string): Record<string, any>[] {
     for (const value of Object.values(obj)) {
       walk(value);
       if (Array.isArray(value)) {
-        for (const item of value) walk(item);
+        for (const item of value) {
+          walk(item);
+        }
       }
     }
   }

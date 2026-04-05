@@ -269,7 +269,9 @@ function parseArrayLit(state: ParserState): TisynExpr[] {
     items.push(parseExpr(state));
     while (peek(state).kind === "COMMA") {
       consume(state); // COMMA
-      if (peek(state).kind === "RBRACKET") break; // trailing comma OK
+      if (peek(state).kind === "RBRACKET") {
+        break;
+      } // trailing comma OK
       items.push(parseExpr(state));
     }
   }
@@ -288,7 +290,9 @@ function parseObjectLit(state: ParserState): Record<string, TisynExpr> {
     parseEntry(state, entries);
     while (peek(state).kind === "COMMA") {
       consume(state); // COMMA
-      if (peek(state).kind === "RBRACE") break; // trailing comma OK
+      if (peek(state).kind === "RBRACE") {
+        break;
+      } // trailing comma OK
       parseEntry(state, entries);
     }
   }

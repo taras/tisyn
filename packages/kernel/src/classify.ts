@@ -54,7 +54,9 @@ const COMPOUND_EXTERNAL_IDS = new Set([
 export type Classification = "STRUCTURAL" | "EXTERNAL";
 
 export function classify(id: string): Classification {
-  if (STRUCTURAL_IDS.has(id)) return "STRUCTURAL";
+  if (STRUCTURAL_IDS.has(id)) {
+    return "STRUCTURAL";
+  }
   return "EXTERNAL";
 }
 

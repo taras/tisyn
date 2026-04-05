@@ -58,7 +58,9 @@ export function createProtocolServer<Ops extends Record<string, OperationSpec>>(
 
       for (;;) {
         const { value: msg, done } = yield* sub.next();
-        if (done) break;
+        if (done) {
+          break;
+        }
 
         if (msg.method === "initialize") {
           if (msg.params.agentId !== impl.id) {

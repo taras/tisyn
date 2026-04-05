@@ -33,7 +33,9 @@ export function tryAutoClose(
   const stack: Opener[] = [];
 
   for (const tok of tokens) {
-    if (tok.kind === "EOF") break;
+    if (tok.kind === "EOF") {
+      break;
+    }
     if (tok.kind === "LPAREN") {
       stack.push("(");
     } else if (tok.kind === "LBRACKET") {
@@ -41,13 +43,19 @@ export function tryAutoClose(
     } else if (tok.kind === "LBRACE") {
       stack.push("{");
     } else if (tok.kind === "RPAREN") {
-      if (stack.length === 0 || stack[stack.length - 1] !== "(") return null;
+      if (stack.length === 0 || stack[stack.length - 1] !== "(") {
+        return null;
+      }
       stack.pop();
     } else if (tok.kind === "RBRACKET") {
-      if (stack.length === 0 || stack[stack.length - 1] !== "[") return null;
+      if (stack.length === 0 || stack[stack.length - 1] !== "[") {
+        return null;
+      }
       stack.pop();
     } else if (tok.kind === "RBRACE") {
-      if (stack.length === 0 || stack[stack.length - 1] !== "{") return null;
+      if (stack.length === 0 || stack[stack.length - 1] !== "{") {
+        return null;
+      }
       stack.pop();
     }
   }

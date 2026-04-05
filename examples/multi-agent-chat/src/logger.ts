@@ -14,7 +14,9 @@ export function logError(scope: string, message: string, error?: unknown): void 
 }
 
 export function logDebug(scope: string, message: string, data?: Record<string, unknown>): void {
-  if (VERBOSE) logInfo(scope, message, data);
+  if (VERBOSE) {
+    logInfo(scope, message, data);
+  }
 }
 
 function formatData(data: Record<string, unknown>): string {
