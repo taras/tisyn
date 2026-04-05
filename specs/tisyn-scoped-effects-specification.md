@@ -22,7 +22,7 @@ MUST provide:
   within the current scope.
 - **Transport binding primitive** — binds an agent identity to
   a transport within the current scope.
-- **Agent handle lookup** — obtains a callable handle for an
+- **Agent facade lookup** — obtains a callable facade for an
   agent within the current scope.
 
 The current reference API surface for these roles is:
@@ -31,7 +31,7 @@ The current reference API surface for these roles is:
 scoped(...)                          → scope boundary
 Effects.around(...)                  → middleware installation
 useTransport(Agent, transport(...))  → transport binding
-useAgent(Agent)                      → agent handle
+useAgent(Agent)                      → agent facade
 ````
 
 The blocking single-child authored `scoped(function* () { ... })`
@@ -56,7 +56,7 @@ used as defined in RFC 2119.
 
 The **semantic model** described in this specification —
 scope boundaries, middleware composition, scope-local dispatch,
-transport binding, agent handle resolution, cross-boundary
+transport binding, agent facade resolution, cross-boundary
 middleware protocol, and durability requirements — is normative.
 
 The blocking single-child authored `scoped(...)` form, its
@@ -80,7 +80,7 @@ commitment of this document.
 
 **Scope boundary.** A lifetime and isolation region created by
 an explicit scope boundary primitive (reference API: `scoped()`).
-Middleware, transport bindings, and agent handles are scoped to
+Middleware, transport bindings, and agent facades are scoped to
 it. Generator functions do NOT create implicit scope boundaries.
 
 **Middleware machinery.** The runtime infrastructure that owns
@@ -102,10 +102,12 @@ with a concrete transport within a scope. Established by the
 transport binding primitive (reference API: `useTransport()`).
 Scoped to the enclosing scope boundary.
 
-**Agent handle.** A callable object returned by the agent
-handle lookup primitive (reference API: `useAgent()`) that
-provides typed method calls dispatching to a transport-bound
-agent. Calls flow through the scope's middleware chain.
+**Agent facade.** A callable object returned by the agent
+facade lookup primitive (reference API: `useAgent()`) that
+provides typed method calls for a transport-bound agent and an
+`.around()` middleware surface. Direct methods dispatch
+through a per-agent Context API into the scope's `Effects`
+middleware chain.
 
 **Dispatch boundary.** The interception point through which all
 effects flow. Middleware composes around this boundary.
@@ -260,8 +262,8 @@ yield* scoped(function* () {
   yield* useTransport(Coder, stdio("node", ["./agents/coder.js"]));
   yield* useTransport(Reviewer, stdio("node", ["./agents/reviewer.js"]));
 
-  const coder = useAgent(Coder);
-  const reviewer = useAgent(Reviewer);
+  const coder = yield* useAgent(Coder);
+  const reviewer = yield* useAgent(Reviewer);
 
   const patch = yield* coder.implement(spec);
   return yield* reviewer.review(patch);
@@ -285,6 +287,12 @@ mechanism follows Effection's context-api pattern:
   the chain, and sets the new context value.
 - Children inherit the parent's middleware chain. Child
   installations do not affect parent scope.
+
+All behavioral middleware extension points in this
+specification MUST use this `.around()` installation model.
+Implementations MUST NOT introduce a separate enforcement
+registration path for cross-boundary constraints or per-agent
+interception.
 
 ### 5.2 Max/Min Priority
 
@@ -391,26 +399,44 @@ binding time.
 Transport bindings MUST be scoped. When the enclosing scope
 exits, the runtime MUST shut down the transport.
 
-### 6.2 Agent Handle Lookup
+### 6.2 Agent Facade Lookup
 
-The agent handle lookup primitive (reference API:
-`useAgent(Agent)`) obtains a callable handle for dispatching
-to a transport-bound agent:
+The agent facade lookup primitive (reference API:
+`useAgent(Agent)`) obtains a callable facade for dispatching to
+a transport-bound agent:
 
 ````typescript
 // Reference API example
-const coder = useAgent(Coder);
+const coder = yield* useAgent(Coder);
 const patch = yield* coder.implement(spec);
 ````
 
-Agent handle lookup is a lookup, not an installation. The agent
+Agent facade lookup is a lookup, not an installation. The agent
 MUST already be transport-bound in the current scope or an
 ancestor scope. If no binding exists, the lookup MUST fail with
 a descriptive error.
 
-The handle provides typed method calls that lower to dispatch
-calls with the agent's effect ID namespace. All middleware in
-the current scope applies to these calls.
+The returned facade MUST expose one direct top-level method per
+declared agent operation. Each direct method MUST delegate to a
+same-named operation on a backing per-agent Context API. The
+backing API's core handler MUST dispatch using the agent's
+effect ID namespace and the operation's single payload value.
+
+The returned facade MUST also expose `.around()` from the
+backing per-agent Context API. Middleware installed there
+composes structurally before the `Effects` chain. Both facade
+`max` and facade `min` middleware are host-side because the
+facade core handler delegates into `Effects` rather than being
+the terminal dispatch boundary.
+
+The facade is not a raw Context API result. The `.operations`
+namespace remains an implementation detail of the backing API;
+the user-facing surface is the flattened direct-method facade.
+
+Multiple `useAgent(Agent)` calls for the same declaration in the
+same scope MUST share middleware visibility for that agent.
+Child-scope facade middleware is inherited by descendants and
+MUST NOT affect the parent after scope exit.
 
 ### 6.3 Separation of Concerns
 
@@ -418,8 +444,8 @@ the current scope applies to these calls.
 |---|---|---|---|
 | Transport binding | Transport binding primitive | `useTransport(Agent, transport(...))` | Scope setup |
 | Middleware | Middleware installation primitive | `Effects.around(...)` | Scope setup |
-| Agent handle | Agent handle lookup | `useAgent(Agent)` | Workflow logic |
-| Effect dispatch | Dispatch boundary | `yield* handle.method(data)` | Workflow logic |
+| Agent facade | Agent facade lookup | `useAgent(Agent)` | Workflow logic |
+| Effect dispatch | Dispatch boundary | `yield* facade.method(data)` | Workflow logic |
 
 Setup and workflow logic are distinct phases. Setup configures
 the scope. Workflow logic uses what the scope provides.
@@ -794,7 +820,7 @@ MUST lower it as a normal `Fn` value.
 ### 11.2 Authored Form Recognition
 
 The compiler SHOULD recognize authored forms corresponding to
-the transport binding and agent handle lookup semantic roles
+the transport binding and agent facade lookup semantic roles
 (§1). It MUST lower them to declaration or effect nodes as
 appropriate per the compiler specification. The exact authored
 syntax for these forms is determined by the compiler
@@ -838,7 +864,7 @@ The runtime MUST:
 2. **Process transport binding.** Bind agent identities to
    transport implementations within the current scope. Manage
    transport lifetime — shut down on scope exit.
-3. **Process agent handle lookup.** Return typed facades that
+3. **Process agent facade lookup.** Return typed facades that
    dispatch through per-agent Context APIs and the scope's
    Effects middleware chain. Fail with a descriptive error if
    no transport binding exists.

@@ -7,14 +7,13 @@
  * NEG-6:  outermost middleware receives the correct effectId and data
  * NEG-7:  outermost middleware can modify effectId before forwarding
  * NEG-8:  multiple dispatches with middleware — each dispatch goes through middleware
- * NEG-9:  BoundAgentsContext is null by default (no bound agents without useTransport)
+ * NEG-9:  BoundAgentsContext is empty Set by default (no bound agents without useTransport)
  * NEG-10: useAgent with agent not in BoundAgentsContext still throws
  * NEG-11: useAgent returns typed handle when agent is bound
  */
 
 import { describe, it } from "@effectionx/vitest";
 import { expect } from "vitest";
-import { useScope } from "effection";
 import type { Val } from "@tisyn/ir";
 import { Effects, dispatch, useAgent, BoundAgentsContext } from "@tisyn/agent";
 import type { AgentDeclaration, OperationSpec } from "@tisyn/agent";
@@ -153,17 +152,15 @@ describe("Adversarial / edge cases", () => {
   });
 
   // NEG-9
-  it("BoundAgentsContext is null by default", function* () {
-    const scope = yield* useScope();
-    const bound = scope.hasOwn(BoundAgentsContext) ? scope.expect(BoundAgentsContext) : null;
-    expect(bound).toBeNull();
+  it("BoundAgentsContext is empty Set by default", function* () {
+    const bound = yield* BoundAgentsContext.expect();
+    expect(bound).toBeInstanceOf(Set);
+    expect(bound.size).toBe(0);
   });
 
   // NEG-10
   it("useAgent throws for agent not in BoundAgentsContext", function* () {
-    const scope = yield* useScope();
-    const boundSet = new Set(["other-agent"]);
-    scope.set(BoundAgentsContext, boundSet);
+    yield* BoundAgentsContext.set(new Set(["other-agent"]));
 
     const MyAgent: AgentDeclaration<{ go: OperationSpec<null, string> }> = {
       id: "my-agent",
@@ -180,8 +177,7 @@ describe("Adversarial / edge cases", () => {
 
   // NEG-11
   it("useAgent returns typed handle when agent is bound in BoundAgentsContext", function* () {
-    const scope = yield* useScope();
-    scope.set(BoundAgentsContext, new Set(["echo-agent"]));
+    yield* BoundAgentsContext.set(new Set(["echo-agent"]));
 
     // Install a handler that echoes data back
     yield* Effects.around({

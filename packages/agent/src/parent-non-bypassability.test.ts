@@ -1,5 +1,6 @@
 import { describe, it } from "@effectionx/vitest";
 import { expect } from "vitest";
+import type { Operation } from "effection";
 import { scoped, spawn } from "effection";
 import type { Val } from "@tisyn/ir";
 import type { FnNode } from "@tisyn/ir";
@@ -31,11 +32,10 @@ function denyEffect(id: string): FnNode {
 
 // Helper that simulates protocol-server wiring of IR middleware
 // as ordinary Effects.around() middleware (replacing the old installEnforcement path).
-function* withCrossBoundaryMiddleware(fn: FnNode) {
-  yield* Effects.around({
-    *dispatch([effectId, data]: [string, Val], next) {
-      return yield* evaluateMiddlewareFn(fn, effectId, data, (eid: string, d: Val) => next(eid, d));
-    },
+function withCrossBoundaryMiddleware(fn: FnNode) {
+  return Effects.around({
+    dispatch: ([effectId, data]: [string, Val], next: (eid: string, d: Val) => Operation<Val>) =>
+      evaluateMiddlewareFn(fn, effectId, data, (eid: string, d: Val) => next(eid, d)),
   });
 }
 

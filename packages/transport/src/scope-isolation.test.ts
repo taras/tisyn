@@ -137,7 +137,7 @@ describe("inprocessTransport scope isolation", () => {
     // helper handler tries to useAgent(inner) — should fail inside the isolated scope
     const helperFactory = inprocessTransport(helper, {
       *run({ a, b }: { a: number; b: number }) {
-        // useAgent reads BoundAgentsContext; in isolated scope it should be null → throws
+        // useAgent reads BoundAgentsContext; in isolated scope it should be empty → throws
         const handle = yield* useAgent(inner);
         return yield* handle.add({ a, b });
       },

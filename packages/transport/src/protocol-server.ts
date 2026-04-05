@@ -116,14 +116,13 @@ export function createProtocolServer<Ops extends Record<string, OperationSpec>>(
                 // it becomes the outermost middleware — collectMiddleware's prototype
                 // chain traversal ensures parent max MW always runs before child max MW.
                 yield* Effects.around({
-                  *dispatch([effectId, data]: [string, Val], next) {
-                    return yield* evaluateMiddlewareFn(
-                      middlewareFn,
-                      effectId,
-                      data,
-                      (eid: string, d: Val) => next(eid, d),
-                    );
-                  },
+                  dispatch: (
+                    [effectId, data]: [string, Val],
+                    next: (eid: string, d: Val) => Operation<Val>,
+                  ) =>
+                    evaluateMiddlewareFn(middlewareFn, effectId, data, (eid: string, d: Val) =>
+                      next(eid, d),
+                    ),
                 });
                 yield* installCrossBoundaryMiddleware(middlewareFn);
 

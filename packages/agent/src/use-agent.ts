@@ -1,4 +1,4 @@
-import { type Operation, createContext, useScope } from "effection";
+import { type Operation, createContext } from "effection";
 import type { AgentDeclaration, OperationSpec } from "./types.js";
 import type { AgentFacade } from "./facade.js";
 import { getOrCreateAgentApi, buildFacade } from "./facade.js";
@@ -10,7 +10,7 @@ export type AgentHandle<Ops extends Record<string, OperationSpec>> = AgentFacade
  * Scope-local registry of bound agent IDs.
  * Set by `useTransport()`; read by `useAgent()`.
  */
-export const BoundAgentsContext = createContext<Set<string> | null>("$bound-agents", null);
+export const BoundAgentsContext = createContext<Set<string>>("$bound-agents", new Set());
 
 /**
  * Get a typed facade for an agent that was previously bound via `useTransport()`.
@@ -28,10 +28,9 @@ export const BoundAgentsContext = createContext<Set<string> | null>("$bound-agen
 export function* useAgent<Ops extends Record<string, OperationSpec>>(
   declaration: AgentDeclaration<Ops>,
 ): Operation<AgentFacade<Ops>> {
-  const scope = yield* useScope();
-  const bound = scope.get(BoundAgentsContext) ?? null;
+  const bound = yield* BoundAgentsContext.expect();
 
-  if (!bound?.has(declaration.id)) {
+  if (!bound.has(declaration.id)) {
     throw new Error(
       `Agent '${declaration.id}' is not bound in the current scope. Call useTransport() to bind it first.`,
     );

@@ -1,5 +1,4 @@
 import type { Operation } from "effection";
-import { useScope } from "effection";
 import type { AgentDeclaration, OperationSpec } from "@tisyn/agent";
 import { BoundAgentsContext } from "@tisyn/agent";
 import type { AgentTransportFactory } from "./transport.js";
@@ -17,12 +16,10 @@ export function* useTransport<Ops extends Record<string, OperationSpec>>(
   declaration: AgentDeclaration<Ops>,
   factory: AgentTransportFactory,
 ): Operation<void> {
-  const scope = yield* useScope();
-
-  const current = scope.get(BoundAgentsContext) ?? null;
-  const next = new Set(current ?? []);
+  const current = yield* BoundAgentsContext.expect();
+  const next = new Set(current);
   next.add(declaration.id);
-  scope.set(BoundAgentsContext, next);
+  yield* BoundAgentsContext.set(next);
 
   yield* installRemoteAgent(declaration, factory);
 }

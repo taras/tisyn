@@ -31,7 +31,6 @@ import { evaluate, type Env, envFromRecord } from "@tisyn/kernel";
 import { type DurableStream, InMemoryStream, ReplayIndex } from "@tisyn/durable-streams";
 import { dispatch, Effects, evaluateMiddlewareFn, BoundAgentsContext } from "@tisyn/agent";
 import { installAgentTransport, type AgentTransportFactory } from "@tisyn/transport";
-import { useScope } from "effection";
 import type { FnNode } from "@tisyn/ir";
 import { ConfigContext } from "./config-scope.js";
 
@@ -937,19 +936,17 @@ function orchestrateScope(
   ctx: DriveContext,
 ): Operation<Val> {
   return scoped(function* () {
-    const scope = yield* useScope();
-    const current = scope.get(BoundAgentsContext) ?? null;
-    const next = new Set(current ?? []);
+    const current = yield* BoundAgentsContext.expect();
+    const next = new Set(current);
 
     // Install cross-boundary middleware FIRST (outermost max in this scope)
     if (inner.handler !== null) {
       const handler = inner.handler;
       yield* Effects.around({
-        *dispatch([effectId, data]: [string, Val], nextMw) {
-          return yield* evaluateMiddlewareFn(handler, effectId, data, (eid: string, d: Val) =>
-            nextMw(eid, d),
-          );
-        },
+        dispatch: (
+          [effectId, data]: [string, Val],
+          nextMw: (eid: string, d: Val) => Operation<Val>,
+        ) => evaluateMiddlewareFn(handler, effectId, data, (eid: string, d: Val) => nextMw(eid, d)),
       });
     }
 
@@ -971,7 +968,7 @@ function orchestrateScope(
       next.add(prefix);
       yield* installAgentTransport(prefix, factory as unknown as AgentTransportFactory);
     }
-    scope.set(BoundAgentsContext, next);
+    yield* BoundAgentsContext.set(next);
 
     const childKernel = evaluate(inner.body, env);
     const result = yield* driveKernel(childKernel, childId, env, ctx);

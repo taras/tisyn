@@ -1,6 +1,6 @@
 import { describe, it } from "@effectionx/vitest";
 import { expect } from "vitest";
-import { scoped, useScope } from "effection";
+import { scoped } from "effection";
 import type { Val } from "@tisyn/ir";
 import {
   agent,
@@ -20,11 +20,10 @@ function* bindAgent<Ops extends Record<string, OperationSpec>>(
   declaration: AgentDeclaration<Ops>,
   impl: AgentImplementation<Ops>,
 ) {
-  const scope = yield* useScope();
-  const current = scope.get(BoundAgentsContext) ?? null;
-  const next = new Set(current ?? []);
+  const current = yield* BoundAgentsContext.expect();
+  const next = new Set(current);
   next.add(declaration.id);
-  scope.set(BoundAgentsContext, next);
+  yield* BoundAgentsContext.set(next);
   yield* impl.install();
 }
 

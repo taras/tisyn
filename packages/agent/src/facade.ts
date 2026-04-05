@@ -63,9 +63,7 @@ function createAgentApi(
   const handler: AgentApiHandler = {};
 
   for (const name of Object.keys(declaration.operations)) {
-    handler[name] = function* (args: Val): Operation<Val> {
-      return yield* dispatch(`${id}.${name}`, args);
-    };
+    handler[name] = (args: Val): Operation<Val> => dispatch(`${id}.${name}`, args);
   }
 
   return createApi(`agent:${id}`, handler);
