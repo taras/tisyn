@@ -184,9 +184,6 @@ importers:
       effection:
         specifier: 4.0.2
         version: 4.0.2
-      tsx:
-        specifier: ^4.21.0
-        version: 4.21.0
       typescript:
         specifier: ~5.8.0
         version: 5.8.3
@@ -338,6 +335,9 @@ importers:
 
   packages/runtime:
     dependencies:
+      '@effectionx/context-api':
+        specifier: ^0.5.3
+        version: 0.5.3(effection@4.0.2)
       '@tisyn/agent':
         specifier: workspace:*
         version: link:../agent
@@ -359,6 +359,9 @@ importers:
       '@tisyn/validate':
         specifier: workspace:*
         version: link:../validate
+      tsx:
+        specifier: ^4.21.0
+        version: 4.21.0
     devDependencies:
       '@effectionx/vitest':
         specifier: ^0.3.0

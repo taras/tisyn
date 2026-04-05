@@ -33,6 +33,34 @@ If you want to **run** a Tisyn program rather than compile, inspect, or validate
 
 This package is where durability becomes operational.
 
+## Runtime Context API
+
+`Runtime` is a middleware-interceptable context API for runtime capabilities, following the same `createApi()` pattern used by `Effects`.
+
+### `Runtime.loadModule(specifier, parentURL)`
+
+Loads a module by specifier. Supports `.ts`, `.mts`, `.cts` (via tsx) and `.js`, `.mjs`, `.cjs` (via native import).
+
+- `specifier` — absolute path, `file:` URL, or relative path (`./`, `../`)
+- `parentURL` — `file:` URL of the calling module (typically `import.meta.url`)
+
+```ts
+const mod = yield* Runtime.loadModule("./my-module.ts", import.meta.url);
+```
+
+### `Runtime.around(middlewares, options?)`
+
+Installs middleware that intercepts `loadModule` calls. Middleware is scope-local, inherited by children, and child installations do not affect the parent.
+
+```ts
+yield* Runtime.around({
+  *loadModule([specifier, parentURL], next) {
+    console.log("loading", specifier);
+    return yield* next(specifier, parentURL);
+  },
+});
+```
+
 ## Core Concepts
 
 ### Durable execution

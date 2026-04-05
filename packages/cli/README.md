@@ -32,7 +32,7 @@ A descriptor module's default export must be a `WorkflowDescriptor` (tagged with
 
 `.tsx` is not supported.
 
-Descriptor and transport-binding module loading uses a shared bootstrap loader:
+Descriptor and transport-binding module loading delegates to `@tisyn/runtime`'s shared `loadModule()`:
 
 - TypeScript-family files load through `tsx`'s `tsImport()` API
 - JavaScript-family files load through native `import()`

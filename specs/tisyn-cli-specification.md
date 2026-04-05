@@ -859,7 +859,7 @@ The extension-to-strategy mapping is internal default
 behavior. It is not a public contract and is not
 configurable via CLI flags.
 
-`@tisyn/cli` MUST declare `tsx` as a direct dependency
+`@tisyn/runtime` MUST declare `tsx` as a direct dependency
 (not peer or optional). `tsx` is imported lazily: the
 `tsx/esm/api` module is loaded only when a TypeScript-
 family file is encountered. If the user only provides
@@ -867,16 +867,16 @@ JavaScript modules, `tsx` is never loaded.
 
 #### 10.5.3 Shared Default Implementation
 
-The bootstrap loading path MUST be implemented so that
-it can serve as the default core handler for the scoped
-`Runtime.loadModule` capability described in §10.5.6.
+The default module-loading logic — extension-dispatched
+loading via `tsImport()` (TypeScript) or `import()`
+(JavaScript) — is owned by `@tisyn/runtime` and exported
+as `loadModule()`.
 
-In practice, this means extracting the extension-
-dispatched loading into a shared internal function.
-The bootstrap path calls this function directly. The
-future `Runtime.loadModule` core handler MUST delegate
-to the same function, ensuring that pre-scope and
-in-scope module loading behave identically by default.
+The CLI bootstrap path calls this function directly for
+pre-scope module loading. The `Runtime.loadModule` core
+handler (§10.5.6) delegates to the same function. This
+ensures that pre-scope and in-scope module loading behave
+identically by default.
 
 #### 10.5.4 Module Loading vs. Workflow Source Compilation
 
@@ -946,18 +946,20 @@ errors (missing default export, invalid
 `WorkflowDescriptor`, missing named export) are
 reported with exit code 2 per existing rules (§3.4).
 
-#### 10.5.6 Architectural Alignment: Runtime
+#### 10.5.6 Runtime Context API
 
-The bootstrap loading path defined in this section is
-architecturally aligned with a scoped runtime capability
-that this specification does not itself define.
-
-The intended scoped model is `Runtime` — a context API
-created via `createApi()`, following the same pattern as
-`Effects`. `Runtime` exposes `loadModule` as a middleware-
-interceptable capability:
+`Runtime` is a context API exported from `@tisyn/runtime`,
+created via `createApi()` following the same pattern as
+`Effects` (from `@tisyn/agent`). `Runtime` exposes
+`loadModule` as a middleware-interceptable capability:
 
     yield* Runtime.loadModule(specifier, parentURL);
+
+`specifier` may be an absolute filesystem path, a `file:`
+URL, or a relative path (starting with `./` or `../`).
+Relative specifiers are resolved against `parentURL`
+(a `file:` URL, typically `import.meta.url`). Bare
+specifiers are not supported.
 
 Middleware is installed via `Runtime.around()`:
 
@@ -975,24 +977,16 @@ context, scoped to the current scope, inherited by
 children, and child installations do not affect the
 parent.
 
-The bootstrap loading path (§10.5.2) is the pre-scope
-analogue of this capability. It exists because descriptor
-loading occurs before any scope exists. It is CLI-owned
-plumbing, not an extensibility abstraction.
+The core handler for `Runtime.loadModule` resolves the
+specifier against parentURL to produce an absolute file
+path, then delegates to the shared `loadModule()`
+function (§10.5.3).
 
-The shared default implementation rule (§10.5.3) ensures
-that bootstrap loading and the future scoped
-`Runtime.loadModule` core handler use the same
-underlying loading strategy. This prevents behavioral
-drift between pre-scope and in-scope module loading.
-
-The `Runtime` context API itself — its package placement,
-its full operation set, and its normative semantics — is
-deferred to a separate specification or amendment when
-a scoped consumer exists. This section establishes the
-architectural intent so that the bootstrap implementation
-is designed to align with it, not to normatively define
-the runtime-side API surface.
+The CLI bootstrap loading path (§10.5.2) remains a
+pre-scope analogue of this capability. It exists because
+descriptor loading occurs before any Effection scope
+exists. It calls the shared loader directly, not through
+`Runtime.loadModule`.
 
 ---
 

@@ -21,7 +21,6 @@ import { discoverConfig, validateAndResolveConfig, ConfigError } from "./config.
 import { buildInputSchema } from "@tisyn/compiler";
 import { deriveFlags, parseInputFlags, formatInputHelp } from "./inputs.js";
 import { CliError } from "./load-descriptor.js";
-import { loadModule, isTypeScriptFile } from "./load-module.js";
 import { loadLocalBinding, startServer } from "./startup.js";
 import { rebaseConfigPaths } from "./run.js";
 import type { ResolvedConfig } from "@tisyn/runtime";
@@ -507,64 +506,6 @@ describe("rebaseConfigPaths", () => {
     };
     rebaseConfigPaths(config, "/project/descriptors");
     expect(config.agents[0]!.transport.command).toBe("/project/descriptors/bin/agent");
-  });
-});
-
-// ── shared module loader ────────────────────────────────────────────────────────
-
-describe("shared module loader", () => {
-  it("loads a .js module", function* () {
-    const dir = yield* call(makeTempDir);
-    const modulePath = join(dir, "test-module.mjs");
-    yield* call(() => writeFile(modulePath, `export default { hello: "world" };\n`));
-    const mod = yield* call(() => loadModule(modulePath));
-    expect((mod.default as Record<string, unknown>).hello).toBe("world");
-  });
-
-  it("loads a .ts module", function* () {
-    const dir = yield* call(makeTempDir);
-    const modulePath = join(dir, "test-module.ts");
-    yield* call(() => writeFile(modulePath, `const x: string = "hello";\nexport default { x };\n`));
-    const mod = yield* call(() => loadModule(modulePath));
-    expect((mod.default as Record<string, unknown>).x).toBe("hello");
-  });
-
-  it("rejects unsupported extension", function* () {
-    const dir = yield* call(makeTempDir);
-    const modulePath = join(dir, "test-module.tsx");
-    yield* call(() => writeFile(modulePath, `export default {};\n`));
-    let threw = false;
-    try {
-      yield* call(() => loadModule(modulePath));
-    } catch (err) {
-      threw = true;
-      expect(err).toBeInstanceOf(CliError);
-      expect((err as CliError).exitCode).toBe(3);
-      expect((err as CliError).message).toContain("Unsupported");
-    }
-    expect(threw).toBe(true);
-  });
-
-  it("reports not found for missing file", function* () {
-    let threw = false;
-    try {
-      yield* call(() => loadModule("/tmp/nonexistent-cli-test-xyz.ts"));
-    } catch (err) {
-      threw = true;
-      expect(err).toBeInstanceOf(CliError);
-      expect((err as CliError).exitCode).toBe(3);
-      expect((err as CliError).message).toContain("not found");
-    }
-    expect(threw).toBe(true);
-  });
-
-  it("classifies TypeScript and JavaScript extensions", function* () {
-    expect(isTypeScriptFile("foo.ts")).toBe(true);
-    expect(isTypeScriptFile("foo.mts")).toBe(true);
-    expect(isTypeScriptFile("foo.cts")).toBe(true);
-    expect(isTypeScriptFile("foo.js")).toBe(false);
-    expect(isTypeScriptFile("foo.mjs")).toBe(false);
-    expect(isTypeScriptFile("foo.cjs")).toBe(false);
   });
 });
 
