@@ -4,7 +4,7 @@ import { tmpdir } from "node:os";
 import { fileURLToPath } from "node:url";
 import { call, resource } from "effection";
 import type { Operation } from "effection";
-import { implementAgent } from "@tisyn/agent";
+import { Agents } from "@tisyn/agent";
 import { execute } from "@tisyn/runtime";
 import { InMemoryStream } from "@tisyn/durable-streams";
 import { Call } from "@tisyn/ir";
@@ -61,14 +61,8 @@ export function runScenario(workflow: TisynFn<[], unknown>): Operation<void> {
         };
 
         // 7. Install agents
-        const hostImpl = implementAgent(Host(), createHostAgentHandlers(hostAgentState));
-        yield* hostImpl.install();
-
-        const browserImpl = implementAgent(
-          Browser(),
-          createBrowserAgentHandlers(browserAgentState),
-        );
-        yield* browserImpl.install();
+        yield* Agents.use(Host(), createHostAgentHandlers(hostAgentState));
+        yield* Agents.use(Browser(), createBrowserAgentHandlers(browserAgentState));
 
         // 8. Execute test workflow with dom workflow IR in env
         const stream = new InMemoryStream();

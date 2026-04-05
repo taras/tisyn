@@ -21,7 +21,6 @@ const Greet = agent("greet", {
 
 function calcHandlers() {
   return {
-    // biome-ignore lint/correctness/useYield: mock
     *add(params: { a: number; b: number }) {
       return params.a + params.b;
     },
@@ -30,7 +29,6 @@ function calcHandlers() {
 
 function greetHandlers() {
   return {
-    // biome-ignore lint/correctness/useYield: mock
     *hello(params: { name: string }) {
       return `Hello, ${params.name}!`;
     },
@@ -293,7 +291,6 @@ describe("browser transport", () => {
         inc: operation<Record<string, never>, number>(),
       });
       const countingCap = localCapability(countingCalc, {
-        // biome-ignore lint/correctness/useYield: mock
         *inc() {
           callCount++;
           return callCount;

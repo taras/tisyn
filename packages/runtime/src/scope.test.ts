@@ -84,14 +84,12 @@ describe("scope orchestration", () => {
       noop: operation<Record<string, never>, null>(),
     });
     const factory = inprocessTransport(greetAgent, {
-      // biome-ignore lint/correctness/useYield: mock
       *noop() {
         return null;
       },
     });
 
     const ir = scope(42, null, { "greet-service-scope": Get(Ref("envObj"), "transport") });
-    // biome-ignore lint/suspicious/noExplicitAny: factory is not Json-serializable but is a valid Val at runtime
     const { result } = yield* execute({ ir, env: { envObj: { transport: factory } as any } });
     expect(result).toEqual({ status: "ok", value: 42 });
   });

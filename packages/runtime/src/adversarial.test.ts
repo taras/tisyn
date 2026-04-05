@@ -3,20 +3,18 @@
  *
  * NEG-1:  useAgent throws descriptive error when agent not bound
  * NEG-3:  dispatch with no handler throws "No agent registered"
- * NEG-4:  enforcement denial propagates as error (not swallowed)
- * NEG-6:  enforcement receives the correct effectId and data
- * NEG-7:  enforcement can modify effectId before forwarding to inner
- * NEG-8:  multiple dispatches with enforcement — each dispatch goes through enforcement
- * NEG-9:  BoundAgentsContext is null by default (no bound agents without useTransport)
- * NEG-10: useAgent with agent not in BoundAgentsContext still throws
- * NEG-11: useAgent returns typed handle when agent is bound
+ * NEG-4:  outermost middleware denial propagates as error (not swallowed)
+ * NEG-6:  outermost middleware receives the correct effectId and data
+ * NEG-7:  outermost middleware can modify effectId before forwarding
+ * NEG-8:  multiple dispatches with middleware — each dispatch goes through middleware
+ * NEG-10: useAgent throws when a different agent is bound (not the requested one)
+ * NEG-11: useAgent returns typed handle when agent is bound via Agents.use()
  */
 
 import { describe, it } from "@effectionx/vitest";
 import { expect } from "vitest";
-import { useScope } from "effection";
 import type { Val } from "@tisyn/ir";
-import { Effects, dispatch, installEnforcement, useAgent, BoundAgentsContext } from "@tisyn/agent";
+import { Effects, dispatch, useAgent, Agents, agent, operation } from "@tisyn/agent";
 import type { AgentDeclaration, OperationSpec } from "@tisyn/agent";
 
 describe("Adversarial / edge cases", () => {
@@ -46,43 +44,51 @@ describe("Adversarial / edge cases", () => {
     }
   });
 
-  // NEG-4
-  it("enforcement denial error propagates — not swallowed", function* () {
-    yield* Effects.around({
-      // biome-ignore lint/correctness/useYield: mock
-      *dispatch([_e, _d]: [string, Val]) {
-        return "core" as Val;
+  // NEG-4: outermost middleware denial propagates as error
+  it("outermost middleware denial error propagates — not swallowed", function* () {
+    yield* Effects.around(
+      {
+        *dispatch([_e, _d]: [string, Val]) {
+          return "core" as Val;
+        },
       },
-    });
+      { at: "min" },
+    );
 
-    yield* installEnforcement(function* (_effectId, _data, _inner) {
-      throw new Error("enforcement-denied");
+    yield* Effects.around({
+      *dispatch([_e, _d]: [string, Val], _next) {
+        throw new Error("middleware-denied");
+      },
     });
 
     try {
       yield* dispatch("test.op", null);
       expect.unreachable("should have thrown");
     } catch (error) {
-      expect((error as Error).message).toBe("enforcement-denied");
+      expect((error as Error).message).toBe("middleware-denied");
     }
   });
 
-  // NEG-6
-  it("enforcement receives correct effectId and data", function* () {
-    yield* Effects.around({
-      // biome-ignore lint/correctness/useYield: mock
-      *dispatch([_e, _d]: [string, Val]) {
-        return "core" as Val;
+  // NEG-6: outermost middleware receives correct effectId and data
+  it("outermost middleware receives correct effectId and data", function* () {
+    yield* Effects.around(
+      {
+        *dispatch([_e, _d]: [string, Val]) {
+          return "core" as Val;
+        },
       },
-    });
+      { at: "min" },
+    );
 
     let capturedId: string | null = null;
     let capturedData: Val = null;
 
-    yield* installEnforcement(function* (effectId, data, inner) {
-      capturedId = effectId;
-      capturedData = data;
-      return yield* inner(effectId, data);
+    yield* Effects.around({
+      *dispatch([effectId, data]: [string, Val], next) {
+        capturedId = effectId;
+        capturedData = data;
+        return yield* next(effectId, data);
+      },
     });
 
     yield* dispatch("agent.op", { key: "val" } as unknown as Val);
@@ -90,59 +96,66 @@ describe("Adversarial / edge cases", () => {
     expect(capturedData).toEqual({ key: "val" });
   });
 
-  // NEG-7
-  it("enforcement can modify effectId before forwarding to inner chain", function* () {
+  // NEG-7: outermost middleware can modify effectId before forwarding
+  it("outermost middleware can modify effectId before forwarding", function* () {
     let seenInCore: string | null = null;
-    yield* Effects.around({
-      // biome-ignore lint/correctness/useYield: mock
-      *dispatch([e, _d]: [string, Val]) {
-        seenInCore = e;
-        return "ok" as Val;
+    yield* Effects.around(
+      {
+        *dispatch([e, _d]: [string, Val]) {
+          seenInCore = e;
+          return "ok" as Val;
+        },
       },
-    });
+      { at: "min" },
+    );
 
-    yield* installEnforcement(function* (_effectId, data, inner) {
-      return yield* inner("replaced.op", data);
+    yield* Effects.around({
+      *dispatch([_e, d]: [string, Val], next) {
+        return yield* next("replaced.op", d);
+      },
     });
 
     yield* dispatch("original.op", null);
     expect(seenInCore).toBe("replaced.op");
   });
 
-  // NEG-8
-  it("each dispatch call goes through enforcement", function* () {
-    let enforcementCallCount = 0;
-    yield* Effects.around({
-      // biome-ignore lint/correctness/useYield: mock
-      *dispatch([_e, _d]: [string, Val]) {
-        return "ok" as Val;
+  // NEG-8: each dispatch goes through middleware
+  it("each dispatch call goes through middleware", function* () {
+    let mwCallCount = 0;
+    yield* Effects.around(
+      {
+        *dispatch([_e, _d]: [string, Val]) {
+          return "ok" as Val;
+        },
       },
-    });
+      { at: "min" },
+    );
 
-    yield* installEnforcement(function* (effectId, data, inner) {
-      enforcementCallCount++;
-      return yield* inner(effectId, data);
+    yield* Effects.around({
+      *dispatch([e, d]: [string, Val], next) {
+        mwCallCount++;
+        return yield* next(e, d);
+      },
     });
 
     yield* dispatch("op1", null);
     yield* dispatch("op2", null);
     yield* dispatch("op3", null);
 
-    expect(enforcementCallCount).toBe(3);
+    expect(mwCallCount).toBe(3);
   });
 
-  // NEG-9
-  it("BoundAgentsContext is null by default", function* () {
-    const scope = yield* useScope();
-    const bound = scope.hasOwn(BoundAgentsContext) ? scope.expect(BoundAgentsContext) : null;
-    expect(bound).toBeNull();
-  });
+  // NEG-10: useAgent throws when a different agent is bound
+  it("useAgent throws for agent not bound even when another agent is", function* () {
+    const OtherAgent = agent("other-agent", {
+      run: operation<null, string>(),
+    });
 
-  // NEG-10
-  it("useAgent throws for agent not in BoundAgentsContext", function* () {
-    const scope = yield* useScope();
-    const boundSet = new Set(["other-agent"]);
-    scope.set(BoundAgentsContext, boundSet);
+    yield* Agents.use(OtherAgent, {
+      *run() {
+        return "ok";
+      },
+    });
 
     const MyAgent: AgentDeclaration<{ go: OperationSpec<null, string> }> = {
       id: "my-agent",
@@ -157,23 +170,17 @@ describe("Adversarial / edge cases", () => {
     }
   });
 
-  // NEG-11
-  it("useAgent returns typed handle when agent is bound in BoundAgentsContext", function* () {
-    const scope = yield* useScope();
-    scope.set(BoundAgentsContext, new Set(["echo-agent"]));
-
-    // Install a handler that echoes data back
-    yield* Effects.around({
-      // biome-ignore lint/correctness/useYield: mock
-      *dispatch([_e, d]: [string, Val]) {
-        return d;
-      },
+  // NEG-11: useAgent returns typed handle when agent is bound
+  it("useAgent returns typed handle when agent is bound via Agents.use()", function* () {
+    const EchoAgent = agent("echo-agent", {
+      echo: operation<string, string>(),
     });
 
-    const EchoAgent: AgentDeclaration<{ echo: OperationSpec<string, string> }> = {
-      id: "echo-agent",
-      operations: { echo: {} },
-    };
+    yield* Agents.use(EchoAgent, {
+      *echo(data: string) {
+        return data;
+      },
+    });
 
     const handle = yield* useAgent(EchoAgent);
     expect(handle).toBeDefined();

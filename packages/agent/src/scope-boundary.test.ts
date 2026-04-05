@@ -10,7 +10,6 @@ import { Effects, dispatch } from "./index.js";
 function* installCoreHandler() {
   yield* Effects.around(
     {
-      // biome-ignore lint/correctness/useYield: mock handler
       *dispatch([_e, _d]: [string, Val]) {
         return "core";
       },

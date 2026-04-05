@@ -44,7 +44,6 @@ describe("Built-in sleep effect", () => {
 
   it("Effects.around({ *dispatch }) intercepts sleep before built-in", function* () {
     yield* Effects.around({
-      // biome-ignore lint/correctness/useYield: mock
       *dispatch([effectId, _data]: [string, Val], _next) {
         if (effectId === "sleep") {
           return 42;
@@ -73,7 +72,6 @@ describe("Built-in sleep effect", () => {
   it("Effects.around({ *dispatch }) intercepts direct Effects.sleep()", function* () {
     let intercepted = false;
     yield* Effects.around({
-      // biome-ignore lint/correctness/useYield: mock
       *dispatch([effectId, _data]: [string, Val], _next) {
         if (effectId === "sleep") {
           intercepted = true;

@@ -1,11 +1,7 @@
 import type { Operation, Subscription, Task } from "effection";
 import { spawn, scoped } from "effection";
 import type { AgentImplementation, OperationSpec } from "@tisyn/agent";
-import {
-  installEnforcement,
-  evaluateMiddlewareFn,
-  installCrossBoundaryMiddleware,
-} from "@tisyn/agent";
+import { Effects, evaluateMiddlewareFn, installCrossBoundaryMiddleware } from "@tisyn/agent";
 import type { AgentMessage, HostMessage } from "@tisyn/protocol";
 import type { Val } from "@tisyn/ir";
 import { isFnNode } from "@tisyn/ir";
@@ -115,9 +111,19 @@ export function createProtocolServer<Ops extends Record<string, OperationSpec>>(
             const middlewareFn = validatedMiddleware;
             const task = yield* spawn(function* () {
               yield* scoped(function* () {
-                yield* installEnforcement((effectId, data, inner) =>
-                  evaluateMiddlewareFn(middlewareFn, effectId, data, inner),
-                );
+                // Install cross-boundary middleware as ordinary Effects.around()
+                // at default (max) priority. Installed first in this scoped block,
+                // it becomes the outermost middleware — collectMiddleware's prototype
+                // chain traversal ensures parent max MW always runs before child max MW.
+                yield* Effects.around({
+                  dispatch: (
+                    [effectId, data]: [string, Val],
+                    next: (eid: string, d: Val) => Operation<Val>,
+                  ) =>
+                    evaluateMiddlewareFn(middlewareFn, effectId, data, (eid: string, d: Val) =>
+                      next(eid, d),
+                    ),
+                });
                 yield* installCrossBoundaryMiddleware(middlewareFn);
 
                 try {

@@ -2,11 +2,11 @@
  * Scope isolation tests for inprocessTransport.
  *
  * Verifies that the agent-side server runs in an isolated scope that does not
- * inherit host Effects middleware or BoundAgentsContext.
+ * inherit host Effects middleware or routing-based agent bindings.
  *
  * SL-1: Host Effects.around() middleware does NOT bleed into child server
  * SL-2: Cross-boundary middleware propagated via protocol DOES affect child
- * SL-3: Host BoundAgentsContext (set by useTransport) not visible in child server
+ * SL-3: Host agent bindings (installed by useTransport) not visible in child server
  */
 
 import { describe, it } from "@effectionx/vitest";
@@ -117,8 +117,8 @@ describe("inprocessTransport scope isolation", () => {
     });
   });
 
-  // SL-3: host BoundAgentsContext (set by useTransport) not visible in isolated child scope
-  it("host BoundAgentsContext does not leak into child server", function* () {
+  // SL-3: host agent bindings (routing middleware set by useTransport) not visible in isolated child scope
+  it("host agent bindings do not leak into child server", function* () {
     const inner = agent("calc-sl3-inner", {
       add: operation<{ a: number; b: number }, number>(),
     });
@@ -137,17 +137,17 @@ describe("inprocessTransport scope isolation", () => {
     // helper handler tries to useAgent(inner) — should fail inside the isolated scope
     const helperFactory = inprocessTransport(helper, {
       *run({ a, b }: { a: number; b: number }) {
-        // useAgent reads BoundAgentsContext; in isolated scope it should be null → throws
+        // useAgent queries Effects.resolve(); in isolated scope no bindings exist → throws
         const handle = yield* useAgent(inner);
         return yield* handle.add({ a, b });
       },
     });
 
     yield* scoped(function* () {
-      // Bind inner in HOST scope — sets BoundAgentsContext for "calc-sl3-inner"
+      // Bind inner in HOST scope — installs routing middleware for "calc-sl3-inner"
       yield* useTransport(inner, innerFactory);
 
-      // Helper runs in its own isolated scope — must NOT see host's BoundAgentsContext
+      // Helper runs in its own isolated scope — must NOT see host's agent bindings
       yield* installRemoteAgent(helper, helperFactory);
 
       try {

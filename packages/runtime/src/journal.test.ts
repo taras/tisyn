@@ -23,7 +23,6 @@ describe("Journal", () => {
     };
 
     yield* Effects.around({
-      // biome-ignore lint/correctness/useYield: mock
       *dispatch([_effectId, _data]: [string, any]) {
         return 42;
       },

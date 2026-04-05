@@ -41,7 +41,6 @@ describe("middleware composition", () => {
     yield* installCoreHandler();
 
     yield* Effects.around({
-      // biome-ignore lint/correctness/useYield: denying middleware
       *dispatch([_e, _d]: [string, Val], _next) {
         throw new Error("denied");
       },
@@ -398,7 +397,6 @@ describe("middleware composition", () => {
     );
 
     yield* Effects.around({
-      // biome-ignore lint/correctness/useYield: denying middleware
       *dispatch([e, _d]: [string, Val], _next) {
         if (e === "tisyn.exec") {
           throw new Error("tisyn.exec blocked by middleware");

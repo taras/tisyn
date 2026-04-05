@@ -458,10 +458,10 @@ describe("compileOne with scoped()", () => {
 
 describe("scope teardown across while-loop iterations", () => {
   it("each scoped() iteration installs a fresh handler and tears it down on exit", function* () {
-    // Each scope installs an Effects.around handler (compiled to a FnNode) via
-    // installEnforcement, which sets EnforcementContext for that Effection scope.
+    // Each scope installs an Effects.around handler (compiled to a FnNode) as
+    // ordinary Effects.around() middleware in that Effection scope.
     // orchestrateScope wraps each body inside Effection's scoped(), so when it
-    // exits, EnforcementContext reverts to null.
+    // exits, the scope-local Effects middleware is torn down.
     //
     // Why this detects teardown failure:
     //   After the while loop, `yield* sleep(5)` fires dispatch("sleep", [5]).

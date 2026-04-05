@@ -20,7 +20,6 @@ describe("Over the wire", () => {
 
       // Install GraphQL capability (mock)
       const graphqlImpl = implementAgent(graphql, {
-        // biome-ignore lint/correctness/useYield: mock
         *execute({ document: _document, variables }) {
           return { orderId: "order-1", status: "created", input: variables ?? null };
         },

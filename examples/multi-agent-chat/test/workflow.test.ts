@@ -8,7 +8,7 @@
 import { describe, it } from "@effectionx/vitest";
 import { expect } from "vitest";
 import { spawn, withResolvers } from "effection";
-import { implementAgent } from "@tisyn/agent";
+import { Agents } from "@tisyn/agent";
 import { execute } from "@tisyn/runtime";
 import { Call } from "@tisyn/ir";
 import { App, Llm, DB, chat } from "../src/workflow.generated.js";
@@ -35,7 +35,7 @@ describe("Compiled workflow", () => {
     const done = withResolvers<void>();
 
     // Install local App agent
-    const browserImpl = implementAgent(App(), {
+    yield* Agents.use(App(), {
       *elicit(args) {
         elicitCalls.push(args);
         if (userMessageIndex >= userMessages.length) {
@@ -53,19 +53,17 @@ describe("Compiled workflow", () => {
       },
       *setReadOnly() {},
     });
-    yield* browserImpl.install();
 
     // Install local LLM agent (echo stub)
-    const llmImpl = implementAgent(Llm(), {
+    yield* Agents.use(Llm(), {
       *sample(args) {
         sampleCalls.push(args);
         return { message: `Echo: ${args.input.message}` };
       },
     });
-    yield* llmImpl.install();
 
     // Install local DB agent (in-memory stub)
-    const dbImpl = implementAgent(DB(), {
+    yield* Agents.use(DB(), {
       *loadMessages(args) {
         loadMessagesCalls.push(args);
         return [];
@@ -74,7 +72,6 @@ describe("Compiled workflow", () => {
         appendMessageCalls.push(args);
       },
     });
-    yield* dbImpl.install();
 
     // Run the compiled workflow in a spawned task so we can cancel it
     const _task = yield* spawn(function* () {

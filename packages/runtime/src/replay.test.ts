@@ -54,7 +54,6 @@ describe("Replay", () => {
 
     let agentCalled = false;
     yield* Effects.around({
-      // biome-ignore lint/correctness/useYield: mock
       *dispatch([_effectId, _data]: [string, any]) {
         agentCalled = true;
         return 999;
@@ -82,7 +81,6 @@ describe("Replay", () => {
 
     let liveCallCount = 0;
     yield* Effects.around({
-      // biome-ignore lint/correctness/useYield: mock
       *dispatch([_effectId, _data]: [string, any]) {
         liveCallCount++;
         return 20;
@@ -166,7 +164,6 @@ describe("Replay", () => {
 
     let agentCalled = false;
     yield* Effects.around({
-      // biome-ignore lint/correctness/useYield: mock
       *dispatch([_effectId, _data]: [string, any]) {
         agentCalled = true;
         return 1;

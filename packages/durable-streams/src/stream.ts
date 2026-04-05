@@ -51,12 +51,10 @@ export class InMemoryStream implements DurableStream {
     this.events = cloneEvents(initialEvents);
   }
 
-  // biome-ignore lint/correctness/useYield: synchronous generator for Operation interface
   *readAll(): Operation<DurableEvent[]> {
     return cloneEvents(this.events);
   }
 
-  // biome-ignore lint/correctness/useYield: synchronous generator for Operation interface
   *append(event: DurableEvent): Operation<void> {
     if (this.injectFailure) {
       throw this.injectFailure;
