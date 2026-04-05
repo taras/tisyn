@@ -25,7 +25,23 @@ The CLI loads descriptors, resolves environment, installs transports, and hands 
 
 A descriptor module's default export must be a `WorkflowDescriptor` (tagged with `tisyn_config: "workflow"`). The CLI resolves the workflow module path and export name from the descriptor's `run` field.
 
-When `run.module` points to a `.ts` source file, `tsn run` compiles the workflow at runtime using the tisyn compiler. The source file should contain ambient factory contract declarations (`declare function AgentName(): { ... }`) and exported generator functions. When `run.module` points to a `.js` file, the CLI loads pre-compiled IR via dynamic import.
+`tsn run` and `tsn check` accept descriptor modules with these extensions:
+
+- TypeScript-family: `.ts`, `.mts`, `.cts`
+- JavaScript-family: `.js`, `.mjs`, `.cjs`
+
+`.tsx` is not supported.
+
+Descriptor and transport-binding module loading uses a shared bootstrap loader:
+
+- TypeScript-family files load through `tsx`'s `tsImport()` API
+- JavaScript-family files load through native `import()`
+
+Workflow target resolution stays separate from descriptor-module loading:
+
+- if `run.module` explicitly points to a TypeScript-family workflow source file, the CLI compiles that source at runtime using `@tisyn/compiler`
+- if `run.module` explicitly points to a JavaScript-family file, the CLI loads the pre-compiled module and extracts the named export
+- if `run.module` is omitted, the CLI resolves the named export from the same module that produced the descriptor, including when that descriptor module is TypeScript
 
 Bare `Fn` IR nodes (produced by the compiler) are automatically invoked: zero-parameter workflows are called directly, and single flat-object-parameter workflows receive parsed CLI flags as their argument. Destructured function parameters are not supported — use `(input: { ... })` form.
 
@@ -45,6 +61,8 @@ Modules referenced by `transport.local()` or `transport.inprocess()` can export 
 - `createTransport()` returning a plain `AgentTransportFactory` (backward-compatible)
 
 Both types are exported from `@tisyn/transport`.
+
+These transport binding modules use the same bootstrap loader as descriptor modules, so `.ts`, `.mts`, `.cts`, `.js`, `.mjs`, and `.cjs` are supported here as well. `.tsx` is not supported.
 
 When a server is configured, the CLI starts the server first and calls `bindServer(serverBinding)` on bindings that support it. The `LocalServerBinding` provides the server address and accepted WebSocket connections as a typed `Stream<Operation<WebSocket>, never>`, letting modules receive browser connections without accessing raw `WebSocketServer` internals.
 
@@ -81,13 +99,17 @@ Load a workflow descriptor module, validate readiness, and execute the workflow.
 
 ```bash
 tsn run ./descriptor.ts
+tsn run ./workflow.ts -e dev
 tsn run ./descriptor.ts -e dev --max-turns 10
 ```
 
 The `run` command:
 1. Loads and validates the workflow descriptor (default export)
 2. Applies an entrypoint overlay if `--entrypoint` is specified
-3. Resolves the compiled workflow IR from the generated module
+3. Resolves the workflow target:
+   - explicit TypeScript-family workflow source -> compiler path
+   - explicit JavaScript-family workflow module -> bootstrap module loading
+   - omitted `run.module` -> same-module export lookup
 4. Parses CLI flags against the workflow's input schema metadata
 5. Resolves environment variables from the process environment
 6. Installs agent transports, starts servers, creates journal streams
@@ -129,6 +151,7 @@ tsn check ./descriptor.ts --env-example
 
 - CLI argument parsing and command dispatch
 - descriptor loading and validation
+- bootstrap module loading for descriptor and transport-binding modules
 - two-phase input flag derivation and parsing
 - transport, server, and journal lifecycle orchestration
 - dynamic and static help generation
