@@ -64,14 +64,16 @@ export function isTypeScriptFile(filePath: string): boolean {
 
 // ── Lazy tsx cache ───────────────────────────────────────────────────────────
 
-let tsxApi:
-  | { tsImport: (specifier: string, options: string | { parentURL: string }) => Promise<unknown> }
-  | undefined;
+type TsxApi = {
+  tsImport: (specifier: string, options: string | { parentURL: string }) => Promise<unknown>;
+};
 
-async function getTsxApi() {
+let tsxApi: TsxApi | undefined;
+
+function* getTsxApi(): Operation<TsxApi> {
   if (!tsxApi) {
     try {
-      tsxApi = (await import("tsx/esm/api")) as unknown as typeof tsxApi;
+      tsxApi = (yield* call(() => import("tsx/esm/api"))) as unknown as TsxApi;
     } catch {
       throw new LoaderInitError();
     }
@@ -119,10 +121,10 @@ export function* loadModule(filePath: string): Operation<Record<string, unknown>
   }
 
   if (TS_EXTENSIONS.has(ext)) {
-    const { tsImport } = yield* call(() => getTsxApi());
+    const api = yield* getTsxApi();
     try {
       const mod = (yield* call(() =>
-        tsImport(pathToFileURL(filePath).href, import.meta.url),
+        api.tsImport(pathToFileURL(filePath).href, import.meta.url),
       )) as Record<string, unknown>;
       return normalizeTsxModule(mod);
     } catch (err) {
