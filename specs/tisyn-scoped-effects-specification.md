@@ -477,13 +477,13 @@ the terminal dispatch boundary.
 
 > **Note:** Facade-local middleware — installed via
 > `facade.around()` — applies only to calls initiated through
-> that specific facade instance. Effects-level middleware —
-> installed via `Effects.around()` — applies at the shared
-> dispatch boundary regardless of whether the call arrived via
-> the compiled path or the runtime facade path. A call through
-> a facade traverses the facade's local middleware first, then
-> enters the Effects dispatch boundary where Effects-level
-> middleware applies.
+> that facade, not to calls arriving via the compiled path.
+> Effects-level middleware — installed via `Effects.around()` —
+> applies at the shared dispatch boundary regardless of whether
+> the call arrived via the compiled path or the runtime facade
+> path. A call through a facade traverses the facade's local
+> middleware first, then enters the Effects dispatch boundary
+> where Effects-level middleware applies.
 
 The facade is not a raw Context API result. The `.operations`
 namespace remains an implementation detail of the backing API;
