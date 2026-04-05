@@ -14,15 +14,7 @@
 import { describe, it } from "@effectionx/vitest";
 import { expect } from "vitest";
 import type { Val } from "@tisyn/ir";
-import {
-  Effects,
-  dispatch,
-  useAgent,
-  Agents,
-  agent,
-  operation,
-  implementAgent,
-} from "@tisyn/agent";
+import { Effects, dispatch, useAgent, Agents, agent, operation } from "@tisyn/agent";
 import type { AgentDeclaration, OperationSpec } from "@tisyn/agent";
 
 describe("Adversarial / edge cases", () => {
@@ -159,13 +151,11 @@ describe("Adversarial / edge cases", () => {
       run: operation<null, string>(),
     });
 
-    const otherImpl = implementAgent(OtherAgent, {
+    yield* Agents.use(OtherAgent, {
       *run() {
         return "ok";
       },
     });
-
-    yield* Agents.use(OtherAgent, otherImpl);
 
     const MyAgent: AgentDeclaration<{ go: OperationSpec<null, string> }> = {
       id: "my-agent",
@@ -186,13 +176,11 @@ describe("Adversarial / edge cases", () => {
       echo: operation<string, string>(),
     });
 
-    const impl = implementAgent(EchoAgent, {
+    yield* Agents.use(EchoAgent, {
       *echo(data: string) {
         return data;
       },
     });
-
-    yield* Agents.use(EchoAgent, impl);
 
     const handle = yield* useAgent(EchoAgent);
     expect(handle).toBeDefined();

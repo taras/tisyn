@@ -32,7 +32,7 @@ The current reference API surface for these roles is:
 ````
 scoped(...)                          → scope boundary
 Effects.around(...)                  → middleware installation
-Agents.use(Agent, impl)             → local binding
+Agents.use(Agent, handlers)          → local binding
 useTransport(Agent, transport(...))  → transport binding
 useAgent(Agent)                      → agent facade
 ````
@@ -387,13 +387,16 @@ Both binding forms install `Effects.around()` middleware that
 routes matching effects and reports binding status via the
 `resolve` operation.
 
-**Local binding** (reference API: `Agents.use(Agent, impl)`)
-installs the implementation's dispatch and resolve middleware
+**Local binding** (reference API: `Agents.use(Agent, handlers)`)
+installs dispatch and resolve middleware for the given handlers
 directly in the current scope:
 
 ````typescript
 // Reference API example
-yield* Agents.use(Coder, coderImpl);
+yield* Agents.use(Coder, {
+  *review({ text }) { return `reviewed: ${text}`; },
+  *summarize({ text }) { return `summary of: ${text}`; },
+});
 ````
 
 **Transport binding** (reference API:
@@ -468,7 +471,7 @@ MUST NOT affect the parent after scope exit.
 
 | Concern | Semantic role | Reference API | Phase |
 |---|---|---|---|
-| Local binding | Local binding primitive | `Agents.use(Agent, impl)` | Scope setup |
+| Local binding | Local binding primitive | `Agents.use(Agent, handlers)` | Scope setup |
 | Transport binding | Transport binding primitive | `useTransport(Agent, transport(...))` | Scope setup |
 | Middleware | Middleware installation primitive | `Effects.around(...)` | Scope setup |
 | Agent facade | Agent facade lookup | `useAgent(Agent)` | Workflow logic |

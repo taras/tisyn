@@ -18,8 +18,7 @@ This package sits between authored workflow logic and concrete side effects.
 
 - `agent(id, operations)` declares a named capability boundary.
 - `operation<Spec>()` declares one typed operation on that boundary.
-- `implementAgent()` binds handlers to a declaration.
-- `Agents.use()` binds a local implementation in the current scope, installing routing and resolve middleware.
+- `Agents.use()` binds handlers directly to a declaration in the current scope, installing routing and resolve middleware.
 - `Effects.around()` installs Effection middleware layers that intercept or route effect invocations.
 - `dispatch()` performs an effect call through the current `Effects` middleware boundary.
 - `resolve()` queries the Effects middleware chain to check if an agent is bound in the current scope.
@@ -34,8 +33,8 @@ The public surface exported from `src/index.ts` includes:
 
 - `agent` — declare a named agent boundary and its available operations
 - `operation` — declare the typed input/output contract for one operation
-- `implementAgent` — bind handlers to a declaration so the runtime can dispatch them
-- `Agents` — setup namespace; `Agents.use(declaration, impl)` binds a local implementation in the current scope
+- `Agents` — setup namespace; `Agents.use(declaration, handlers)` binds handlers directly in the current scope
+- `implementAgent` — create an `AgentImplementation` object for use by protocol servers and transports (internal/advanced)
 - `Effects` — the Effection middleware context for invocation routing; use `Effects.around()` to install intercept layers
 - `dispatch` — perform an effect call through the current `Effects` middleware boundary
 - `resolve` — query the Effects middleware chain to check if an agent is bound
@@ -51,7 +50,7 @@ Important exported types:
 - `DeclaredAgent` — represent the callable declaration returned by `agent()`
 - `AgentDeclaration` — structural type for a declared agent contract
 - `AgentImplementation` — declaration paired with handlers and install logic
-- `ImplementationHandlers` — type the handler map expected by `implementAgent()`
+- `ImplementationHandlers` — type the handler map expected by `Agents.use()` and `implementAgent()`
 - `Invocation` — represent one concrete operation call ready for dispatch
 - `ArgsOf` — extract the input shape from an operation declaration
 - `ResultOf` — extract the result type from an operation declaration
@@ -76,22 +75,22 @@ Calling a declared operation produces an invocation description. It is a typed e
 const request = orders.fetch({ input: { orderId: "ord-1" } });
 ```
 
-## Implement Handlers
+## Bind Handlers Locally
+
+`Agents.use()` binds typed handlers directly to a declaration in the current scope. It installs both dispatch routing and resolve middleware — `useAgent()` will succeed for this agent after this call.
 
 ```ts
-import { implementAgent } from "@tisyn/agent";
+import { Agents } from "@tisyn/agent";
 
-const ordersImpl = implementAgent(orders, {
+yield* Agents.use(orders, {
   *fetch({ input }) {
     return { id: input.orderId, total: 42 };
   },
-
   *cancel() {},
 });
-
 ```
 
-The implementation exposes `call(opName, payload)` for use by protocol servers. To make the handlers reachable at the dispatch layer, pass the implementation to a transport (see `@tisyn/transport`).
+For transport or protocol server use cases, `implementAgent()` creates an `AgentImplementation` object with `call(opName, payload)`. This is an internal/advanced API used by `@tisyn/transport`.
 
 ## Use an Agent with Per-Operation Middleware
 
@@ -138,7 +137,7 @@ This is useful when:
 - one agent implementation delegates work to another
 
 ```ts
-const checkoutImpl = implementAgent(checkout, {
+yield* Agents.use(checkout, {
   *complete({ input }) {
     const order = yield* invoke(
       orders.fetch({ input: { orderId: input.orderId } }),

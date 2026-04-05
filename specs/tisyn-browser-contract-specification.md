@@ -164,7 +164,7 @@ function localCapability<Ops>(
 ): LocalCapability;
 ```
 
-Internally: `implementAgent(declaration, handlers).install()`.
+Internally: installs dispatch and resolve middleware via `Effects.around()`, equivalent to what `Agents.use(declaration, handlers)` does for local bindings.
 
 ### 5.3 Unified Model
 

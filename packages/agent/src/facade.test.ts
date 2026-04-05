@@ -2,7 +2,7 @@ import { describe, it } from "@effectionx/vitest";
 import { expect } from "vitest";
 import { scoped } from "effection";
 import type { Val } from "@tisyn/ir";
-import { agent, operation, implementAgent, Agents, Effects, useAgent } from "./index.js";
+import { agent, operation, Agents, Effects, useAgent } from "./index.js";
 
 describe("agent facade", () => {
   // F-1: useAgent() returns object with direct methods AND .around()
@@ -12,7 +12,7 @@ describe("agent facade", () => {
       summarize: operation<{ text: string }, string>(),
     });
 
-    const impl = implementAgent(reviewer, {
+    yield* Agents.use(reviewer, {
       *review({ text }) {
         return `reviewed: ${text}`;
       },
@@ -20,8 +20,6 @@ describe("agent facade", () => {
         return `summary: ${text}`;
       },
     });
-
-    yield* Agents.use(reviewer, impl);
     const facade = yield* useAgent(reviewer);
 
     // Direct methods exist and are functions
@@ -44,12 +42,6 @@ describe("agent facade", () => {
       add: operation<{ a: number; b: number }, number>(),
     });
 
-    const impl = implementAgent(calc, {
-      *add({ a, b }) {
-        return a + b;
-      },
-    });
-
     // Install Effects-level middleware FIRST so it's outermost max
     yield* Effects.around({
       *dispatch([e, d]: [string, Val], next) {
@@ -58,8 +50,12 @@ describe("agent facade", () => {
       },
     });
 
-    // Then bind the agent (impl installs as next max, inner)
-    yield* Agents.use(calc, impl);
+    // Then bind the agent (installs as next max, inner)
+    yield* Agents.use(calc, {
+      *add({ a, b }) {
+        return a + b;
+      },
+    });
 
     const facade = yield* useAgent(calc);
 
@@ -84,13 +80,11 @@ describe("agent facade", () => {
       add: operation<{ a: number; b: number }, number>(),
     });
 
-    const impl = implementAgent(calc, {
+    yield* Agents.use(calc, {
       *add({ a, b }) {
         return a + b;
       },
     });
-
-    yield* Agents.use(calc, impl);
 
     const facade1 = yield* useAgent(calc);
     const facade2 = yield* useAgent(calc);
@@ -115,13 +109,11 @@ describe("agent facade", () => {
       add: operation<{ a: number; b: number }, number>(),
     });
 
-    const impl = implementAgent(calc, {
+    yield* Agents.use(calc, {
       *add({ a, b }) {
         return a + b;
       },
     });
-
-    yield* Agents.use(calc, impl);
 
     const parentFacade = yield* useAgent(calc);
 
@@ -184,13 +176,12 @@ describe("agent facade", () => {
     });
 
     // Install core handler AFTER effects MW so it's inner
-    const impl = implementAgent(calc, {
+    yield* Agents.use(calc, {
       *add({ a, b }) {
         order.push("core");
         return a + b;
       },
     });
-    yield* Agents.use(calc, impl);
 
     const facade = yield* useAgent(calc);
 
@@ -226,13 +217,11 @@ describe("agent facade", () => {
       add: operation<{ a: number; b: number }, number>(),
     });
 
-    const impl = implementAgent(calc, {
+    yield* Agents.use(calc, {
       *add({ a, b }) {
         return a + b;
       },
     });
-
-    yield* Agents.use(calc, impl);
 
     const facade = yield* useAgent(calc);
     const result = yield* facade.add({ a: 21, b: 21 });

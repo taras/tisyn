@@ -13,7 +13,7 @@ import { describe, it } from "@effectionx/vitest";
 import { expect } from "vitest";
 import { scoped } from "effection";
 import type { Val } from "@tisyn/ir";
-import { agent, operation, implementAgent, Agents, Effects, useAgent } from "./index.js";
+import { agent, operation, Agents, Effects, useAgent } from "./index.js";
 
 describe("Agents setup API", () => {
   // AG-1
@@ -22,14 +22,11 @@ describe("Agents setup API", () => {
       add: operation<{ a: number; b: number }, number>(),
     });
 
-    const impl = implementAgent(calc, {
-      // biome-ignore lint/correctness/useYield: mock handler
+    yield* Agents.use(calc, {
       *add({ a, b }) {
         return a + b;
       },
     });
-
-    yield* Agents.use(calc, impl);
 
     const facade = yield* useAgent(calc);
     const result = yield* facade.add({ a: 3, b: 4 });
@@ -57,14 +54,11 @@ describe("Agents setup API", () => {
       add: operation<{ a: number; b: number }, number>(),
     });
 
-    const impl = implementAgent(calc, {
-      // biome-ignore lint/correctness/useYield: mock handler
+    yield* Agents.use(calc, {
       *add({ a, b }) {
         return a + b;
       },
     });
-
-    yield* Agents.use(calc, impl);
 
     // Child scope should see parent's binding
     yield* scoped(function* () {
@@ -84,23 +78,18 @@ describe("Agents setup API", () => {
       run: operation<null, string>(),
     });
 
-    const parentImpl = implementAgent(parent_agent, {
-      // biome-ignore lint/correctness/useYield: mock handler
+    yield* Agents.use(parent_agent, {
       *run() {
         return "parent";
       },
     });
 
-    yield* Agents.use(parent_agent, parentImpl);
-
     yield* scoped(function* () {
-      const childImpl = implementAgent(child_agent, {
-        // biome-ignore lint/correctness/useYield: mock handler
+      yield* Agents.use(child_agent, {
         *run() {
           return "child";
         },
       });
-      yield* Agents.use(child_agent, childImpl);
 
       // Child can see both
       const childFacade = yield* useAgent(child_agent);
@@ -135,14 +124,11 @@ describe("Agents setup API", () => {
       },
     });
 
-    const impl = implementAgent(calc, {
-      // biome-ignore lint/correctness/useYield: mock handler
+    yield* Agents.use(calc, {
       *add({ a, b }) {
         return a + b;
       },
     });
-
-    yield* Agents.use(calc, impl);
 
     const facade = yield* useAgent(calc);
     yield* facade.add({ a: 1, b: 2 });
@@ -160,22 +146,17 @@ describe("Agents setup API", () => {
       greet: operation<{ name: string }, string>(),
     });
 
-    const calcImpl = implementAgent(calc, {
-      // biome-ignore lint/correctness/useYield: mock handler
+    yield* Agents.use(calc, {
       *add({ a, b }) {
         return a + b;
       },
     });
 
-    const greeterImpl = implementAgent(greeter, {
-      // biome-ignore lint/correctness/useYield: mock handler
+    yield* Agents.use(greeter, {
       *greet({ name }) {
         return `hello ${name}`;
       },
     });
-
-    yield* Agents.use(calc, calcImpl);
-    yield* Agents.use(greeter, greeterImpl);
 
     const calcFacade = yield* useAgent(calc);
     const greeterFacade = yield* useAgent(greeter);
