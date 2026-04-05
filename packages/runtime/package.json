@@ -27,13 +27,15 @@
     "test": "vitest run"
   },
   "dependencies": {
+    "@effectionx/context-api": "^0.5.3",
     "@tisyn/agent": "workspace:*",
     "@tisyn/config": "workspace:*",
     "@tisyn/durable-streams": "workspace:*",
     "@tisyn/ir": "workspace:*",
     "@tisyn/kernel": "workspace:*",
     "@tisyn/transport": "workspace:*",
-    "@tisyn/validate": "workspace:*"
+    "@tisyn/validate": "workspace:*",
+    "tsx": "^4.21.0"
   },
   "devDependencies": {
     "@effectionx/vitest": "^0.3.0",

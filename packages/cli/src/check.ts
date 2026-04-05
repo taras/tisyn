@@ -18,7 +18,9 @@ import {
   loadDescriptorModule,
   resolveWorkflowModule,
   loadWorkflowExport,
+  compileWorkflowFromSource,
 } from "./load-descriptor.js";
+import { isTypeScriptFile } from "./load-module.js";
 import { deriveFlags, formatInputHelp } from "./inputs.js";
 import type { CheckCommandOptions } from "./types.js";
 
@@ -32,8 +34,15 @@ export function* runCheck(options: CheckCommandOptions, cwd: string): Operation<
   const merged = options.entrypoint ? applyOverlay(descriptor, options.entrypoint) : descriptor;
 
   // Phase B: Resolve workflow module + export
-  const { modulePath: workflowPath, exportName } = resolveWorkflowModule(merged, modulePath);
-  const workflowExport = yield* loadWorkflowExport(workflowPath, exportName);
+  const {
+    modulePath: workflowPath,
+    exportName,
+    explicit,
+  } = resolveWorkflowModule(merged, modulePath);
+  const workflowExport =
+    explicit && isTypeScriptFile(workflowPath)
+      ? yield* compileWorkflowFromSource(workflowPath, exportName)
+      : yield* loadWorkflowExport(workflowPath, exportName);
 
   // Phase C: Resolve environment
   const envNodes = collectEnvNodes(merged);

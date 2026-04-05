@@ -9,8 +9,8 @@ import { createServer } from "node:http";
 import { readFile } from "node:fs/promises";
 import type { AddressInfo } from "node:net";
 import { join, extname } from "node:path";
-import { pathToFileURL } from "node:url";
-import { call, createSignal, resource, withResolvers } from "effection";
+import { createSignal, resource, withResolvers } from "effection";
+import { loadModule } from "./load-module.js";
 import type { Operation } from "effection";
 import { installAgentTransport } from "@tisyn/transport";
 import { workerTransport } from "@tisyn/transport/worker";
@@ -67,15 +67,7 @@ export function* loadLocalBinding(
   modulePath: string,
   agentConfig?: Record<string, unknown>,
 ): Operation<LocalAgentBinding> {
-  let mod: Record<string, unknown>;
-  try {
-    mod = yield* call(
-      () => import(pathToFileURL(modulePath).href) as Promise<Record<string, unknown>>,
-    );
-  } catch (err) {
-    const msg = err instanceof Error ? err.message : String(err);
-    throw new CliError(3, `Failed to load transport module '${modulePath}': ${msg}`);
-  }
+  const mod = yield* loadModule(modulePath);
 
   if (typeof mod.createBinding === "function") {
     return (mod.createBinding as (config?: Record<string, unknown>) => LocalAgentBinding)(

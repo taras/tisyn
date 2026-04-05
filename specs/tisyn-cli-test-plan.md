@@ -1,6 +1,6 @@
 # Tisyn CLI Test Plan
 
-**Validates:** Tisyn CLI Specification v0.3.4
+**Validates:** Tisyn CLI Specification v0.4.0
 **Status:** Final Draft
 **Style reference:** Blocking Scope Conformance Test Plan
 
@@ -21,6 +21,7 @@ This test plan covers:
 
 - Command dispatch and surface
 - Descriptor loading and workflow function loading
+- TypeScript-family module loading for descriptors and transport bindings
 - Invocation input schema contract (IS1–IS3)
 - CLI flag derivation and mapping
 - Boolean v1 semantics (B1–B4)
@@ -112,6 +113,10 @@ instrumentation:
 | `fixtures/separate-module.ts` | Descriptor with `run.module` pointing to separate file | LOAD |
 | `fixtures/bad-descriptor.ts` | Module whose default export is not a `WorkflowDescriptor` | LOAD, EXIT |
 | `fixtures/no-default.ts` | Module with no default export | LOAD |
+| `fixtures/ts-descriptor.ts` | TypeScript descriptor module fixture (`.ts`, `.mts`, or `.cts`) | LOAD, HELP, CHK |
+| `fixtures/same-module-ts-descriptor.ts` | TypeScript descriptor whose workflow export lives in the same module | LOAD |
+| `fixtures/unsupported-extension.tsx` | Unsupported JSX-bearing descriptor module fixture | LOAD, EXIT |
+| `fixtures/local-binding.ts` | TypeScript local/inprocess transport binding module | LIFE |
 | `fixtures/unsupported-schema.ts` | Workflow whose input schema contains an unsupported shape | IS |
 | `fixtures/env-heavy.ts` | Descriptor with required, optional, and secret env nodes | CHK, EXIT, SNAP |
 | `fixtures/collision.ts` | Workflow with `verbose` parameter (collides with built-in) | COL |
@@ -186,6 +191,10 @@ normative contribution is orchestration.
 | CLI-LOAD-006 | P0 | E2E | §10.2/M3 | `run.module` relative path resolves correctly. Observable: workflow loads without code 3. |
 | CLI-LOAD-007 | P0 | E2E | §10.1/2 | `run.module` path does not exist → exit code 3 |
 | CLI-LOAD-008 | P0 | E2E | §10.1/2 | `run.module` omitted → workflow function resolved from descriptor module. Observable: successful execution. |
+| CLI-LOAD-009 | P0 | E2E | §10.5.1, §10.5.2 | TypeScript descriptor module (`.ts`/`.mts`/`.cts`) loads successfully. Observable: reaches a later phase, not a load-phase error. |
+| CLI-LOAD-010 | P0 | E2E | §10.5.5 | Unsupported extension (for example `.tsx`) → exit code 3 with unsupported-extension diagnostic. |
+| CLI-LOAD-011 | P0 | E2E | §10.5.4 | Explicit TypeScript-family `run.module` target uses compiler-based source compilation, not module loading. Observable: `tsn check` succeeds for a TS workflow source fixture. |
+| CLI-LOAD-012 | P0 | E2E | §10.1/2, §10.5.4 | Same-module workflow export in a TypeScript descriptor resolves from the descriptor module instead of the compiler path. Observable: successful execution or check. |
 
 ### E. Entrypoint Selection (`tsn run`)
 
@@ -287,6 +296,7 @@ namespacing, this test must be updated.
 | CLI-HLP-009 | P0 | E2E | §9.6 | Schema derivation failure → help shows built-in options + diagnostic, exits with error code |
 | CLI-HLP-010 | P0 | E2E | §9.6 | Help MUST NOT silently omit workflow inputs section without explanation |
 | CLI-HLP-011 | GOLDEN | Golden | §9.6 | Snapshot: help output for `with-inputs` fixture |
+| CLI-HLP-012 | P0 | E2E | §10.5.1 | `tsn run <ts-descriptor> --help` loads a TypeScript descriptor module and shows workflow-derived help. |
 
 ### K. `tsn check`
 
@@ -303,6 +313,7 @@ namespacing, this test must be updated.
 | CLI-CHK-009 | P0 | E2E | §2.4 | Does NOT validate specific invocation input values |
 | CLI-CHK-010 | P0 | E2E | §2.4 | `--env-example` prints environment variable template to stdout and exits 0. Spec grounding: §2.4 options table. |
 | CLI-CHK-011 | GOLDEN | Golden | §2.4 | Snapshot: `tsn check` output for `multi-agent` fixture |
+| CLI-CHK-012 | P0 | E2E | §10.5.1, §10.5.4 | `tsn check` accepts a TypeScript descriptor module and respects explicit TS workflow-source compilation behavior. |
 
 ### L. Startup Lifecycle Ordering
 
@@ -365,19 +376,19 @@ continued diagnostic collection. P1.
 | A. Command surface | 7 | 0 | 0 | 7 |
 | B. `tsn generate` | 6 | 0 | 0 | 6 |
 | C. `tsn build` | 6 | 1 | 0 | 7 |
-| D. Descriptor loading | 8 | 0 | 0 | 8 |
+| D. Descriptor loading | 12 | 0 | 0 | 12 |
 | E. Entrypoint selection | 4 | 0 | 0 | 4 |
 | F. Input schema contract | 11 | 0 | 0 | 11 |
 | G. Flag derivation | 20 | 0 | 0 | 20 |
 | H. Boolean v1 | 7 | 0 | 0 | 7 |
 | I. Flag collision | 2 | 1 | 0 | 3 |
-| J. Help generation | 8 | 2 | 1 | 11 |
-| K. `tsn check` | 8 | 1 | 1 | 10 |
+| J. Help generation | 9 | 2 | 1 | 12 |
+| K. `tsn check` | 9 | 1 | 1 | 11 |
 | L. Startup lifecycle | 7 | 0 | 0 | 7 |
 | M. Exit codes | 13 | 1 | 0 | 14 |
 | N. Combined reporting | 0 | 1 | 0 | 1 |
 | O. Golden/snapshot | 0 | 0 | 7 | 7 |
-| **Total** | **107** | **7** | **9** | **123** |
+| **Total** | **113** | **7** | **9** | **129** |
 
 GOLDEN counts are **orthogonal output-stability coverage**,
 not a third priority bucket parallel to P0/P1. An

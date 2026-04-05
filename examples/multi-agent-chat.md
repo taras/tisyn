@@ -237,9 +237,9 @@ pnpm dev
 ```
 
 This runs `predev` (builds workflow IR, compiles TypeScript, builds browser
-bundle) then `tsn run dist/descriptor.js -e dev`.
+bundle) then `tsn run src/workflow.ts -e dev`.
 
-The descriptor configures three agents, a memory journal, and a dev
+The workflow module configures three agents, a memory journal, and a dev
 entrypoint with a WebSocket server serving the browser bundle.
 
 ## Session Behavior
@@ -285,7 +285,7 @@ entrypoint with a WebSocket server serving the browser bundle.
 The demo is complete when all of the following are true:
 
 - `host.ts` is deleted
-- `pnpm dev` runs `tsn run dist/descriptor.js -e dev`
+- `pnpm dev` runs `tsn run src/workflow.ts -e dev`
 - the workflow loads chat from `DB()` on startup
 - the workflow calls `App().loadChat(messages)` to populate the browser
 - new user messages persist through `DB().appendMessage()`

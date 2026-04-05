@@ -1,4 +1,5 @@
 import type { Workflow } from "@tisyn/agent";
+import { workflow, agent, transport, env, journal, entrypoint, server } from "@tisyn/config";
 
 declare function App(): {
   elicit(input: { message: string }): Workflow<{ message: string }>;
@@ -41,3 +42,23 @@ export function* chat() {
     yield* App().showAssistantMessage({ message: assistant.message });
   }
 }
+
+export default workflow({
+  run: { export: "chat", module: "./workflow.ts" },
+  agents: [
+    agent("llm", transport.worker("../dist/llm-worker.js")),
+    agent("app", transport.local("./browser-agent.ts")),
+    agent("d-b", transport.inprocess("./db-agent.ts"), {
+      dbPath: env("CHAT_DB_PATH", "./data/chat.json"),
+    }),
+  ],
+  journal: journal.memory(),
+  entrypoints: {
+    dev: entrypoint({
+      server: server.websocket({
+        port: env("PORT", 3000),
+        static: "../browser/dist",
+      }),
+    }),
+  },
+});

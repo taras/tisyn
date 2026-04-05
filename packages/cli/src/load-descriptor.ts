@@ -6,10 +6,10 @@
  */
 
 import { readFile } from "node:fs/promises";
-import { pathToFileURL } from "node:url";
 import { resolve, dirname } from "node:path";
 import { call } from "effection";
 import type { Operation } from "effection";
+import { loadModule } from "./load-module.js";
 import type { TisynExpr as Expr } from "@tisyn/ir";
 import { compile } from "@tisyn/compiler";
 import type { InputSchema } from "@tisyn/compiler";
@@ -28,15 +28,7 @@ export interface WorkflowExport {
  * - 2: no default export or not a valid WorkflowDescriptor
  */
 export function* loadDescriptorModule(modulePath: string): Operation<WorkflowDescriptor> {
-  let mod: Record<string, unknown>;
-  try {
-    mod = yield* call(
-      () => import(pathToFileURL(modulePath).href) as Promise<Record<string, unknown>>,
-    );
-  } catch (err) {
-    const msg = err instanceof Error ? err.message : String(err);
-    throw new CliError(3, `Failed to load descriptor module '${modulePath}': ${msg}`);
-  }
+  const mod = yield* loadModule(modulePath);
 
   const descriptor = mod.default;
   if (!descriptor || typeof descriptor !== "object") {
@@ -63,11 +55,12 @@ export function* loadDescriptorModule(modulePath: string): Operation<WorkflowDes
 export function resolveWorkflowModule(
   descriptor: WorkflowDescriptor,
   descriptorPath: string,
-): { modulePath: string; exportName: string } {
+): { modulePath: string; exportName: string; explicit: boolean } {
   const run = descriptor.run;
   const exportName = run.export;
+  const explicit = !!run.module;
   const modulePath = run.module ? resolve(dirname(descriptorPath), run.module) : descriptorPath;
-  return { modulePath, exportName };
+  return { modulePath, exportName, explicit };
 }
 
 /**
@@ -81,15 +74,7 @@ export function* loadWorkflowExport(
   modulePath: string,
   exportName: string,
 ): Operation<WorkflowExport> {
-  let mod: Record<string, unknown>;
-  try {
-    mod = yield* call(
-      () => import(pathToFileURL(modulePath).href) as Promise<Record<string, unknown>>,
-    );
-  } catch (err) {
-    const msg = err instanceof Error ? err.message : String(err);
-    throw new CliError(3, `Failed to load workflow module '${modulePath}': ${msg}`);
-  }
+  const mod = yield* loadModule(modulePath);
 
   const ir = mod[exportName];
   if (!ir || typeof ir !== "object") {
