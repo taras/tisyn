@@ -62,10 +62,7 @@ export function runScenario(workflow: TisynFn<[], unknown>): Operation<void> {
 
         // 7. Install agents
         yield* Agents.use(Host(), createHostAgentHandlers(hostAgentState));
-        yield* Agents.use(
-          Browser(),
-          createBrowserAgentHandlers(browserAgentState),
-        );
+        yield* Agents.use(Browser(), createBrowserAgentHandlers(browserAgentState));
 
         // 8. Execute test workflow with dom workflow IR in env
         const stream = new InMemoryStream();

@@ -47,7 +47,10 @@ export function implementAgent<Ops extends Record<string, OperationSpec>>(
         },
       });
     },
-    *call<K extends keyof Ops & string>(name: K, args: ArgsOf<Ops[K]>): Operation<ResultOf<Ops[K]>> {
+    *call<K extends keyof Ops & string>(
+      name: K,
+      args: ArgsOf<Ops[K]>,
+    ): Operation<ResultOf<Ops[K]>> {
       const handler = (handlers as Record<string, (args: Val) => Operation<Val>>)[name];
       if (!handler) {
         throw new Error(`Agent "${id}" has no handler for operation: ${name}`);

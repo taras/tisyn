@@ -114,7 +114,9 @@ export function buildFacade<Ops extends Record<string, OperationSpec>>(
 
   for (const name of Object.keys(declaration.operations) as (keyof Ops & string)[]) {
     facade[name] = ((args: ArgsOf<Ops[typeof name]>): Operation<ResultOf<Ops[typeof name]>> =>
-      operations[name](args as Val) as Operation<ResultOf<Ops[typeof name]>>) as AgentFacade<Ops>[typeof name];
+      operations[name](args as Val) as Operation<
+        ResultOf<Ops[typeof name]>
+      >) as AgentFacade<Ops>[typeof name];
   }
 
   // Attach the backing Api's around method directly
