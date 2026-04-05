@@ -7,7 +7,6 @@ import {
   operation,
   implementAgent,
   Effects,
-  dispatch,
   useAgent,
   BoundAgentsContext,
 } from "./index.js";
