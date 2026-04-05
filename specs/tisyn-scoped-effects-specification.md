@@ -304,11 +304,11 @@ middlewares `[m1, m2]` MUST be:
 M1 → M2 → m1 → m2 → core handler
 ````
 
-> **Note:** Parent-supplied cross-boundary enforcement does NOT
-> use max/min priority. It is installed as an enforcement
-> wrapper outside the child's entire middleware chain (§7.5).
-> Max/min priority applies only to middleware installed within
-> a single scope's own composition chain.
+> **Note:** Parent-supplied cross-boundary middleware is
+> installed as the first max-priority middleware in the
+> child's execution scope. The context-api prototype chain
+> traversal guarantees parent max middleware always runs before
+> child max middleware, preserving monotonic narrowing (§7.5).
 
 ### 5.3 `next` Delegation
 
@@ -331,19 +331,16 @@ yield* next(effectId, data)
 
 This is the normalized JavaScript-side calling convention for
 dispatch middleware across all categories, including the
-JavaScript wrapper used internally by enforcement wrappers
-(§7.5).
+cross-boundary middleware wrapper (§7.5).
 
 `next` is runtime infrastructure. It is NOT serializable. It
 MUST NOT be represented as Tisyn IR.
 
 ### 5.4 Middleware Categories
 
-Three categories of middleware are supported. Categories A and
-B install via the middleware installation primitive and
-participate in the scope's composition chain. Category C is
-structurally different — it is an enforcement wrapper installed
-outside the child's chain (§7.5).
+Three categories of middleware are supported. All categories
+install via the middleware installation primitive and
+participate in the scope's composition chain.
 
 **Category A: Host-local.** JavaScript middleware installed
 by the host developer. Logging, tracing, metrics, debugging.
@@ -358,12 +355,13 @@ stored as journal metadata. Guard implementations are
 host-provided. On restart, the runtime reads guard metadata and
 re-installs JavaScript guard middleware.
 
-**Category C: Cross-boundary.** JavaScript enforcement wrapper
-that evaluates IR middleware logic with scope-local dispatch
-interpretation (§8). The IR middleware logic is received from a
-parent delegation message. Installed as an enforcement wrapper
-outside the child's middleware chain (§7.5). See §7 for the
-full protocol.
+**Category C: Cross-boundary.** Ordinary `Effects.around()`
+middleware that evaluates IR middleware logic with scope-local
+dispatch interpretation (§8). The IR middleware logic is
+received from a parent delegation message. Installed as the
+first max-priority middleware in the child's execution scope,
+making it outermost via prototype chain traversal (§7.5). See
+§7 for the full protocol.
 
 ---
 
@@ -486,12 +484,14 @@ When a child runtime receives an execute request with a
 1. The runtime MUST validate the `Fn` node via `validateIr`.
    Malformed or invalid nodes MUST be rejected with a protocol
    error.
-2. The runtime MUST install a JavaScript enforcement wrapper
-   outside the child's middleware chain (§7.5).
-3. The wrapper MUST evaluate the `Fn` using scope-local
+2. The runtime MUST install ordinary `Effects.around()`
+   middleware as the first max-priority layer in the child's
+   execution scope (§7.5). This ensures it is outermost via
+   prototype chain traversal.
+3. The middleware MUST evaluate the `Fn` using scope-local
    dispatch interpretation: any `Eval("dispatch", ...)` the
    kernel yields Suspend for MUST be routed to the child's
-   composed middleware chain (see §8).
+   composed middleware chain via `next` (see §8).
 4. *(Deferred — not implemented in v1.)* The runtime MUST
    record the `Fn` as a durable input to the execution (see §9).
 
@@ -542,29 +542,30 @@ non-bypassable by the child's own middleware installations.
 
 When a parent delegates to a child with a `middleware` field,
 the child runtime installs the parent's IR middleware logic as
-a JavaScript wrapper. This wrapper MUST execute for every
-effect the child performs, regardless of what other middleware
-the child installs.
+ordinary `Effects.around()` middleware at default (max)
+priority. This middleware MUST execute for every effect the
+child performs, regardless of what other middleware the child
+installs.
 
-To guarantee this, the runtime MUST install parent-supplied
-cross-boundary middleware as an **enforcement wrapper** outside
-the child's own middleware composition chain — not as a
-participant within it. Concretely:
+The non-bypassability guarantee comes from the context-api
+prototype chain traversal:
 
-1. The child's middleware chain (its own max and min layers)
-   composes normally via the context-api pattern.
-2. The parent's enforcement wrapper wraps the child's entire
-   composed chain. Every effect call passes through the
-   parent's wrapper first, then enters the child's chain.
-3. The parent's wrapper evaluates the IR middleware logic. If
-   the logic calls `dispatch` (delegates inward), the call
-   enters the child's composed chain from the outside.
-4. If the logic throws or short-circuits, the child's chain
-   is never entered.
+1. The child runtime creates a scoped block for execution and
+   installs the cross-boundary middleware as the FIRST
+   `Effects.around()` call (outermost max in that scope).
+2. Any subsequent `Effects.around()` calls (transport bindings,
+   handler-installed middleware) become inner max layers.
+3. At dispatch time, `collectMiddleware` walks the scope
+   prototype chain from child to root. For each scope level,
+   parent max middleware is placed before child max middleware
+   via `unshift`. This structurally guarantees that the
+   cross-boundary middleware runs outermost.
+4. If the cross-boundary middleware throws or short-circuits,
+   the child's inner layers are never entered.
 
 This ordering guarantees that no child-installed middleware —
 whether max or min, whether it short-circuits or not — can
-execute before the parent's enforcement logic has run.
+execute before the parent's cross-boundary middleware has run.
 
 #### Execution ordering
 
@@ -572,34 +573,35 @@ For every effect the child performs, the execution order MUST
 be:
 
 ````
-parent enforcement wrapper
+parent cross-boundary middleware (outermost max)
   → child max-1 → child max-2 → ... → child max-N
     → child min-1 → child min-2 → ... → child min-M
       → core dispatch handler
 ````
 
-The parent enforcement wrapper is outermost. If it denies or
-short-circuits, no child layer executes. If it delegates via
-scope-local `dispatch`, execution enters the child's composed
-chain (max layers, then min layers, then core) from the
-outside.
+The parent cross-boundary middleware is outermost. If it denies
+or short-circuits, no child layer executes. If it delegates via
+scope-local `dispatch` (calling `next`), execution enters the
+child's composed chain (remaining max layers, then min layers,
+then core).
 
 #### What the child may do
 
 The child MAY install additional middleware within its own
-chain that further narrows the allowed effects (additional
+scope that further narrows the allowed effects (additional
 restrictions, logging, tracing). The child MUST NOT circumvent
-the parent's enforcement wrapper.
+the parent's cross-boundary middleware.
 
-#### Why standard min priority is insufficient
+#### Why this works without a separate enforcement context
 
-If parent middleware were installed as ordinary `min` middleware
-within the child's composition chain, a child-installed `max`
-middleware could short-circuit (return without calling `next`)
-before the parent's `min` layer executes. This would violate
-the monotonic narrowing guarantee. The enforcement wrapper
-model prevents this by placing the parent's logic outside the
-child's chain entirely.
+The context-api `collectMiddleware` function walks the scope
+prototype chain and places parent max middleware at the front
+of the combined array via `unshift`. This means parent max
+middleware ALWAYS runs before child max middleware, regardless
+of installation order within the child scope. A child-installed
+max middleware cannot short-circuit before the parent's max
+middleware because the parent's layer is structurally outermost
+in the combined chain.
 
 ---
 
@@ -607,29 +609,31 @@ child's chain entirely.
 
 ### 8.1 Mechanism
 
-When the runtime evaluates IR middleware logic inside an
-enforcement wrapper (§7.5), the kernel processes
-`Eval("dispatch", ...)` as an ordinary external Eval — it
-yields Suspend with the effect ID `dispatch` and the provided
-data. The kernel has no special knowledge of `dispatch`.
+When the runtime evaluates IR middleware logic inside a
+cross-boundary `Effects.around()` middleware (§7.5), the kernel
+processes `Eval("dispatch", ...)` as an ordinary external
+Eval — it yields Suspend with the effect ID `dispatch` and the
+provided data. The kernel has no special knowledge of
+`dispatch`.
 
-The runtime intercepts this Suspend and, because evaluation is
-occurring inside an enforcement wrapper, routes it to the inner
-continuation — the child's composed middleware chain — rather
-than to the global top of the dispatch stack.
+The `evaluateMiddlewareFn` function intercepts this Suspend
+and routes it to the `next` continuation — the remainder of the
+Effects middleware chain — rather than to the global top of the
+dispatch stack.
 
 This is scope-local dispatch: the effect ID is `dispatch`, the
 same as in workflow code. The difference is entirely in how the
-runtime handles the Suspend during enforcement wrapper
-evaluation.
+middleware wrapper handles the Suspend during IR middleware
+logic evaluation.
 
 The continuation-relative interpretation of
 `Eval("dispatch", ...)` MUST apply **only** while the runtime
-is evaluating cross-boundary IR middleware logic inside an
-enforcement wrapper. Outside that context — in workflow code,
-in host-local JavaScript middleware, in guard middleware —
-`dispatch` retains its ordinary global dispatch-boundary
-behavior and enters the full middleware stack from the outside.
+is evaluating cross-boundary IR middleware logic inside the
+`Effects.around()` wrapper. Outside that context — in workflow
+code, in host-local JavaScript middleware, in guard
+middleware — `dispatch` retains its ordinary global
+dispatch-boundary behavior and enters the full middleware stack
+from the outside.
 
 ### 8.2 Not a Special Effect ID
 
@@ -642,14 +646,15 @@ binding.
 
 ### 8.3 Non-Recursion Guarantee
 
-When the runtime routes a scope-local `dispatch` Suspend to
-the inner continuation, that call MUST enter the child's
-middleware chain. It MUST NOT re-enter the parent's enforcement
-wrapper. It MUST NOT trigger the IR middleware logic again.
+When `evaluateMiddlewareFn` routes a scope-local `dispatch`
+Suspend to `next`, that call MUST enter the remainder of the
+middleware chain. It MUST NOT re-enter the cross-boundary
+middleware wrapper. It MUST NOT trigger the IR middleware logic
+again.
 
 This guarantee prevents infinite regress: the middleware
-logic's dispatch call continues inward, past the enforcement
-wrapper.
+logic's dispatch call continues inward via `next`, past the
+cross-boundary middleware layer.
 
 ### 8.4 Runtime Implementation
 
@@ -833,17 +838,18 @@ The runtime MUST:
 2. **Process transport binding.** Bind agent identities to
    transport implementations within the current scope. Manage
    transport lifetime — shut down on scope exit.
-3. **Process agent handle lookup.** Return typed handles that
-   dispatch through the scope's middleware chain. Fail with a
-   descriptive error if no transport binding exists.
+3. **Process agent handle lookup.** Return typed facades that
+   dispatch through per-agent Context APIs and the scope's
+   Effects middleware chain. Fail with a descriptive error if
+   no transport binding exists.
 4. **Install host-local middleware.** Process middleware
    installation calls with JavaScript middleware per the
    context-api pattern.
-5. **Install cross-boundary enforcement.** Read IR middleware
-   logic from delegation messages (§7.3). Validate. Construct
-   a JavaScript enforcement wrapper with scope-local dispatch
-   interpretation (§8). Install outside the child's middleware
-   chain per §7.5.
+5. **Install cross-boundary middleware.** Read IR middleware
+   logic from delegation messages (§7.3). Validate. Install as
+   ordinary `Effects.around()` middleware with scope-local
+   dispatch interpretation (§8), as the first max-priority
+   layer in the execution scope per §7.5.
 6. *(Deferred — not implemented in v1.)* **Record durable inputs.**
    Store cross-boundary IR middleware logic alongside other
    execution inputs. Validate consistency on replay (§9).

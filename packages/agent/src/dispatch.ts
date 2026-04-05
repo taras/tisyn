@@ -3,25 +3,6 @@ import type { Val, FnNode } from "@tisyn/ir";
 import { createApi } from "@effectionx/context-api";
 
 // ---------------------------------------------------------------------------
-// EnforcementContext — non-bypassable cross-boundary wrapper
-//
-// This is separate from EffectsContext so that even if a child scope
-// resets Effects middleware, enforcement still runs first.
-// ---------------------------------------------------------------------------
-
-export type EnforcementFn = (
-  effectId: string,
-  data: Val,
-  inner: (eid: string, d: Val) => Operation<Val>,
-) => Operation<Val>;
-
-const EnforcementContext = createContext<EnforcementFn | null>("$enforcement", null);
-
-export function* installEnforcement(fn: EnforcementFn): Operation<void> {
-  yield* EnforcementContext.set(fn);
-}
-
-// ---------------------------------------------------------------------------
 // CrossBoundaryMiddlewareContext — per-execute IR middleware carrier
 //
 // Set by installCrossBoundaryMiddleware() before a remote execution.
@@ -67,17 +48,10 @@ export const Effects = Object.assign(EffectsApi, {
 });
 
 /**
- * Dispatch an effect. Runs the enforcement wrapper (if installed) before
- * the full Effects middleware chain, making parent restrictions
- * non-bypassable by child middleware.
+ * Dispatch an effect through the Effects middleware chain.
+ *
+ * Cross-boundary constraints are installed as ordinary Effects.around()
+ * middleware in the execution scope — no separate enforcement context.
  */
-export function* dispatch(effectId: string, data: Val): Operation<Val> {
-  const enforcement = (yield* EnforcementContext.get()) ?? null;
-
-  const inner = (eid: string, d: Val): Operation<Val> => EffectsApi.operations.dispatch(eid, d);
-
-  if (enforcement !== null) {
-    return yield* enforcement(effectId, data, inner);
-  }
-  return yield* inner(effectId, data);
-}
+export const dispatch: (effectId: string, data: Val) => Operation<Val> =
+  EffectsApi.operations.dispatch;

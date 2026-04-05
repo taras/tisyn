@@ -4,7 +4,7 @@ import { scoped, spawn } from "effection";
 import type { Val } from "@tisyn/ir";
 import type { FnNode } from "@tisyn/ir";
 import { Fn, Eval, Ref, Arr, If, Eq, Q, Throw } from "@tisyn/ir";
-import { Effects, dispatch, installEnforcement, evaluateMiddlewareFn } from "./index.js";
+import { Effects, dispatch, evaluateMiddlewareFn } from "./index.js";
 import { ProhibitedEffectError } from "@tisyn/kernel";
 
 // ---------------------------------------------------------------------------
@@ -30,137 +30,181 @@ function denyEffect(id: string): FnNode {
 }
 
 // Helper that simulates protocol-server wiring of IR middleware
-function* withEnforcementFromIr(fn: FnNode) {
-  yield* installEnforcement((effectId, data, inner) =>
-    evaluateMiddlewareFn(fn, effectId, data, inner),
-  );
+// as ordinary Effects.around() middleware (replacing the old installEnforcement path).
+function* withCrossBoundaryMiddleware(fn: FnNode) {
+  yield* Effects.around({
+    *dispatch([effectId, data]: [string, Val], next) {
+      return yield* evaluateMiddlewareFn(fn, effectId, data,
+        (eid: string, d: Val) => next(eid, d));
+    },
+  });
 }
 
 // ---------------------------------------------------------------------------
-// PNB tests — parent enforcement non-bypassability
+// PNB tests — parent middleware non-bypassability
+//
+// These tests verify that parent-scope Effects.around() middleware runs
+// before child-scope middleware, preserving monotonic narrowing. This is
+// guaranteed by collectMiddleware's prototype chain traversal: parent max
+// middleware is always outermost.
 // ---------------------------------------------------------------------------
 
-describe("parent enforcement non-bypassability", () => {
-  // PNB-1: enforcement installed in parent scope is inherited by child scopes
-  it("enforcement installed in parent fires for dispatches from child scopes", function* () {
+describe("parent middleware non-bypassability", () => {
+  // PNB-1: middleware installed in parent scope is inherited by child scopes
+  it("parent middleware fires for dispatches from child scopes", function* () {
     const log: string[] = [];
 
-    yield* Effects.around({
-      // biome-ignore lint/correctness/useYield: mock core handler
-      *dispatch([_e, _d]: [string, Val]) {
-        log.push("core");
-        return "core" as Val;
+    // Core handler at min priority (innermost)
+    yield* Effects.around(
+      {
+        // biome-ignore lint/correctness/useYield: mock core handler
+        *dispatch([_e, _d]: [string, Val]) {
+          log.push("core");
+          return "core" as Val;
+        },
       },
-    });
+      { at: "min" },
+    );
 
-    // Install enforcement in the current (parent) scope
-    yield* installEnforcement(function* (effectId, data, inner) {
-      log.push("enforcement");
-      return yield* inner(effectId, data);
-    });
-
-    // Effects.around from a child scope — inherited lookup means enforcement DOES run
-    yield* scoped(function* () {
-      yield* dispatch("test.op", null);
-    });
-
-    // enforcement fires because child scope inherits from parent via prototype chain
-    expect(log).toContain("enforcement");
-    expect(log).toContain("core");
-    expect(log.indexOf("enforcement")).toBeLessThan(log.indexOf("core"));
-  });
-
-  // PNB-2: enforcement runs before the Effects handler in the same scope
-  it("enforcement runs before the Effects handler in the same scope where it is installed", function* () {
-    const log: string[] = [];
-
-    yield* Effects.around({
-      *dispatch([_e, _d]: [string, Val]) {
-        log.push("core");
-        return "core" as Val;
-      },
-    });
-
-    yield* installEnforcement(function* (effectId, data, inner) {
-      log.push("enforcement");
-      return yield* inner(effectId, data);
-    });
-
-    // Effects.around in the SAME scope as installEnforcement
-    yield* dispatch("test.op", null);
-
-    // Enforcement runs first, then the Effects handler
-    expect(log[0]).toBe("enforcement");
-    expect(log).toContain("core");
-    expect(log.indexOf("enforcement")).toBeLessThan(log.indexOf("core"));
-  });
-
-  // PNB-3: enforcement denial is non-bypassable — child Effects middleware cannot allow a denied effect
-  it("enforcement denial cannot be bypassed by child Effects middleware installed after enforcement", function* () {
-    yield* Effects.around({
-      // biome-ignore lint/correctness/useYield: mock core handler
-      *dispatch([_e, _d]: [string, Val]) {
-        return "core" as Val;
-      },
-    });
-
-    // Enforcement denies "blocked.op" in the same scope
-    yield* installEnforcement(function* (effectId, data, inner) {
-      if (effectId === "blocked.op") {
-        throw new Error("denied by enforcement");
-      }
-      return yield* inner(effectId, data);
-    });
-
-    // Even if Effects middleware is added after enforcement, it runs AFTER enforcement
+    // Parent middleware at default max priority (outermost)
     yield* Effects.around({
       *dispatch([e, d]: [string, Val], next) {
+        log.push("parent-mw");
         return yield* next(e, d);
       },
     });
 
-    try {
-      yield* dispatch("blocked.op", null);
-      expect.unreachable("should have thrown");
-    } catch (error) {
-      expect((error as Error).message).toBe("denied by enforcement");
-    }
+    // Child scope dispatch — parent middleware fires via prototype chain inheritance
+    yield* scoped(function* () {
+      yield* dispatch("test.op", null);
+    });
+
+    expect(log).toContain("parent-mw");
+    expect(log).toContain("core");
+    expect(log.indexOf("parent-mw")).toBeLessThan(log.indexOf("core"));
   });
 
-  // PNB-4: IR-based enforcement (evaluateMiddlewareFn with allow-all) passes effects through
-  it("IR allow-all enforcement passes effects through to the Effects chain", function* () {
-    let coreReached = false;
+  // PNB-2: parent middleware runs before child middleware in the same dispatch
+  it("parent middleware runs before child middleware in same dispatch", function* () {
+    const log: string[] = [];
 
+    // Core handler at min priority
+    yield* Effects.around(
+      {
+        // biome-ignore lint/correctness/useYield: mock core handler
+        *dispatch([_e, _d]: [string, Val]) {
+          log.push("core");
+          return "core" as Val;
+        },
+      },
+      { at: "min" },
+    );
+
+    // Parent middleware
     yield* Effects.around({
-      *dispatch([_e, _d]: [string, Val]) {
-        coreReached = true;
-        return "core" as Val;
+      *dispatch([e, d]: [string, Val], next) {
+        log.push("parent-mw");
+        return yield* next(e, d);
       },
     });
 
-    yield* withEnforcementFromIr(allowAll);
+    yield* scoped(function* () {
+      // Child middleware — installed later, runs after parent
+      yield* Effects.around({
+        *dispatch([e, d]: [string, Val], next) {
+          log.push("child-mw");
+          return yield* next(e, d);
+        },
+      });
+
+      yield* dispatch("test.op", null);
+    });
+
+    expect(log[0]).toBe("parent-mw");
+    expect(log[1]).toBe("child-mw");
+    expect(log).toContain("core");
+  });
+
+  // PNB-3: parent denial cannot be bypassed by child middleware
+  it("parent denial cannot be bypassed by child Effects middleware", function* () {
+    // Core handler at min priority
+    yield* Effects.around(
+      {
+        // biome-ignore lint/correctness/useYield: mock core handler
+        *dispatch([_e, _d]: [string, Val]) {
+          return "core" as Val;
+        },
+      },
+      { at: "min" },
+    );
+
+    // Parent middleware denies "blocked.op" — installed first, outermost max
+    yield* Effects.around({
+      *dispatch([e, d]: [string, Val], next) {
+        if (e === "blocked.op") {
+          throw new Error("denied by parent");
+        }
+        return yield* next(e, d);
+      },
+    });
+
+    yield* scoped(function* () {
+      // Child installs pass-through — cannot undo parent denial
+      yield* Effects.around({
+        *dispatch([e, d]: [string, Val], next) {
+          return yield* next(e, d);
+        },
+      });
+
+      try {
+        yield* dispatch("blocked.op", null);
+        expect.unreachable("should have thrown");
+      } catch (error) {
+        expect((error as Error).message).toBe("denied by parent");
+      }
+    });
+  });
+
+  // PNB-4: IR-based middleware (evaluateMiddlewareFn with allow-all) passes effects through
+  it("IR allow-all middleware passes effects through to the Effects chain", function* () {
+    let coreReached = false;
+
+    yield* Effects.around(
+      {
+        *dispatch([_e, _d]: [string, Val]) {
+          coreReached = true;
+          return "core" as Val;
+        },
+      },
+      { at: "min" },
+    );
+
+    yield* withCrossBoundaryMiddleware(allowAll);
 
     const result = yield* dispatch("any.op", null);
     expect(coreReached).toBe(true);
     expect(result).toBe("core");
   });
 
-  // PNB-5: IR-based enforcement (evaluateMiddlewareFn with denyEffect) denies the target effect
-  it("IR denyEffect enforcement denies specific effect", function* () {
-    yield* Effects.around({
-      // biome-ignore lint/correctness/useYield: mock core handler
-      *dispatch([_e, _d]: [string, Val]) {
-        return "core" as Val;
+  // PNB-5: IR-based middleware (evaluateMiddlewareFn with denyEffect) denies the target effect
+  it("IR denyEffect middleware denies specific effect", function* () {
+    yield* Effects.around(
+      {
+        // biome-ignore lint/correctness/useYield: mock core handler
+        *dispatch([_e, _d]: [string, Val]) {
+          return "core" as Val;
+        },
       },
-    });
+      { at: "min" },
+    );
 
-    yield* withEnforcementFromIr(denyEffect("sensitive.op"));
+    yield* withCrossBoundaryMiddleware(denyEffect("sensitive.op"));
 
     // allowed.op passes through
     const result = yield* dispatch("allowed.op", null);
     expect(result).toBe("core");
 
-    // sensitive.op is denied by the IR enforcement
+    // sensitive.op is denied by the IR middleware
     try {
       yield* dispatch("sensitive.op", null);
       expect.unreachable("should have thrown");
@@ -169,14 +213,17 @@ describe("parent enforcement non-bypassability", () => {
     }
   });
 
-  // PNB-6: IR enforcement that uses a non-dispatch effect ID throws ProhibitedEffectError
+  // PNB-6: IR middleware that uses a non-dispatch effect ID throws ProhibitedEffectError
   it("IR middleware that yields non-dispatch effect throws ProhibitedEffectError", function* () {
-    yield* Effects.around({
-      // biome-ignore lint/correctness/useYield: mock core handler
-      *dispatch([_e, _d]: [string, Val]) {
-        return "core" as Val;
+    yield* Effects.around(
+      {
+        // biome-ignore lint/correctness/useYield: mock core handler
+        *dispatch([_e, _d]: [string, Val]) {
+          return "core" as Val;
+        },
       },
-    });
+      { at: "min" },
+    );
 
     // IR fn that tries to yield a "sleep" effect — not allowed in middleware
     const illegalMiddleware = Fn(
@@ -184,7 +231,7 @@ describe("parent enforcement non-bypassability", () => {
       Eval("sleep", Q(null)), // "sleep" is not "dispatch" — prohibited
     );
 
-    yield* withEnforcementFromIr(illegalMiddleware);
+    yield* withCrossBoundaryMiddleware(illegalMiddleware);
 
     try {
       yield* dispatch("test.op", null);
@@ -195,130 +242,154 @@ describe("parent enforcement non-bypassability", () => {
     }
   });
 
-  // PNB-7: enforcement installed in a scope is not visible to a sibling scope
-  it("enforcement installed in one scope does not apply to sibling scope", function* () {
+  // PNB-7: middleware installed in a scope is not visible to a sibling scope
+  it("middleware installed in one scope does not apply to sibling scope", function* () {
     const log: string[] = [];
 
-    yield* Effects.around({
-      // biome-ignore lint/correctness/useYield: mock core handler
-      *dispatch([_e, _d]: [string, Val]) {
-        log.push("core");
-        return "core" as Val;
+    yield* Effects.around(
+      {
+        // biome-ignore lint/correctness/useYield: mock core handler
+        *dispatch([_e, _d]: [string, Val]) {
+          log.push("core");
+          return "core" as Val;
+        },
       },
-    });
+      { at: "min" },
+    );
 
-    // Sibling scope 1: installs enforcement
+    // Sibling scope 1: installs middleware
     yield* scoped(function* () {
-      yield* installEnforcement(function* (effectId, data, inner) {
-        log.push("enforcement-s1");
-        return yield* inner(effectId, data);
+      yield* Effects.around({
+        *dispatch([e, d]: [string, Val], next) {
+          log.push("mw-s1");
+          return yield* next(e, d);
+        },
       });
 
       yield* dispatch("test.op", null);
-      expect(log).toContain("enforcement-s1");
+      expect(log).toContain("mw-s1");
     });
 
     log.length = 0;
 
-    // Sibling scope 2: enforcement from scope 1 must NOT be visible here
+    // Sibling scope 2: middleware from scope 1 must NOT be visible here
     yield* scoped(function* () {
       yield* dispatch("test.op", null);
-      expect(log).not.toContain("enforcement-s1");
+      expect(log).not.toContain("mw-s1");
       expect(log).toContain("core");
     });
   });
 
-  // PNB-8: child scope can install its own enforcement independent of parent
-  it("child scope can install its own enforcement without affecting parent scope dispatch", function* () {
+  // PNB-8: child scope can install its own middleware independent of parent
+  it("child scope middleware does not affect parent scope dispatch", function* () {
     const log: string[] = [];
 
-    yield* Effects.around({
-      // biome-ignore lint/correctness/useYield: mock core handler
-      *dispatch([_e, _d]: [string, Val]) {
-        log.push("core");
-        return "core" as Val;
+    yield* Effects.around(
+      {
+        // biome-ignore lint/correctness/useYield: mock core handler
+        *dispatch([_e, _d]: [string, Val]) {
+          log.push("core");
+          return "core" as Val;
+        },
       },
-    });
+      { at: "min" },
+    );
 
     yield* scoped(function* () {
-      yield* installEnforcement(function* (effectId, data, inner) {
-        log.push("child-enforcement");
-        return yield* inner(effectId, data);
+      yield* Effects.around({
+        *dispatch([e, d]: [string, Val], next) {
+          log.push("child-mw");
+          return yield* next(e, d);
+        },
       });
 
       yield* dispatch("test.op", null);
-      expect(log).toContain("child-enforcement");
+      expect(log).toContain("child-mw");
     });
 
     log.length = 0;
 
-    // Parent scope dispatch: child-enforcement must NOT run here
+    // Parent scope dispatch: child middleware must NOT run here
     yield* dispatch("test.op", null);
-    expect(log).not.toContain("child-enforcement");
+    expect(log).not.toContain("child-mw");
     expect(log).toContain("core");
   });
 
-  // PNB-9: enforcement allows overriding effectId forwarded to inner
-  // (keeping original numbering; new inheritance tests are PNB-10 through PNB-14 below)
-  it("enforcement can transform the effectId before forwarding to the Effects chain", function* () {
+  // PNB-9: middleware can transform effectId before forwarding
+  it("middleware can transform the effectId before forwarding to the rest of the chain", function* () {
     let receivedEffectId: string | null = null;
 
-    yield* Effects.around({
-      *dispatch([e, _d]: [string, Val]) {
-        receivedEffectId = e;
-        return "core" as Val;
+    yield* Effects.around(
+      {
+        *dispatch([e, _d]: [string, Val]) {
+          receivedEffectId = e;
+          return "core" as Val;
+        },
       },
-    });
+      { at: "min" },
+    );
 
-    yield* installEnforcement(function* (_effectId, data, inner) {
-      // Rewrite effectId to a canonical form
-      return yield* inner("canonical.op", data);
+    yield* Effects.around({
+      *dispatch([_e, d]: [string, Val], next) {
+        // Rewrite effectId to a canonical form
+        return yield* next("canonical.op", d);
+      },
     });
 
     yield* dispatch("original.op", null);
     expect(receivedEffectId).toBe("canonical.op");
   });
 
-  // PNB-10: child scope inherits parent enforcement (inherited lookup)
-  it("child scoped() task inherits enforcement installed in parent", function* () {
+  // PNB-10: child scope inherits parent middleware (inherited lookup)
+  it("child scoped() task inherits parent middleware", function* () {
     const log: string[] = [];
 
-    yield* Effects.around({
-      // biome-ignore lint/correctness/useYield: mock core handler
-      *dispatch([_e, _d]: [string, Val]) {
-        log.push("core");
-        return "core" as Val;
+    yield* Effects.around(
+      {
+        // biome-ignore lint/correctness/useYield: mock core handler
+        *dispatch([_e, _d]: [string, Val]) {
+          log.push("core");
+          return "core" as Val;
+        },
       },
-    });
+      { at: "min" },
+    );
 
-    yield* installEnforcement(function* (effectId, data, inner) {
-      log.push("enforcement");
-      return yield* inner(effectId, data);
+    yield* Effects.around({
+      *dispatch([e, d]: [string, Val], next) {
+        log.push("parent-mw");
+        return yield* next(e, d);
+      },
     });
 
     yield* scoped(function* () {
       yield* dispatch("test.op", null);
     });
 
-    expect(log).toContain("enforcement");
+    expect(log).toContain("parent-mw");
     expect(log).toContain("core");
   });
 
-  // PNB-11: spawned task inherits parent enforcement
-  it("spawned task inherits enforcement installed in parent", function* () {
+  // PNB-11: spawned task inherits parent middleware
+  it("spawned task inherits parent middleware", function* () {
     const log: string[] = [];
 
-    yield* Effects.around({
-      // biome-ignore lint/correctness/useYield: mock core handler
-      *dispatch([_e, _d]: [string, Val]) {
-        log.push("core");
-        return "core" as Val;
+    yield* Effects.around(
+      {
+        // biome-ignore lint/correctness/useYield: mock core handler
+        *dispatch([_e, _d]: [string, Val]) {
+          log.push("core");
+          return "core" as Val;
+        },
       },
-    });
+      { at: "min" },
+    );
 
-    yield* installEnforcement(function* (effectId, data, inner) {
-      log.push("enforcement");
-      return yield* inner(effectId, data);
+    yield* Effects.around({
+      *dispatch([e, d]: [string, Val], next) {
+        log.push("parent-mw");
+        return yield* next(e, d);
+      },
     });
 
     const task = yield* spawn(function* () {
@@ -326,41 +397,53 @@ describe("parent enforcement non-bypassability", () => {
     });
     yield* task;
 
-    expect(log).toContain("enforcement");
+    expect(log).toContain("parent-mw");
     expect(log).toContain("core");
   });
 
-  // PNB-12: child scope enforcement shadows parent enforcement
-  it("child enforcement shadows parent enforcement for that subtree", function* () {
+  // PNB-12: child middleware stacks with parent (monotonic narrowing)
+  // Unlike the old EnforcementContext (which shadowed), Effects.around()
+  // middleware stacks via prototype chain — both parent and child run,
+  // parent first. This is correct monotonic narrowing per spec §7.5.
+  it("child middleware stacks with parent — both run, parent first", function* () {
     const log: string[] = [];
 
+    yield* Effects.around(
+      {
+        // biome-ignore lint/correctness/useYield: mock core handler
+        *dispatch([_e, _d]: [string, Val]) {
+          log.push("core");
+          return "core" as Val;
+        },
+      },
+      { at: "min" },
+    );
+
+    // Parent middleware
     yield* Effects.around({
-      // biome-ignore lint/correctness/useYield: mock core handler
-      *dispatch([_e, _d]: [string, Val]) {
-        log.push("core");
-        return "core" as Val;
+      *dispatch([e, d]: [string, Val], next) {
+        log.push("parent-mw");
+        return yield* next(e, d);
       },
     });
 
-    // Parent installs enforcement
-    yield* installEnforcement(function* (effectId, data, inner) {
-      log.push("parent-enforcement");
-      return yield* inner(effectId, data);
-    });
-
-    // Child installs its own enforcement — shadows parent
+    // Child installs its own middleware — stacks with parent
     yield* scoped(function* () {
-      yield* installEnforcement(function* (effectId, data, inner) {
-        log.push("child-enforcement");
-        return yield* inner(effectId, data);
+      yield* Effects.around({
+        *dispatch([e, d]: [string, Val], next) {
+          log.push("child-mw");
+          return yield* next(e, d);
+        },
       });
 
       yield* dispatch("test.op", null);
     });
 
-    // Child enforcement ran, not parent enforcement (shadowed)
-    expect(log).toContain("child-enforcement");
-    expect(log).not.toContain("parent-enforcement");
+    // Both run — parent first (outermost), then child, then core
+    expect(log).toContain("parent-mw");
+    expect(log).toContain("child-mw");
     expect(log).toContain("core");
+    expect(log.indexOf("parent-mw")).toBeLessThan(log.indexOf("child-mw"));
+    expect(log.indexOf("child-mw")).toBeLessThan(log.indexOf("core"));
   });
 });

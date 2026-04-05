@@ -1,12 +1,10 @@
 import { type Operation, createContext, useScope } from "effection";
-import type { Val } from "@tisyn/ir";
-import type { AgentDeclaration, OperationSpec, ArgsOf, ResultOf } from "./types.js";
-import { dispatch } from "./dispatch.js";
+import type { AgentDeclaration, OperationSpec } from "./types.js";
+import type { AgentFacade } from "./facade.js";
+import { getOrCreateAgentApi, buildFacade } from "./facade.js";
 
-/** A typed handle for an already-bound agent — each method dispatches via `dispatch()`. */
-export type AgentHandle<Ops extends Record<string, OperationSpec>> = {
-  [K in keyof Ops]: (args: ArgsOf<Ops[K]>) => Operation<ResultOf<Ops[K]>>;
-};
+/** @deprecated Use AgentFacade instead. */
+export type AgentHandle<Ops extends Record<string, OperationSpec>> = AgentFacade<Ops>;
 
 /**
  * Scope-local registry of bound agent IDs.
@@ -15,12 +13,21 @@ export type AgentHandle<Ops extends Record<string, OperationSpec>> = {
 export const BoundAgentsContext = createContext<Set<string> | null>("$bound-agents", null);
 
 /**
- * Get a typed handle for an agent that was previously bound via `useTransport()`.
+ * Get a typed facade for an agent that was previously bound via `useTransport()`.
+ *
+ * The facade exposes one method per declared operation (each dispatching
+ * through the per-agent Context API) plus `.around()` for installing
+ * per-operation middleware.
+ *
+ * Multiple calls with the same declaration in the same scope share
+ * middleware visibility — middleware installed via one reference is
+ * visible to all.
+ *
  * Throws a descriptive error if the agent is not bound in the current scope.
  */
 export function* useAgent<Ops extends Record<string, OperationSpec>>(
   declaration: AgentDeclaration<Ops>,
-): Operation<AgentHandle<Ops>> {
+): Operation<AgentFacade<Ops>> {
   const scope = yield* useScope();
   const bound = scope.get(BoundAgentsContext) ?? null;
 
@@ -30,10 +37,6 @@ export function* useAgent<Ops extends Record<string, OperationSpec>>(
     );
   }
 
-  const handle = {} as AgentHandle<Ops>;
-  for (const name of Object.keys(declaration.operations) as (keyof Ops & string)[]) {
-    (handle as any)[name] = (args: unknown): Operation<unknown> =>
-      dispatch(`${declaration.id}.${name}`, args as Val);
-  }
-  return handle;
+  const api = yield* getOrCreateAgentApi(declaration);
+  return buildFacade(api, declaration);
 }

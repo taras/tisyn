@@ -31,7 +31,7 @@ import { evaluate, type Env, envFromRecord } from "@tisyn/kernel";
 import { type DurableStream, InMemoryStream, ReplayIndex } from "@tisyn/durable-streams";
 import {
   dispatch,
-  installEnforcement,
+  Effects,
   evaluateMiddlewareFn,
   BoundAgentsContext,
 } from "@tisyn/agent";
@@ -922,15 +922,18 @@ function* orchestrateTimebox(
 
 /**
  * Orchestrate `scope` — run body in an isolated Effection scope with
- * bound agent transports and an optional enforcement handler.
+ * bound agent transports and an optional cross-boundary middleware handler.
  *
  * Mirrors the authored `yield* useTransport(Contract, factory)` + scoped() pattern:
- * 1. BoundAgentsContext mutation
+ * 1. Optional cross-boundary middleware via Effects.around (outermost max, runs first)
  * 2. installAgentTransport (opens transport, runs session, installs Effects.around middleware)
- * 3. Optional enforcement handler via installEnforcement
+ * 3. BoundAgentsContext mutation
  * 4. Drive child kernel for the body
- * All transport sessions and the enforcement middleware are owned by this scoped() block
- * and torn down when it exits.
+ *
+ * Cross-boundary middleware is installed BEFORE transport bindings so it is
+ * the outermost max-priority Effects middleware. collectMiddleware's prototype
+ * chain traversal ensures parent max MW always runs before child max MW,
+ * preserving monotonic narrowing without a separate enforcement context.
  */
 function orchestrateScope(
   inner: ScopeInner,
@@ -942,6 +945,17 @@ function orchestrateScope(
     const scope = yield* useScope();
     const current = scope.get(BoundAgentsContext) ?? null;
     const next = new Set(current ?? []);
+
+    // Install cross-boundary middleware FIRST (outermost max in this scope)
+    if (inner.handler !== null) {
+      const handler = inner.handler;
+      yield* Effects.around({
+        *dispatch([effectId, data]: [string, Val], nextMw) {
+          return yield* evaluateMiddlewareFn(handler, effectId, data,
+            (eid: string, d: Val) => nextMw(eid, d));
+        },
+      });
+    }
 
     for (const [prefix, binding] of Object.entries(inner.bindings)) {
       let factory: Val;
@@ -962,12 +976,6 @@ function orchestrateScope(
       yield* installAgentTransport(prefix, factory as unknown as AgentTransportFactory);
     }
     scope.set(BoundAgentsContext, next);
-
-    if (inner.handler !== null) {
-      yield* installEnforcement((effectId, data, innerNext) =>
-        evaluateMiddlewareFn(inner.handler!, effectId, data, innerNext),
-      );
-    }
 
     const childKernel = evaluate(inner.body, env);
     const result = yield* driveKernel(childKernel, childId, env, ctx);
