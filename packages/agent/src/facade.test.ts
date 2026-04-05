@@ -247,12 +247,7 @@ describe("agent facade", () => {
 
     // Facade composes before Effects (structural: facade calls dispatch)
     // Within each layer: max before min
-    expect(order).toEqual([
-      "facade-max",
-      "facade-min",
-      "effects-max",
-      "core",
-    ]);
+    expect(order).toEqual(["facade-max", "facade-min", "effects-max", "core"]);
   });
 
   // F-6: single-payload contract preserved

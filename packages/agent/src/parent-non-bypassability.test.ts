@@ -34,8 +34,7 @@ function denyEffect(id: string): FnNode {
 function* withCrossBoundaryMiddleware(fn: FnNode) {
   yield* Effects.around({
     *dispatch([effectId, data]: [string, Val], next) {
-      return yield* evaluateMiddlewareFn(fn, effectId, data,
-        (eid: string, d: Val) => next(eid, d));
+      return yield* evaluateMiddlewareFn(fn, effectId, data, (eid: string, d: Val) => next(eid, d));
     },
   });
 }

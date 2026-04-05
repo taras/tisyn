@@ -1,11 +1,7 @@
 import type { Operation, Subscription, Task } from "effection";
 import { spawn, scoped } from "effection";
 import type { AgentImplementation, OperationSpec } from "@tisyn/agent";
-import {
-  Effects,
-  evaluateMiddlewareFn,
-  installCrossBoundaryMiddleware,
-} from "@tisyn/agent";
+import { Effects, evaluateMiddlewareFn, installCrossBoundaryMiddleware } from "@tisyn/agent";
 import type { AgentMessage, HostMessage } from "@tisyn/protocol";
 import type { Val } from "@tisyn/ir";
 import { isFnNode } from "@tisyn/ir";
@@ -121,8 +117,12 @@ export function createProtocolServer<Ops extends Record<string, OperationSpec>>(
                 // chain traversal ensures parent max MW always runs before child max MW.
                 yield* Effects.around({
                   *dispatch([effectId, data]: [string, Val], next) {
-                    return yield* evaluateMiddlewareFn(middlewareFn, effectId, data,
-                      (eid: string, d: Val) => next(eid, d));
+                    return yield* evaluateMiddlewareFn(
+                      middlewareFn,
+                      effectId,
+                      data,
+                      (eid: string, d: Val) => next(eid, d),
+                    );
                   },
                 });
                 yield* installCrossBoundaryMiddleware(middlewareFn);

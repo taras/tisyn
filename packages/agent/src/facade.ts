@@ -86,10 +86,7 @@ export function* getOrCreateAgentApi(
 ): Operation<Api<AgentApiHandler>> {
   let ctx = declarationContexts.get(declaration);
   if (!ctx) {
-    ctx = createContext<Api<AgentApiHandler> | null>(
-      `$agent-facade:${declaration.id}`,
-      null,
-    );
+    ctx = createContext<Api<AgentApiHandler> | null>(`$agent-facade:${declaration.id}`, null);
     declarationContexts.set(declaration, ctx);
   }
 

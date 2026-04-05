@@ -29,12 +29,7 @@ import {
 import { assertValidIr } from "@tisyn/validate";
 import { evaluate, type Env, envFromRecord } from "@tisyn/kernel";
 import { type DurableStream, InMemoryStream, ReplayIndex } from "@tisyn/durable-streams";
-import {
-  dispatch,
-  Effects,
-  evaluateMiddlewareFn,
-  BoundAgentsContext,
-} from "@tisyn/agent";
+import { dispatch, Effects, evaluateMiddlewareFn, BoundAgentsContext } from "@tisyn/agent";
 import { installAgentTransport, type AgentTransportFactory } from "@tisyn/transport";
 import { useScope } from "effection";
 import type { FnNode } from "@tisyn/ir";
@@ -951,8 +946,9 @@ function orchestrateScope(
       const handler = inner.handler;
       yield* Effects.around({
         *dispatch([effectId, data]: [string, Val], nextMw) {
-          return yield* evaluateMiddlewareFn(handler, effectId, data,
-            (eid: string, d: Val) => nextMw(eid, d));
+          return yield* evaluateMiddlewareFn(handler, effectId, data, (eid: string, d: Val) =>
+            nextMw(eid, d),
+          );
         },
       });
     }
