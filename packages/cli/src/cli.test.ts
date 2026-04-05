@@ -524,9 +524,7 @@ describe("shared module loader", () => {
   it("loads a .ts module", function* () {
     const dir = yield* call(makeTempDir);
     const modulePath = join(dir, "test-module.ts");
-    yield* call(() =>
-      writeFile(modulePath, `const x: string = "hello";\nexport default { x };\n`),
-    );
+    yield* call(() => writeFile(modulePath, `const x: string = "hello";\nexport default { x };\n`));
     const mod = yield* call(() => loadModule(modulePath));
     expect((mod.default as Record<string, unknown>).x).toBe("hello");
   });
@@ -1341,12 +1339,7 @@ export function* myWorkflow() {
       ),
     );
 
-    yield* call(() =>
-      writeFile(
-        join(dir, "descriptor.mjs"),
-        tsCompileDescriptor("./workflow.ts"),
-      ),
-    );
+    yield* call(() => writeFile(join(dir, "descriptor.mjs"), tsCompileDescriptor("./workflow.ts")));
 
     const result = yield* exec("node", {
       arguments: [CLI_BIN, "check", join(dir, "descriptor.mjs")],

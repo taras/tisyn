@@ -24,12 +24,14 @@ export function isTypeScriptFile(filePath: string): boolean {
 }
 
 // Lazily cached tsx/esm/api module
-let tsxApi: { tsImport: (specifier: string, options: string | { parentURL: string }) => Promise<unknown> } | undefined;
+let tsxApi:
+  | { tsImport: (specifier: string, options: string | { parentURL: string }) => Promise<unknown> }
+  | undefined;
 
 async function getTsxApi() {
   if (!tsxApi) {
     try {
-      tsxApi = await import("tsx/esm/api") as unknown as typeof tsxApi;
+      tsxApi = (await import("tsx/esm/api")) as unknown as typeof tsxApi;
     } catch {
       throw new CliError(
         3,
@@ -81,7 +83,10 @@ export async function loadModule(filePath: string): Promise<Record<string, unkno
   if (TS_EXTENSIONS.has(ext)) {
     const { tsImport } = await getTsxApi();
     try {
-      const mod = (await tsImport(pathToFileURL(filePath).href, import.meta.url)) as Record<string, unknown>;
+      const mod = (await tsImport(pathToFileURL(filePath).href, import.meta.url)) as Record<
+        string,
+        unknown
+      >;
       return normalizeTsxModule(mod);
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);

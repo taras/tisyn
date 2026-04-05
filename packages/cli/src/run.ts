@@ -45,10 +45,15 @@ function* loadRunMetadata(modulePath: string, entrypoint?: string) {
   const merged = entrypoint ? applyOverlay(descriptor, entrypoint) : descriptor;
 
   // Phase B: Resolve workflow module and load/compile export
-  const { modulePath: workflowPath, exportName, explicit } = resolveWorkflowModule(merged, modulePath);
-  const workflowExport = (explicit && isTypeScriptFile(workflowPath))
-    ? yield* compileWorkflowFromSource(workflowPath, exportName)
-    : yield* loadWorkflowExport(workflowPath, exportName);
+  const {
+    modulePath: workflowPath,
+    exportName,
+    explicit,
+  } = resolveWorkflowModule(merged, modulePath);
+  const workflowExport =
+    explicit && isTypeScriptFile(workflowPath)
+      ? yield* compileWorkflowFromSource(workflowPath, exportName)
+      : yield* loadWorkflowExport(workflowPath, exportName);
 
   return { descriptor, merged, workflowPath, exportName, workflowExport };
 }
