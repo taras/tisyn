@@ -13,6 +13,8 @@
 import { extname } from "node:path";
 import { pathToFileURL } from "node:url";
 import { access } from "node:fs/promises";
+import { call } from "effection";
+import type { Operation } from "effection";
 
 // ── Error hierarchy ──────────────────────────────────────────────────────────
 
@@ -103,7 +105,7 @@ function normalizeTsxModule(mod: Record<string, unknown>): Record<string, unknow
  * Supports `.ts`, `.mts`, `.cts` (via tsx) and `.js`, `.mjs`, `.cjs`
  * (via native import). Throws `ModuleLoadError` subclasses on failure.
  */
-export async function loadModule(filePath: string): Promise<Record<string, unknown>> {
+export function* loadModule(filePath: string): Operation<Record<string, unknown>> {
   const ext = extname(filePath);
 
   if (!TS_EXTENSIONS.has(ext) && !JS_EXTENSIONS.has(ext)) {
@@ -111,18 +113,17 @@ export async function loadModule(filePath: string): Promise<Record<string, unkno
   }
 
   try {
-    await access(filePath);
+    yield* call(() => access(filePath));
   } catch {
     throw new ModuleNotFoundError(filePath);
   }
 
   if (TS_EXTENSIONS.has(ext)) {
-    const { tsImport } = await getTsxApi();
+    const { tsImport } = yield* call(() => getTsxApi());
     try {
-      const mod = (await tsImport(pathToFileURL(filePath).href, import.meta.url)) as Record<
-        string,
-        unknown
-      >;
+      const mod = (yield* call(() =>
+        tsImport(pathToFileURL(filePath).href, import.meta.url),
+      )) as Record<string, unknown>;
       return normalizeTsxModule(mod);
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
@@ -130,7 +131,7 @@ export async function loadModule(filePath: string): Promise<Record<string, unkno
     }
   } else {
     try {
-      return (await import(pathToFileURL(filePath).href)) as Record<string, unknown>;
+      return (yield* call(() => import(pathToFileURL(filePath).href))) as Record<string, unknown>;
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
       throw new ModuleLoadError(`Failed to load module '${filePath}': ${msg}`);

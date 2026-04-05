@@ -7,6 +7,7 @@
  */
 
 import { loadModule as runtimeLoadModule, isTypeScriptFile, ModuleLoadError } from "@tisyn/runtime";
+import type { Operation } from "effection";
 import { CliError } from "./load-descriptor.js";
 
 export { isTypeScriptFile };
@@ -17,9 +18,9 @@ export { isTypeScriptFile };
  * Supports `.ts`, `.mts`, `.cts` (via tsx) and `.js`, `.mjs`, `.cjs`
  * (via native import). Rejects unsupported extensions with exit code 3.
  */
-export async function loadModule(filePath: string): Promise<Record<string, unknown>> {
+export function* loadModule(filePath: string): Operation<Record<string, unknown>> {
   try {
-    return await runtimeLoadModule(filePath);
+    return yield* runtimeLoadModule(filePath);
   } catch (err) {
     if (err instanceof ModuleLoadError) {
       throw new CliError(3, err.message);

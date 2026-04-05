@@ -9,7 +9,7 @@ import { createServer } from "node:http";
 import { readFile } from "node:fs/promises";
 import type { AddressInfo } from "node:net";
 import { join, extname } from "node:path";
-import { call, createSignal, resource, withResolvers } from "effection";
+import { createSignal, resource, withResolvers } from "effection";
 import { loadModule } from "./load-module.js";
 import type { Operation } from "effection";
 import { installAgentTransport } from "@tisyn/transport";
@@ -67,7 +67,7 @@ export function* loadLocalBinding(
   modulePath: string,
   agentConfig?: Record<string, unknown>,
 ): Operation<LocalAgentBinding> {
-  const mod = yield* call(() => loadModule(modulePath));
+  const mod = yield* loadModule(modulePath);
 
   if (typeof mod.createBinding === "function") {
     return (mod.createBinding as (config?: Record<string, unknown>) => LocalAgentBinding)(

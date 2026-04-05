@@ -8,7 +8,7 @@
  * inherited by children, child installations do not affect the parent.
  */
 
-import { type Operation, call } from "effection";
+import type { Operation } from "effection";
 import { createApi } from "@effectionx/context-api";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { isAbsolute } from "node:path";
@@ -18,7 +18,7 @@ const RuntimeApi = createApi("Runtime", {
   *loadModule(specifier: string, parentURL: string): Operation<Record<string, unknown>> {
     const resolved = resolveSpecifier(specifier, parentURL);
     const filePath = fileURLToPath(resolved);
-    return yield* call(() => defaultLoadModule(filePath));
+    return yield* defaultLoadModule(filePath);
   },
 });
 

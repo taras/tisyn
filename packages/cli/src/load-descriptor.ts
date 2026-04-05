@@ -8,8 +8,8 @@
 import { readFile } from "node:fs/promises";
 import { resolve, dirname } from "node:path";
 import { call } from "effection";
-import { loadModule } from "./load-module.js";
 import type { Operation } from "effection";
+import { loadModule } from "./load-module.js";
 import type { TisynExpr as Expr } from "@tisyn/ir";
 import { compile } from "@tisyn/compiler";
 import type { InputSchema } from "@tisyn/compiler";
@@ -28,7 +28,7 @@ export interface WorkflowExport {
  * - 2: no default export or not a valid WorkflowDescriptor
  */
 export function* loadDescriptorModule(modulePath: string): Operation<WorkflowDescriptor> {
-  const mod = yield* call(() => loadModule(modulePath));
+  const mod = yield* loadModule(modulePath);
 
   const descriptor = mod.default;
   if (!descriptor || typeof descriptor !== "object") {
@@ -74,7 +74,7 @@ export function* loadWorkflowExport(
   modulePath: string,
   exportName: string,
 ): Operation<WorkflowExport> {
-  const mod = yield* call(() => loadModule(modulePath));
+  const mod = yield* loadModule(modulePath);
 
   const ir = mod[exportName];
   if (!ir || typeof ir !== "object") {

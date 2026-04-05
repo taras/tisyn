@@ -20,7 +20,7 @@ describe("shared module loader", () => {
     const dir = yield* call(makeTempDir);
     const filePath = join(dir, "test.mjs");
     yield* call(() => writeFile(filePath, 'export default { hello: "world" };'));
-    const mod = yield* call(() => loadModule(filePath));
+    const mod = yield* loadModule(filePath);
     expect((mod.default as Record<string, unknown>).hello).toBe("world");
   });
 
@@ -28,7 +28,7 @@ describe("shared module loader", () => {
     const dir = yield* call(makeTempDir);
     const filePath = join(dir, "test.ts");
     yield* call(() => writeFile(filePath, 'const x: string = "hello"; export default { x };'));
-    const mod = yield* call(() => loadModule(filePath));
+    const mod = yield* loadModule(filePath);
     expect((mod.default as Record<string, unknown>).x).toBe("hello");
   });
 
@@ -38,7 +38,7 @@ describe("shared module loader", () => {
     yield* call(() => writeFile(filePath, "export default {};"));
     let threw = false;
     try {
-      yield* call(() => loadModule(filePath));
+      yield* loadModule(filePath);
     } catch (err) {
       threw = true;
       expect(err).toBeInstanceOf(UnsupportedExtensionError);
@@ -50,7 +50,7 @@ describe("shared module loader", () => {
   it("reports not found for missing file", function* () {
     let threw = false;
     try {
-      yield* call(() => loadModule("/tmp/nonexistent-runtime-test-xyz.ts"));
+      yield* loadModule("/tmp/nonexistent-runtime-test-xyz.ts");
     } catch (err) {
       threw = true;
       expect(err).toBeInstanceOf(ModuleNotFoundError);
