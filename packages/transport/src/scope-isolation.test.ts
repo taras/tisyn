@@ -7,6 +7,7 @@
  * SL-1: Host Effects.around() middleware does NOT bleed into child server
  * SL-2: Cross-boundary middleware propagated via protocol DOES affect child
  * SL-3: Host agent bindings (installed by useTransport) not visible in child server
+ * SL-4: Host Effects.around({ at: "min" }) does NOT bleed into child server
  */
 
 import { describe, it } from "@effectionx/vitest";
@@ -157,6 +158,49 @@ describe("inprocessTransport scope isolation", () => {
         expect(error).toBeInstanceOf(Error);
         expect((error as Error).message).toContain("not bound in the current scope");
       }
+    });
+  });
+
+  // SL-4: host Effects.around({ at: "min" }) does NOT bleed into isolated child scope
+  it("host Effects.around({ at: 'min' }) does not leak into child server", function* () {
+    const calc = agent("calc-sl4", {
+      add: operation<{ a: number; b: number }, number>(),
+    });
+
+    // Same child handler as SL-1: dispatches PROBE_ID to detect host middleware leakage.
+    const factory = inprocessTransport(calc, {
+      *add({ a, b }: { a: number; b: number }) {
+        try {
+          yield* dispatch(PROBE_ID, null as Val);
+        } catch (e) {
+          const msg = (e as Error).message ?? "";
+          if (msg === "host-leaked") {
+            throw e;
+          }
+          // "No agent registered..." → expected in isolated scope, continue
+        }
+        return a + b;
+      },
+    });
+
+    yield* scoped(function* () {
+      // Install host-side interceptor at min priority
+      yield* Effects.around(
+        {
+          *dispatch([effectId, _data]: [string, Val]) {
+            if (effectId === PROBE_ID) {
+              throw new Error("host-leaked");
+            }
+            return "host-min" as Val;
+          },
+        },
+        { at: "min" },
+      );
+
+      yield* installRemoteAgent(calc, factory);
+
+      const result = yield* invoke(calc.add({ a: 1, b: 2 }));
+      expect(result).toBe(3);
     });
   });
 });

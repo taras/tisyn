@@ -361,27 +361,39 @@ cannot observe replay/record phase.
 
 ---
 
-## 13. Implementation-Side Runtime Boundary (Deferred)
+## 13. Cross-Boundary Middleware Coverage
 
-The scoped-effects specification leaves further
-implementation-side boundary refinement to later work. This
-section documents what SHOULD be tested once that boundary is
-specified more fully.
+This section covers the interaction between host Effects
+middleware, scope isolation, and explicit cross-boundary
+middleware propagation.
 
-### 13.1 Tests to Add When A6 Is Specified
+### 13.1 Intended Contract
 
-| ID | Description |
-|---|---|
-| MI-001 | Effects `min` middleware wraps the same dispatch interface for remote agents |
-| MI-002 | Effects `min` middleware wraps the same dispatch interface for browser-local agents |
-| MI-003 | Effects `min` middleware wraps the same dispatch interface for in-process agents |
-| MI-004 | Middleware installed at Effects `min` receives the same `(effectId, data)` shape regardless of execution environment |
-| MI-005 | Transport-specific behavior is below the standardized boundary and not visible to `min` middleware |
+Three rules govern middleware at the host/agent boundary:
 
-These tests cannot be written until the boundary interface
-contract is specified. They are listed here for tracking
-and to confirm that the test plan acknowledges the
-deferred scope.
+1. **Generic host middleware does not cross the boundary by
+   scope inheritance.** Effects middleware installed in the
+   host scope — at any priority (max or min) — is not
+   visible to an agent's isolated execution scope.
+
+2. **Explicit cross-boundary middleware does cross via the
+   protocol carrier.** `installCrossBoundaryMiddleware(fn)`
+   attaches an IR middleware function to the execute request.
+   The protocol server installs it as ordinary
+   `Effects.around()` in the child's execution scope.
+
+3. **The propagated carrier is installed as outermost child
+   Effects max.** It runs before any middleware the child
+   handler installs, whether max or min.
+
+### 13.2 Tests
+
+| ID | Tier | Title | Setup | Expected |
+|---|---|---|---|---|
+| MI-001 | Core | Host Effects `min` does not leak into remote child | Host installs interceptor at `{ at: "min" }` that throws on sentinel; child dispatches sentinel | Child completes normally; host min interceptor does not fire |
+| MI-002 | Core | Propagated middleware runs before child max | Host installs cross-boundary IR middleware that transforms data; child installs max middleware logging the data it receives | Child max sees transformed data |
+| MI-003 | Core | Propagated middleware runs before child min | Same setup as MI-002; child also installs min middleware logging the data it receives | Child min sees transformed data |
+| MI-004 | Core | Propagated middleware preserves `(effectId, data)` shape | Cross-boundary IR middleware delegates via `Eval("dispatch", [effectId, data])`; child core handler records the shape | Child core receives standard two-arg shape |
 
 ---
 
@@ -457,7 +469,7 @@ correctly implemented when:
 | §5.1 Installation / §7.3 child install / §7.5 monotonic narrowing | Single mechanism | MM-001–003 | Covered |
 | §9 Durability and replay | Replay | MR-001–004 | Covered |
 | §6.1 Agent binding / §6.2 lookup | Agents setup API | AG-001–006 | Covered |
-| §14 Deferred extensions | Deferred | MI-001–005 | Deferred |
+| §13 Cross-boundary middleware | Cross-boundary | MI-001–004 | Covered |
 
 ### 15.2 Test Count Summary
 
@@ -476,5 +488,5 @@ correctly implemented when:
 | Single mechanism | 3 | 0 | 3 |
 | Replay transparency | 3 | 1 | 4 |
 | Agents setup API | 6 | 0 | 6 |
-| Deferred (impl-side) | 0 | 0 | 0 |
-| **Total** | **52** | **6** | **58** |
+| Cross-boundary middleware | 4 | 0 | 4 |
+| **Total** | **56** | **6** | **62** |
