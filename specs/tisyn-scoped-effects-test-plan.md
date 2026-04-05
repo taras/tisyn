@@ -397,7 +397,7 @@ Three rules govern middleware at the host/agent boundary:
 
 ---
 
-## 13.2 Agents Setup API
+## 14. Agents Setup API
 
 Tests for the `Agents.use()` local binding primitive and the
 routing-owned `resolve` operation that replaces the former
@@ -414,7 +414,7 @@ routing-owned `resolve` operation that replaces the former
 
 ---
 
-## 14. Acceptance Criteria
+## 15. Acceptance Criteria
 
 The scoped-effects middleware/facade slice is considered
 correctly implemented when:
@@ -448,16 +448,18 @@ correctly implemented when:
 12. No Core tier test produces an unexpected error, hang,
     or crash.
 
-13. Cross-boundary constraints are expressible and
-    enforceable as ordinary Effects middleware installed
-    in the runtime's root scope, with no separate API
-    required.
+13. Generic host Effects middleware does not cross the
+    agent boundary by scope inheritance. Explicit
+    cross-boundary middleware crosses via
+    `installCrossBoundaryMiddleware(fn)` and the protocol
+    carrier, and is installed in the child as outermost
+    Effects max.
 
 ---
 
-## 15. Coverage Summary
+## 16. Coverage Summary
 
-### 15.1 Scoped-Effects Section Coverage
+### 16.1 Scoped-Effects Section Coverage
 
 | Scoped-effects section | Test category | Test IDs | Status |
 |---|---|---|---|
@@ -474,7 +476,7 @@ correctly implemented when:
 | §6.1 Agent binding / §6.2 lookup | Agents setup API | AG-001–006 | Covered |
 | §13 Cross-boundary middleware | Cross-boundary | MI-001–004 | Covered |
 
-### 15.2 Test Count Summary
+### 16.2 Test Count Summary
 
 | Category | Core | Extended | Total |
 |---|---|---|---|
