@@ -35,6 +35,28 @@ function yieldEvent(type: string, name: string, value: unknown, coroutineId = "r
   };
 }
 
+function yieldErrorEvent(
+  type: string,
+  name: string,
+  error: { message: string; name?: string },
+  coroutineId = "root",
+): YieldEvent {
+  return {
+    type: "yield",
+    coroutineId,
+    description: { type, name },
+    result: { status: "err", error } as never,
+  };
+}
+
+function timeboxIR(duration: number, body: unknown) {
+  return {
+    tisyn: "eval",
+    id: "timebox",
+    data: { tisyn: "quote", expr: { duration, body } },
+  };
+}
+
 describe("LLM Sampling — Standard External Effect", () => {
   // LS-001: llm.sample dispatches through installed adapter and returns result
   it("LS-001: dispatches through installed adapter and returns result", function* () {
@@ -159,6 +181,34 @@ describe("LLM Sampling — Replay", () => {
     expect(agentCalled).toBe(false);
     expect(result).toEqual({ status: "ok", value: { cached: true } });
   });
+
+  // LS-033: Backend error replays identically
+  it("LS-033: error replay re-delivers same error without contacting adapter", function* () {
+    const stored: DurableEvent[] = [
+      yieldErrorEvent("llm", "sample", { message: "model overloaded", name: "BackendError" }),
+    ];
+    const stream = new InMemoryStream(stored);
+
+    let agentCalled = false;
+    yield* Effects.around({
+      *dispatch([_effectId, _data]: [string, any]) {
+        agentCalled = true;
+        return 999;
+      },
+    });
+
+    const { result } = yield* execute({
+      ir: singleEffectIR("llm", "sample") as never,
+      stream,
+    });
+
+    expect(agentCalled).toBe(false);
+    expect(result.status).toBe("err");
+    if (result.status === "err") {
+      expect(result.error.message).toBe("model overloaded");
+      expect(result.error.name).toBe("BackendError");
+    }
+  });
 });
 
 describe("LLM Sampling — Progress Non-Durability", () => {
@@ -260,5 +310,30 @@ describe("LLM Sampling — Scope Integration", () => {
 
     const shutdownMsg = messages.find((m) => m.method === "shutdown");
     expect(shutdownMsg).toBeDefined();
+  });
+});
+
+describe("LLM Sampling — Cancellation", () => {
+  // LS-031: Cancelled llm.sample produces no YieldEvent
+  it("LS-031: cancelled llm.sample produces no YieldEvent", function* () {
+    const factory = createMockLlmTransport({ neverComplete: true });
+    const ir = scope(timeboxIR(50, singleEffectIR("llm", "sample", { prompt: "hello" })), null, {
+      llm: Get(Ref("envObj"), "transport"),
+    });
+    const { result, journal } = yield* execute({
+      ir: ir as never,
+      env: { envObj: { transport: factory } as any },
+    });
+
+    // Timebox expired — body was cancelled
+    expect(result).toEqual({ status: "ok", value: { status: "timeout" } });
+
+    // No YieldEvent for llm.sample — persist-before-resume means the event
+    // is only written after the effect returns, and cancellation prevents that
+    const yieldEvents = journal.filter((e) => e.type === "yield") as YieldEvent[];
+    const llmYields = yieldEvents.filter(
+      (e) => e.description.type === "llm" && e.description.name === "sample",
+    );
+    expect(llmYields).toHaveLength(0);
   });
 });
