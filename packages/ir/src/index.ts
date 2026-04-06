@@ -136,6 +136,7 @@ export {
   MergeObjects,
   All,
   Race,
+  Scope,
   Spawn,
   Join,
   Resource,

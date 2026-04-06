@@ -381,6 +381,8 @@ function constructorName(id: string): string {
       return "All";
     case "race":
       return "Race";
+    case "scope":
+      return "Scope";
     case "spawn":
       return "Spawn";
     case "join":
