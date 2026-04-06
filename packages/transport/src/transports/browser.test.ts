@@ -50,7 +50,6 @@ function literalWorkflow(value: unknown): IrInput {
 
 let mockPage: {
   goto: ReturnType<typeof vi.fn>;
-  addScriptTag: ReturnType<typeof vi.fn>;
   waitForFunction: ReturnType<typeof vi.fn>;
   evaluate: ReturnType<typeof vi.fn>;
   close: ReturnType<typeof vi.fn>;
@@ -62,19 +61,20 @@ let mockBrowser: {
 };
 
 let mockContext: {
+  addInitScript: ReturnType<typeof vi.fn>;
   newPage: ReturnType<typeof vi.fn>;
 };
 
 beforeEach(() => {
   mockPage = {
     goto: vi.fn(async () => {}),
-    addScriptTag: vi.fn(async () => {}),
     waitForFunction: vi.fn(async () => {}),
     evaluate: vi.fn(async () => ({ status: "ok", value: 42 })),
     close: vi.fn(async () => {}),
   };
 
   mockContext = {
+    addInitScript: vi.fn(async () => {}),
     newPage: vi.fn(async () => mockPage),
   };
 
@@ -191,7 +191,7 @@ describe("browser transport", () => {
   // --- Capability composition — real-browser mode ---
 
   describe("Capability composition — real-browser mode", () => {
-    it("executor bundle is injected via page.addScriptTag", function* () {
+    it("executor bundle is registered via context.addInitScript", function* () {
       const factory = browserTransport({
         executor: "/path/to/executor.iife.js",
       });
@@ -202,10 +202,10 @@ describe("browser transport", () => {
         yield* invoke(Browser.execute({ workflow: literalWorkflow(42) }));
       });
 
-      expect(mockPage.addScriptTag).toHaveBeenCalledWith({
+      expect(mockContext.addInitScript).toHaveBeenCalledWith({
         path: "/path/to/executor.iife.js",
       });
-      expect(mockPage.waitForFunction).toHaveBeenCalled();
+      expect(mockPage.waitForFunction).toHaveBeenCalledTimes(1);
     });
 
     it("transport drives page.evaluate with IR and returns result", function* () {
@@ -380,9 +380,10 @@ describe("browser transport", () => {
       });
 
       expect(mockPage.goto).toHaveBeenCalledWith("https://example.com");
+      expect(mockPage.waitForFunction).toHaveBeenCalledTimes(2);
     });
 
-    it("navigate then execute operate on same implicit page", function* () {
+    it("navigate re-establishes executor before execute on the same implicit page", function* () {
       const factory = browserTransport({
         executor: "/path/to/executor.iife.js",
       });
@@ -394,6 +395,7 @@ describe("browser transport", () => {
       });
 
       expect(mockPage.goto).toHaveBeenCalledWith("https://example.com/app");
+      expect(mockPage.waitForFunction).toHaveBeenCalledTimes(2);
       expect(mockPage.evaluate).toHaveBeenCalled();
     });
 
@@ -414,6 +416,8 @@ describe("browser transport", () => {
           expect((error as Error).message).toContain("net::ERR_CONNECTION_REFUSED");
         }
       });
+
+      expect(mockPage.waitForFunction).toHaveBeenCalledTimes(1);
     });
   });
 
