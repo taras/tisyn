@@ -7,6 +7,7 @@ import { installRemoteAgent } from "./install-remote.js";
 import { ProgressContext, CoroutineContext } from "./progress.js";
 import type { ProgressEvent } from "./progress.js";
 import { createMockLlmTransport } from "./test-helpers/mock-llm-adapter.js";
+import type { HostMessage } from "./transport.js";
 
 const llmDeclaration = agent("llm", {
   sample: operation<Val, Val>(),
@@ -19,8 +20,6 @@ describe("LLM Sampling — Progress Forwarding", () => {
     yield* ProgressContext.set((event) => {
       progressEvents.push(event);
     });
-
-    // Set coroutineId to simulate runtime context
     yield* CoroutineContext.set("root");
 
     const factory = createMockLlmTransport({
@@ -41,27 +40,28 @@ describe("LLM Sampling — Progress Forwarding", () => {
 
   // LS-013: Progress after result is discarded
   it("LS-013: post-result progress is silently discarded", function* () {
-    // The session stream closes after the result is received (signal.close()).
-    // Any progress notifications arriving after that are dropped by the signal.
-    // The mock adapter sends all progress BEFORE the result, so to test this
-    // we verify the drain loop correctly terminates after result.
     const progressEvents: ProgressEvent[] = [];
     yield* ProgressContext.set((event) => {
       progressEvents.push(event);
     });
     yield* CoroutineContext.set("root");
 
+    // Mock sends one progress before the result, then one AFTER the result
     const factory = createMockLlmTransport({
       progress: [{ text: "before" }],
       result: { answer: 42 },
+      lateProgress: [{ text: "late — should be dropped" }],
     });
 
     yield* scoped(function* () {
       yield* installRemoteAgent(llmDeclaration, factory);
-      yield* dispatch("llm.sample", { prompt: "hello" });
+      const result = yield* dispatch("llm.sample", { prompt: "hello" });
+      expect(result).toEqual({ answer: 42 });
     });
 
-    // Only pre-result progress should be received
+    // Only pre-result progress should be received; late progress is dropped
+    // by the session signal (signal.close() fires on result, subsequent
+    // signal.send() from onProgress is a no-op on a closed signal).
     expect(progressEvents).toHaveLength(1);
     expect(progressEvents[0].value).toEqual({ text: "before" });
   });
@@ -103,51 +103,95 @@ describe("LLM Sampling — Progress Identity and Correlation", () => {
     });
     yield* CoroutineContext.set("root");
 
+    // Use a delay so both requests are in-flight simultaneously
     const factory = createMockLlmTransport({
       progress: [{ text: "chunk" }],
       result: { answer: 42 },
+      delay: 20,
     });
 
     yield* scoped(function* () {
       yield* installRemoteAgent(llmDeclaration, factory);
 
-      // Two sequential calls — each should get a distinct token
-      yield* dispatch("llm.sample", { prompt: "first" });
-      yield* dispatch("llm.sample", { prompt: "second" });
+      // Launch both dispatches concurrently so both are in-flight at the same time
+      let result1: Val = null;
+      let result2: Val = null;
+      const t1 = yield* spawn(function* () {
+        result1 = yield* dispatch("llm.sample", { prompt: "first" });
+      });
+      const t2 = yield* spawn(function* () {
+        result2 = yield* dispatch("llm.sample", { prompt: "second" });
+      });
+
+      // Wait for both to complete
+      yield* t1;
+      yield* t2;
+
+      expect(result1).toEqual({ answer: 42 });
+      expect(result2).toEqual({ answer: 42 });
     });
 
+    // Both calls emitted progress — should have 2 events with distinct tokens
     expect(progressEvents).toHaveLength(2);
     const tokens = progressEvents.map((e) => e.token);
     expect(tokens[0]).not.toBe(tokens[1]);
+
+    // Grouping by token cleanly separates progress from each call
+    const grouped = new Map<string, ProgressEvent[]>();
+    for (const ev of progressEvents) {
+      const group = grouped.get(ev.token) ?? [];
+      group.push(ev);
+      grouped.set(ev.token, group);
+    }
+    expect(grouped.size).toBe(2);
   });
 });
 
 describe("LLM Sampling — Cancellation and Failure", () => {
-  // LS-030: Scope cancellation halts in-flight LLM call
-  it("LS-030: cancellation halts in-flight call", function* () {
+  // LS-030: Scope cancellation halts in-flight LLM call via protocol cancel
+  it("LS-030: cancellation sends cancel notification and halts in-flight call", function* () {
+    const messages: HostMessage[] = [];
     let dispatched = false;
     let completed = false;
 
-    const factory = createMockLlmTransport({ neverComplete: true });
+    const innerFactory = createMockLlmTransport({ neverComplete: true });
+    // Wrap factory to record all host→agent messages
+    const recordingFactory = function* () {
+      const transport = yield* innerFactory();
+      return {
+        *send(msg: HostMessage) {
+          messages.push(msg);
+          yield* transport.send(msg);
+        },
+        receive: transport.receive,
+      };
+    };
 
     yield* scoped(function* () {
-      yield* installRemoteAgent(llmDeclaration, factory);
+      yield* installRemoteAgent(llmDeclaration, recordingFactory as any);
 
       // Spawn a dispatch that will never complete
-      yield* spawn(function* () {
+      const task = yield* spawn(function* () {
         dispatched = true;
         yield* dispatch("llm.sample", { prompt: "hello" });
         completed = true;
       });
 
-      // Give the dispatch a chance to start
+      // Give the dispatch a chance to start and the execute request to arrive
       yield* sleep(10);
 
-      // Exiting the scoped block cancels the in-flight task
+      // Halt just the dispatch task — this triggers the session's finally block
+      // which sends cancelNotification for the in-flight request
+      yield* task.halt();
     });
 
     expect(dispatched).toBe(true);
     expect(completed).toBe(false);
+
+    // Verify the protocol cancel path was exercised
+    const cancelMsg = messages.find((m) => m.method === "cancel");
+    expect(cancelMsg).toBeDefined();
+    expect((cancelMsg as any).params.id).toEqual(expect.any(String));
   });
 
   // LS-032: Backend error becomes journaled application error
@@ -169,9 +213,6 @@ describe("LLM Sampling — Cancellation and Failure", () => {
     expect(caughtError).not.toBeNull();
     expect(caughtError!.message).toBe("model overloaded");
   });
-
-  // LS-033: Backend error replays identically (tested in runtime tests via journal)
-  // This is a replay test, covered in the runtime test file as LS-005 pattern.
 
   // LS-034: Progress emitted before failure remains observational
   it("LS-034: progress before failure is captured, error propagates", function* () {
