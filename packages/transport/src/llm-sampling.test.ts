@@ -2,7 +2,7 @@ import { describe, it } from "@effectionx/vitest";
 import { expect } from "vitest";
 import { scoped, sleep, spawn } from "effection";
 import type { Val } from "@tisyn/ir";
-import { agent, operation, Effects, dispatch } from "@tisyn/agent";
+import { agent, operation, dispatch } from "@tisyn/agent";
 import { installRemoteAgent } from "./install-remote.js";
 import { ProgressContext, CoroutineContext } from "./progress.js";
 import type { ProgressEvent } from "./progress.js";
@@ -134,7 +134,7 @@ describe("LLM Sampling — Cancellation and Failure", () => {
       yield* installRemoteAgent(llmDeclaration, factory);
 
       // Spawn a dispatch that will never complete
-      const task = yield* spawn(function* () {
+      yield* spawn(function* () {
         dispatched = true;
         yield* dispatch("llm.sample", { prompt: "hello" });
         completed = true;

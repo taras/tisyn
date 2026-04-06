@@ -40,20 +40,6 @@ function yieldEvent(
   };
 }
 
-function yieldErrorEvent(
-  type: string,
-  name: string,
-  error: { message: string; name?: string },
-  coroutineId = "root",
-): YieldEvent {
-  return {
-    type: "yield",
-    coroutineId,
-    description: { type, name },
-    result: { status: "err", error },
-  };
-}
-
 describe("LLM Sampling — Standard External Effect", () => {
   // LS-001: llm.sample dispatches through installed adapter and returns result
   it("LS-001: dispatches through installed adapter and returns result", function* () {

@@ -30,7 +30,7 @@ export function createMockLlmTransport(config: MockAdapterConfig): AgentTranspor
     agentScope.run(function* () {
       for (;;) {
         const { value: msg, done } = yield* hostSub.next();
-        if (done) break;
+        if (done) { break; }
 
         if (msg.method === "initialize") {
           yield* agentToHost.send(
