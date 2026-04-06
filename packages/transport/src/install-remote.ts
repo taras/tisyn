@@ -6,6 +6,7 @@ import { parseEffectId } from "@tisyn/kernel";
 import { Effects, getCrossBoundaryMiddleware } from "@tisyn/agent";
 import { executeRequest } from "@tisyn/protocol";
 import { createSession } from "./session.js";
+import { ProgressContext, CoroutineContext } from "./progress.js";
 
 let executionCounter = 0;
 
@@ -41,6 +42,7 @@ export function* installAgentTransport(
             taskId: "root",
             operation: name,
             args: [data],
+            progressToken: requestId,
             ...(middleware != null ? { middleware: middleware as unknown as Val } : {}),
           }),
         );
@@ -53,6 +55,11 @@ export function* installAgentTransport(
               return result.value as Val;
             }
             throw new Error(result.error.message);
+          }
+          const sink = yield* ProgressContext.get();
+          if (sink) {
+            const cid = (yield* CoroutineContext.get()) ?? "root";
+            sink({ token: requestId, effectId, coroutineId: cid, value: item.value });
           }
         }
       }
@@ -106,11 +113,11 @@ export function* installRemoteAgent<Ops extends Record<string, OperationSpec>>(
             taskId: "root",
             operation: name,
             args: [data],
+            progressToken: requestId,
             ...(middleware != null ? { middleware: middleware as unknown as Val } : {}),
           }),
         );
 
-        // Subscribe and drain — Phase 1 discards progress
         const sub = yield* stream;
         for (;;) {
           const item = yield* sub.next();
@@ -121,7 +128,11 @@ export function* installRemoteAgent<Ops extends Record<string, OperationSpec>>(
             }
             throw new Error(result.error.message);
           }
-          // Progress value — discard in Phase 1
+          const sink = yield* ProgressContext.get();
+          if (sink) {
+            const cid = (yield* CoroutineContext.get()) ?? "root";
+            sink({ token: requestId, effectId, coroutineId: cid, value: item.value });
+          }
         }
       }
       return yield* next(effectId, data);

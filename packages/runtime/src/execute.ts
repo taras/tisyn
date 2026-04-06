@@ -30,7 +30,7 @@ import { assertValidIr } from "@tisyn/validate";
 import { evaluate, type Env, envFromRecord } from "@tisyn/kernel";
 import { type DurableStream, InMemoryStream, ReplayIndex } from "@tisyn/durable-streams";
 import { dispatch, Effects, evaluateMiddlewareFn } from "@tisyn/agent";
-import { installAgentTransport, type AgentTransportFactory } from "@tisyn/transport";
+import { installAgentTransport, type AgentTransportFactory, CoroutineContext } from "@tisyn/transport";
 import type { FnNode } from "@tisyn/ir";
 import { ConfigContext } from "./config-scope.js";
 
@@ -245,6 +245,7 @@ function* driveKernel(
   // scoped() binds spawned children to the parent's lifetime:
   // children are alive while the parent runs, torn down when the parent exits.
   return yield* scoped(function* () {
+    yield* CoroutineContext.set(coroutineId);
     try {
       for (;;) {
         const step = pendingStep ?? kernel.next(nextValue);
