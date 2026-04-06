@@ -165,23 +165,26 @@ export function browserTransport(config?: BrowserTransportConfig): AgentTranspor
         browser.close().catch(() => {});
       });
 
-      // Create context + default page
       const context: BrowserContext = yield* call(() => browser.newContext({ viewport }));
+      const waitForExecutor = () =>
+        page.waitForFunction(() => typeof (globalThis as any).__tisyn_execute === "function");
+
+      // Register executor bundle for the initial page and future navigations
+      yield* call(() => context.addInitScript({ path: executorPath }));
+
+      // Create context + default page
       const page: Page = yield* call(() => context.newPage());
+      yield* call(waitForExecutor);
 
       // Navigate to URL if configured
       if (url) {
         yield* call(() => page.goto(url));
+        yield* call(waitForExecutor);
       }
-
-      // Inject executor bundle
-      yield* call(() => page.addScriptTag({ path: executorPath }));
-      yield* call(() =>
-        page.waitForFunction(() => typeof (globalThis as any).__tisyn_execute === "function"),
-      );
 
       navigateHandler = function* (params: NavigateParams): Operation<void> {
         yield* call(() => page.goto(params.url));
+        yield* call(waitForExecutor);
       };
 
       executeHandler = function* (params: ExecuteParams): Operation<Json> {
