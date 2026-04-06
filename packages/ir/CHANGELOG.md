@@ -2,6 +2,8 @@
 
 ## 0.9.0
 
+## 0.9.0
+
 ### Minor Changes
 
 - 38d9ffc: Add `TimeboxShape`, `TimeboxNode`, and `Timebox` constructor. Add timebox cases in printer and decompiler.

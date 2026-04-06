@@ -2,6 +2,13 @@
 
 ## 0.9.0
 
+### Patch Changes
+
+- @tisyn/ir@0.9.0
+- @tisyn/validate@0.9.0
+
+## 0.9.0
+
 ### Minor Changes
 
 - 38d9ffc: Add per-ID timebox evaluation rule — evaluates duration synchronously, keeps body as unevaluated Expr.

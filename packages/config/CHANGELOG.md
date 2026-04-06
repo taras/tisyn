@@ -1,5 +1,11 @@
 # @tisyn/config
 
+## 0.10.0
+
+### Minor Changes
+
+- e6696fb: Add optional per-agent `config` parameter to `agent()` constructor and `AgentBinding` type
+
 ## 0.9.0
 
 ### Minor Changes

@@ -4,6 +4,25 @@
 
 ### Minor Changes
 
+- e6696fb: Resolve per-agent `config` through env resolution pipeline and expose on `ResolvedAgent`
+- 8d82f9c: Add `Runtime` context API with `Runtime.loadModule(specifier, parentURL)` and `Runtime.around(...)` for middleware-interceptable module loading. Export shared default loader (`loadModule`, `isTypeScriptFile`) and error types (`ModuleLoadError`, `UnsupportedExtensionError`, `ModuleNotFoundError`, `LoaderInitError`).
+
+### Patch Changes
+
+- Updated dependencies [e6696fb]
+- Updated dependencies [34533e6]
+  - @tisyn/config@0.10.0
+  - @tisyn/transport@0.9.0
+  - @tisyn/agent@0.9.0
+  - @tisyn/ir@0.9.0
+  - @tisyn/kernel@0.9.0
+  - @tisyn/validate@0.9.0
+  - @tisyn/durable-streams@0.9.0
+
+## 0.9.0
+
+### Minor Changes
+
 - 7ad2031: Support config-aware execution via `ExecuteOptions.config` and resolve `__config` as a journaled runtime effect for replay-safe workflow config access.
 - 8eb99d9: Add `config` field to `ExecuteOptions` and handle `__config` as a journaled standard effect for config-aware workflow execution via `yield* useConfig()`.
 - 6b2a66a: Add config resolution helpers — `applyOverlay` (entrypoint merge-by-id), `resolveEnv` (env variable resolution with type coercion), `resolveConfig` (full pipeline: overlay → validate → resolve → project), and `projectConfig` (strips descriptor metadata, produces runtime-ready shape).

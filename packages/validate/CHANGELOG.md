@@ -2,6 +2,12 @@
 
 ## 0.9.0
 
+### Patch Changes
+
+- @tisyn/ir@0.9.0
+
+## 0.9.0
+
 ### Minor Changes
 
 - 38d9ffc: Add duration subtree restriction that rejects external Evals; `TIMEBOX_DURATION_EXTERNAL` error code.

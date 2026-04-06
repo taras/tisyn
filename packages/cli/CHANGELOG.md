@@ -1,5 +1,28 @@
 # @tisyn/cli
 
+## 0.3.0
+
+### Minor Changes
+
+- 34533e6: Decouple browser/WebSocket ingress from agent transport creation. `startServer()` now returns `LocalServerBinding` with a connection stream instead of raw `WebSocketServer`. Add `loadLocalBinding()` that prefers `createBinding()` over `createTransport()` for local/inprocess modules. Reorder Phase D startup so server starts before transport installation, enabling `bindServer()` hooks to wire connection handling before workflows execute.
+- f7c4d57: `tsn run` can compile `.ts` workflow sources at runtime; bare `Fn` IR nodes are auto-invoked via `Call` for execution
+- 9a4ba47: Add first-class TypeScript module loading for descriptor and transport binding modules. CLI bootstrap loading delegates to `@tisyn/runtime`'s shared `loadModule()`, wrapping errors into CLI exit codes.
+
+### Patch Changes
+
+- e6696fb: Forward resolved per-agent config to `createBinding()` for local/inprocess transport modules
+- Updated dependencies [e6696fb]
+- Updated dependencies [e6696fb]
+- Updated dependencies [34533e6]
+- Updated dependencies [f7c4d57]
+- Updated dependencies [8d82f9c]
+  - @tisyn/config@0.10.0
+  - @tisyn/runtime@0.9.0
+  - @tisyn/transport@0.9.0
+  - @tisyn/compiler@0.9.0
+  - @tisyn/ir@0.9.0
+  - @tisyn/durable-streams@0.9.0
+
 ## 0.2.0
 
 ### Minor Changes
