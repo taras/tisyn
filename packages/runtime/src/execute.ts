@@ -30,7 +30,11 @@ import { assertValidIr } from "@tisyn/validate";
 import { evaluate, type Env, envFromRecord } from "@tisyn/kernel";
 import { type DurableStream, InMemoryStream, ReplayIndex } from "@tisyn/durable-streams";
 import { dispatch, Effects, evaluateMiddlewareFn } from "@tisyn/agent";
-import { installAgentTransport, type AgentTransportFactory, CoroutineContext } from "@tisyn/transport";
+import {
+  installAgentTransport,
+  type AgentTransportFactory,
+  CoroutineContext,
+} from "@tisyn/transport";
 import type { FnNode } from "@tisyn/ir";
 import { ConfigContext } from "./config-scope.js";
 

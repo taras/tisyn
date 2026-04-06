@@ -26,12 +26,7 @@ function singleEffectIR(agentType: string, opName: string, data: unknown = null)
   };
 }
 
-function yieldEvent(
-  type: string,
-  name: string,
-  value: unknown,
-  coroutineId = "root",
-): YieldEvent {
+function yieldEvent(type: string, name: string, value: unknown, coroutineId = "root"): YieldEvent {
   return {
     type: "yield",
     coroutineId,
@@ -44,11 +39,9 @@ describe("LLM Sampling — Standard External Effect", () => {
   // LS-001: llm.sample dispatches through installed adapter and returns result
   it("LS-001: dispatches through installed adapter and returns result", function* () {
     const factory = createMockLlmTransport({ result: { answer: 42 } });
-    const ir = scope(
-      singleEffectIR("llm", "sample", { prompt: "hello" }),
-      null,
-      { llm: Get(Ref("envObj"), "transport") },
-    );
+    const ir = scope(singleEffectIR("llm", "sample", { prompt: "hello" }), null, {
+      llm: Get(Ref("envObj"), "transport"),
+    });
     const { result } = yield* execute({
       ir: ir as never,
       env: { envObj: { transport: factory } as any },
@@ -59,11 +52,9 @@ describe("LLM Sampling — Standard External Effect", () => {
   // LS-002: YieldEvent description matches parseEffectId("llm.sample")
   it("LS-002: YieldEvent description matches parsed effect ID", function* () {
     const factory = createMockLlmTransport({ result: { answer: 42 } });
-    const ir = scope(
-      singleEffectIR("llm", "sample", { prompt: "hello" }),
-      null,
-      { llm: Get(Ref("envObj"), "transport") },
-    );
+    const ir = scope(singleEffectIR("llm", "sample", { prompt: "hello" }), null, {
+      llm: Get(Ref("envObj"), "transport"),
+    });
     const { journal } = yield* execute({
       ir: ir as never,
       env: { envObj: { transport: factory } as any },
@@ -81,11 +72,9 @@ describe("LLM Sampling — Standard External Effect", () => {
   it("LS-003: YieldEvent is journaled before close", function* () {
     const stream = new InMemoryStream();
     const factory = createMockLlmTransport({ result: { answer: 42 } });
-    const ir = scope(
-      singleEffectIR("llm", "sample", { prompt: "hello" }),
-      null,
-      { llm: Get(Ref("envObj"), "transport") },
-    );
+    const ir = scope(singleEffectIR("llm", "sample", { prompt: "hello" }), null, {
+      llm: Get(Ref("envObj"), "transport"),
+    });
     const { journal } = yield* execute({
       ir: ir as never,
       env: { envObj: { transport: factory } as any },
@@ -179,11 +168,9 @@ describe("LLM Sampling — Progress Non-Durability", () => {
       progress: [{ text: "thinking..." }, { text: "done" }],
       result: { answer: 42 },
     });
-    const ir = scope(
-      singleEffectIR("llm", "sample", { prompt: "hello" }),
-      null,
-      { llm: Get(Ref("envObj"), "transport") },
-    );
+    const ir = scope(singleEffectIR("llm", "sample", { prompt: "hello" }), null, {
+      llm: Get(Ref("envObj"), "transport"),
+    });
     const { journal } = yield* execute({
       ir: ir as never,
       env: { envObj: { transport: factory } as any },
@@ -230,11 +217,9 @@ describe("LLM Sampling — Scope Integration", () => {
   // LS-040: llm.sample works inside scoped() with useTransport() binding
   it("LS-040: works inside scope with transport binding", function* () {
     const factory = createMockLlmTransport({ result: { answer: 42 } });
-    const ir = scope(
-      singleEffectIR("llm", "sample", { prompt: "hello" }),
-      null,
-      { llm: Get(Ref("envObj"), "transport") },
-    );
+    const ir = scope(singleEffectIR("llm", "sample", { prompt: "hello" }), null, {
+      llm: Get(Ref("envObj"), "transport"),
+    });
     const { result, journal } = yield* execute({
       ir: ir as never,
       env: { envObj: { transport: factory } as any },
@@ -265,11 +250,9 @@ describe("LLM Sampling — Scope Integration", () => {
       };
     };
 
-    const ir = scope(
-      singleEffectIR("llm", "sample", { prompt: "hello" }),
-      null,
-      { llm: Get(Ref("envObj"), "transport") },
-    );
+    const ir = scope(singleEffectIR("llm", "sample", { prompt: "hello" }), null, {
+      llm: Get(Ref("envObj"), "transport"),
+    });
     yield* execute({
       ir: ir as never,
       env: { envObj: { transport: recordingFactory } as any },

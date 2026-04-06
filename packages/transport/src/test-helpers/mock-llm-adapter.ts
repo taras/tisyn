@@ -1,7 +1,12 @@
 import type { Operation } from "effection";
 import { createChannel, createScope, ensure, spawn, sleep } from "effection";
 import type { Val } from "@tisyn/ir";
-import type { AgentTransport, AgentTransportFactory, HostMessage, AgentMessage } from "../transport.js";
+import type {
+  AgentTransport,
+  AgentTransportFactory,
+  HostMessage,
+  AgentMessage,
+} from "../transport.js";
 import {
   initializeResponse,
   executeSuccess,
@@ -30,7 +35,9 @@ export function createMockLlmTransport(config: MockAdapterConfig): AgentTranspor
     agentScope.run(function* () {
       for (;;) {
         const { value: msg, done } = yield* hostSub.next();
-        if (done) { break; }
+        if (done) {
+          break;
+        }
 
         if (msg.method === "initialize") {
           yield* agentToHost.send(
