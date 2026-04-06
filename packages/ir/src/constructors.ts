@@ -160,7 +160,7 @@ export function Construct<T extends Record<string, unknown>>(fields: {
     tisyn: "eval",
     id: "construct",
     data: { tisyn: "quote", expr: fields },
-  } as EvalT<T>;
+  };
 }
 
 export function Arr<T>(...items: Expr<T>[]): EvalT<T[]> {
@@ -168,7 +168,7 @@ export function Arr<T>(...items: Expr<T>[]): EvalT<T[]> {
     tisyn: "eval",
     id: "array",
     data: { tisyn: "quote", expr: { items } },
-  } as EvalT<T[]>;
+  };
 }
 
 export function Concat(...parts: Expr<unknown>[]): EvalT<string> {
@@ -176,7 +176,7 @@ export function Concat(...parts: Expr<unknown>[]): EvalT<string> {
     tisyn: "eval",
     id: "concat",
     data: { tisyn: "quote", expr: { parts } },
-  } as EvalT<string>;
+  };
 }
 
 // ── Error ──
@@ -186,7 +186,7 @@ export function Throw(message: Expr<string>): EvalT<never> {
     tisyn: "eval",
     id: "throw",
     data: { tisyn: "quote", expr: { message } },
-  } as EvalT<never>;
+  };
 }
 
 export function Try<T>(
@@ -213,7 +213,7 @@ export function Try<T>(
     tisyn: "eval",
     id: "try",
     data: { tisyn: "quote", expr: fields },
-  } as EvalT<T>;
+  };
 }
 
 export function Eval<T>(id: string, data: Expr<unknown>): EvalT<T> {
@@ -221,7 +221,7 @@ export function Eval<T>(id: string, data: Expr<unknown>): EvalT<T> {
     tisyn: "eval",
     id,
     data,
-  } as EvalT<T>;
+  };
 }
 
 export function ConcatArrays<T>(...arrays: Expr<T[]>[]): EvalT<T[]> {
@@ -229,7 +229,7 @@ export function ConcatArrays<T>(...arrays: Expr<T[]>[]): EvalT<T[]> {
     tisyn: "eval",
     id: "concat-arrays",
     data: { tisyn: "quote", expr: { arrays } },
-  } as EvalT<T[]>;
+  };
 }
 
 export function MergeObjects<T extends Record<string, unknown>>(...objects: Expr<T>[]): EvalT<T> {
@@ -237,7 +237,7 @@ export function MergeObjects<T extends Record<string, unknown>>(...objects: Expr
     tisyn: "eval",
     id: "merge-objects",
     data: { tisyn: "quote", expr: { objects } },
-  } as EvalT<T>;
+  };
 }
 
 export function All<T extends unknown[]>(...exprs: { [K in keyof T]: Expr<T[K]> }): EvalT<T> {
@@ -245,7 +245,7 @@ export function All<T extends unknown[]>(...exprs: { [K in keyof T]: Expr<T[K]> 
     tisyn: "eval",
     id: "all",
     data: { tisyn: "quote", expr: { exprs } },
-  } as EvalT<T>;
+  };
 }
 
 export function Race<T>(...exprs: Expr<T>[]): EvalT<T> {
@@ -253,7 +253,19 @@ export function Race<T>(...exprs: Expr<T>[]): EvalT<T> {
     tisyn: "eval",
     id: "race",
     data: { tisyn: "quote", expr: { exprs } },
-  } as EvalT<T>;
+  };
+}
+
+export function Scope<T>(
+  body: Expr<T>,
+  handler: TisynFn<[unknown], unknown> | null = null,
+  bindings: Record<string, Expr<unknown>> = {},
+): EvalT<T> {
+  return {
+    tisyn: "eval",
+    id: "scope",
+    data: { tisyn: "quote", expr: { handler, bindings, body } },
+  };
 }
 
 export function Spawn<T>(body: Expr<T>): EvalT<{ __tisyn_task: string }> {
@@ -261,7 +273,7 @@ export function Spawn<T>(body: Expr<T>): EvalT<{ __tisyn_task: string }> {
     tisyn: "eval",
     id: "spawn",
     data: { tisyn: "quote", expr: { body } },
-  } as EvalT<{ __tisyn_task: string }>;
+  };
 }
 
 export function Join<T>(ref: RefT<{ __tisyn_task: string }>): EvalT<T> {
@@ -269,7 +281,7 @@ export function Join<T>(ref: RefT<{ __tisyn_task: string }>): EvalT<T> {
     tisyn: "eval",
     id: "join",
     data: ref,
-  } as EvalT<T>;
+  };
 }
 
 export function Resource<T>(body: Expr<T>): EvalT<T> {
@@ -277,7 +289,7 @@ export function Resource<T>(body: Expr<T>): EvalT<T> {
     tisyn: "eval",
     id: "resource",
     data: { tisyn: "quote", expr: { body } },
-  } as EvalT<T>;
+  };
 }
 
 export function Provide<T>(value: Expr<T>): EvalT<null> {
@@ -285,7 +297,7 @@ export function Provide<T>(value: Expr<T>): EvalT<null> {
     tisyn: "eval",
     id: "provide",
     data: value,
-  } as EvalT<null>;
+  };
 }
 
 export function Timebox<V>(
@@ -296,5 +308,5 @@ export function Timebox<V>(
     tisyn: "eval",
     id: "timebox",
     data: { tisyn: "quote", expr: { duration, body } },
-  } as EvalT<{ status: "completed"; value: V } | { status: "timeout" }>;
+  };
 }
