@@ -1,6 +1,6 @@
 # @tisyn/runtime
 
-## 1.0.0
+## 0.9.0
 
 ### Minor Changes
 
@@ -12,12 +12,12 @@
 - Updated dependencies [e6696fb]
 - Updated dependencies [34533e6]
   - @tisyn/config@0.10.0
-  - @tisyn/transport@1.0.0
-  - @tisyn/agent@1.0.0
-  - @tisyn/ir@1.0.0
-  - @tisyn/kernel@1.0.0
-  - @tisyn/validate@1.0.0
-  - @tisyn/durable-streams@1.0.0
+  - @tisyn/transport@0.9.0
+  - @tisyn/agent@0.9.0
+  - @tisyn/ir@0.9.0
+  - @tisyn/kernel@0.9.0
+  - @tisyn/validate@0.9.0
+  - @tisyn/durable-streams@0.9.0
 
 ## 0.9.0
 

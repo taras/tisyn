@@ -4,7 +4,7 @@
 
 ### Patch Changes
 
-- @tisyn/ir@1.0.0
+- @tisyn/ir@0.9.0
 
 ## 0.4.0
 

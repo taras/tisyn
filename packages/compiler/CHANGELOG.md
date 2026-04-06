@@ -1,6 +1,6 @@
 # @tisyn/compiler
 
-## 1.0.0
+## 0.9.0
 
 ### Minor Changes
 
@@ -8,8 +8,8 @@
 
 ### Patch Changes
 
-- @tisyn/ir@1.0.0
-- @tisyn/validate@1.0.0
+- @tisyn/ir@0.9.0
+- @tisyn/validate@0.9.0
 
 ## 0.9.0
 
