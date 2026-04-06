@@ -14,3 +14,5 @@ export type {
 } from "./transport.js";
 export { createProtocolServer } from "./protocol-server.js";
 export type { AgentServerTransport, ProtocolServer } from "./protocol-server.js";
+export { ProgressContext, CoroutineContext } from "./progress.js";
+export type { ProgressEvent, ProgressSink } from "./progress.js";

@@ -59,6 +59,10 @@
     "./browser-executor": {
       "types": "./src/transports/browser-executor.ts",
       "import": "./src/transports/browser-executor.ts"
+    },
+    "./test-helpers/mock-llm-adapter": {
+      "types": "./dist/test-helpers/mock-llm-adapter.d.ts",
+      "import": "./dist/test-helpers/mock-llm-adapter.js"
     }
   },
   "publishConfig": {
