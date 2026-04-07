@@ -159,7 +159,9 @@ function assertNotCapabilityInProhibitedPosition(
   ctx: EmitContext,
 ): void {
   const found = lookupBinding(name, ctx);
-  if (!found) return;
+  if (!found) {
+    return;
+  }
   const { info } = found;
 
   if (info.capturedInChildScope && info.capability?.captureRule === "prohibited") {
@@ -170,7 +172,9 @@ function assertNotCapabilityInProhibitedPosition(
       ctx,
     );
   }
-  if (!info.capability || !info.capability.authorVisible) return;
+  if (!info.capability || !info.capability.authorVisible) {
+    return;
+  }
   throw error(
     "CV-E1",
     `Capability value '${name}' (${info.capability.family}) cannot appear in ${position} position`,
@@ -182,7 +186,9 @@ function assertNotCapabilityInProhibitedPosition(
 /** Reject a capture-prohibited capability binding referenced from a child scope (CV-E1). */
 function assertCapabilityCaptureAllowed(name: string, node: ts.Node, ctx: EmitContext): void {
   const found = lookupBinding(name, ctx);
-  if (!found) return;
+  if (!found) {
+    return;
+  }
   if (found.info.capturedInChildScope && found.info.capability?.captureRule === "prohibited") {
     throw error(
       "CV-E1",
@@ -2192,12 +2198,18 @@ function joinCapabilityStates(
     const frame = ctx.scopeStack[i]!;
     const thenFrame = thenStack[i];
     const elseFrame = elseStack[i];
-    if (!thenFrame || !elseFrame) continue;
+    if (!thenFrame || !elseFrame) {
+      continue;
+    }
     for (const [name, info] of frame) {
-      if (!info.capability) continue;
+      if (!info.capability) {
+        continue;
+      }
       const thenCap = thenFrame.get(name)?.capability;
       const elseCap = elseFrame.get(name)?.capability;
-      if (!thenCap || !elseCap) continue;
+      if (!thenCap || !elseCap) {
+        continue;
+      }
       if (thenCap.state !== elseCap.state) {
         info.capability.state = "indeterminate";
       } else {
