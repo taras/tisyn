@@ -151,17 +151,17 @@ describe("spawn rejection", () => {
     ).toThrow("SP1");
   });
 
-  it("rejects let binding for spawn handle (SP2)", () => {
+  it("rejects let binding for spawn handle (CV-E5)", () => {
     expect(() =>
       compileOne(`
         function* f(): Workflow<void> {
           let task = yield* spawn(function* () { return 42; });
         }
       `),
-    ).toThrow("SP2");
+    ).toThrow("CV-E5");
   });
 
-  it("rejects spawn handle used as return value (SP4)", () => {
+  it("rejects spawn handle used as return value (CV-E1)", () => {
     expect(() =>
       compileOne(`
         function* f(): Workflow<any> {
@@ -169,10 +169,10 @@ describe("spawn rejection", () => {
           return task;
         }
       `),
-    ).toThrow("SP4");
+    ).toThrow("CV-E1");
   });
 
-  it("rejects spawn handle in object literal (SP4)", () => {
+  it("rejects spawn handle in object literal (CV-E1)", () => {
     expect(() =>
       compileOne(`
         function* f(): Workflow<any> {
@@ -180,10 +180,10 @@ describe("spawn rejection", () => {
           return { t: task };
         }
       `),
-    ).toThrow("SP4");
+    ).toThrow("CV-E1");
   });
 
-  it("rejects spawn handle in array literal (SP4)", () => {
+  it("rejects spawn handle in array literal (CV-E1)", () => {
     expect(() =>
       compileOne(`
         function* f(): Workflow<any> {
@@ -191,10 +191,10 @@ describe("spawn rejection", () => {
           return [task];
         }
       `),
-    ).toThrow("SP4");
+    ).toThrow("CV-E1");
   });
 
-  it("rejects parent spawn handle capture in nested spawn (SP11)", () => {
+  it("rejects parent spawn handle capture in nested spawn (CV-E1)", () => {
     expect(() =>
       compileOne(`
         function* f(): Workflow<void> {
@@ -204,10 +204,10 @@ describe("spawn rejection", () => {
           });
         }
       `),
-    ).toThrow("SP11");
+    ).toThrow("CV-E1");
   });
 
-  it("rejects parent spawn handle in expression position inside spawned body (SP11)", () => {
+  it("rejects parent spawn handle in expression position inside spawned body (CV-E1)", () => {
     expect(() =>
       compileOne(`
         function* f(): Workflow<any> {
@@ -217,7 +217,7 @@ describe("spawn rejection", () => {
           });
         }
       `),
-    ).toThrow("SP11");
+    ).toThrow("CV-E1");
   });
 });
 
