@@ -1,5 +1,24 @@
 # @tisyn/runtime
 
+## 0.10.0
+
+### Patch Changes
+
+- ae8d61c: Enforce curly braces on all control flow statements.
+- ae02508: Replace the separate enforcement path in `orchestrateScope()` with ordinary `Effects.around()` middleware. Cross-boundary middleware is now installed as the first max-priority `Effects.around()` before transport bindings so parent constraints remain outermost through normal scope inheritance. Runtime no longer mutates or depends on `BoundAgentsContext`.
+- Updated dependencies [d918311]
+- Updated dependencies [ae8d61c]
+- Updated dependencies [ae02508]
+- Updated dependencies [ae02508]
+- Updated dependencies [7004d09]
+  - @tisyn/transport@0.10.0
+  - @tisyn/agent@0.10.0
+  - @tisyn/config@0.10.1
+  - @tisyn/ir@0.10.0
+  - @tisyn/kernel@0.10.0
+  - @tisyn/validate@0.10.0
+  - @tisyn/durable-streams@0.10.0
+
 ## 0.9.0
 
 ### Minor Changes

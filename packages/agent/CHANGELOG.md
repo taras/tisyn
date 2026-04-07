@@ -1,5 +1,19 @@
 # @tisyn/agent
 
+## 0.10.0
+
+### Minor Changes
+
+- ae02508: Standardize agent middleware around a single `Effects.around()` mechanism. `useAgent()` now returns an `AgentFacade` backed by a per-agent Context API with direct operation methods and `.around()` for per-operation middleware. Local bindings now use `Agents.use(declaration, handlers)`, and binding checks are routing-owned through `resolve()` rather than a separate bound-agent registry. Remove `BoundAgentsContext`, `EnforcementContext`, `installEnforcement`, and `EnforcementFn` so cross-boundary constraints flow through ordinary `Effects.around()` middleware.
+
+### Patch Changes
+
+- ae8d61c: Enforce curly braces on all control flow statements.
+- Updated dependencies [ae8d61c]
+- Updated dependencies [7004d09]
+  - @tisyn/ir@0.10.0
+  - @tisyn/kernel@0.10.0
+
 ## 0.9.0
 
 ### Patch Changes
