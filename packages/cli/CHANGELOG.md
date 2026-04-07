@@ -10,12 +10,12 @@
 - Updated dependencies [ae02508]
 - Updated dependencies [ae02508]
 - Updated dependencies [7004d09]
-  - @tisyn/transport@1.0.0
-  - @tisyn/compiler@1.0.0
+  - @tisyn/transport@0.10.0
+  - @tisyn/compiler@0.10.0
   - @tisyn/config@0.10.1
-  - @tisyn/ir@1.0.0
-  - @tisyn/runtime@1.0.0
-  - @tisyn/durable-streams@1.0.0
+  - @tisyn/ir@0.10.0
+  - @tisyn/runtime@0.10.0
+  - @tisyn/durable-streams@0.10.0
 
 ## 0.3.0
 

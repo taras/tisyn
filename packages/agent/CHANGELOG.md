@@ -1,6 +1,6 @@
 # @tisyn/agent
 
-## 1.0.0
+## 0.10.0
 
 ### Minor Changes
 
@@ -11,8 +11,8 @@
 - ae8d61c: Enforce curly braces on all control flow statements.
 - Updated dependencies [ae8d61c]
 - Updated dependencies [7004d09]
-  - @tisyn/ir@1.0.0
-  - @tisyn/kernel@1.0.0
+  - @tisyn/ir@0.10.0
+  - @tisyn/kernel@0.10.0
 
 ## 0.9.0
 
