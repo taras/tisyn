@@ -12,18 +12,26 @@ import { compileOne } from "./index.js";
 
 // Helper: search IR tree for an Eval node with a given id
 function findEval(node: unknown, id: string): Record<string, any> | undefined {
-  if (typeof node !== "object" || node === null) return undefined;
+  if (typeof node !== "object" || node === null) {
+    return undefined;
+  }
   const obj = node as Record<string, unknown>;
-  if (obj["tisyn"] === "eval" && obj["id"] === id) return obj as Record<string, any>;
+  if (obj["tisyn"] === "eval" && obj["id"] === id) {
+    return obj as Record<string, any>;
+  }
   for (const value of Object.values(obj)) {
     if (Array.isArray(value)) {
       for (const item of value) {
         const found = findEval(item, id);
-        if (found) return found;
+        if (found) {
+          return found;
+        }
       }
     } else {
       const found = findEval(value, id);
-      if (found) return found;
+      if (found) {
+        return found;
+      }
     }
   }
   return undefined;
