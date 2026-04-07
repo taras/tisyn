@@ -1,5 +1,24 @@
 # @tisyn/transport
 
+## 1.0.0
+
+### Patch Changes
+
+- d918311: Persist the real-browser executor across full document navigations by registering it with Playwright init scripts and re-waiting for executor readiness after durable browser navigations.
+- ae8d61c: Enforce curly braces on all control flow statements.
+- ae02508: Replace the protocol-server enforcement path with ordinary `Effects.around()` middleware for cross-boundary constraints. Remote bindings installed through `useTransport()` / `installRemoteAgent()` now report availability through routing-owned `resolve` middleware instead of a separate bound-agent registry. Transport no longer uses `BoundAgentsContext`.
+- Updated dependencies [ae8d61c]
+- Updated dependencies [ae02508]
+- Updated dependencies [ae02508]
+- Updated dependencies [7004d09]
+  - @tisyn/agent@1.0.0
+  - @tisyn/ir@1.0.0
+  - @tisyn/kernel@1.0.0
+  - @tisyn/runtime@1.0.0
+  - @tisyn/validate@1.0.0
+  - @tisyn/protocol@1.0.0
+  - @tisyn/durable-streams@1.0.0
+
 ## 0.9.0
 
 ### Minor Changes

@@ -1,5 +1,14 @@
 # @tisyn/dsl
 
+## 0.4.2
+
+### Patch Changes
+
+- ae8d61c: Enforce curly braces on all control flow statements.
+- Updated dependencies [ae8d61c]
+- Updated dependencies [7004d09]
+  - @tisyn/ir@1.0.0
+
 ## 0.4.1
 
 ### Patch Changes

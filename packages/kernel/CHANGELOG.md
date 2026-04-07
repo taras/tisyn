@@ -1,5 +1,15 @@
 # @tisyn/kernel
 
+## 1.0.0
+
+### Patch Changes
+
+- ae8d61c: Enforce curly braces on all control flow statements.
+- Updated dependencies [ae8d61c]
+- Updated dependencies [7004d09]
+  - @tisyn/ir@1.0.0
+  - @tisyn/validate@1.0.0
+
 ## 0.9.0
 
 ### Patch Changes

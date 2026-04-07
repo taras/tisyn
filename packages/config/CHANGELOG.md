@@ -1,5 +1,11 @@
 # @tisyn/config
 
+## 0.10.1
+
+### Patch Changes
+
+- ae8d61c: Enforce curly braces on all control flow statements.
+
 ## 0.10.0
 
 ### Minor Changes

@@ -1,5 +1,22 @@
 # @tisyn/cli
 
+## 0.3.1
+
+### Patch Changes
+
+- ae8d61c: Enforce curly braces on all control flow statements.
+- Updated dependencies [d918311]
+- Updated dependencies [ae8d61c]
+- Updated dependencies [ae02508]
+- Updated dependencies [ae02508]
+- Updated dependencies [7004d09]
+  - @tisyn/transport@1.0.0
+  - @tisyn/compiler@1.0.0
+  - @tisyn/config@0.10.1
+  - @tisyn/ir@1.0.0
+  - @tisyn/runtime@1.0.0
+  - @tisyn/durable-streams@1.0.0
+
 ## 0.3.0
 
 ### Minor Changes

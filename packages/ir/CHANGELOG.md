@@ -1,5 +1,12 @@
 # @tisyn/ir
 
+## 1.0.0
+
+### Patch Changes
+
+- ae8d61c: Enforce curly braces on all control flow statements.
+- 7004d09: Add `Scope` constructor to IR constructors, matching the existing pattern for `All`, `Race`, `Spawn`, and other compound external nodes.
+
 ## 0.9.0
 
 ## 0.9.0
