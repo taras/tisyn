@@ -59,11 +59,19 @@ import type { DiscoveredContract } from "./discover.js";
 
 // ── Context ──
 
+interface CapabilityInfo {
+  family: "spawn-task" | "stream-subscription";
+  state: "active" | "completed" | "indeterminate";
+  captureRule: "prohibited" | "permitted";
+  authorVisible: boolean;
+}
+
 interface BindingInfo {
   kind: "let" | "const";
   version: number;
-  isSpawnHandle?: boolean;
-  isForbiddenCapture?: boolean;
+  capability?: CapabilityInfo;
+  /** Set in cloneScopeStackForSpawnBody for bindings whose captureRule is "prohibited". */
+  capturedInChildScope?: boolean;
 }
 
 type ScopeFrame = Map<string, BindingInfo>;
@@ -122,10 +130,10 @@ function declareBinding(
   name: string,
   kind: "let" | "const",
   ctx: EmitContext,
-  isSpawnHandle?: boolean,
+  capability?: CapabilityInfo,
 ): void {
   const frame = ctx.scopeStack[ctx.scopeStack.length - 1]!;
-  frame.set(name, { kind, version: 0, isSpawnHandle });
+  frame.set(name, { kind, version: 0, capability });
 }
 
 /** Get the versioned IR name for a binding (e.g. "x_0", "x_1"). */
@@ -143,15 +151,52 @@ function bumpVersion(name: string, ctx: EmitContext): string {
   return `${name}_${found.info.version}`;
 }
 
-/** Resolve a reference: return versioned name if it's a tracked let binding. */
-function isSpawnHandleBinding(name: string, ctx: EmitContext): boolean {
+/** Reject a capability binding in a prohibited expression/structural position (CV-E1). */
+function assertNotCapabilityInProhibitedPosition(
+  name: string,
+  position: string,
+  node: ts.Node,
+  ctx: EmitContext,
+): void {
   const found = lookupBinding(name, ctx);
-  return found?.info.isSpawnHandle === true;
+  if (!found) return;
+  const { info } = found;
+
+  if (info.capturedInChildScope && info.capability?.captureRule === "prohibited") {
+    throw error(
+      "CV-E1",
+      `Capability value '${name}' (${info.capability.family}) cannot be captured in child scope`,
+      node,
+      ctx,
+    );
+  }
+  if (!info.capability || !info.capability.authorVisible) return;
+  throw error(
+    "CV-E1",
+    `Capability value '${name}' (${info.capability.family}) cannot appear in ${position} position`,
+    node,
+    ctx,
+  );
 }
 
-function isForbiddenCaptureBinding(name: string, ctx: EmitContext): boolean {
+/** Reject a capture-prohibited capability binding referenced from a child scope (CV-E1). */
+function assertCapabilityCaptureAllowed(name: string, node: ts.Node, ctx: EmitContext): void {
   const found = lookupBinding(name, ctx);
-  return found?.info.isForbiddenCapture === true;
+  if (!found) return;
+  if (found.info.capturedInChildScope && found.info.capability?.captureRule === "prohibited") {
+    throw error(
+      "CV-E1",
+      `Capability value '${name}' (${found.info.capability.family}) cannot be captured in child scope`,
+      node,
+      ctx,
+    );
+  }
+}
+
+/** Check if a binding is a joinable spawn handle (not in a child scope). */
+function isJoinableSpawnHandle(name: string, ctx: EmitContext): boolean {
+  const found = lookupBinding(name, ctx);
+  return found?.info.capability?.family === "spawn-task" && !found?.info.capturedInChildScope;
 }
 
 function resolveRef(name: string, ctx: EmitContext): string {
@@ -167,21 +212,21 @@ function cloneScopeStack(stack: ScopeFrame[]): ScopeFrame[] {
   return stack.map((frame) => {
     const newFrame = new Map<string, BindingInfo>();
     for (const [k, v] of frame) {
-      newFrame.set(k, { ...v });
+      newFrame.set(k, { ...v, capability: v.capability ? { ...v.capability } : undefined });
     }
     return newFrame;
   });
 }
 
-/** Clone scope stack with spawn-handle bindings downgraded to forbidden captures (SP11). */
+/** Clone scope stack with capture-prohibited capability bindings marked as captured in child scope. */
 function cloneScopeStackForSpawnBody(stack: ScopeFrame[]): ScopeFrame[] {
   return stack.map((frame) => {
     const newFrame = new Map<string, BindingInfo>();
     for (const [k, v] of frame) {
-      if (v.isSpawnHandle) {
-        newFrame.set(k, { ...v, isSpawnHandle: undefined, isForbiddenCapture: true });
+      if (v.capability && v.capability.captureRule === "prohibited") {
+        newFrame.set(k, { ...v, capability: { ...v.capability }, capturedInChildScope: true });
       } else {
-        newFrame.set(k, { ...v });
+        newFrame.set(k, { ...v, capability: v.capability ? { ...v.capability } : undefined });
       }
     }
     return newFrame;
@@ -483,10 +528,15 @@ function emitVariableStatement(
       decl.initializer.expression.expression.text === "spawn"
     ) {
       if (!isConst) {
-        throw error("SP2", "Spawn handle must be declared with 'const', not 'let'", decl, ctx);
+        throw error("CV-E5", "Capability value must be declared with 'const', not 'let'", decl, ctx);
       }
       const spawnExpr = emitSpawn(decl.initializer.expression, ctx);
-      declareBinding(name, kind, ctx, true);
+      declareBinding(name, kind, ctx, {
+        family: "spawn-task",
+        state: "active",
+        captureRule: "prohibited",
+        authorVisible: true,
+      });
       return Let(name, spawnExpr, processDecl(i + 1));
     }
 
@@ -841,14 +891,21 @@ function emitIfStatementInList(
   });
 
   if (joinVars.length === 0) {
-    const thenBranch = emitStatementBodyWithCtx(stmt.thenStatement, ctx);
+    const preIfStack = cloneScopeStack(ctx.scopeStack);
+    const thenCapCtx: EmitContext = { ...ctx, scopeStack: cloneScopeStack(ctx.scopeStack) };
     if (stmt.elseStatement) {
-      const elseBranch = emitStatementBodyWithCtx(stmt.elseStatement, ctx);
+      const elseCapCtx: EmitContext = { ...ctx, scopeStack: cloneScopeStack(ctx.scopeStack) };
+      const thenBranch = emitStatementBodyWithCtx(stmt.thenStatement, thenCapCtx);
+      const elseBranch = emitStatementBodyWithCtx(stmt.elseStatement, elseCapCtx);
+      joinCapabilityStates(thenCapCtx.scopeStack, elseCapCtx.scopeStack, ctx);
       return Let(ctx.counter.next("discard"), If(condition, thenBranch, elseBranch), rest());
     }
+    const thenBranch = emitStatementBodyWithCtx(stmt.thenStatement, thenCapCtx);
+    joinCapabilityStates(thenCapCtx.scopeStack, preIfStack, ctx);
     return Let(ctx.counter.next("discard"), If(condition, thenBranch), rest());
   }
 
+  const preIfStack = cloneScopeStack(ctx.scopeStack);
   const thenCtx: EmitContext = { ...ctx, scopeStack: cloneScopeStack(ctx.scopeStack) };
   const elseCtx: EmitContext = { ...ctx, scopeStack: cloneScopeStack(ctx.scopeStack) };
   const thenJoinExpr = compileBranchToExpr(stmt.thenStatement, joinVars, thenCtx);
@@ -857,6 +914,11 @@ function emitIfStatementInList(
     : buildJoinExprFromSnapshot(joinVars, snapshot);
 
   applyJoinVersions(joinVars, ctx);
+  if (stmt.elseStatement) {
+    joinCapabilityStates(thenCtx.scopeStack, elseCtx.scopeStack, ctx);
+  } else {
+    joinCapabilityStates(thenCtx.scopeStack, preIfStack, ctx);
+  }
 
   if (joinVars.length === 1) {
     const v = joinVars[0]!;
@@ -960,17 +1022,22 @@ function emitIfStatement(
   });
 
   if (joinVars.length === 0) {
-    // No variables changed — simple if
+    // No SSA variables changed — compile in clones for capability state tracking
+    const preIfStack = cloneScopeStack(ctx.scopeStack);
+    const thenCapCtx: EmitContext = { ...ctx, scopeStack: cloneScopeStack(ctx.scopeStack) };
     if (stmt.elseStatement) {
-      const thenBranch = emitStatementBody(stmt.thenStatement, ctx);
-      const elseBranch = emitStatementBody(stmt.elseStatement, ctx);
+      const elseCapCtx: EmitContext = { ...ctx, scopeStack: cloneScopeStack(ctx.scopeStack) };
+      const thenBranch = emitStatementBody(stmt.thenStatement, thenCapCtx);
+      const elseBranch = emitStatementBody(stmt.elseStatement, elseCapCtx);
+      joinCapabilityStates(thenCapCtx.scopeStack, elseCapCtx.scopeStack, ctx);
       const ifExpr = If(condition, thenBranch, elseBranch);
       if (!hasMore) {
         return ifExpr;
       }
       return Let(ctx.counter.next("discard"), ifExpr, rest());
     }
-    const thenBranch = emitStatementBody(stmt.thenStatement, ctx);
+    const thenBranch = emitStatementBody(stmt.thenStatement, thenCapCtx);
+    joinCapabilityStates(thenCapCtx.scopeStack, preIfStack, ctx);
     const ifExpr = If(condition, thenBranch);
     if (!hasMore) {
       return ifExpr;
@@ -979,6 +1046,7 @@ function emitIfStatement(
   }
 
   // Phase 2: compile branches as join-producing expressions using fresh clones.
+  const preIfStack = cloneScopeStack(ctx.scopeStack);
   const thenCtx: EmitContext = { ...ctx, scopeStack: cloneScopeStack(ctx.scopeStack) };
   const elseCtx: EmitContext = { ...ctx, scopeStack: cloneScopeStack(ctx.scopeStack) };
   const thenJoinExpr = compileBranchToExpr(stmt.thenStatement, joinVars, thenCtx);
@@ -988,6 +1056,12 @@ function emitIfStatement(
 
   // Update main scope stack versions to post-join
   applyJoinVersions(joinVars, ctx);
+  // Join capability states from both branches
+  if (stmt.elseStatement) {
+    joinCapabilityStates(thenCtx.scopeStack, elseCtx.scopeStack, ctx);
+  } else {
+    joinCapabilityStates(thenCtx.scopeStack, preIfStack, ctx);
+  }
 
   if (joinVars.length === 1) {
     const v = joinVars[0]!;
@@ -1669,30 +1743,35 @@ function emitIfStatementInListPacked(
   });
 
   if (ifJoinVars.length === 0) {
-    // No if-level SSA joins — compile both branches in packed mode with rest as continuation
+    // No if-level SSA joins — compile both branches in clones for capability state tracking
+    const preIfStack = cloneScopeStack(ctx.scopeStack);
+    const thenCapCtx: EmitContext = { ...ctx, scopeStack: cloneScopeStack(ctx.scopeStack) };
     const thenBranch = emitStatementListWithTerminalPacked(
       getBodyStatements(stmt.thenStatement),
       0,
-      ctx,
+      thenCapCtx,
       joinVars,
       rest,
     );
     if (stmt.elseStatement) {
-      const elseCtx2: EmitContext = { ...ctx, scopeStack: cloneScopeStack(ctx.scopeStack) };
+      const elseCapCtx: EmitContext = { ...ctx, scopeStack: cloneScopeStack(ctx.scopeStack) };
       const elseBranch = emitStatementListWithTerminalPacked(
         getBodyStatements(stmt.elseStatement),
         0,
-        elseCtx2,
+        elseCapCtx,
         joinVars,
         rest,
       );
+      joinCapabilityStates(thenCapCtx.scopeStack, elseCapCtx.scopeStack, ctx);
       return If(condition, thenBranch, elseBranch);
     }
+    joinCapabilityStates(thenCapCtx.scopeStack, preIfStack, ctx);
     return If(condition, thenBranch, rest());
   }
 
   // If-level SSA joins: use standard compileBranchToExpr (fine since neither branch always terminates),
   // then continue with packed rest
+  const preIfStack = cloneScopeStack(ctx.scopeStack);
   const ifThenCtx: EmitContext = { ...ctx, scopeStack: cloneScopeStack(ctx.scopeStack) };
   const ifElseCtx: EmitContext = { ...ctx, scopeStack: cloneScopeStack(ctx.scopeStack) };
   const thenJoinExpr = compileBranchToExpr(stmt.thenStatement, ifJoinVars, ifThenCtx);
@@ -1701,6 +1780,11 @@ function emitIfStatementInListPacked(
     : buildJoinExprFromSnapshot(ifJoinVars, snapshot);
 
   applyJoinVersions(ifJoinVars, ctx);
+  if (stmt.elseStatement) {
+    joinCapabilityStates(ifThenCtx.scopeStack, ifElseCtx.scopeStack, ctx);
+  } else {
+    joinCapabilityStates(ifThenCtx.scopeStack, preIfStack, ctx);
+  }
 
   if (ifJoinVars.length === 1) {
     const v = ifJoinVars[0]!;
@@ -1733,9 +1817,12 @@ function emitWhileStatementInPackedBranch(
 
   if (!hasReturn && loopCarriedVars.length === 0) {
     // Case A: no return, no loop-carried state — While IR node, then packed continuation
+    const preLoopStack = cloneScopeStack(ctx.scopeStack);
     const condition = emitExpression(stmt.expression, ctx);
     const bodyStmts = getBodyStatements(stmt.statement);
-    const bodyExpr = emitStatementList(bodyStmts, 0, ctx);
+    const bodyCtx: EmitContext = { ...ctx, scopeStack: cloneScopeStack(ctx.scopeStack) };
+    const bodyExpr = emitStatementList(bodyStmts, 0, bodyCtx);
+    joinCapabilityStates(bodyCtx.scopeStack, preLoopStack, ctx);
     const whileExpr = While(condition, [bodyExpr]);
     const whileName = ctx.counter.next("while");
     return Let(whileName, whileExpr, isLast ? terminal() : rest());
@@ -2095,6 +2182,31 @@ function applyJoinVersions(joinVars: string[], ctx: EmitContext): void {
   }
 }
 
+/** Join capability states from two branches into ctx. If states differ, result is indeterminate. */
+function joinCapabilityStates(
+  thenStack: ScopeFrame[],
+  elseStack: ScopeFrame[],
+  ctx: EmitContext,
+): void {
+  for (let i = 0; i < ctx.scopeStack.length; i++) {
+    const frame = ctx.scopeStack[i]!;
+    const thenFrame = thenStack[i];
+    const elseFrame = elseStack[i];
+    if (!thenFrame || !elseFrame) continue;
+    for (const [name, info] of frame) {
+      if (!info.capability) continue;
+      const thenCap = thenFrame.get(name)?.capability;
+      const elseCap = elseFrame.get(name)?.capability;
+      if (!thenCap || !elseCap) continue;
+      if (thenCap.state !== elseCap.state) {
+        info.capability.state = "indeterminate";
+      } else {
+        info.capability.state = thenCap.state;
+      }
+    }
+  }
+}
+
 /** Emit a single statement or block as a body expression. */
 function emitStatementBody(stmt: ts.Statement, ctx: EmitContext): Expr {
   if (ts.isBlock(stmt)) {
@@ -2121,9 +2233,12 @@ function emitWhileStatement(
   }
 
   // Case A: no return, no loop-carried state → While IR node
+  const preLoopStack = cloneScopeStack(ctx.scopeStack);
   const condition = emitExpression(stmt.expression, ctx);
   const bodyStmts = getBodyStatements(stmt.statement);
-  const bodyExpr = emitStatementList(bodyStmts, 0, ctx);
+  const bodyCtx: EmitContext = { ...ctx, scopeStack: cloneScopeStack(ctx.scopeStack) };
+  const bodyExpr = emitStatementList(bodyStmts, 0, bodyCtx);
+  joinCapabilityStates(bodyCtx.scopeStack, preLoopStack, ctx);
   const whileExpr = While(condition, [bodyExpr]);
 
   if (isLast) {
@@ -2200,6 +2315,7 @@ function emitWhileCaseB(
 
   // Build the Fn body: body statements with fall-through = recursive Call
   const bodyStmts = getBodyStatements(stmt.statement);
+  const preLoopStack = cloneScopeStack(ctx.scopeStack);
   const fnCtx: EmitContext = { ...ctx, scopeStack: cloneScopeStack(ctx.scopeStack) };
 
   const transformedBody = emitLoopBody(
@@ -2212,6 +2328,7 @@ function emitWhileCaseB(
     lastParamName,
     needsPack,
   );
+  joinCapabilityStates(fnCtx.scopeStack, preLoopStack, ctx);
 
   const loopFn = Fn(loopCarriedParams, transformedBody);
 
@@ -2794,6 +2911,7 @@ function emitForOfEachCaseA(
 
   // Compile body with inStreamLoop flag set
   const bodyStmts = getBodyStatements(stmt.statement);
+  const preLoopStack = cloneScopeStack(ctx.scopeStack);
   const bodyCtx: EmitContext = {
     ...ctx,
     scopeStack: cloneScopeStack(ctx.scopeStack),
@@ -2803,6 +2921,7 @@ function emitForOfEachCaseA(
   declareBinding(bindingName, "const", bodyCtx);
   const compiledBody = emitStatementList(bodyStmts, 0, bodyCtx);
   popFrame(bodyCtx);
+  joinCapabilityStates(bodyCtx.scopeStack, preLoopStack, ctx);
 
   const discardName = ctx.counter.next("discard");
 
@@ -2872,6 +2991,7 @@ function emitForOfEachCaseB(
 
   // Build the Fn body
   const bodyStmts = getBodyStatements(stmt.statement);
+  const preLoopStack = cloneScopeStack(ctx.scopeStack);
   const fnCtx: EmitContext = {
     ...ctx,
     scopeStack: cloneScopeStack(ctx.scopeStack),
@@ -2891,6 +3011,7 @@ function emitForOfEachCaseB(
   }
 
   popFrame(fnCtx);
+  joinCapabilityStates(fnCtx.scopeStack, preLoopStack, ctx);
 
   // Done branch: return carried values (or null if no carried state)
   let doneBranch: Expr;
@@ -3125,15 +3246,17 @@ function emitThrowStatement(stmt: ts.ThrowStatement, ctx: EmitContext): Expr {
 function emitYieldStar(target: ts.Expression, ctx: EmitContext): Expr {
   // yield* <identifier> — check for spawn handle join
   if (ts.isIdentifier(target)) {
-    if (isForbiddenCaptureBinding(target.text, ctx)) {
-      throw error(
-        "SP11",
-        `Parent spawn handle '${target.text}' is not visible inside spawned body`,
-        target,
-        ctx,
-      );
-    }
-    if (isSpawnHandleBinding(target.text, ctx)) {
+    assertCapabilityCaptureAllowed(target.text, target, ctx);
+    if (isJoinableSpawnHandle(target.text, ctx)) {
+      const found = lookupBinding(target.text, ctx)!;
+      const cap = found.info.capability!;
+      if (cap.state === "completed") {
+        throw error("CV-E3", `Capability value '${target.text}' has already been completed`, target, ctx);
+      }
+      if (cap.state === "indeterminate") {
+        throw error("CV-E4", `Capability value '${target.text}' is in indeterminate state`, target, ctx);
+      }
+      cap.state = "completed";
       return JoinEval(Ref(resolveRef(target.text, ctx)));
     }
   }
@@ -4457,22 +4580,7 @@ export function emitExpression(node: ts.Expression, ctx: EmitContext): Expr {
 
   // ── Identifiers → Ref (versioned if SSA-tracked) ──
   if (ts.isIdentifier(node)) {
-    if (isForbiddenCaptureBinding(node.text, ctx)) {
-      throw error(
-        "SP11",
-        `Parent spawn handle '${node.text}' is not visible inside spawned body`,
-        node,
-        ctx,
-      );
-    }
-    if (isSpawnHandleBinding(node.text, ctx)) {
-      throw error(
-        "SP4",
-        `Spawn handle '${node.text}' can only be used as 'yield* ${node.text}'`,
-        node,
-        ctx,
-      );
-    }
+    assertNotCapabilityInProhibitedPosition(node.text, "expression", node, ctx);
     return Ref(resolveRef(node.text, ctx));
   }
 
@@ -4652,6 +4760,7 @@ function emitObjectLiteral(node: ts.ObjectLiteralExpression, ctx: EmitContext): 
       } else if (ts.isShorthandPropertyAssignment(prop)) {
         // { x } → { x: Ref("x") }
         const key = prop.name.text;
+        assertNotCapabilityInProhibitedPosition(key, "object-field", prop, ctx);
         fields[key] = Ref(resolveRef(key, ctx));
       } else {
         throw error(
@@ -4692,6 +4801,7 @@ function emitObjectLiteral(node: ts.ObjectLiteralExpression, ctx: EmitContext): 
       currentFields[key] = emitExpression(prop.initializer, ctx);
     } else if (ts.isShorthandPropertyAssignment(prop)) {
       const key = prop.name.text;
+      assertNotCapabilityInProhibitedPosition(key, "object-field", prop, ctx);
       currentFields[key] = Ref(resolveRef(key, ctx));
     } else {
       throw error("E999", "Only property assignments are supported in object literals", prop, ctx);

@@ -69,6 +69,12 @@ export const ErrorCodes = {
   "E-CONV-07": "converge() argument must be an object literal",
   "E-CONV-08": "converge() interval must not contain yield*",
   "E-CONV-09": "converge() timeout must not contain yield*",
+  // ── Capability Values ──
+  "CV-E1": "Capability value in prohibited position",
+  "CV-E2": "Operation on completed capability value",
+  "CV-E3": "Double-completion of capability value",
+  "CV-E4": "Operation on capability value in indeterminate state",
+  "CV-E5": "Capability value must be declared with 'const'",
   // ── useConfig ──
   UC1: "Config.useConfig() requires exactly one ConfigToken argument",
   UC2: "Config.useConfig() argument must be a ConfigToken identifier",
