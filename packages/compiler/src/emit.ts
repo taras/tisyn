@@ -534,7 +534,12 @@ function emitVariableStatement(
       decl.initializer.expression.expression.text === "spawn"
     ) {
       if (!isConst) {
-        throw error("CV-E5", "Capability value must be declared with 'const', not 'let'", decl, ctx);
+        throw error(
+          "CV-E5",
+          "Capability value must be declared with 'const', not 'let'",
+          decl,
+          ctx,
+        );
       }
       const spawnExpr = emitSpawn(decl.initializer.expression, ctx);
       declareBinding(name, kind, ctx, {
@@ -3263,10 +3268,20 @@ function emitYieldStar(target: ts.Expression, ctx: EmitContext): Expr {
       const found = lookupBinding(target.text, ctx)!;
       const cap = found.info.capability!;
       if (cap.state === "completed") {
-        throw error("CV-E3", `Capability value '${target.text}' has already been completed`, target, ctx);
+        throw error(
+          "CV-E3",
+          `Capability value '${target.text}' has already been completed`,
+          target,
+          ctx,
+        );
       }
       if (cap.state === "indeterminate") {
-        throw error("CV-E4", `Capability value '${target.text}' is in indeterminate state`, target, ctx);
+        throw error(
+          "CV-E4",
+          `Capability value '${target.text}' is in indeterminate state`,
+          target,
+          ctx,
+        );
       }
       cap.state = "completed";
       return JoinEval(Ref(resolveRef(target.text, ctx)));
