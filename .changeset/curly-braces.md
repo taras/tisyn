@@ -3,7 +3,6 @@
 "@tisyn/cli": patch
 "@tisyn/compiler": patch
 "@tisyn/config": patch
-"@tisyn/conformance": patch
 "@tisyn/dsl": patch
 "@tisyn/ir": patch
 "@tisyn/kernel": patch
