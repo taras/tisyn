@@ -4,7 +4,12 @@ import type { DeclaredAgent, OperationSpec } from "@tisyn/agent";
 import type { TisynFn } from "@tisyn/ir";
 import { Fn, Ref, Eval, Let, Call, Get, Construct, Arr, ConcatArrays } from "@tisyn/ir";
 
-export function App(): DeclaredAgent<{ elicit: OperationSpec<{ input: { message: string } }, { message: string }>; showAssistantMessage: OperationSpec<{ input: { message: string } }, void>; loadChat: OperationSpec<{ messages: Array<{ role: string; content: string }> }, void>; setReadOnly: OperationSpec<{ input: { reason: string } }, void> }> {
+export function App(): DeclaredAgent<{
+  elicit: OperationSpec<{ input: { message: string } }, { message: string }>;
+  showAssistantMessage: OperationSpec<{ input: { message: string } }, void>;
+  loadChat: OperationSpec<{ messages: Array<{ role: string; content: string }> }, void>;
+  setReadOnly: OperationSpec<{ input: { reason: string } }, void>;
+}> {
   const id = "app";
   return agent(id, {
     elicit: operation<{ input: { message: string } }, { message: string }>(),
@@ -14,162 +19,171 @@ export function App(): DeclaredAgent<{ elicit: OperationSpec<{ input: { message:
   });
 }
 
-export function DB(): DeclaredAgent<{ loadMessages: OperationSpec<{ input: Record<string, never> }, Array<{ role: string; content: string }>>; appendMessage: OperationSpec<{ input: { role: string; content: string } }, void> }> {
+export function DB(): DeclaredAgent<{
+  loadMessages: OperationSpec<
+    { input: Record<string, never> },
+    Array<{ role: string; content: string }>
+  >;
+  appendMessage: OperationSpec<{ input: { role: string; content: string } }, void>;
+}> {
   const id = "d-b";
   return agent(id, {
-    loadMessages: operation<{ input: Record<string, never> }, Array<{ role: string; content: string }>>(),
+    loadMessages: operation<
+      { input: Record<string, never> },
+      Array<{ role: string; content: string }>
+    >(),
     appendMessage: operation<{ input: { role: string; content: string } }, void>(),
   });
 }
 
-export function Llm(): DeclaredAgent<{ sample: OperationSpec<{ input: {
-    history: Array<{ role: string; content: string }>;
-    message: string;
-  } }, { message: string }> }> {
+export function Llm(): DeclaredAgent<{
+  sample: OperationSpec<
+    {
+      input: {
+        history: Array<{ role: string; content: string }>;
+        message: string;
+      };
+    },
+    { message: string }
+  >;
+}> {
   const id = "llm";
   return agent(id, {
-    sample: operation<{ input: {
-    history: Array<{ role: string; content: string }>;
-    message: string;
-  } }, { message: string }>(),
+    sample: operation<
+      {
+        input: {
+          history: Array<{ role: string; content: string }>;
+          message: string;
+        };
+      },
+      { message: string }
+    >(),
   });
 }
 
-export const chat: TisynFn<[], unknown> =
-  Fn([],
+export const chat: TisynFn<[], unknown> = Fn(
+  [],
+  Let(
+    "prior",
+    Eval(
+      "d-b.loadMessages",
+      Construct({
+        input: Construct({}),
+      }),
+    ),
     Let(
-      "prior",
-      Eval("d-b.loadMessages",
+      "__discard_0",
+      Eval(
+        "app.loadChat",
         Construct({
-          input: Construct({
-  
-            })
-        })),
+          messages: Ref<any>("prior"),
+        }),
+      ),
       Let(
-        "__discard_0",
-        Eval("app.loadChat",
-          Construct({
-            messages: Ref<any>("prior")
-          })),
+        "history_0",
+        Ref<any>("prior"),
         Let(
-          "history_0",
-          Ref<any>("prior"),
-          Let(
-            "__loop_0",
-            Fn(["history_0"],
+          "__loop_0",
+          Fn(
+            ["history_0"],
+            Let(
+              "user",
+              Eval(
+                "app.elicit",
+                Construct({
+                  input: Construct({
+                    message: "Say something",
+                  }),
+                }),
+              ),
               Let(
-                "user",
-                Eval("app.elicit",
+                "__discard_1",
+                Eval(
+                  "d-b.appendMessage",
                   Construct({
                     input: Construct({
-                        message: "Say something"
-                      })
-                  })),
+                      role: "user",
+                      content: Get(Ref<any>("user"), "message"),
+                    }),
+                  }),
+                ),
                 Let(
-                  "__discard_1",
-                  Eval("d-b.appendMessage",
-                    Construct({
-                      input: Construct({
-                          role: "user",
-                          content: Get(
-                              Ref<any>("user"),
-                              "message"
-                            )
-                        })
-                    })),
+                  "contextForSampling",
+                  ConcatArrays(
+                    Ref<any>("history_0"),
+                    Arr(
+                      Construct({
+                        role: "user",
+                        content: Get(Ref<any>("user"), "message"),
+                      }),
+                    ),
+                  ),
                   Let(
-                    "contextForSampling",
-                    ConcatArrays(
-                      Ref<any>("history_0"),
-                      Arr(
-                        Construct({
-                          role: "user",
-                          content: Get(
-                              Ref<any>("user"),
-                              "message"
-                            )
-                        })
-                      )
+                    "assistant",
+                    Eval(
+                      "llm.sample",
+                      Construct({
+                        input: Construct({
+                          history: Ref<any>("contextForSampling"),
+                          message: Get(Ref<any>("user"), "message"),
+                        }),
+                      }),
                     ),
                     Let(
-                      "assistant",
-                      Eval("llm.sample",
+                      "__discard_2",
+                      Eval(
+                        "d-b.appendMessage",
                         Construct({
                           input: Construct({
-                              history: Ref<any>("contextForSampling"),
-                              message: Get(
-                                  Ref<any>("user"),
-                                  "message"
-                                )
-                            })
-                        })),
+                            role: "assistant",
+                            content: Get(Ref<any>("assistant"), "message"),
+                          }),
+                        }),
+                      ),
                       Let(
-                        "__discard_2",
-                        Eval("d-b.appendMessage",
-                          Construct({
-                            input: Construct({
-                                role: "assistant",
-                                content: Get(
-                                    Ref<any>("assistant"),
-                                    "message"
-                                  )
-                              })
-                          })),
-                        Let(
-                          "history_1",
-                          ConcatArrays(
-                            Ref<any>("contextForSampling"),
-                            Arr(
-                              Construct({
-                                role: "assistant",
-                                content: Get(
-                                    Ref<any>("assistant"),
-                                    "message"
-                                  )
-                              })
-                            )
+                        "history_1",
+                        ConcatArrays(
+                          Ref<any>("contextForSampling"),
+                          Arr(
+                            Construct({
+                              role: "assistant",
+                              content: Get(Ref<any>("assistant"), "message"),
+                            }),
                           ),
-                          Let(
-                            "__discard_3",
-                            Eval("app.showAssistantMessage",
-                              Construct({
-                                input: Construct({
-                                    message: Get(
-                                        Ref<any>("assistant"),
-                                        "message"
-                                      )
-                                  })
-                              })),
-                            Call(
-                              Ref<any>("__loop_0"),
-                              Ref<any>("history_1")
-                            )
-                          )
-                        )
-                      )
-                    )
-                  )
-                )
-              )),
-            Let(
-              "__loop_result_0",
-              Call(
-                Ref<any>("__loop_0"),
-                Ref<any>("history_0")
+                        ),
+                        Let(
+                          "__discard_3",
+                          Eval(
+                            "app.showAssistantMessage",
+                            Construct({
+                              input: Construct({
+                                message: Get(Ref<any>("assistant"), "message"),
+                              }),
+                            }),
+                          ),
+                          Call(Ref<any>("__loop_0"), Ref<any>("history_1")),
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
               ),
-              Get(
-                Ref<any>("__loop_result_0"),
-                "__value"
-              )
-            )
-          )
-        )
-      )
-    ));
+            ),
+          ),
+          Let(
+            "__loop_result_0",
+            Call(Ref<any>("__loop_0"), Ref<any>("history_0")),
+            Get(Ref<any>("__loop_result_0"), "__value"),
+          ),
+        ),
+      ),
+    ),
+  ),
+);
 
 export const agents = { App, DB, Llm };
 export const workflows = { chat };
 
 export const inputSchemas = {
-  chat: {"type":"none"}
+  chat: { type: "none" },
 };
