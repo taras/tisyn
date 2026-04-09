@@ -1,5 +1,11 @@
 # @tisyn/ir
 
+## 1.0.0
+
+### Patch Changes
+
+- 37bbb63: Widen `print()` and `decompile()` to accept `IrInput` so phantom-typed IR nodes from constructors can be passed directly without `as TisynExpr` casts.
+
 ## 0.10.0
 
 ### Patch Changes

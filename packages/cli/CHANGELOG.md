@@ -1,5 +1,22 @@
 # @tisyn/cli
 
+## 0.4.0
+
+### Minor Changes
+
+- 12c9cfa: Rename EventResult status from `"err"` to `"error"` for clarity. Preserve error name through catch/rethrow by changing `errorToValue()` to return structured `{ message, name }` and making `Throw` recognize structured error values.
+
+### Patch Changes
+
+- Updated dependencies [46200b6]
+- Updated dependencies [12c9cfa]
+- Updated dependencies [37bbb63]
+  - @tisyn/compiler@1.0.0
+  - @tisyn/runtime@1.0.0
+  - @tisyn/transport@1.0.0
+  - @tisyn/ir@1.0.0
+  - @tisyn/durable-streams@1.0.0
+
 ## 0.3.1
 
 ### Patch Changes
