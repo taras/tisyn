@@ -26,6 +26,9 @@ importers:
 
   examples/claude-code-acp:
     dependencies:
+      '@tisyn/agent':
+        specifier: workspace:*
+        version: link:../../packages/agent
       '@tisyn/config':
         specifier: workspace:*
         version: link:../../packages/config

@@ -8,6 +8,7 @@
     "check": "tsc --noEmit"
   },
   "dependencies": {
+    "@tisyn/agent": "workspace:*",
     "@tisyn/config": "workspace:*",
     "@tisyn/transport": "workspace:*"
   },

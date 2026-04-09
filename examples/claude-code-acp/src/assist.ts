@@ -1,3 +1,5 @@
+import { type Workflow, resource, provide } from "@tisyn/agent";
+
 /**
  * Claude Code ACP integration — authored workflow example.
  *
