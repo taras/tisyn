@@ -5,7 +5,7 @@
 ### Patch Changes
 
 - Updated dependencies [37bbb63]
-  - @tisyn/ir@1.0.0
+  - @tisyn/ir@0.11.0
 
 ## 0.4.2
 

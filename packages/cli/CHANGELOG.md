@@ -11,11 +11,11 @@
 - Updated dependencies [46200b6]
 - Updated dependencies [12c9cfa]
 - Updated dependencies [37bbb63]
-  - @tisyn/compiler@1.0.0
-  - @tisyn/runtime@1.0.0
-  - @tisyn/transport@1.0.0
-  - @tisyn/ir@1.0.0
-  - @tisyn/durable-streams@1.0.0
+  - @tisyn/compiler@0.11.0
+  - @tisyn/runtime@0.11.0
+  - @tisyn/transport@0.11.0
+  - @tisyn/ir@0.11.0
+  - @tisyn/durable-streams@0.11.0
 
 ## 0.3.1
 

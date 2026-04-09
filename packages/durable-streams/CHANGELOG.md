@@ -1,11 +1,11 @@
 # @tisyn/durable-streams
 
-## 1.0.0
+## 0.11.0
 
 ### Patch Changes
 
 - Updated dependencies [12c9cfa]
-  - @tisyn/kernel@1.0.0
+  - @tisyn/kernel@0.11.0
 
 ## 0.10.0
 
