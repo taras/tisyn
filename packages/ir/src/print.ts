@@ -1,4 +1,5 @@
 import type { TisynExpr } from "./types.js";
+import type { IrInput } from "./expr.js";
 import { isEvalNode, isQuoteNode, isRefNode, isFnNode } from "./guards.js";
 import { classify, isCompoundExternal } from "./classify.js";
 
@@ -13,7 +14,7 @@ export interface PrintOptions {
 /**
  * Print an expression as a constructor-call representation.
  */
-export function print(expr: TisynExpr, options?: PrintOptions): string {
+export function print(expr: IrInput, options?: PrintOptions): string {
   const opts = {
     indent: options?.indent ?? 2,
     maxWidth: options?.maxWidth ?? 80,
@@ -24,7 +25,7 @@ export function print(expr: TisynExpr, options?: PrintOptions): string {
 }
 
 function printNode(
-  expr: TisynExpr,
+  expr: IrInput,
   depth: number,
   opts: PrintOptions & { indent: number; maxWidth: number; compact: boolean },
 ): string {
