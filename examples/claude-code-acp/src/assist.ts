@@ -1,4 +1,5 @@
 import { type Workflow, resource, provide } from "@tisyn/agent";
+import { workflow, agent, transport, journal } from "@tisyn/config";
 import type { SessionHandle, PlanResult, ForkData } from "./types.ts";
 
 /**
@@ -49,3 +50,12 @@ export function* assist(input: { task: string }) {
 
   yield* Output().log({ label: "Implementation", text: implementation.response });
 }
+
+export default workflow({
+  run: { export: "assist", module: "./assist.ts" },
+  agents: [
+    agent("claude-code", transport.local("../claude-code-binding.ts")),
+    agent("output", transport.inprocess("./output-agent.ts")),
+  ],
+  journal: journal.memory(),
+});
