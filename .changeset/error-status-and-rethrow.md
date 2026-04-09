@@ -3,7 +3,6 @@
 "@tisyn/runtime": minor
 "@tisyn/transport": minor
 "@tisyn/cli": minor
-"@tisyn/conformance": minor
 "@tisyn/agent": minor
 "@tisyn/compiler": minor
 ---
