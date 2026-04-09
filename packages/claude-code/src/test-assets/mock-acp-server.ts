@@ -62,7 +62,5 @@ rl.on("line", (line: string) => {
       return;
   }
 
-  process.stdout.write(
-    JSON.stringify({ jsonrpc: "2.0", id: msg.id, result }) + "\n",
-  );
+  process.stdout.write(JSON.stringify({ jsonrpc: "2.0", id: msg.id, result }) + "\n");
 });

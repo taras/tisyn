@@ -7,9 +7,9 @@ import type { Workflow } from "./types.js";
  * with IR. Throws if called at runtime without compilation.
  */
 export function resource<T>(_body: () => Generator<unknown, void, unknown>): Workflow<T> {
-	throw new Error(
-		"resource() is a compiler-recognized form and cannot be called at runtime. Run `tsn generate` to compile your workflow.",
-	);
+  throw new Error(
+    "resource() is a compiler-recognized form and cannot be called at runtime. Run `tsn generate` to compile your workflow.",
+  );
 }
 
 /**
@@ -19,7 +19,7 @@ export function resource<T>(_body: () => Generator<unknown, void, unknown>): Wor
  * with IR. Throws if called at runtime without compilation.
  */
 export function provide<T>(_value: T): Workflow<void> {
-	throw new Error(
-		"provide() is a compiler-recognized form and cannot be called at runtime. Run `tsn generate` to compile your workflow.",
-	);
+  throw new Error(
+    "provide() is a compiler-recognized form and cannot be called at runtime. Run `tsn generate` to compile your workflow.",
+  );
 }

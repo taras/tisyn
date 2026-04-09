@@ -5,7 +5,13 @@ import type { TisynFn } from "@tisyn/ir";
 import { Fn, Ref, Eval, Let, Call, Get, Construct, Concat } from "@tisyn/ir";
 import type { SessionHandle, PlanResult, ForkData } from "./types.ts";
 
-export function ClaudeCode(): DeclaredAgent<{ openSession: OperationSpec<{ config: { model: string } }, SessionHandle>; closeSession: OperationSpec<{ handle: SessionHandle }, void>; plan: OperationSpec<{ args: { session: SessionHandle; prompt: string } }, PlanResult>; fork: OperationSpec<{ session: SessionHandle }, ForkData>; openFork: OperationSpec<{ data: ForkData }, SessionHandle> }> {
+export function ClaudeCode(): DeclaredAgent<{
+  openSession: OperationSpec<{ config: { model: string } }, SessionHandle>;
+  closeSession: OperationSpec<{ handle: SessionHandle }, void>;
+  plan: OperationSpec<{ args: { session: SessionHandle; prompt: string } }, PlanResult>;
+  fork: OperationSpec<{ session: SessionHandle }, ForkData>;
+  openFork: OperationSpec<{ data: ForkData }, SessionHandle>;
+}> {
   const id = "claude-code";
   return agent(id, {
     openSession: operation<{ config: { model: string } }, SessionHandle>(),
@@ -16,77 +22,76 @@ export function ClaudeCode(): DeclaredAgent<{ openSession: OperationSpec<{ confi
   });
 }
 
-export function Output(): DeclaredAgent<{ log: OperationSpec<{ input: { label: string; text: string } }, void> }> {
+export function Output(): DeclaredAgent<{
+  log: OperationSpec<{ input: { label: string; text: string } }, void>;
+}> {
   const id = "output";
   return agent(id, {
     log: operation<{ input: { label: string; text: string } }, void>(),
   });
 }
 
-export const assist: TisynFn<[{ task: string }], unknown> =
-  Fn(["input"],
+export const assist: TisynFn<[{ task: string }], unknown> = Fn(
+  ["input"],
+  Let(
+    "session",
+    Call(
+      Ref<any>("useClaudeCodeSession"),
+      Construct({
+        model: "opus-4",
+      }),
+    ),
     Let(
-      "session",
-      Call(
-        Ref<any>("useClaudeCodeSession"),
+      "analysis",
+      Eval(
+        "claude-code.plan",
         Construct({
-          model: "opus-4"
-        })
+          args: Construct({
+            session: Ref<any>("session"),
+            prompt: Concat("Analyze: ", Get(Ref<any>("input"), "task")),
+          }),
+        }),
       ),
       Let(
-        "analysis",
-        Eval("claude-code.plan",
+        "__discard_0",
+        Eval(
+          "output.log",
           Construct({
-            args: Construct({
-                session: Ref<any>("session"),
-                prompt: Concat(
-                    "Analyze: ",
-                    Get(
-                      Ref<any>("input"),
-                      "task"
-                    )
-                  )
-              })
-          })),
+            input: Construct({
+              label: "Analysis",
+              text: Get(Ref<any>("analysis"), "response"),
+            }),
+          }),
+        ),
         Let(
-          "__discard_0",
-          Eval("output.log",
+          "implementation",
+          Eval(
+            "claude-code.plan",
+            Construct({
+              args: Construct({
+                session: Ref<any>("session"),
+                prompt: "Now implement the changes you described.",
+              }),
+            }),
+          ),
+          Eval(
+            "output.log",
             Construct({
               input: Construct({
-                  label: "Analysis",
-                  text: Get(
-                      Ref<any>("analysis"),
-                      "response"
-                    )
-                })
-            })),
-          Let(
-            "implementation",
-            Eval("claude-code.plan",
-              Construct({
-                args: Construct({
-                    session: Ref<any>("session"),
-                    prompt: "Now implement the changes you described."
-                  })
-              })),
-            Eval("output.log",
-              Construct({
-                input: Construct({
-                    label: "Implementation",
-                    text: Get(
-                        Ref<any>("implementation"),
-                        "response"
-                      )
-                  })
-              }))
-          )
-        )
-      )
-    ));
+                label: "Implementation",
+                text: Get(Ref<any>("implementation"), "response"),
+              }),
+            }),
+          ),
+        ),
+      ),
+    ),
+  ),
+);
 
 export const agents = { ClaudeCode, Output };
 export const workflows = { assist };
 
 export const inputSchemas = {
-  assist: {"type":"object","fields":[{"name":"task","fieldType":"string","optional":false}]}
+  assist: { type: "object", fields: [{ name: "task", fieldType: "string", optional: false }] },
 };

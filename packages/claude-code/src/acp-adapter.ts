@@ -15,11 +15,7 @@ import { exec } from "@effectionx/process";
 import { lines, filter, map } from "@effectionx/stream-helpers";
 import { pipe } from "remeda";
 import type { HostMessage, AgentMessage } from "@tisyn/transport";
-import {
-  executeSuccess,
-  executeApplicationError,
-  progressNotification,
-} from "@tisyn/protocol";
+import { executeSuccess, executeApplicationError, progressNotification } from "@tisyn/protocol";
 import type {
   AcpRequest,
   AcpMessage,
@@ -57,11 +53,7 @@ export interface AcpAdapter {
  * Translate a Tisyn ExecuteRequest into an ACP request.
  * Maps the Tisyn operation name and args to ACP method calls.
  */
-export function tisynExecuteToAcp(
-  id: string,
-  operation: string,
-  args: unknown,
-): AcpRequest {
+export function tisynExecuteToAcp(id: string, operation: string, args: unknown): AcpRequest {
   return {
     jsonrpc: "2.0",
     id,
@@ -149,9 +141,7 @@ export function parseAcpMessage(json: unknown): AcpMessage {
       return parsed;
     }
 
-    throw new Error(
-      "Invalid ACP response: must have either 'result' or 'error' field",
-    );
+    throw new Error("Invalid ACP response: must have either 'result' or 'error' field");
   }
 
   // Notification: has "method" field but no "id"
@@ -181,9 +171,7 @@ export function parseAcpMessage(json: unknown): AcpMessage {
  * The adapter translates Tisyn protocol messages to/from ACP format
  * and exposes them as `sendTisynMessage` / `tisynMessages`.
  */
-export function createAcpAdapter(
-  config?: AcpAdapterConfig,
-): Operation<AcpAdapter> {
+export function createAcpAdapter(config?: AcpAdapterConfig): Operation<AcpAdapter> {
   return resource(function* (provide) {
     const command = config?.command ?? "claude";
     const args = config?.arguments ?? ["--acp"];
@@ -229,10 +217,7 @@ export function createAcpAdapter(
         if ("method" in msg) {
           // Map ACP notifications to progress using the most recent pending token
           // ACP progress notifications include a request_id or we use the notification params
-          const token =
-            (msg.params?.request_id as string) ??
-            (msg.params?.token as string) ??
-            "";
+          const token = (msg.params?.request_id as string) ?? (msg.params?.token as string) ?? "";
           const progressToken = pendingTokens.get(token) ?? token;
           return acpNotificationToTisyn(progressToken, msg.params);
         }
@@ -255,11 +240,7 @@ export function createAcpAdapter(
           const token = params.progressToken ?? requestId;
           pendingTokens.set(requestId, String(token));
 
-          const acpRequest = tisynExecuteToAcp(
-            requestId,
-            params.operation,
-            params.args[0],
-          );
+          const acpRequest = tisynExecuteToAcp(requestId, params.operation, params.args[0]);
           proc.stdin.send(JSON.stringify(acpRequest) + "\n");
           return;
         }

@@ -46,7 +46,9 @@ export function createBinding(config?: AcpAdapterConfig): LocalAgentBinding {
           try {
             for (;;) {
               const { value, done } = yield* sub.next();
-              if (done) { break; }
+              if (done) {
+                break;
+              }
               yield* agentToHost.send(value);
             }
           } finally {

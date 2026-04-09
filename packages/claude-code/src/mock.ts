@@ -13,11 +13,7 @@
 import type { Task } from "effection";
 import { createChannel, resource, spawn, sleep, suspend } from "effection";
 import type { Val } from "@tisyn/ir";
-import type {
-  AgentTransportFactory,
-  HostMessage,
-  AgentMessage,
-} from "@tisyn/transport";
+import type { AgentTransportFactory, HostMessage, AgentMessage } from "@tisyn/transport";
 import {
   initializeResponse,
   executeSuccess,
@@ -72,7 +68,9 @@ export function createMockClaudeCodeTransport(config: MockClaudeCodeConfig): {
 
         for (;;) {
           const { value: msg, done } = yield* hostSub.next();
-          if (done) { break; }
+          if (done) {
+            break;
+          }
 
           if (msg.method === "initialize") {
             yield* agentToHost.send(
@@ -90,7 +88,8 @@ export function createMockClaudeCodeTransport(config: MockClaudeCodeConfig): {
 
             calls.push({ operation: opName, args: params.args[0] as Val });
 
-            const opConfig = (config as Record<string, MockOperationConfig | undefined>)[opName] ?? {};
+            const opConfig =
+              (config as Record<string, MockOperationConfig | undefined>)[opName] ?? {};
 
             const task = yield* spawn(function* () {
               for (const p of opConfig.progress ?? []) {
@@ -108,9 +107,7 @@ export function createMockClaudeCodeTransport(config: MockClaudeCodeConfig): {
               if (opConfig.error) {
                 yield* agentToHost.send(executeApplicationError(String(id), opConfig.error));
               } else {
-                yield* agentToHost.send(
-                  executeSuccess(String(id), opConfig.result ?? null),
-                );
+                yield* agentToHost.send(executeSuccess(String(id), opConfig.result ?? null));
               }
 
               inflight.delete(String(id));
