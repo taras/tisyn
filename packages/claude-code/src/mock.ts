@@ -10,11 +10,10 @@
  * Each operation can be configured independently with result, error, progress, delay.
  */
 
-import type { Operation, Task } from "effection";
+import type { Task } from "effection";
 import { createChannel, resource, spawn, sleep, suspend } from "effection";
 import type { Val } from "@tisyn/ir";
 import type {
-  AgentTransport,
   AgentTransportFactory,
   HostMessage,
   AgentMessage,
@@ -73,7 +72,7 @@ export function createMockClaudeCodeTransport(config: MockClaudeCodeConfig): {
 
         for (;;) {
           const { value: msg, done } = yield* hostSub.next();
-          if (done) break;
+          if (done) { break; }
 
           if (msg.method === "initialize") {
             yield* agentToHost.send(
