@@ -104,9 +104,9 @@ interface SpawnRuntimeFixture {
   args: Record<string, Val>;   // workflow arguments
   env: Record<string, Val>;    // execution environment
   expected: {
-    status: "ok" | "err" | "cancelled";
+    status: "ok" | "error" | "cancelled";
     value?: Val;               // for status "ok"
-    error?: string;            // error category for "err"
+    error?: string;            // error category for "error"
     journal: {
       // per-coroutineId expected events
       [coroutineId: string]: Array<YieldEntry | CloseEntry>;

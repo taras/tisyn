@@ -545,7 +545,7 @@ R13. If the child kernel throws before reaching the provide
      `yield* resource(...)` catches the error.
 
 R14. The runtime MUST write a `CloseEvent` for the child's
-     coroutineId with `status: "err"` before propagating the
+     coroutineId with `status: "error"` before propagating the
      error to the parent.
 
 **Background failure (after provide).**
@@ -568,7 +568,7 @@ R16. The parent does NOT catch this error via a `try/catch`
 
 R17. If the child's cleanup code (in a `finally` block) throws
      during teardown, the error MUST be recorded in the
-     child's `CloseEvent` with `status: "err"`. The error
+     child's `CloseEvent` with `status: "error"`. The error
      propagates upward through the scope tree per existing
      structured concurrency rules.
 

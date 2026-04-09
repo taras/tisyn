@@ -347,6 +347,15 @@ function* evalStructural(id: string, data: Expr, env: Env): Generator<EffectDesc
     // §5.15 throw
     case "throw": {
       const message = yield* evaluate(fields["message"] as Expr, env);
+      if (
+        typeof message === "object" &&
+        message !== null &&
+        "message" in message &&
+        "name" in message
+      ) {
+        const err = message as { message: string; name: string };
+        throw new ExplicitThrow(String(err.message), err.name);
+      }
       throw new ExplicitThrow(String(message));
     }
 

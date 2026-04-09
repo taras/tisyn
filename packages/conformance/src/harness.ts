@@ -110,7 +110,7 @@ function resultMatches(actual: EventResult, expected: EventResult): boolean {
     return canonicalEqual(actual.value, expected.value);
   }
 
-  if (actual.status === "err" && expected.status === "err") {
+  if (actual.status === "error" && expected.status === "error") {
     // Check name match if expected has one
     if (expected.error.name && actual.error.name !== expected.error.name) {
       return false;
@@ -136,9 +136,9 @@ function resultMatches(actual: EventResult, expected: EventResult): boolean {
  */
 function applySentinel(actual: DurableEvent, expected: DurableEvent): DurableEvent {
   if (
-    expected.result.status === "err" &&
+    expected.result.status === "error" &&
     expected.result.error.message === "<any>" &&
-    actual.result.status === "err" &&
+    actual.result.status === "error" &&
     actual.result.error.message.length > 0
   ) {
     return {
@@ -212,7 +212,7 @@ function* installMockDispatch(
       if (effect.result.status === "ok") {
         return effect.result.value;
       }
-      if (effect.result.status === "err") {
+      if (effect.result.status === "error") {
         const err = new Error(effect.result.error.message);
         if (effect.result.error.name) {
           err.name = effect.result.error.name;
@@ -353,7 +353,7 @@ async function runNegativeValidationFixture(
   });
 
   // Should be an error result with the expected error type
-  if (result.result.status !== "err") {
+  if (result.result.status !== "error") {
     return {
       id: fixture.id,
       pass: false,
@@ -390,7 +390,7 @@ async function runNegativeRuntimeFixture(fixture: NegativeRuntimeFixture): Promi
     });
   });
 
-  if (result.result.status !== "err") {
+  if (result.result.status !== "error") {
     return {
       id: fixture.id,
       pass: false,

@@ -1145,7 +1145,7 @@ Two event types:
 ```
 EventResult =
   | { status: "ok", value?: Val }
-  | { status: "err", error: { message: string, name?: string } }
+  | { status: "error", error: { message: string, name?: string } }
   | { status: "cancelled" }
 ```
 
@@ -1772,7 +1772,7 @@ interface CloseEvent {
 
 type EventResult =
   | { status: "ok"; value?: Json }
-  | { status: "err"; error: { message: string; name?: string } }
+  | { status: "error"; error: { message: string; name?: string } }
   | { status: "cancelled" };
 ```
 

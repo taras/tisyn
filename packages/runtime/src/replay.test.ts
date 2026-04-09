@@ -113,8 +113,8 @@ describe("Replay", () => {
       stream,
     });
 
-    expect(result.status).toBe("err");
-    if (result.status === "err") {
+    expect(result.status).toBe("error");
+    if (result.status === "error") {
       expect(result.error.name).toBe("DivergenceError");
       expect(result.error.message).toContain("expected a.op");
       expect(result.error.message).toContain("got b.op");
@@ -131,8 +131,8 @@ describe("Replay", () => {
       stream,
     });
 
-    expect(result.status).toBe("err");
-    if (result.status === "err") {
+    expect(result.status).toBe("error");
+    if (result.status === "error") {
       expect(result.error.name).toBe("DivergenceError");
       expect(result.error.message).toContain("expected a.foo");
       expect(result.error.message).toContain("got a.bar");
@@ -149,8 +149,8 @@ describe("Replay", () => {
       stream,
     });
 
-    expect(result.status).toBe("err");
-    if (result.status === "err") {
+    expect(result.status).toBe("error");
+    if (result.status === "error") {
       expect(result.error.name).toBe("DivergenceError");
       expect(result.error.message).toContain("closed");
     }

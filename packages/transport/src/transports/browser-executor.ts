@@ -51,7 +51,7 @@ export function createInProcessRunner(): InProcessRunner {
       ir: Call(workflow as any) as IrInput,
       stream,
     });
-    if (result.status === "err") {
+    if (result.status === "error") {
       throw new Error((result as any).error?.message ?? "Browser execute failed");
     }
     return (result as any).value as Json;

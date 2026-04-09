@@ -162,7 +162,7 @@ export function* runRun(
     if (options.verbose && result.value !== null && result.value !== undefined) {
       console.log(JSON.stringify(result.value, null, 2));
     }
-  } else if (result.status === "err") {
+  } else if (result.status === "error") {
     console.error(`Workflow execution failed: ${result.error.message}`);
     yield* exit(6);
   } else {

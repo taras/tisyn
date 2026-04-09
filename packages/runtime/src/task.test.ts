@@ -81,8 +81,8 @@ describe("all", () => {
 
     const { result } = yield* execute({ ir: ir as never });
 
-    expect(result.status).toBe("err");
-    if (result.status === "err") {
+    expect(result.status).toBe("error");
+    if (result.status === "error") {
       expect(result.error.message).toBe("child failed");
     }
   });
@@ -105,8 +105,8 @@ describe("all", () => {
 
     const { result } = yield* execute({ ir: ir as never });
 
-    expect(result.status).toBe("err");
-    if (result.status === "err") {
+    expect(result.status).toBe("error");
+    if (result.status === "error") {
       expect(result.error.message).toBe("error from child 0");
     }
   });
@@ -126,7 +126,7 @@ describe("all", () => {
 
     const { result, journal } = yield* execute({ ir: ir as never });
 
-    expect(result.status).toBe("err");
+    expect(result.status).toBe("error");
 
     // All children should have close events (ok or err)
     const childCloses = journal.filter(
@@ -218,8 +218,8 @@ describe("race", () => {
 
     const { result } = yield* execute({ ir: ir as never });
 
-    expect(result.status).toBe("err");
-    if (result.status === "err") {
+    expect(result.status).toBe("error");
+    if (result.status === "error") {
       expect(result.error.message).toBe("error 0");
     }
   });
@@ -229,8 +229,8 @@ describe("race", () => {
 
     const { result } = yield* execute({ ir: ir as never });
 
-    expect(result.status).toBe("err");
-    if (result.status === "err") {
+    expect(result.status).toBe("error");
+    if (result.status === "error") {
       expect(result.error.name).toBe("RuntimeBugError");
       expect(result.error.message).toContain("empty");
     }

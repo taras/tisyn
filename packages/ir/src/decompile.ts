@@ -1,4 +1,5 @@
 import type { TisynExpr } from "./types.js";
+import type { IrInput } from "./expr.js";
 import { isEvalNode, isQuoteNode, isRefNode, isFnNode } from "./guards.js";
 import { classify, isCompoundExternal } from "./classify.js";
 
@@ -8,7 +9,7 @@ export interface DecompileOptions {
   namedExport?: string;
 }
 
-export function decompile(expr: TisynExpr, options?: DecompileOptions): string {
+export function decompile(expr: IrInput, options?: DecompileOptions): string {
   const opts = {
     indent: options?.indent ?? 2,
     typeAnnotations: options?.typeAnnotations ?? false,
@@ -26,7 +27,7 @@ export function decompile(expr: TisynExpr, options?: DecompileOptions): string {
 }
 
 function decompileBody(
-  expr: TisynExpr,
+  expr: IrInput,
   depth: number,
   opts: { indent: number; typeAnnotations: boolean },
 ): string {
@@ -69,7 +70,7 @@ function decompileStatement(
 }
 
 function decompileExpr(
-  expr: TisynExpr,
+  expr: IrInput,
   depth: number,
   opts: { indent: number; typeAnnotations: boolean },
 ): string {

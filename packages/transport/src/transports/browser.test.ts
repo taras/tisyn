@@ -227,7 +227,7 @@ describe("browser transport", () => {
 
     it("executor error propagates as thrown Error", function* () {
       mockPage.evaluate.mockResolvedValue({
-        status: "err",
+        status: "error",
         error: { message: "capability not found: dom.click" },
       });
 

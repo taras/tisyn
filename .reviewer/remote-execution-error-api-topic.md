@@ -10,7 +10,7 @@ Possible follow-up APIs:
 1. Structured result-returning variant
 
 - `executeRemoteResult(options): Operation<RemoteExecutionResult>`
-- returns `{ status: "ok" | "err" | "cancelled", ... }`
+- returns `{ status: "ok" | "error" | "cancelled", ... }`
 
 2. Rich thrown error type
 

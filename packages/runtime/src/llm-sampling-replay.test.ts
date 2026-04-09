@@ -45,7 +45,7 @@ function yieldErrorEvent(
     type: "yield",
     coroutineId,
     description: { type, name },
-    result: { status: "err", error } as never,
+    result: { status: "error", error } as never,
   };
 }
 
@@ -152,8 +152,8 @@ describe("LLM Sampling — Replay", () => {
       stream,
     });
 
-    expect(result.status).toBe("err");
-    if (result.status === "err") {
+    expect(result.status).toBe("error");
+    if (result.status === "error") {
       expect(result.error.name).toBe("DivergenceError");
       expect(result.error.message).toContain("expected foo.bar");
       expect(result.error.message).toContain("got llm.sample");
@@ -203,8 +203,8 @@ describe("LLM Sampling — Replay", () => {
     });
 
     expect(agentCalled).toBe(false);
-    expect(result.status).toBe("err");
-    if (result.status === "err") {
+    expect(result.status).toBe("error");
+    if (result.status === "error") {
       expect(result.error.message).toBe("model overloaded");
       expect(result.error.name).toBe("BackendError");
     }

@@ -630,7 +630,7 @@ no Effection `subscription.next()` call is made.
 
 **Error handling:** If the Effection subscription produces an
 error, the runtime MUST journal a `YieldEvent` with
-`status: "err"` and resume the kernel with an error. The error
+`status: "error"` and resume the kernel with an error. The error
 propagates through normal error handling.
 
 ### 8.3 Classification

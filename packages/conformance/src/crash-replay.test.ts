@@ -93,7 +93,7 @@ describe("End-to-end crash/replay", () => {
     });
 
     // First run should have error result (crashed on step3)
-    expect(firstResult.result.status).toBe("err");
+    expect(firstResult.result.status).toBe("error");
 
     // Journal: 2 yield(ok) + 1 yield(err) for step3 + 1 close(err)
     const firstSnapshot = firstRunStream.snapshot();

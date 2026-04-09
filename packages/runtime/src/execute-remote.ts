@@ -20,7 +20,7 @@ export function* executeRemote(options: ExecuteRemoteOptions): Operation<Json> {
   if (result.status === "ok") {
     return result.value;
   }
-  if (result.status === "err") {
+  if (result.status === "error") {
     throw new Error(result.error.message, { cause: result });
   }
   throw new Error("Execution was cancelled", { cause: result });

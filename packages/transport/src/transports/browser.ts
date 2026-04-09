@@ -191,7 +191,7 @@ export function browserTransport(config?: BrowserTransportConfig): AgentTranspor
         const result: any = yield* call(() =>
           page.evaluate((ir) => (window as any).__tisyn_execute(ir), params.workflow as unknown),
         );
-        if (result.status === "err") {
+        if (result.status === "error") {
           throw new Error(result.error?.message ?? "Browser workflow failed");
         }
         return result.value as Json;
