@@ -59,8 +59,8 @@ describe("Built-in sleep effect", () => {
   it("unknown effect still fails with 'No agent registered'", function* () {
     const ir = { tisyn: "eval", id: "unknown.effect", data: null };
     const { result } = yield* execute({ ir: ir as never });
-    expect(result.status).toBe("err");
-    if (result.status === "err") {
+    expect(result.status).toBe("error");
+    if (result.status === "error") {
       expect(result.error.message).toContain("No agent registered for effect");
     }
   });

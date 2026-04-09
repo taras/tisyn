@@ -144,7 +144,7 @@ describe("resource orchestration", () => {
     const body = Seq(Throw("init failed"), provideIR(42));
     const ir = resourceIR(body);
     const { result } = yield* execute({ ir });
-    expect(result.status).toBe("err");
+    expect(result.status).toBe("error");
     expect((result as any).error.message).toContain("init failed");
   });
 
@@ -154,7 +154,7 @@ describe("resource orchestration", () => {
     const ir = Try(resourceIR(body), "e", Ref("e"));
     const { result } = yield* execute({ ir });
     expect(result.status).toBe("ok");
-    expect(String((result as any).value)).toContain("init boom");
+    expect((result as any).value.message).toContain("init boom");
   });
 
   // Init failure writes child Close(err) before parent error
@@ -166,7 +166,7 @@ describe("resource orchestration", () => {
       (e) => e.type === "close" && (e as any).coroutineId === "root.0",
     );
     expect(childClose).toBeDefined();
-    expect((childClose as any).result.status).toBe("err");
+    expect((childClose as any).result.status).toBe("error");
   });
 
   // Multiple resources tear down in reverse creation order
@@ -193,7 +193,7 @@ describe("resource orchestration", () => {
   it("provide outside resource context fails", function* () {
     const ir = provideIR(42);
     const { result } = yield* execute({ ir });
-    expect(result.status).toBe("err");
+    expect(result.status).toBe("error");
     expect((result as any).error.message).toContain("provide outside resource context");
   });
 

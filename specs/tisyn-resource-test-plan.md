@@ -129,9 +129,9 @@ interface ResourceRuntimeFixture {
   ir: Expr;                    // root IR expression
   env: Record<string, Val>;    // execution environment
   expected: {
-    status: "ok" | "err" | "cancelled";
+    status: "ok" | "error" | "cancelled";
     value?: Val;               // for status "ok"
-    error?: string;            // error category for "err"
+    error?: string;            // error category for "error"
     journal: {
       [coroutineId: string]: Array<YieldEntry | CloseEntry>;
     };

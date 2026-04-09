@@ -7,7 +7,7 @@ export interface EffectDescription {
 
 export type EventResult =
   | { status: "ok"; value: Json }
-  | { status: "err"; error: { message: string; name?: string } }
+  | { status: "error"; error: { message: string; name?: string } }
   | { status: "cancelled" };
 
 export interface YieldEvent {

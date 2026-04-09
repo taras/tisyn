@@ -34,9 +34,12 @@ export class DivisionByZero extends Error {
 }
 
 export class ExplicitThrow extends Error {
-  override name = "ExplicitThrow" as const;
-  constructor(message: string) {
+  override name: string = "ExplicitThrow";
+  constructor(message: string, originalName?: string) {
     super(message);
+    if (originalName) {
+      this.name = originalName;
+    }
   }
 }
 
@@ -62,8 +65,11 @@ export function isCatchable(e: unknown): boolean {
   );
 }
 
-export function errorToValue(e: unknown): string {
-  return e instanceof Error ? e.message : String(e);
+export function errorToValue(e: unknown): { message: string; name: string } {
+  if (e instanceof Error) {
+    return { message: e.message, name: e.name };
+  }
+  return { message: String(e), name: "Error" };
 }
 
 export class ProhibitedEffectError extends Error {

@@ -102,7 +102,7 @@ describe("Over the wire", () => {
         expect(err.message).toBeTruthy();
         // cause preserves the full EventResult
         expect(err.cause).toBeDefined();
-        expect((err.cause as { status: string }).status).toBe("err");
+        expect((err.cause as { status: string }).status).toBe("error");
       }
     });
 

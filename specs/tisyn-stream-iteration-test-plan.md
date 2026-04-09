@@ -165,7 +165,7 @@ interface StreamRuntimeFixture {
     error?: string;            // optional error after items
   };
   expected: {
-    status: "ok" | "err" | "cancelled";
+    status: "ok" | "error" | "cancelled";
     value?: Val;
     error?: { message?: string; name?: string };
     journal: Array<YieldEntry | CloseEntry>;
@@ -197,7 +197,7 @@ interface StreamReplayFixture {
     | "duplicate-prone"
     | "lossy-but-allowed";
   expected: {
-    status: "ok" | "err";
+    status: "ok" | "error";
     value?: Val;
     journal: Array<YieldEntry | CloseEntry>;
     live_effects_count: number; // number of effects dispatched live
@@ -332,7 +332,7 @@ status, and journal.
 | SI-R-002 | Core | R1 | Handle token is deterministic | Same IR executed twice with same coroutineId | Same handle token in both executions |
 | SI-R-003 | Core | R3, §8.2 | `stream.next` returns item | IR: subscribe then `Eval("stream.next", [handle])` with mock source producing `[10, 20]` | First next → `{done:false, value:10}`, second → `{done:false, value:20}` |
 | SI-R-004 | Core | R3 | Stream exhaustion returns done | Mock source produces `[10]` then closes | Third next (after two items) → `{done:true}` |
-| SI-R-005 | Core | §8.2 | Stream error produces err YieldEvent | Mock source errors after first item | YieldEvent for next with `status:"err"` |
+| SI-R-005 | Core | §8.2 | Stream error produces err YieldEvent | Mock source errors after first item | YieldEvent for next with `status:"error"` |
 
 ### 6.2 Full Iteration
 

@@ -894,7 +894,7 @@ Two event types. Nothing else.
 ```
 EventResult =
   | { status: "ok",   value?: Val }
-  | { status: "err",  error: { message: string, name?: string } }
+  | { status: "error",  error: { message: string, name?: string } }
   | { status: "cancelled" }
 ```
 
