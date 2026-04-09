@@ -1,1 +1,1 @@
-export { createBinding } from "@tisyn/transport/claude-code";
+export { createBinding } from "@tisyn/claude-code";

@@ -1,0 +1,15 @@
+{
+  "extends": "../../tsconfig.json",
+  "compilerOptions": {
+    "outDir": "./dist",
+    "rootDir": "./src"
+  },
+  "include": ["src"],
+  "exclude": ["src/**/*.test.ts", "src/**/test-assets/**"],
+  "references": [
+    { "path": "../agent" },
+    { "path": "../ir" },
+    { "path": "../protocol" },
+    { "path": "../transport" }
+  ]
+}

@@ -8,19 +8,10 @@
  * The binding handles the Tisyn initialize handshake internally — ACP
  * processes don't speak Tisyn protocol, so the binding synthesizes the
  * InitializeResponse that `createSession()` expects.
- *
- * Usage in config descriptor:
- * ```typescript
- * // claude-code-binding.ts (project-local wrapper)
- * export { createBinding } from "@tisyn/transport/claude-code";
- *
- * // tisyn.config.ts
- * agent("claude-code", transport.local("./claude-code-binding.ts"))
- * ```
  */
 
 import { resource, createChannel, spawn } from "effection";
-import type { AgentMessage, LocalAgentBinding, HostMessage } from "../../transport.js";
+import type { AgentMessage, LocalAgentBinding, HostMessage } from "@tisyn/transport";
 import { initializeResponse } from "@tisyn/protocol";
 import { createAcpAdapter } from "./acp-adapter.js";
 import type { AcpAdapterConfig } from "./acp-adapter.js";

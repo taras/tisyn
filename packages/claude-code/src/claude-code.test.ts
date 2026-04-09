@@ -4,12 +4,11 @@ import { scoped, sleep, spawn } from "effection";
 import { resolve } from "node:path";
 import type { Val } from "@tisyn/ir";
 import { agent, operation, dispatch } from "@tisyn/agent";
-import { installRemoteAgent } from "./install-remote.js";
-import { ProgressContext, CoroutineContext } from "./progress.js";
-import type { ProgressEvent } from "./progress.js";
-import { createMockClaudeCodeTransport } from "./test-helpers/mock-claude-code.js";
-import { createBinding } from "./transports/claude-code/index.js";
-import type { AgentTransportFactory, HostMessage } from "./transport.js";
+import { installRemoteAgent } from "@tisyn/transport";
+import { ProgressContext, CoroutineContext } from "@tisyn/transport";
+import type { ProgressEvent, AgentTransportFactory, HostMessage } from "@tisyn/transport";
+import { createMockClaudeCodeTransport } from "./mock.js";
+import { createBinding } from "./index.js";
 
 const claudeCodeDeclaration = agent("claude-code", {
   openSession: operation<Val, Val>(),
@@ -83,7 +82,6 @@ describe("Claude Code ACP Integration", () => {
 
   // 3. Sequential plan calls
   it("two sequential plan calls on same session both return results", function* () {
-    let planCallCount = 0;
     const { factory } = createMockClaudeCodeTransport({
       openSession: { result: { sessionId: "s-123" } },
       plan: {
@@ -290,17 +288,16 @@ describe("Claude Code ACP Integration", () => {
 
 // ── Binding-path tests (real adapter + mock ACP subprocess) ──
 
-const testTsconfig = resolve(import.meta.dirname, "../tsconfig.test.json");
 const mockAcpServer = resolve(
   import.meta.dirname,
-  "transports/test-assets/mock-acp-server.ts",
+  "test-assets/mock-acp-server.ts",
 );
 
 describe("Claude Code ACP Binding Path", () => {
   it("createBinding completes initialize handshake and dispatches openSession", function* () {
     const binding = createBinding({
       command: "npx",
-      arguments: ["tsx", "--tsconfig", testTsconfig, mockAcpServer],
+      arguments: ["tsx", mockAcpServer],
     });
 
     yield* scoped(function* () {
@@ -317,7 +314,7 @@ describe("Claude Code ACP Binding Path", () => {
   it("createBinding routes plan calls through ACP subprocess", function* () {
     const binding = createBinding({
       command: "npx",
-      arguments: ["tsx", "--tsconfig", testTsconfig, mockAcpServer],
+      arguments: ["tsx", mockAcpServer],
     });
 
     yield* scoped(function* () {
@@ -342,7 +339,7 @@ describe("Claude Code ACP Binding Path", () => {
   it("createBinding supports sequential operations through same subprocess", function* () {
     const binding = createBinding({
       command: "npx",
-      arguments: ["tsx", "--tsconfig", testTsconfig, mockAcpServer],
+      arguments: ["tsx", mockAcpServer],
     });
 
     yield* scoped(function* () {

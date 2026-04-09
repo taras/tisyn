@@ -14,7 +14,7 @@ import { resource } from "effection";
 import { exec } from "@effectionx/process";
 import { lines, filter, map } from "@effectionx/stream-helpers";
 import { pipe } from "remeda";
-import type { HostMessage, AgentMessage } from "../../transport.js";
+import type { HostMessage, AgentMessage } from "@tisyn/transport";
 import {
   executeSuccess,
   executeApplicationError,
@@ -237,7 +237,7 @@ export function createAcpAdapter(
           return acpNotificationToTisyn(progressToken, msg.params);
         }
 
-        throw new Error(`Unrecognized ACP message: ${line}`);
+        throw new Error(`Unrecognized ACP message: ${JSON.stringify(json)}`);
       }),
     ) as Stream<AgentMessage, void>;
 

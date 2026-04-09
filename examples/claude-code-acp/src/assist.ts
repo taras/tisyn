@@ -1,4 +1,5 @@
 import { type Workflow, resource, provide } from "@tisyn/agent";
+import type { SessionHandle, PlanResult, ForkData } from "./types.ts";
 
 /**
  * Claude Code ACP integration — authored workflow example.
@@ -10,26 +11,16 @@ import { type Workflow, resource, provide } from "@tisyn/agent";
  * Build: tsn generate src/assist.ts -o src/assist.generated.ts
  */
 
-interface SessionHandle {
-  sessionId: string;
-}
-
-interface PlanResult {
-  response: string;
-  toolResults?: Array<{ tool: string; output: unknown }>;
-}
-
-interface ForkData {
-  parentSessionId: string;
-  forkId: string;
-}
-
 declare function ClaudeCode(): {
   openSession(config: { model: string }): Workflow<SessionHandle>;
   closeSession(handle: SessionHandle): Workflow<void>;
   plan(args: { session: SessionHandle; prompt: string }): Workflow<PlanResult>;
   fork(session: SessionHandle): Workflow<ForkData>;
   openFork(data: ForkData): Workflow<SessionHandle>;
+};
+
+declare function Output(): {
+  log(input: { label: string; text: string }): Workflow<void>;
 };
 
 export function* assist(input: { task: string }) {
@@ -49,13 +40,12 @@ export function* assist(input: { task: string }) {
     prompt: `Analyze: ${input.task}`,
   });
 
+  yield* Output().log({ label: "Analysis", text: analysis.response });
+
   const implementation = yield* ClaudeCode().plan({
     session,
     prompt: "Now implement the changes you described.",
   });
 
-  return {
-    analysis: analysis.response,
-    implementation: implementation.response,
-  };
+  yield* Output().log({ label: "Implementation", text: implementation.response });
 }

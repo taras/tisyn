@@ -60,10 +60,6 @@
       "types": "./src/transports/browser-executor.ts",
       "import": "./src/transports/browser-executor.ts"
     },
-    "./claude-code": {
-      "types": "./dist/transports/claude-code/index.d.ts",
-      "import": "./dist/transports/claude-code/index.js"
-    },
     "./test-helpers/mock-llm-adapter": {
       "types": "./dist/test-helpers/mock-llm-adapter.d.ts",
       "import": "./dist/test-helpers/mock-llm-adapter.js"
