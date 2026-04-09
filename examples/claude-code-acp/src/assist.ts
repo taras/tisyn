@@ -24,16 +24,19 @@ declare function Output(): {
   log(input: { label: string; text: string }): Workflow<void>;
 };
 
-export function* assist(input: { task: string }) {
-  // Session as resource — init opens, finally closes
-  const session = yield* resource<SessionHandle>(function* () {
-    const handle = yield* ClaudeCode().openSession({ model: "opus-4" });
+function* useClaudeCodeSession(config: { model: string }) {
+  return yield* resource<SessionHandle>(function* () {
+    const handle = yield* ClaudeCode().openSession(config);
     try {
       yield* provide(handle);
     } finally {
       yield* ClaudeCode().closeSession(handle);
     }
   });
+}
+
+export function* assist(input: { task: string }) {
+  const session = yield* useClaudeCodeSession({ model: "opus-4" });
 
   // Sequential plan calls — each is a durable YieldEvent
   const analysis = yield* ClaudeCode().plan({

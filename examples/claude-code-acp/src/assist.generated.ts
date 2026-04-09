@@ -2,7 +2,7 @@
 import { agent, operation } from "@tisyn/agent";
 import type { DeclaredAgent, OperationSpec } from "@tisyn/agent";
 import type { TisynFn } from "@tisyn/ir";
-import { Fn, Ref, Eval, Let, Get, Construct, Concat, Resource, Provide, Try } from "@tisyn/ir";
+import { Fn, Ref, Eval, Let, Call, Get, Construct, Concat } from "@tisyn/ir";
 import type { SessionHandle, PlanResult, ForkData } from "./types.ts";
 
 export function ClaudeCode(): DeclaredAgent<{ openSession: OperationSpec<{ config: { model: string } }, SessionHandle>; closeSession: OperationSpec<{ handle: SessionHandle }, void>; plan: OperationSpec<{ args: { session: SessionHandle; prompt: string } }, PlanResult>; fork: OperationSpec<{ session: SessionHandle }, ForkData>; openFork: OperationSpec<{ data: ForkData }, SessionHandle> }> {
@@ -27,27 +27,11 @@ export const assist: TisynFn<[{ task: string }], unknown> =
   Fn(["input"],
     Let(
       "session",
-      Resource(
-        Let(
-          "handle",
-          Eval("claude-code.openSession",
-            Construct({
-              config: Construct({
-                  model: "opus-4"
-                })
-            })),
-          Try(
-            Provide(
-              Ref<any>("handle")
-            ),
-            undefined,
-            undefined,
-            Eval("claude-code.closeSession",
-              Construct({
-                handle: Ref<any>("handle")
-              }))
-          )
-        )
+      Call(
+        Ref<any>("useClaudeCodeSession"),
+        Construct({
+          model: "opus-4"
+        })
       ),
       Let(
         "analysis",
