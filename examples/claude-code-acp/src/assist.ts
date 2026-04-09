@@ -24,8 +24,8 @@ declare function Output(): {
   log(input: { label: string; text: string }): Workflow<void>;
 };
 
-function* useClaudeCodeSession(config: { model: string }) {
-  return yield* resource<SessionHandle>(function* () {
+function useClaudeCodeSession(config: { model: string }) {
+  return resource<SessionHandle>(function* () {
     const handle = yield* ClaudeCode().openSession(config);
     try {
       yield* provide(handle);
