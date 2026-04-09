@@ -1,0 +1,18 @@
+{
+  "name": "@tisyn/example-claude-code-acp",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build:workflow": "tsn generate src/assist.ts -o src/assist.generated.ts",
+    "check": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@tisyn/config": "workspace:*",
+    "@tisyn/transport": "workspace:*"
+  },
+  "devDependencies": {
+    "@tisyn/cli": "workspace:*",
+    "typescript": "~5.8.0"
+  }
+}

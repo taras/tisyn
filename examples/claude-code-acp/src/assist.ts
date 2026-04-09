@@ -4,7 +4,8 @@
  * Demonstrates:
  * - Session lifecycle as resource (open/provide/close in finally)
  * - Sequential plan calls on the same session
- * - Fork with child session
+ *
+ * Build: tsn generate src/assist.ts -o src/assist.generated.ts
  */
 
 interface SessionHandle {
@@ -31,7 +32,7 @@ declare function ClaudeCode(): {
 
 export function* assist(input: { task: string }) {
   // Session as resource — init opens, finally closes
-  const session = yield* resource(function* () {
+  const session = yield* resource<SessionHandle>(function* () {
     const handle = yield* ClaudeCode().openSession({ model: "opus-4" });
     try {
       yield* provide(handle);

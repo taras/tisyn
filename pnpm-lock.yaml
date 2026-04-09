@@ -24,6 +24,22 @@ importers:
         specifier: ~5.8.0
         version: 5.8.3
 
+  examples/claude-code-acp:
+    dependencies:
+      '@tisyn/config':
+        specifier: workspace:*
+        version: link:../../packages/config
+      '@tisyn/transport':
+        specifier: workspace:*
+        version: link:../../packages/transport
+    devDependencies:
+      '@tisyn/cli':
+        specifier: workspace:*
+        version: link:../../packages/cli
+      typescript:
+        specifier: ~5.8.0
+        version: 5.8.3
+
   examples/multi-agent-chat:
     dependencies:
       '@effectionx/node':

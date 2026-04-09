@@ -1,12 +1,14 @@
 import { describe, it } from "@effectionx/vitest";
 import { expect } from "vitest";
 import { scoped, sleep, spawn } from "effection";
+import { resolve } from "node:path";
 import type { Val } from "@tisyn/ir";
 import { agent, operation, dispatch } from "@tisyn/agent";
 import { installRemoteAgent } from "./install-remote.js";
 import { ProgressContext, CoroutineContext } from "./progress.js";
 import type { ProgressEvent } from "./progress.js";
 import { createMockClaudeCodeTransport } from "./test-helpers/mock-claude-code.js";
+import { createBinding } from "./transports/claude-code/index.js";
 import type { AgentTransportFactory, HostMessage } from "./transport.js";
 
 const claudeCodeDeclaration = agent("claude-code", {
@@ -283,5 +285,90 @@ describe("Claude Code ACP Integration", () => {
     const closeCalls = calls.filter((c) => c.operation === "closeSession");
     expect(openCalls).toHaveLength(2);
     expect(closeCalls).toHaveLength(1);
+  });
+});
+
+// ── Binding-path tests (real adapter + mock ACP subprocess) ──
+
+const testTsconfig = resolve(import.meta.dirname, "../tsconfig.test.json");
+const mockAcpServer = resolve(
+  import.meta.dirname,
+  "transports/test-assets/mock-acp-server.ts",
+);
+
+describe("Claude Code ACP Binding Path", () => {
+  it("createBinding completes initialize handshake and dispatches openSession", function* () {
+    const binding = createBinding({
+      command: "npx",
+      arguments: ["tsx", "--tsconfig", testTsconfig, mockAcpServer],
+    });
+
+    yield* scoped(function* () {
+      yield* installRemoteAgent(claudeCodeDeclaration, binding.transport);
+
+      const handle = yield* dispatch(
+        "claude-code.openSession",
+        { model: "opus-4" } as unknown as Val,
+      );
+      expect(handle).toEqual({ sessionId: "test-session-1" });
+    });
+  });
+
+  it("createBinding routes plan calls through ACP subprocess", function* () {
+    const binding = createBinding({
+      command: "npx",
+      arguments: ["tsx", "--tsconfig", testTsconfig, mockAcpServer],
+    });
+
+    yield* scoped(function* () {
+      yield* installRemoteAgent(claudeCodeDeclaration, binding.transport);
+
+      yield* dispatch(
+        "claude-code.openSession",
+        { model: "opus-4" } as unknown as Val,
+      );
+
+      const result = yield* dispatch("claude-code.plan", {
+        session: { sessionId: "test-session-1" },
+        prompt: "Implement auth",
+      } as unknown as Val);
+
+      expect(result).toEqual({
+        response: "mock plan result for: Implement auth",
+      });
+    });
+  });
+
+  it("createBinding supports sequential operations through same subprocess", function* () {
+    const binding = createBinding({
+      command: "npx",
+      arguments: ["tsx", "--tsconfig", testTsconfig, mockAcpServer],
+    });
+
+    yield* scoped(function* () {
+      yield* installRemoteAgent(claudeCodeDeclaration, binding.transport);
+
+      yield* dispatch(
+        "claude-code.openSession",
+        { model: "opus-4" } as unknown as Val,
+      );
+
+      const r1 = yield* dispatch("claude-code.plan", {
+        session: { sessionId: "test-session-1" },
+        prompt: "Task 1",
+      } as unknown as Val);
+      expect(r1).toEqual({ response: "mock plan result for: Task 1" });
+
+      const r2 = yield* dispatch("claude-code.plan", {
+        session: { sessionId: "test-session-1" },
+        prompt: "Task 2",
+      } as unknown as Val);
+      expect(r2).toEqual({ response: "mock plan result for: Task 2" });
+
+      yield* dispatch(
+        "claude-code.closeSession",
+        { sessionId: "test-session-1" } as unknown as Val,
+      );
+    });
   });
 });

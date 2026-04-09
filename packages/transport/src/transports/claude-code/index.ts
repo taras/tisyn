@@ -5,6 +5,10 @@
  * to a Claude Code ACP stdio process and translates between Tisyn protocol
  * and ACP protocol messages.
  *
+ * The binding handles the Tisyn initialize handshake internally — ACP
+ * processes don't speak Tisyn protocol, so the binding synthesizes the
+ * InitializeResponse that `createSession()` expects.
+ *
  * Usage in config descriptor:
  * ```typescript
  * // claude-code-binding.ts (project-local wrapper)
@@ -15,8 +19,9 @@
  * ```
  */
 
-import { resource } from "effection";
-import type { LocalAgentBinding, HostMessage } from "../../transport.js";
+import { resource, createChannel, spawn } from "effection";
+import type { AgentMessage, LocalAgentBinding, HostMessage } from "../../transport.js";
+import { initializeResponse } from "@tisyn/protocol";
 import { createAcpAdapter } from "./acp-adapter.js";
 import type { AcpAdapterConfig } from "./acp-adapter.js";
 
@@ -38,11 +43,42 @@ export function createBinding(config?: AcpAdapterConfig): LocalAgentBinding {
       resource(function* (provide) {
         const adapter = yield* createAcpAdapter(config);
 
+        // Channel merges ACP process messages with synthetic protocol
+        // responses (e.g. InitializeResponse). createSession() subscribes
+        // to transport.receive and expects the first message to be an
+        // InitializeResponse — we inject it here.
+        const agentToHost = createChannel<AgentMessage, void>();
+
+        // Forward ACP process messages into the channel
+        yield* spawn(function* () {
+          const sub = yield* adapter.tisynMessages;
+          try {
+            for (;;) {
+              const { value, done } = yield* sub.next();
+              if (done) break;
+              yield* agentToHost.send(value);
+            }
+          } finally {
+            yield* agentToHost.close();
+          }
+        });
+
         yield* provide({
           *send(message: HostMessage) {
+            if (message.method === "initialize") {
+              // Synthesize InitializeResponse — ACP processes don't speak
+              // Tisyn protocol, so the binding handles the handshake.
+              yield* agentToHost.send(
+                initializeResponse(message.id, {
+                  protocolVersion: "1.0",
+                  sessionId: `acp-${Date.now()}`,
+                }),
+              );
+              return;
+            }
             yield* adapter.sendTisynMessage(message);
           },
-          receive: adapter.tisynMessages,
+          receive: agentToHost,
         });
       }),
   };

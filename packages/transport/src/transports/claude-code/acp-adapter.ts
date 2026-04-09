@@ -243,12 +243,9 @@ export function createAcpAdapter(
 
     const adapter: AcpAdapter = {
       *sendTisynMessage(message: HostMessage) {
-        if (message.method === "initialize") {
-          // Handle initialize by sending back a synthetic response
-          // The ACP process doesn't use Tisyn's initialize handshake
-          // We handle it adapter-side
-          // Nothing to send to ACP — respond directly will be handled
-          // by the binding layer
+        // Initialize and shutdown are handled by the binding layer
+        // (index.ts), not forwarded to the ACP process.
+        if (message.method === "initialize" || message.method === "shutdown") {
           return;
         }
 
@@ -268,7 +265,6 @@ export function createAcpAdapter(
         }
 
         if (message.method === "cancel") {
-          // Send abort signal to ACP process
           const abortMsg: AcpRequest = {
             jsonrpc: "2.0",
             id: `cancel-${message.params.id}`,
@@ -276,12 +272,6 @@ export function createAcpAdapter(
             params: { id: message.params.id, reason: message.params.reason },
           };
           proc.stdin.send(JSON.stringify(abortMsg) + "\n");
-          return;
-        }
-
-        if (message.method === "shutdown") {
-          // Close logical connection — don't kill the process
-          // The process is transport-external
           return;
         }
       },
