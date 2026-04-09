@@ -134,8 +134,8 @@ describe("timebox — error propagation", () => {
   it("TRT-10: body throws before deadline → error propagates", function* () {
     const ir = timeboxIR(5000, throwIR("body error"));
     const { result } = yield* execute({ ir });
-    expect(result.status).toBe("err");
-    if (result.status === "err") {
+    expect(result.status).toBe("error");
+    if (result.status === "error") {
       expect(result.error.message).toContain("body error");
     }
   });

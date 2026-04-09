@@ -48,7 +48,7 @@ describe("scope orchestration", () => {
     });
     // The Try catches the scope failure; the caught error value contains the message
     expect(result.status).toBe("ok");
-    expect(String((result as any).value)).toContain("noSuchVar");
+    expect((result as any).value.message).toContain("noSuchVar");
   });
 
   // SC-B-002: effectful binding expression fails with ScopeBindingEffectError
@@ -62,8 +62,8 @@ describe("scope orchestration", () => {
       ir: Try(scope(42, null, { "my-agent": effectfulBinding }), "e", Ref("e")),
     });
     expect(result.status).toBe("ok");
-    // errorToValue returns the error message; ScopeBindingEffectError message mentions "scope binding"
-    expect(String((result as any).value)).toContain("scope binding");
+    // errorToValue returns structured error value; ScopeBindingEffectError message mentions "scope binding"
+    expect((result as any).value.message).toContain("scope binding");
   });
 
   // SC-B-003: failed binding produces no Yield events in journal

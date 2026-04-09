@@ -100,7 +100,7 @@ interface TimeboxRuntimeFixture {
     coroutineId?: string;
   }>;
   expected: {
-    status: "ok" | "err" | "cancelled";
+    status: "ok" | "error" | "cancelled";
     value?: Val;
     error?: string;
     journal: {

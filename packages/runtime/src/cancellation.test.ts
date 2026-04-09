@@ -66,13 +66,13 @@ describe("Cancellation", () => {
     const ir = effectIR("a", "op1");
     const { result, journal } = yield* execute({ ir: ir as never });
 
-    expect(result.status).toBe("err");
+    expect(result.status).toBe("error");
 
     const rootCloses = journal.filter(
       (e): e is CloseEvent => e.type === "close" && e.coroutineId === "root",
     );
     expect(rootCloses.length).toBe(1);
-    expect(rootCloses[0]!.result.status).toBe("err");
+    expect(rootCloses[0]!.result.status).toBe("error");
   });
 
   it("all children have close events in journal", function* () {

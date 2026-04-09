@@ -36,8 +36,8 @@ describe("try/catch runtime integration", () => {
 
     expect(result.status).toBe("ok");
     if (result.status === "ok") {
-      // The catch body returns the error message string via errorToValue
-      expect(result.value).toBe("service unavailable");
+      // The catch body returns the structured error value via errorToValue
+      expect(result.value).toEqual({ message: "service unavailable", name: "Error" });
     }
   });
 

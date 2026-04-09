@@ -375,8 +375,8 @@ describe("Return-in-try: D — Finally interaction (runtime)", () => {
       }
     `);
     const { result } = yield* execute({ ir: Call(ir) });
-    expect(result.status).toBe("err");
-    if (result.status === "err") {
+    expect(result.status).toBe("error");
+    if (result.status === "error") {
       expect(result.error.message).toBe("fail");
     }
   });

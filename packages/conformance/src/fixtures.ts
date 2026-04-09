@@ -365,14 +365,14 @@ export const REPLAY_020: Fixture = {
   ],
   live_effects: [],
   expected_result: {
-    status: "err",
+    status: "error",
     error: { message: "<any>", name: "DivergenceError" },
   },
   expected_journal: [
     {
       coroutineId: "root",
       result: {
-        status: "err",
+        status: "error",
         error: { message: "<any>", name: "DivergenceError" },
       },
       type: "close",
@@ -412,7 +412,7 @@ export const NEG_001: Fixture = {
     {
       coroutineId: "root",
       result: {
-        status: "err",
+        status: "error",
         error: { message: "<any>", name: "UnboundVariable" },
       },
       type: "close",

@@ -78,8 +78,8 @@ describe("@tisyn/agent", () => {
       } as never,
     });
 
-    expect(result.status).toBe("err");
-    if (result.status === "err") {
+    expect(result.status).toBe("error");
+    if (result.status === "error") {
       expect(result.error.message).toContain("no handler");
     }
   });

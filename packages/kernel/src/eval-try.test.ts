@@ -90,7 +90,7 @@ describe("T03: try/catch/finally body succeeds — finally runs but result disca
 describe("T04: ExplicitThrow is catchable", () => {
   it("catch runs; result is catch value", () => {
     const ir = tryNode(throwNode(lit("boom")), "e", ref("e"));
-    expect(run(ir)).toBe("boom");
+    expect(run(ir)).toEqual({ message: "boom", name: "ExplicitThrow" });
   });
 });
 
@@ -212,7 +212,7 @@ describe("T15: nested try — inner catch runs, outer finally runs", () => {
     // outer: try { inner: try { throw } catch (e) { e } } finally { discarded }
     const inner = tryNode(throwNode(lit("inner")), "e", ref("e"));
     const outer = tryNode(inner, undefined, undefined, lit("outer-finally"));
-    expect(run(outer)).toBe("inner");
+    expect(run(outer)).toEqual({ message: "inner", name: "ExplicitThrow" });
   });
 });
 
@@ -220,16 +220,16 @@ describe("T16: nested try — inner throw propagates to outer catch", () => {
   it("uncaught inner error is caught by outer catch", () => {
     const inner = tryNode(throwNode(lit("escaping")), undefined, undefined, lit("inner-finally"));
     const outer = tryNode(inner, "e", ref("e"));
-    expect(run(outer)).toBe("escaping");
+    expect(run(outer)).toEqual({ message: "escaping", name: "ExplicitThrow" });
   });
 });
 
 // ── T17–T20: catchParam bindings ──
 
-describe("T17: catchParam binds error message", () => {
-  it("catchParam resolves to error message string inside catchBody", () => {
+describe("T17: catchParam binds error value", () => {
+  it("catchParam resolves to structured error value inside catchBody", () => {
     const ir = tryNode(throwNode(lit("hello")), "err", ref("err"));
-    expect(run(ir)).toBe("hello");
+    expect(run(ir)).toEqual({ message: "hello", name: "ExplicitThrow" });
   });
 });
 
@@ -254,9 +254,9 @@ describe("T19: outer binding with same name as catchParam resolves normally in b
 describe("T20: catchParam shadows outer binding inside catchBody", () => {
   it("catchParam 'x' shadows outer 'x' in catchBody", () => {
     const env = extend(EMPTY_ENV, "x", "outer-x");
-    // body throws, catchParam='x' bound to error message, catchBody returns ref("x")
+    // body throws, catchParam='x' bound to error value, catchBody returns ref("x")
     const ir = tryNode(throwNode(lit("error-msg")), "x", ref("x"));
-    expect(run(ir, env)).toBe("error-msg");
+    expect(run(ir, env)).toEqual({ message: "error-msg", name: "ExplicitThrow" });
   });
 });
 
@@ -267,9 +267,9 @@ describe("T21: finally runs in original pre-try env", () => {
     const env = extend(EMPTY_ENV, "preVal", "pre");
     // try: throw; catch(e): e; finally: ref("preVal")
     const ir = tryNode(throwNode(lit("err")), "e", ref("e"), ref("preVal"));
-    // body throws, catch runs → "err", finally runs and returns "pre" but result is discarded
-    // so the overall result is the catch value "err"
-    expect(run(ir, env)).toBe("err");
+    // body throws, catch runs → error value, finally runs and returns "pre" but result is discarded
+    // so the overall result is the catch value (structured error)
+    expect(run(ir, env)).toEqual({ message: "err", name: "ExplicitThrow" });
   });
 });
 

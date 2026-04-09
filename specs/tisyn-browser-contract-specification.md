@@ -245,7 +245,7 @@ current page throughout the transport's lifetime.
 Navigate errors (e.g., network failures from `page.goto`)
 propagate as thrown Errors.
 
-If the executor returns `{ status: "err", error: { message } }`,
+If the executor returns `{ status: "error", error: { message } }`,
 the transport throws an `Error` with the message. This applies
 to both execution modes.
 

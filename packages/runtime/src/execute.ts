@@ -134,7 +134,7 @@ export function* execute(options: ExecuteOptions): Operation<ExecuteResult> {
       // MalformedIR produces NO journal events (Conformance §4.1)
       return {
         result: {
-          status: "err",
+          status: "error",
           error: { message: error.message, name: "MalformedIR" },
         },
         journal: [],
@@ -175,7 +175,7 @@ export function* execute(options: ExecuteOptions): Operation<ExecuteResult> {
       if (error instanceof DivergenceError) {
         return {
           result: {
-            status: "err" as const,
+            status: "error" as const,
             error: { message: error.message, name: "DivergenceError" },
           },
           journal,
@@ -330,10 +330,10 @@ function* driveKernel(
               try {
                 const result = yield* driveKernel(childKernel, childId, childEnv, ctx);
                 joinResolve(result);
-                if (result.status === "err") {
+                if (result.status === "error") {
                   // R12: child failure tears down parent scope unconditionally
                   const errResult = result as {
-                    status: "err";
+                    status: "error";
                     error: { message: string; name?: string };
                   };
                   throw new EffectError(errResult.error.message, errResult.error.name);
@@ -382,7 +382,7 @@ function* driveKernel(
               nextValue = (childResult.value ?? null) as Val;
             } else {
               const errResult = childResult as {
-                status: "err";
+                status: "error";
                 error: { message: string; name?: string };
               };
               throw new EffectError(errResult.error.message, errResult.error.name);
@@ -550,7 +550,7 @@ function* driveKernel(
 
           if (stored.result.status === "ok") {
             nextValue = (stored.result.value ?? null) as Val;
-          } else if (stored.result.status === "err") {
+          } else if (stored.result.status === "error") {
             const err = new EffectError(stored.result.error.message, stored.result.error.name);
             const throwResult = kernel.throw(err);
             if (throwResult.done) {
@@ -649,7 +649,7 @@ function* driveKernel(
         } catch (error) {
           const err = error instanceof Error ? error : new Error(String(error));
           effectResult = {
-            status: "err",
+            status: "error",
             error: { message: err.message, name: err.name },
           };
         }
@@ -699,7 +699,7 @@ function* driveKernel(
           type: "close",
           coroutineId,
           result: {
-            status: "err",
+            status: "error",
             error: { message: error.message, name: error.name },
           },
         };
@@ -714,7 +714,7 @@ function* driveKernel(
         type: "close",
         coroutineId,
         result: {
-          status: "err",
+          status: "error",
           error: { message: err.message, name: err.name },
         },
       };
@@ -722,7 +722,7 @@ function* driveKernel(
       ctx.journal.push(closeEvent);
 
       return {
-        status: "err",
+        status: "error",
         error: { message: err.message, name: err.name },
       };
     }
@@ -764,10 +764,10 @@ function* orchestrateAll(
         results[i] = result;
         completed++;
 
-        if (result.status === "err") {
+        if (result.status === "error") {
           // Fail-fast: reject immediately, scope teardown halts siblings
           const err = result as {
-            status: "err";
+            status: "error";
             error: { message: string; name?: string };
           };
           reject(new EffectError(err.error.message, err.error.name));
@@ -822,7 +822,7 @@ function* orchestrateRace(
         if (result.status === "ok" && !hasWinner) {
           hasWinner = true;
           resolve(result.value as Val);
-        } else if (result.status === "err") {
+        } else if (result.status === "error") {
           errors.set(i, result.error);
           if (errors.size === N) {
             // All children failed — propagate lowest-index error.
@@ -888,7 +888,7 @@ function* orchestrateTimebox(
           } as unknown as Val);
         } else {
           const errResult = result as {
-            status: "err";
+            status: "error";
             error: { message: string; name?: string };
           };
           reject(new EffectError(errResult.error.message, errResult.error.name));
@@ -905,7 +905,7 @@ function* orchestrateTimebox(
           resolve({ status: "timeout" } as unknown as Val);
         } else {
           const errResult = result as {
-            status: "err";
+            status: "error";
             error: { message: string; name?: string };
           };
           reject(new EffectError(errResult.error.message, errResult.error.name));
@@ -960,7 +960,7 @@ function orchestrateScope(
         const closeEvent: CloseEvent = {
           type: "close",
           coroutineId: childId,
-          result: { status: "err", error: { message: err.message, name: err.name } },
+          result: { status: "error", error: { message: err.message, name: err.name } },
         };
         yield* ctx.stream.append(closeEvent);
         ctx.journal.push(closeEvent);
@@ -975,7 +975,7 @@ function orchestrateScope(
     if (result.status === "ok") {
       return result.value as Val;
     }
-    const errResult = result as { status: "err"; error: { message: string; name?: string } };
+    const errResult = result as { status: "error"; error: { message: string; name?: string } };
     throw new EffectError(errResult.error.message, errResult.error.name);
   });
 }
@@ -1132,9 +1132,9 @@ function* orchestrateResourceChild(
               try {
                 const result = yield* driveKernel(spawnChildKernel, spawnChildId, cEnv, ctx);
                 joinResolve(result);
-                if (result.status === "err") {
+                if (result.status === "error") {
                   const errResult = result as {
-                    status: "err";
+                    status: "error";
                     error: { message: string; name?: string };
                   };
                   throw new EffectError(errResult.error.message, errResult.error.name);
@@ -1170,7 +1170,7 @@ function* orchestrateResourceChild(
               nextValue = (childResult.value ?? null) as Val;
             } else {
               const errResult = childResult as {
-                status: "err";
+                status: "error";
                 error: { message: string; name?: string };
               };
               throw new EffectError(errResult.error.message, errResult.error.name);
@@ -1230,7 +1230,7 @@ function* orchestrateResourceChild(
 
           if (stored.result.status === "ok") {
             nextValue = (stored.result.value ?? null) as Val;
-          } else if (stored.result.status === "err") {
+          } else if (stored.result.status === "error") {
             const err = new EffectError(stored.result.error.message, stored.result.error.name);
             const throwResult = childKernel.throw(err);
             if (throwResult.done) {
@@ -1312,7 +1312,7 @@ function* orchestrateResourceChild(
         } catch (error) {
           const err = error instanceof Error ? error : new Error(String(error));
           effectResult = {
-            status: "err",
+            status: "error",
             error: { message: err.message, name: err.name },
           };
         }
@@ -1348,7 +1348,7 @@ function* orchestrateResourceChild(
       type: "close",
       coroutineId: childId,
       result: {
-        status: "err",
+        status: "error",
         error: { message: err.message, name: err.name },
       },
     };
@@ -1457,9 +1457,9 @@ function* orchestrateResourceChild(
               try {
                 const result = yield* driveKernel(spawnChildKernel, spawnChildId, cEnv, ctx);
                 joinResolve(result);
-                if (result.status === "err") {
+                if (result.status === "error") {
                   const errResult = result as {
-                    status: "err";
+                    status: "error";
                     error: { message: string; name?: string };
                   };
                   throw new EffectError(errResult.error.message, errResult.error.name);
@@ -1495,7 +1495,7 @@ function* orchestrateResourceChild(
               nextValue = (childResult.value ?? null) as Val;
             } else {
               const errResult = childResult as {
-                status: "err";
+                status: "error";
                 error: { message: string; name?: string };
               };
               throw new EffectError(errResult.error.message, errResult.error.name);
@@ -1555,7 +1555,7 @@ function* orchestrateResourceChild(
 
           if (stored.result.status === "ok") {
             nextValue = (stored.result.value ?? null) as Val;
-          } else if (stored.result.status === "err") {
+          } else if (stored.result.status === "error") {
             const err = new EffectError(stored.result.error.message, stored.result.error.name);
             const throwResult = childKernel.throw(err);
             if (throwResult.done) {
@@ -1647,7 +1647,7 @@ function* orchestrateResourceChild(
         } catch (error) {
           const err = error instanceof Error ? error : new Error(String(error));
           effectResult = {
-            status: "err",
+            status: "error",
             error: { message: err.message, name: err.name },
           };
         }
@@ -1694,7 +1694,7 @@ function* orchestrateResourceChild(
         type: "close",
         coroutineId: childId,
         result: {
-          status: "err",
+          status: "error",
           error: { message: err.message, name: err.name },
         },
       };

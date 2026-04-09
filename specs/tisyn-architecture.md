@@ -473,7 +473,7 @@ Durable Stream. Two event types:
 **Event result** has three possible statuses:
 
 - `{ status: "ok", value: Val }` — success
-- `{ status: "err", error: { message, name? } }` — failure
+- `{ status: "error", error: { message, name? } }` — failure
 - `{ status: "cancelled" }` — task was cancelled
 
 ### 6.3 Persist-Before-Resume

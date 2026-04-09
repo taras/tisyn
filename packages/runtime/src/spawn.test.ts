@@ -92,7 +92,7 @@ describe("spawn orchestration", () => {
     // Hand-built IR: let x = 42, then join(x)
     const ir = letIR("x", 42, joinIR("x"));
     const { result } = yield* execute({ ir });
-    expect(result.status).toBe("err");
+    expect(result.status).toBe("error");
     expect((result as any).error.message).toContain("not a valid task handle");
   });
 
@@ -100,7 +100,7 @@ describe("spawn orchestration", () => {
   it("duplicate join throws RuntimeBugError", function* () {
     const ir = letIR("task", spawnIR(42), Seq(joinIR("task"), joinIR("task")));
     const { result } = yield* execute({ ir });
-    expect(result.status).toBe("err");
+    expect(result.status).toBe("error");
     expect((result as any).error.message).toContain("already been joined");
   });
 
@@ -108,7 +108,7 @@ describe("spawn orchestration", () => {
   it("child failure tears down parent scope", function* () {
     const ir = letIR("task", spawnIR(Throw("child failed")), joinIR("task"));
     const { result } = yield* execute({ ir });
-    expect(result.status).toBe("err");
+    expect(result.status).toBe("error");
     expect((result as any).error.message).toContain("child failed");
   });
 
@@ -126,7 +126,7 @@ describe("spawn orchestration", () => {
     const { result } = yield* execute({ ir });
     expect(result.status).toBe("ok");
     // The caught error value contains the message
-    expect(String((result as any).value)).toContain("child boom");
+    expect((result as any).value.message).toContain("child boom");
   });
 
   // Multiple spawns get sequential IDs

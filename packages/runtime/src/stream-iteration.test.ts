@@ -273,7 +273,7 @@ describe("stream subscription lifecycle", () => {
       (e) => e.type === "yield" && (e as YieldEvent).description.name === "next",
     ) as YieldEvent;
     expect(nextYield).toBeDefined();
-    expect(nextYield.result.status).toBe("err");
+    expect(nextYield.result.status).toBe("error");
   });
 });
 
@@ -356,7 +356,7 @@ describe("stream capability enforcement", () => {
       env: { source: stream as unknown as Val },
     });
     // Should fail with SubscriptionCapabilityError
-    expect(result.status).toBe("err");
+    expect(result.status).toBe("error");
     expect((result as any).error.name).toBe("SubscriptionCapabilityError");
   });
 
@@ -369,7 +369,7 @@ describe("stream capability enforcement", () => {
       env: { source: stream as unknown as Val },
     });
     // RV3 should catch this
-    expect(result.status).toBe("err");
+    expect(result.status).toBe("error");
     expect((result as any).error.name).toBe("SubscriptionCapabilityError");
   });
 
@@ -405,7 +405,7 @@ describe("stream capability enforcement", () => {
       env: { source: stream as unknown as Val },
     });
     // RV3 rejects the child's close value containing a subscription handle
-    expect(result.status).toBe("err");
+    expect(result.status).toBe("error");
     expect((result as any).error.name).toBe("SubscriptionCapabilityError");
   });
 });
@@ -547,7 +547,7 @@ describe("stream replay", () => {
       env: { source: stream as unknown as Val },
       stream: durableStream,
     });
-    expect(result.status).toBe("err");
+    expect(result.status).toBe("error");
     expect((result as any).error.name).toBe("DivergenceError");
   });
 
