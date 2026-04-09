@@ -6,7 +6,7 @@
  * message processing loop is a spawned child, so its lifetime is
  * owned by the enclosing resource scope (no manual createScope).
  *
- * Supports all five operations: openSession, closeSession, plan, fork, openFork.
+ * Supports all five operations: newSession, closeSession, plan, fork, openFork.
  * Each operation can be configured independently with result, error, progress, delay.
  */
 
@@ -30,7 +30,7 @@ export interface MockOperationConfig {
 }
 
 export interface MockClaudeCodeConfig {
-  openSession?: MockOperationConfig;
+  newSession?: MockOperationConfig;
   closeSession?: MockOperationConfig;
   plan?: MockOperationConfig;
   fork?: MockOperationConfig;

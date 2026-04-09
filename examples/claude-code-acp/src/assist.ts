@@ -13,7 +13,7 @@ import type { SessionHandle, PlanResult, ForkData } from "./types.ts";
  */
 
 declare function ClaudeCode(): {
-  openSession(config: { model: string }): Workflow<SessionHandle>;
+  newSession(config: { model: string }): Workflow<SessionHandle>;
   closeSession(handle: SessionHandle): Workflow<void>;
   plan(args: { session: SessionHandle; prompt: string }): Workflow<PlanResult>;
   fork(session: SessionHandle): Workflow<ForkData>;
@@ -26,7 +26,7 @@ declare function Output(): {
 
 function useClaudeCodeSession(config: { model: string }) {
   return resource<SessionHandle>(function* () {
-    const handle = yield* ClaudeCode().openSession(config);
+    const handle = yield* ClaudeCode().newSession(config);
     try {
       yield* provide(handle);
     } finally {

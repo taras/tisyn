@@ -1,14 +1,15 @@
 /**
  * Mock ACP stdio server for testing the real binding path.
  *
- * Reads NDJSON from stdin, responds on stdout. Speaks ACP protocol
- * (not Tisyn protocol — the binding layer translates).
+ * Reads NDJSON from stdin, responds on stdout. Speaks real ACP protocol
+ * wire methods (not Tisyn operation names — the adapter translates).
  *
  * Supports:
- * - openSession → returns { sessionId: "test-session-1" }
- * - plan → returns { response: "mock plan result" }
- * - closeSession → returns null
- * - cancel → no response (cancellation acknowledgment)
+ * - session/new → returns { sessionId: "test-session-1" }
+ * - session/prompt → returns { response: "mock plan result" }
+ * - session/close → returns null
+ * - session/fork → returns fork metadata
+ * - session/cancel → no response (cancellation acknowledgment)
  */
 import * as readline from "node:readline";
 
@@ -22,33 +23,29 @@ rl.on("line", (line: string) => {
     return;
   }
 
-  if (msg.method === "cancel") {
-    // Cancel has no response in ACP
+  if (msg.method === "session/cancel") {
+    // Cancel is a notification in ACP — no response
     return;
   }
 
-  // Map operation to result. installRemoteAgent extracts the bare
-  // operation name (e.g. "openSession") before the ExecuteRequest
-  // reaches the adapter, so we match on bare names here.
+  // Match on real ACP wire method names. The adapter translates
+  // Tisyn operation names (e.g. "newSession") to these before sending.
   let result: unknown;
   switch (msg.method) {
-    case "openSession":
+    case "session/new":
       result = { sessionId: "test-session-1" };
       break;
-    case "plan":
+    case "session/prompt":
       // Echo back part of the input to prove args were forwarded
       result = {
         response: `mock plan result for: ${(msg.params as Record<string, unknown>).prompt ?? "unknown"}`,
       };
       break;
-    case "closeSession":
+    case "session/close":
       result = null;
       break;
-    case "fork":
+    case "session/fork":
       result = { parentSessionId: "test-session-1", forkId: "fork-1" };
-      break;
-    case "openFork":
-      result = { sessionId: "test-session-fork-1" };
       break;
     default:
       // Unknown method — return error

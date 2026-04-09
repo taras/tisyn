@@ -6,7 +6,7 @@ import { Fn, Ref, Eval, Let, Call, Get, Construct, Concat } from "@tisyn/ir";
 import type { SessionHandle, PlanResult, ForkData } from "./types.ts";
 
 export function ClaudeCode(): DeclaredAgent<{
-  openSession: OperationSpec<{ config: { model: string } }, SessionHandle>;
+  newSession: OperationSpec<{ config: { model: string } }, SessionHandle>;
   closeSession: OperationSpec<{ handle: SessionHandle }, void>;
   plan: OperationSpec<{ args: { session: SessionHandle; prompt: string } }, PlanResult>;
   fork: OperationSpec<{ session: SessionHandle }, ForkData>;
@@ -14,7 +14,7 @@ export function ClaudeCode(): DeclaredAgent<{
 }> {
   const id = "claude-code";
   return agent(id, {
-    openSession: operation<{ config: { model: string } }, SessionHandle>(),
+    newSession: operation<{ config: { model: string } }, SessionHandle>(),
     closeSession: operation<{ handle: SessionHandle }, void>(),
     plan: operation<{ args: { session: SessionHandle; prompt: string } }, PlanResult>(),
     fork: operation<{ session: SessionHandle }, ForkData>(),

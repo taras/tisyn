@@ -11,7 +11,7 @@ import { createMockClaudeCodeTransport } from "./mock.js";
 import { createBinding } from "./index.js";
 
 const claudeCodeDeclaration = agent("claude-code", {
-  openSession: operation<Val, Val>(),
+  newSession: operation<Val, Val>(),
   closeSession: operation<Val, Val>(),
   plan: operation<Val, Val>(),
   fork: operation<Val, Val>(),
@@ -20,9 +20,9 @@ const claudeCodeDeclaration = agent("claude-code", {
 
 describe("Claude Code ACP Integration", () => {
   // 1. Session open/close lifecycle
-  it("openSession returns handle and closeSession dispatches on scope exit", function* () {
+  it("newSession returns handle and closeSession dispatches on scope exit", function* () {
     const { factory, calls } = createMockClaudeCodeTransport({
-      openSession: { result: { sessionId: "s-123" } },
+      newSession: { result: { sessionId: "s-123" } },
       closeSession: { result: null },
     });
 
@@ -32,7 +32,7 @@ describe("Claude Code ACP Integration", () => {
       yield* installRemoteAgent(claudeCodeDeclaration, factory);
 
       // Simulate resource pattern: open, use, close
-      sessionHandle = yield* dispatch("claude-code.openSession", {
+      sessionHandle = yield* dispatch("claude-code.newSession", {
         model: "opus-4",
       } as unknown as Val);
       expect(sessionHandle).toEqual({ sessionId: "s-123" });
@@ -42,14 +42,14 @@ describe("Claude Code ACP Integration", () => {
     });
 
     expect(calls).toHaveLength(2);
-    expect(calls[0].operation).toBe("openSession");
+    expect(calls[0].operation).toBe("newSession");
     expect(calls[1].operation).toBe("closeSession");
   });
 
   // 2. Durable plan result
   it("plan call returns final result", function* () {
     const { factory } = createMockClaudeCodeTransport({
-      openSession: { result: { sessionId: "s-123" } },
+      newSession: { result: { sessionId: "s-123" } },
       plan: {
         result: {
           response: "Here is the implementation plan...",
@@ -62,7 +62,7 @@ describe("Claude Code ACP Integration", () => {
     yield* scoped(function* () {
       yield* installRemoteAgent(claudeCodeDeclaration, factory);
 
-      yield* dispatch("claude-code.openSession", { model: "opus-4" } as unknown as Val);
+      yield* dispatch("claude-code.newSession", { model: "opus-4" } as unknown as Val);
 
       const result = yield* dispatch("claude-code.plan", {
         session: { sessionId: "s-123" },
@@ -79,7 +79,7 @@ describe("Claude Code ACP Integration", () => {
   // 3. Sequential plan calls
   it("two sequential plan calls on same session both return results", function* () {
     const { factory } = createMockClaudeCodeTransport({
-      openSession: { result: { sessionId: "s-123" } },
+      newSession: { result: { sessionId: "s-123" } },
       plan: {
         result: { response: "plan result" },
       },
@@ -89,7 +89,7 @@ describe("Claude Code ACP Integration", () => {
     yield* scoped(function* () {
       yield* installRemoteAgent(claudeCodeDeclaration, factory);
 
-      yield* dispatch("claude-code.openSession", { model: "opus-4" } as unknown as Val);
+      yield* dispatch("claude-code.newSession", { model: "opus-4" } as unknown as Val);
 
       const result1 = yield* dispatch("claude-code.plan", {
         session: { sessionId: "s-123" },
@@ -114,7 +114,7 @@ describe("Claude Code ACP Integration", () => {
     yield* CoroutineContext.set("root");
 
     const { factory } = createMockClaudeCodeTransport({
-      openSession: { result: { sessionId: "s-123" } },
+      newSession: { result: { sessionId: "s-123" } },
       plan: {
         progress: [
           { type: "text", content: "Analyzing codebase..." },
@@ -128,7 +128,7 @@ describe("Claude Code ACP Integration", () => {
     yield* scoped(function* () {
       yield* installRemoteAgent(claudeCodeDeclaration, factory);
 
-      yield* dispatch("claude-code.openSession", { model: "opus-4" } as unknown as Val);
+      yield* dispatch("claude-code.newSession", { model: "opus-4" } as unknown as Val);
       yield* dispatch("claude-code.plan", {
         session: { sessionId: "s-123" },
         prompt: "Analyze",
@@ -146,7 +146,7 @@ describe("Claude Code ACP Integration", () => {
   // 5. Fork metadata round-trip
   it("fork returns ForkData and openFork returns child handle", function* () {
     const { factory, calls } = createMockClaudeCodeTransport({
-      openSession: { result: { sessionId: "s-parent" } },
+      newSession: { result: { sessionId: "s-parent" } },
       fork: { result: { parentSessionId: "s-parent", forkId: "f-1" } },
       openFork: { result: { sessionId: "s-child" } },
       closeSession: { result: null },
@@ -155,7 +155,7 @@ describe("Claude Code ACP Integration", () => {
     yield* scoped(function* () {
       yield* installRemoteAgent(claudeCodeDeclaration, factory);
 
-      yield* dispatch("claude-code.openSession", { model: "opus-4" } as unknown as Val);
+      yield* dispatch("claude-code.newSession", { model: "opus-4" } as unknown as Val);
 
       const forkData = yield* dispatch("claude-code.fork", {
         sessionId: "s-parent",
@@ -173,7 +173,7 @@ describe("Claude Code ACP Integration", () => {
   // 6. Error propagation from plan call
   it("plan error propagates to caller", function* () {
     const { factory } = createMockClaudeCodeTransport({
-      openSession: { result: { sessionId: "s-123" } },
+      newSession: { result: { sessionId: "s-123" } },
       plan: { error: { message: "session expired", name: "SessionError" } },
       closeSession: { result: null },
     });
@@ -183,7 +183,7 @@ describe("Claude Code ACP Integration", () => {
     yield* scoped(function* () {
       yield* installRemoteAgent(claudeCodeDeclaration, factory);
 
-      yield* dispatch("claude-code.openSession", { model: "opus-4" } as unknown as Val);
+      yield* dispatch("claude-code.newSession", { model: "opus-4" } as unknown as Val);
 
       try {
         yield* dispatch("claude-code.plan", {
@@ -204,7 +204,7 @@ describe("Claude Code ACP Integration", () => {
     const messages: HostMessage[] = [];
 
     const { factory: innerFactory } = createMockClaudeCodeTransport({
-      openSession: { result: { sessionId: "s-123" } },
+      newSession: { result: { sessionId: "s-123" } },
       plan: { neverComplete: true },
       closeSession: { result: null },
     });
@@ -224,7 +224,7 @@ describe("Claude Code ACP Integration", () => {
     yield* scoped(function* () {
       yield* installRemoteAgent(claudeCodeDeclaration, recordingFactory as AgentTransportFactory);
 
-      yield* dispatch("claude-code.openSession", { model: "opus-4" } as unknown as Val);
+      yield* dispatch("claude-code.newSession", { model: "opus-4" } as unknown as Val);
 
       // Spawn a plan call that will never complete
       const task = yield* spawn(function* () {
@@ -245,10 +245,10 @@ describe("Claude Code ACP Integration", () => {
     expect(cancelMsg).toBeDefined();
   });
 
-  // 8. Transport survival: second openSession after first closes
-  it("transport survives session close — second openSession works", function* () {
+  // 8. Transport survival: second newSession after first closes
+  it("transport survives session close — second newSession works", function* () {
     const { factory, calls } = createMockClaudeCodeTransport({
-      openSession: { result: { sessionId: "s-new" } },
+      newSession: { result: { sessionId: "s-new" } },
       closeSession: { result: null },
     });
 
@@ -256,18 +256,18 @@ describe("Claude Code ACP Integration", () => {
       yield* installRemoteAgent(claudeCodeDeclaration, factory);
 
       // First session lifecycle
-      yield* dispatch("claude-code.openSession", { model: "opus-4" } as unknown as Val);
+      yield* dispatch("claude-code.newSession", { model: "opus-4" } as unknown as Val);
       yield* dispatch("claude-code.closeSession", { sessionId: "s-new" } as unknown as Val);
 
       // Second session through the same transport
-      const handle2 = yield* dispatch("claude-code.openSession", {
+      const handle2 = yield* dispatch("claude-code.newSession", {
         model: "opus-4",
       } as unknown as Val);
       expect(handle2).toEqual({ sessionId: "s-new" });
     });
 
     // Three calls: open, close, open
-    const openCalls = calls.filter((c) => c.operation === "openSession");
+    const openCalls = calls.filter((c) => c.operation === "newSession");
     const closeCalls = calls.filter((c) => c.operation === "closeSession");
     expect(openCalls).toHaveLength(2);
     expect(closeCalls).toHaveLength(1);
@@ -279,7 +279,7 @@ describe("Claude Code ACP Integration", () => {
 const mockAcpServer = resolve(import.meta.dirname, "test-assets/mock-acp-server.ts");
 
 describe("Claude Code ACP Binding Path", () => {
-  it("createBinding completes initialize handshake and dispatches openSession", function* () {
+  it("createBinding completes initialize handshake and dispatches newSession", function* () {
     const binding = createBinding({
       command: "npx",
       arguments: ["tsx", mockAcpServer],
@@ -288,7 +288,7 @@ describe("Claude Code ACP Binding Path", () => {
     yield* scoped(function* () {
       yield* installRemoteAgent(claudeCodeDeclaration, binding.transport);
 
-      const handle = yield* dispatch("claude-code.openSession", {
+      const handle = yield* dispatch("claude-code.newSession", {
         model: "opus-4",
       } as unknown as Val);
       expect(handle).toEqual({ sessionId: "test-session-1" });
@@ -304,7 +304,7 @@ describe("Claude Code ACP Binding Path", () => {
     yield* scoped(function* () {
       yield* installRemoteAgent(claudeCodeDeclaration, binding.transport);
 
-      yield* dispatch("claude-code.openSession", { model: "opus-4" } as unknown as Val);
+      yield* dispatch("claude-code.newSession", { model: "opus-4" } as unknown as Val);
 
       const result = yield* dispatch("claude-code.plan", {
         session: { sessionId: "test-session-1" },
@@ -326,7 +326,7 @@ describe("Claude Code ACP Binding Path", () => {
     yield* scoped(function* () {
       yield* installRemoteAgent(claudeCodeDeclaration, binding.transport);
 
-      yield* dispatch("claude-code.openSession", { model: "opus-4" } as unknown as Val);
+      yield* dispatch("claude-code.newSession", { model: "opus-4" } as unknown as Val);
 
       const r1 = yield* dispatch("claude-code.plan", {
         session: { sessionId: "test-session-1" },

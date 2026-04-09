@@ -47,17 +47,50 @@ export interface AcpAdapter {
   tisynMessages: Stream<AgentMessage, void>;
 }
 
+// ── Tisyn operation → ACP wire method mapping ──
+
+/**
+ * Explicit mapping from Tisyn authored operation names to ACP wire method names.
+ *
+ * Tisyn workflows use ergonomic TypeScript names (e.g. `ClaudeCode().newSession()`).
+ * ACP wire protocol uses slash-separated method names (e.g. `session/new`).
+ * The adapter translates between these — no passthrough.
+ */
+const OPERATION_TO_ACP_METHOD: Record<string, string> = {
+  newSession: "session/new",
+  closeSession: "session/close",
+  plan: "session/prompt",
+  fork: "session/fork",
+  openFork: "session/fork",
+  cancel: "session/cancel",
+};
+
+function resolveAcpMethod(operation: string): string {
+  const method = OPERATION_TO_ACP_METHOD[operation];
+  if (!method) {
+    throw new Error(
+      `Unknown Tisyn operation "${operation}" — no ACP method mapping exists. ` +
+        `Known operations: ${Object.keys(OPERATION_TO_ACP_METHOD).join(", ")}`,
+    );
+  }
+  return method;
+}
+
 // ── ACP ↔ Tisyn translation (pure functions) ──
 
 /**
  * Translate a Tisyn ExecuteRequest into an ACP request.
- * Maps the Tisyn operation name and args to ACP method calls.
+ * Maps the Tisyn operation name to the corresponding ACP wire method.
+ *
+ * The operation may be fully qualified (e.g. "claude-code.newSession")
+ * or bare (e.g. "newSession"). The agent prefix is stripped before lookup.
  */
 export function tisynExecuteToAcp(id: string, operation: string, args: unknown): AcpRequest {
+  const bare = operation.includes(".") ? operation.split(".").pop()! : operation;
   return {
     jsonrpc: "2.0",
     id,
-    method: operation,
+    method: resolveAcpMethod(bare),
     params: (args as Record<string, unknown>) ?? {},
   };
 }
@@ -249,7 +282,7 @@ export function createAcpAdapter(config?: AcpAdapterConfig): Operation<AcpAdapte
           const abortMsg: AcpRequest = {
             jsonrpc: "2.0",
             id: `cancel-${message.params.id}`,
-            method: "cancel",
+            method: resolveAcpMethod("cancel"),
             params: { id: message.params.id, reason: message.params.reason },
           };
           proc.stdin.send(JSON.stringify(abortMsg) + "\n");
