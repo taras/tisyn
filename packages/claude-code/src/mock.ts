@@ -11,7 +11,7 @@
  */
 
 import type { Operation, Task } from "effection";
-import { createChannel, resource, spawn, sleep } from "effection";
+import { createChannel, resource, spawn, sleep, suspend } from "effection";
 import type { Val } from "@tisyn/ir";
 import type {
   AgentTransport,
@@ -99,8 +99,7 @@ export function createMockClaudeCodeTransport(config: MockClaudeCodeConfig): {
               }
 
               if (opConfig.neverComplete) {
-                yield* sleep(2_147_483_647);
-                return;
+                yield* suspend();
               }
 
               if (opConfig.delay) {
