@@ -196,7 +196,7 @@ function runPipeline(options: {
   const outputDir = outputPath ? dirname(outputPath) : dirname(roots[0]!);
   for (const [absPath, names] of referencedFromGenerated) {
     if (names.size > 0) {
-      const rel = relative(outputDir, absPath);
+      const rel = relative(outputDir, absPath).split("\\").join("/");
       const specifier = rel.startsWith(".") ? rel : `./${rel}`;
       generatedImports.push({ names: [...names], path: specifier });
     }
