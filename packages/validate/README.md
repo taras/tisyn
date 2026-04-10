@@ -102,6 +102,31 @@ The main public surface is exported from `src/index.ts`.
 - `ValidationResult`  
   Represents the success or failure result returned by validation functions.
 
+## Parsing Unknown Input
+
+Use the exported TypeBox schemas when you need to validate already-parsed JavaScript values before treating them as IR.
+
+`tisynExprSchema` covers a full `IrInput`-style expression tree. `fnSchema` is narrower: it validates function-shaped IR nodes only.
+
+```ts
+import { Value } from "@sinclair/typebox/value";
+import { fnSchema } from "@tisyn/validate";
+import type { TisynFn } from "@tisyn/ir";
+
+function parseFnInput(input: unknown): TisynFn<unknown[], unknown> {
+  if (!Value.Check(fnSchema, input)) {
+    const detail = [...Value.Errors(fnSchema, input)]
+      .map((error) => `${error.path}: ${error.message}`)
+      .join("; ");
+    throw new Error(`Invalid fn node: ${detail}`);
+  }
+
+  return input as TisynFn<unknown[], unknown>;
+}
+```
+
+If you need to accept any full IR expression rather than only `fn` nodes, validate against `tisynExprSchema` instead.
+
 ## Validation Rules Worth Knowing
 
 Most callers can treat validation as a black box, but a few package-level rules are worth knowing when constructing IR directly:
