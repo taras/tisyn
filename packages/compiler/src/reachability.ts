@@ -8,6 +8,21 @@ import ts from "typescript";
 import type { ModuleInfo } from "./graph.js";
 import { CompileError } from "./errors.js";
 
+// ── Compiler-recognised intrinsics ──
+// These value imports from bare specifiers are consumed by the emitter
+// (pattern-matched by callee name) and never survive to runtime.
+// Reachability must allow them through the E-IMPORT-001 boundary check.
+
+const COMPILER_INTRINSICS: ReadonlySet<string> = new Set([
+  "resource",
+  "provide",
+  "scoped",
+  "spawn",
+  "all",
+  "race",
+  "sleep",
+]);
+
 // ── Symbol identity ──
 
 export interface SymbolId {
@@ -169,6 +184,10 @@ function findCallTargets(
       if (targetMod) {
         // E-IMPORT-001: reachable code references a bare/node: external boundary
         if (targetMod.category === "external" && targetMod.provenance === "boundary") {
+          // Allow compiler-recognised intrinsics — the emitter consumes these by name
+          if (COMPILER_INTRINSICS.has(name)) {
+            return;
+          }
           throw new CompileError(
             "E-IMPORT-001",
             `Cannot use '${name}' from external module '${imp.fromModule}' in workflow code`,
