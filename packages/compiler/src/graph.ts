@@ -129,7 +129,8 @@ function traverseModule(
   );
 
   // Extract imports
-  const { valueImports, typeImportTexts, rejections } = extractImports(sourceFile, modulePath);
+  const { valueImports, typeImportTexts, rejections, typeOnlyModulePaths, externalSpecifiers } =
+    extractImports(sourceFile, modulePath);
 
   // Apply import rejections
   if (rejections.length > 0) {
@@ -171,6 +172,18 @@ function traverseModule(
 
   modules.set(modulePath, info);
 
+  // Record boundary modules (type-only and external) without traversal
+  for (const typePath of typeOnlyModulePaths) {
+    if (!modules.has(typePath)) {
+      modules.set(typePath, makeBoundaryModule(typePath, "type-only"));
+    }
+  }
+  for (const specifier of externalSpecifiers) {
+    if (!modules.has(specifier)) {
+      modules.set(specifier, makeBoundaryModule(specifier, "external"));
+    }
+  }
+
   // G4: Recursively traverse workflow-implementation and contract-declaration modules
   if (category === "workflow-implementation" || category === "contract-declaration") {
     for (const imp of valueImports) {
@@ -180,6 +193,24 @@ function traverseModule(
   // G5: Generated → export names extracted, stop traversal
   // G6: Type-only → recorded, stop traversal
   // G7: External → recorded, stop traversal
+}
+
+/**
+ * Create a stub ModuleInfo for a boundary module that is not traversed.
+ */
+function makeBoundaryModule(path: string, category: "type-only" | "external"): ModuleInfo {
+  const emptySource = ts.createSourceFile(path, "", ts.ScriptTarget.Latest, true, ts.ScriptKind.TS);
+  return {
+    path,
+    category,
+    sourceFile: emptySource,
+    generators: [],
+    nonGeneratorFunctions: [],
+    discoveredContracts: [],
+    exportMap: { local: new Map(), reExports: [] },
+    valueImports: [],
+    typeImportTexts: [],
+  };
 }
 
 // ── Module classification (§15) ──
@@ -288,6 +319,10 @@ interface ExtractedImports {
   valueImports: ValueImport[];
   typeImportTexts: string[];
   rejections: ImportRejection[];
+  /** Resolved paths of type-only import targets (boundary, no traversal). */
+  typeOnlyModulePaths: string[];
+  /** Bare specifier / node: protocol identifiers (boundary, no traversal). */
+  externalSpecifiers: string[];
 }
 
 /**
@@ -302,6 +337,8 @@ export function extractImports(
   const valueImports: ValueImport[] = [];
   const typeImportTexts: string[] = [];
   const rejections: ImportRejection[] = [];
+  const typeOnlyModulePaths: string[] = [];
+  const externalSpecifiers: string[] = [];
   const moduleDir = dirname(modulePath);
 
   for (const stmt of sourceFile.statements) {
@@ -320,6 +357,10 @@ export function extractImports(
     // IS2: Type-only imports — forward without resolution
     if (clause.isTypeOnly) {
       typeImportTexts.push(stmt.getText(sourceFile));
+      const isRelative = specifierText.startsWith("./") || specifierText.startsWith("../");
+      if (isRelative && extname(specifierText)) {
+        typeOnlyModulePaths.push(resolve(moduleDir, specifierText));
+      }
       continue;
     }
 
@@ -363,8 +404,8 @@ export function extractImports(
       }
 
       if (hasValueBindings) {
-        // Record as external boundary — will be checked at Stage 5 if any are referenced
-        // For now, skip without error (error at reference time)
+        // Record as external boundary
+        externalSpecifiers.push(specifierText);
         continue;
       }
 
@@ -408,7 +449,7 @@ export function extractImports(
   // Scan for re-exports (IS8 — E-IMPORT-007)
   scanForReExports(sourceFile, rejections);
 
-  return { valueImports, typeImportTexts, rejections };
+  return { valueImports, typeImportTexts, rejections, typeOnlyModulePaths, externalSpecifiers };
 }
 
 function scanForDynamicImports(

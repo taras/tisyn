@@ -84,7 +84,7 @@ describe("module graph construction", () => {
     }
   });
 
-  it("IG-004: bare specifier import → external boundary, not traversed", () => {
+  it("IG-004: bare specifier import → external boundary, recorded in graph", () => {
     const result = compileGraph({
       roots: ["/root.ts"],
       readFile: makeReadFile({
@@ -96,10 +96,12 @@ describe("module graph construction", () => {
       validate: false,
     });
 
-    expect(result.graph.traversed).toEqual(["/root.ts"]);
+    // Bare specifier recorded as external boundary (no readFile call for it)
+    expect(result.graph.modules["lodash"]?.category).toBe("external");
+    expect(result.graph.modules["/root.ts"]?.category).toBe("workflow-implementation");
   });
 
-  it("IG-005: node: protocol import → external boundary", () => {
+  it("IG-005: node: protocol import → external boundary, recorded in graph", () => {
     const result = compileGraph({
       roots: ["/root.ts"],
       readFile: makeReadFile({
@@ -111,7 +113,8 @@ describe("module graph construction", () => {
       validate: false,
     });
 
-    expect(result.graph.traversed).toEqual(["/root.ts"]);
+    // node: protocol recorded as external boundary
+    expect(result.graph.modules["node:fs"]?.category).toBe("external");
   });
 
   it("IG-006: generatedModulePaths → generated classification", () => {
@@ -147,7 +150,7 @@ describe("module graph construction", () => {
     expect(result.graph.modules["/prior.ts"]?.category).toBe("generated");
   });
 
-  it("IG-008: type-only import → not traversed, forwarded", () => {
+  it("IG-008: type-only import → recorded as type-only, forwarded", () => {
     const result = compileGraph({
       roots: ["/root.ts"],
       readFile: makeReadFile({
@@ -159,8 +162,8 @@ describe("module graph construction", () => {
       validate: false,
     });
 
-    // Type-only imports are NOT traversed (no readFile for types.ts)
-    expect(result.graph.traversed).toEqual(["/root.ts"]);
+    // Type-only module recorded in graph with category "type-only" (no readFile for types.ts)
+    expect(result.graph.modules["/types.ts"]?.category).toBe("type-only");
     // Type import should be forwarded in artifact
     expect(result.source).toContain("import type");
   });
