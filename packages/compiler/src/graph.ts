@@ -101,7 +101,7 @@ function traverseModule(
   visited: Set<string>,
 ): void {
   // G8 / §14.3: Cycle handling via visited set
-  if (visited.has(modulePath)) return;
+  if (visited.has(modulePath)) { return; }
   visited.add(modulePath);
 
   // Read source
@@ -237,7 +237,7 @@ function classifyModule(
 
     if (ts.isVariableStatement(stmt) && (stmt.declarationList.flags & ts.NodeFlags.Const)) {
       for (const decl of stmt.declarationList.declarations) {
-        if (!decl.initializer) continue;
+        if (!decl.initializer) { continue; }
         if (ts.isFunctionExpression(decl.initializer)) {
           if (decl.initializer.asteriskToken) {
             hasGenerators = true;
@@ -315,7 +315,7 @@ export function extractImports(
 
     // Check import clause type
     const clause = stmt.importClause;
-    if (!clause) continue; // side-effect import — skip
+    if (!clause) { continue; } // side-effect import — skip
 
     // IS2: Type-only imports — forward without resolution
     if (clause.isTypeOnly) {
@@ -346,11 +346,10 @@ export function extractImports(
     }
 
     // Must be named imports (IS1)
-    if (!namedBindings || !ts.isNamedImports(namedBindings)) continue;
+    if (!namedBindings || !ts.isNamedImports(namedBindings)) { continue; }
 
     // Classify specifier
     const isRelative = specifierText.startsWith("./") || specifierText.startsWith("../");
-    const isNodeProtocol = specifierText.startsWith("node:");
 
     if (!isRelative) {
       // IS5/IS5a/R2/R3: Bare specifier or node: protocol — graph boundary
@@ -389,7 +388,7 @@ export function extractImports(
 
     // Extract named value imports (IS1)
     for (const el of namedBindings.elements) {
-      if (el.isTypeOnly) continue;
+      if (el.isTypeOnly) { continue; }
 
       const importedName = el.propertyName?.text ?? el.name.text;
       const localName = el.name.text;

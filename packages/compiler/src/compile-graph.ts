@@ -85,13 +85,13 @@ function runPipeline(options: {
   const graph = buildGraph(roots, readFile, generatedModulePaths);
 
   // Stage 4: Compute reachability and emission order
-  const { reachable, entrypoints, unreachableExports } =
+  const { reachable } =
     computeReachability(graph.modules);
   const emitOrder = computeEmitOrder(reachable, graph.modules);
 
   // Stage 5: Compile reachable symbols
   const counter = new Counter();
-  const { symbols, discoveredContracts, compiledWorkflows, compiledHelpers } =
+  const { symbols, discoveredContracts, compiledWorkflows } =
     compileReachableSymbols(
       graph.modules,
       reachable,
@@ -121,7 +121,7 @@ function runPipeline(options: {
   // Collect generated-module imports (GM6)
   const generatedImports: { names: string[]; path: string }[] = [];
   for (const [path, mod] of graph.modules) {
-    if (mod.category !== "generated") continue;
+    if (mod.category !== "generated") { continue; }
     const names = [...mod.exportMap.local.keys()];
     if (names.length > 0) {
       generatedImports.push({ names, path });
@@ -207,7 +207,7 @@ export function runSingleSourcePipeline(options: {
   const result = runPipeline({
     roots: [virtualPath],
     readFile: (path: string) => {
-      if (path === virtualPath) return options.source;
+      if (path === virtualPath) { return options.source; }
       throw new Error(`ENOENT: ${path}`);
     },
     validate: options.validate,

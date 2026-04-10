@@ -170,13 +170,13 @@ export function parseGenerators(sourceFile: ts.SourceFile): ParsedFunction[] {
   const functions: ParsedFunction[] = [];
 
   for (const stmt of sourceFile.statements) {
-    if (!ts.isFunctionDeclaration(stmt)) continue;
-    if (!stmt.asteriskToken) continue;
-    if (!stmt.name) continue;
-    if (!stmt.body) continue;
+    if (!ts.isFunctionDeclaration(stmt)) { continue; }
+    if (!stmt.asteriskToken) { continue; }
+    if (!stmt.name) { continue; }
+    if (!stmt.body) { continue; }
 
     const isAsync = stmt.modifiers?.some((m) => m.kind === ts.SyntaxKind.AsyncKeyword);
-    if (isAsync) continue;
+    if (isAsync) { continue; }
 
     const params: string[] = [];
     const paramTypes: string[] = [];
@@ -231,11 +231,11 @@ export function parseNonGeneratorFunctions(
   for (const stmt of sourceFile.statements) {
     // Case 1: function declaration (non-generator)
     if (ts.isFunctionDeclaration(stmt)) {
-      if (stmt.asteriskToken) continue; // generator — handled by parseGenerators
-      if (!stmt.name) continue;
-      if (!stmt.body) continue;
+      if (stmt.asteriskToken) { continue; } // generator — handled by parseGenerators
+      if (!stmt.name) { continue; }
+      if (!stmt.body) { continue; }
       const isAsync = stmt.modifiers?.some((m) => m.kind === ts.SyntaxKind.AsyncKeyword);
-      if (isAsync) continue;
+      if (isAsync) { continue; }
 
       results.push({
         name: stmt.name.text,
@@ -251,19 +251,19 @@ export function parseNonGeneratorFunctions(
     // Case 2: const-bound function expression or arrow
     if (ts.isVariableStatement(stmt)) {
       for (const decl of stmt.declarationList.declarations) {
-        if (!ts.isIdentifier(decl.name)) continue;
-        if (!decl.initializer) continue;
+        if (!ts.isIdentifier(decl.name)) { continue; }
+        if (!decl.initializer) { continue; }
 
         // Skip let/var — only const
-        if (!(stmt.declarationList.flags & ts.NodeFlags.Const)) continue;
+        if (!(stmt.declarationList.flags & ts.NodeFlags.Const)) { continue; }
 
         const init = decl.initializer;
 
         // const f = function(...) { ... } (non-generator)
         if (ts.isFunctionExpression(init) && !init.asteriskToken) {
           const isAsync = init.modifiers?.some((m) => m.kind === ts.SyntaxKind.AsyncKeyword);
-          if (isAsync) continue;
-          if (!init.body) continue;
+          if (isAsync) { continue; }
+          if (!init.body) { continue; }
 
           results.push({
             name: decl.name.text,
@@ -278,7 +278,7 @@ export function parseNonGeneratorFunctions(
         // const f = (...) => expr  or  const f = (...) => { ... }
         if (ts.isArrowFunction(init)) {
           const isAsync = init.modifiers?.some((m) => m.kind === ts.SyntaxKind.AsyncKeyword);
-          if (isAsync) continue;
+          if (isAsync) { continue; }
 
           results.push({
             name: decl.name.text,
@@ -306,20 +306,20 @@ export function parseConstBoundGenerators(sourceFile: ts.SourceFile): ParsedFunc
   const results: ParsedFunction[] = [];
 
   for (const stmt of sourceFile.statements) {
-    if (!ts.isVariableStatement(stmt)) continue;
-    if (!(stmt.declarationList.flags & ts.NodeFlags.Const)) continue;
+    if (!ts.isVariableStatement(stmt)) { continue; }
+    if (!(stmt.declarationList.flags & ts.NodeFlags.Const)) { continue; }
 
     for (const decl of stmt.declarationList.declarations) {
-      if (!ts.isIdentifier(decl.name)) continue;
-      if (!decl.initializer) continue;
+      if (!ts.isIdentifier(decl.name)) { continue; }
+      if (!decl.initializer) { continue; }
 
       const init = decl.initializer;
-      if (!ts.isFunctionExpression(init)) continue;
-      if (!init.asteriskToken) continue;
-      if (!init.body) continue;
+      if (!ts.isFunctionExpression(init)) { continue; }
+      if (!init.asteriskToken) { continue; }
+      if (!init.body) { continue; }
 
       const isAsync = init.modifiers?.some((m) => m.kind === ts.SyntaxKind.AsyncKeyword);
-      if (isAsync) continue;
+      if (isAsync) { continue; }
 
       const params: string[] = [];
       const paramTypes: string[] = [];
@@ -360,7 +360,7 @@ export function parseConstBoundGenerators(sourceFile: ts.SourceFile): ParsedFunc
 
 function extractParams(
   parameters: ts.NodeArray<ts.ParameterDeclaration>,
-  sourceFile: ts.SourceFile,
+  _sourceFile: ts.SourceFile,
 ): string[] {
   const params: string[] = [];
   for (const param of parameters) {
@@ -412,11 +412,11 @@ export function collectAllExportedNames(sourceFile: ts.SourceFile): ModuleExport
 
     // Named or re-export: export { chat } / export { chat } from "./other"
     if (ts.isExportDeclaration(stmt) && stmt.exportClause && ts.isNamedExports(stmt.exportClause)) {
-      if (stmt.isTypeOnly) continue;
+      if (stmt.isTypeOnly) { continue; }
 
       const isReExport = stmt.moduleSpecifier !== undefined;
       for (const spec of stmt.exportClause.elements) {
-        if (spec.isTypeOnly) continue;
+        if (spec.isTypeOnly) { continue; }
         const exportedName = spec.name.text;
 
         if (isReExport) {

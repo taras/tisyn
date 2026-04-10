@@ -14,7 +14,7 @@ import { compileGraph, CompileError } from "./index.js";
 
 function makeReadFile(files: Record<string, string>): (path: string) => string {
   return (path) => {
-    if (!(path in files)) throw new Error(`ENOENT: ${path}`);
+    if (!(path in files)) { throw new Error(`ENOENT: ${path}`); }
     return files[path]!;
   };
 }

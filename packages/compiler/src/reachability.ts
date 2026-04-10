@@ -5,7 +5,7 @@
  */
 
 import ts from "typescript";
-import type { ModuleInfo, ValueImport } from "./graph.js";
+import type { ModuleInfo } from "./graph.js";
 import { CompileError } from "./errors.js";
 
 // ── Symbol identity ──
@@ -44,7 +44,7 @@ export function computeReachability(
   const allExportedSymbols: SymbolId[] = [];
 
   for (const [path, mod] of modules) {
-    if (mod.category !== "workflow-implementation") continue;
+    if (mod.category !== "workflow-implementation") { continue; }
 
     for (const gen of mod.generators) {
       const exportedAs = findExportedName(gen.name, mod);
@@ -54,7 +54,7 @@ export function computeReachability(
     }
 
     // Track all exported symbols for unreachable warning
-    for (const [exportedName, localName] of mod.exportMap.local) {
+    for (const [, localName] of mod.exportMap.local) {
       allExportedSymbols.push({ modulePath: path, localName });
     }
   }
@@ -84,7 +84,7 @@ export function computeReachability(
     const [modulePath, localName] = parseSymbolKey(key);
 
     const mod = modules.get(modulePath);
-    if (!mod) continue;
+    if (!mod) { continue; }
 
     // Find the function body for this symbol
     const callTargets = findCallTargets(localName, mod, modules);
@@ -122,7 +122,7 @@ function findCallTargets(
 ): SymbolId[] {
   // Find the function body
   const body = findFunctionBody(localName, mod);
-  if (!body) return [];
+  if (!body) { return []; }
 
   const targets: SymbolId[] = [];
   const seen = new Set<string>();
@@ -152,7 +152,7 @@ function findCallTargets(
   }
 
   function resolveAndAdd(name: string): void {
-    if (seen.has(name)) return;
+    if (seen.has(name)) { return; }
     seen.add(name);
 
     // Check if it's a local function in this module
@@ -215,10 +215,10 @@ function findFunctionBody(
   mod: ModuleInfo,
 ): ts.Block | ts.Expression | undefined {
   for (const gen of mod.generators) {
-    if (gen.name === name) return gen.body;
+    if (gen.name === name) { return gen.body; }
   }
   for (const fn of mod.nonGeneratorFunctions) {
-    if (fn.name === name) return fn.body;
+    if (fn.name === name) { return fn.body; }
   }
   return undefined;
 }
@@ -232,7 +232,7 @@ function findFunctionByName(name: string, mod: ModuleInfo): boolean {
 
 function findExportedName(localName: string, mod: ModuleInfo): string | undefined {
   for (const [exportedName, local] of mod.exportMap.local) {
-    if (local === localName) return exportedName;
+    if (local === localName) { return exportedName; }
   }
   return undefined;
 }
@@ -264,7 +264,7 @@ export function computeEmitOrder(
   for (const key of reachable) {
     const [modulePath, localName] = parseSymbolKey(key);
     const mod = modules.get(modulePath);
-    if (!mod) continue;
+    if (!mod) { continue; }
 
     const targets = findCallTargets(localName, mod, modules);
     const targetKeys = targets

@@ -336,9 +336,8 @@ export function generateGraphCode(options: GenerateGraphCodeOptions): string {
 
   const lines: string[] = [];
 
-  // Separate exported workflows (generators) from helpers
+  // Separate exported workflows (generators) from all symbols
   const exportedWorkflows = symbols.filter((s) => s.isExported && s.isGenerator);
-  const helpers = symbols.filter((s) => !s.isExported || !s.isGenerator);
 
   const allSymbols = [...symbols];
   const sortedContracts = [...contracts].sort((a, b) => a.name.localeCompare(b.name));
