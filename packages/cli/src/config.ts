@@ -76,7 +76,9 @@ export function* validateAndResolveConfig(
   for (const pass of config.generates) {
     const rawPass = pass as unknown as Record<string, unknown>;
     if (rawPass.input !== undefined) {
-      throw new ConfigError(`Pass '${(rawPass.name as string) ?? "?"}' uses 'input' which is no longer supported. Use 'roots' instead.`);
+      throw new ConfigError(
+        `Pass '${(rawPass.name as string) ?? "?"}' uses 'input' which is no longer supported. Use 'roots' instead.`,
+      );
     }
   }
 

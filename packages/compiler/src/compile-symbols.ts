@@ -71,10 +71,14 @@ export function compileReachableSymbols(
 
   for (const id of emitOrder) {
     const key = `${id.modulePath}::${id.localName}`;
-    if (!reachable.has(key)) { continue; }
+    if (!reachable.has(key)) {
+      continue;
+    }
 
     const mod = modules.get(id.modulePath);
-    if (!mod) { continue; }
+    if (!mod) {
+      continue;
+    }
 
     const contractMap = contractMaps.get(id.modulePath) ?? new Map();
 
@@ -82,7 +86,9 @@ export function compileReachableSymbols(
     const generator = mod.generators.find((g) => g.name === id.localName);
     const nonGenerator = mod.nonGeneratorFunctions.find((f) => f.name === id.localName);
 
-    if (!generator && !nonGenerator) { continue; }
+    if (!generator && !nonGenerator) {
+      continue;
+    }
 
     const isGenerator = !!generator;
 
@@ -98,11 +104,7 @@ export function compileReachableSymbols(
     }
 
     // Create emit context with per-module contracts and shared counter
-    const ctx = createStrictContextWithCounter(
-      mod.sourceFile,
-      contractMap,
-      counter,
-    );
+    const ctx = createStrictContextWithCounter(mod.sourceFile, contractMap, counter);
 
     let ir: Expr;
     try {
@@ -210,7 +212,9 @@ function buildPerModuleContractMaps(
     // CV2: Contracts imported from other modules
     for (const imp of mod.valueImports) {
       const targetMod = modules.get(imp.resolvedPath);
-      if (!targetMod) { continue; }
+      if (!targetMod) {
+        continue;
+      }
 
       // Check if the imported name is a contract in the target module
       const targetContract = targetMod.discoveredContracts.find((c) => {

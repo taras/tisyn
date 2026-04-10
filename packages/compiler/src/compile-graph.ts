@@ -38,10 +38,13 @@ export interface CompileGraphResult {
   /** Module graph metadata. */
   graph: {
     /** Module category and participation profile keyed by resolved path. */
-    modules: Record<string, {
-      category: ModuleCategory;
-      participation?: ("implementation" | "declaration")[];
-    }>;
+    modules: Record<
+      string,
+      {
+        category: ModuleCategory;
+        participation?: ("implementation" | "declaration")[];
+      }
+    >;
     /** Resolved paths of all traversed modules. */
     traversed: string[];
     /** Names of all compiled symbols. */
@@ -73,32 +76,24 @@ function runPipeline(options: {
   format?: "printed" | "json";
   generatedModulePaths?: string[];
 }): PipelineResult {
-  const {
-    roots,
-    readFile,
-    validate = true,
-    format = "printed",
-    generatedModulePaths,
-  } = options;
+  const { roots, readFile, validate = true, format = "printed", generatedModulePaths } = options;
 
   // Stage 1-3: Build graph, classify modules, extract symbols
   const graph = buildGraph(roots, readFile, generatedModulePaths);
 
   // Stage 4: Compute reachability and emission order
-  const { reachable } =
-    computeReachability(graph.modules);
+  const { reachable } = computeReachability(graph.modules);
   const emitOrder = computeEmitOrder(reachable, graph.modules);
 
   // Stage 5: Compile reachable symbols
   const counter = new Counter();
-  const { symbols, discoveredContracts, compiledWorkflows } =
-    compileReachableSymbols(
-      graph.modules,
-      reachable,
-      emitOrder,
-      counter,
-      { validate },
-    );
+  const { symbols, discoveredContracts, compiledWorkflows } = compileReachableSymbols(
+    graph.modules,
+    reachable,
+    emitOrder,
+    counter,
+    { validate },
+  );
 
   // Assign emitted names (§21)
   const modulePaths = [...graph.modules.keys()];
@@ -124,7 +119,9 @@ function runPipeline(options: {
   // would collide with the current module's own wrapper exports.
   const referencedFromGenerated = new Map<string, Set<string>>();
   for (const mod of graph.modules.values()) {
-    if (mod.category === "generated") { continue; }
+    if (mod.category === "generated") {
+      continue;
+    }
     for (const imp of mod.valueImports) {
       const targetMod = graph.modules.get(imp.resolvedPath);
       if (targetMod && targetMod.category === "generated") {
@@ -224,7 +221,9 @@ export function runSingleSourcePipeline(options: {
   const result = runPipeline({
     roots: [virtualPath],
     readFile: (path: string) => {
-      if (path === virtualPath) { return options.source; }
+      if (path === virtualPath) {
+        return options.source;
+      }
       throw new Error(`ENOENT: ${path}`);
     },
     validate: options.validate,
@@ -284,9 +283,7 @@ function computeParticipation(
   const participation: ("implementation" | "declaration")[] = [];
 
   // Check if module contributes compiled Fn bindings
-  const hasCompiledBindings = compiledSymbols.some(
-    (s) => s.id.modulePath === mod.path,
-  );
+  const hasCompiledBindings = compiledSymbols.some((s) => s.id.modulePath === mod.path);
   if (hasCompiledBindings) {
     participation.push("implementation");
   }

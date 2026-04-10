@@ -14,7 +14,9 @@ import { compileGraph, CompileError } from "./index.js";
 
 function makeReadFile(files: Record<string, string>): (path: string) => string {
   return (path) => {
-    if (!(path in files)) { throw new Error(`ENOENT: ${path}`); }
+    if (!(path in files)) {
+      throw new Error(`ENOENT: ${path}`);
+    }
     return files[path]!;
   };
 }
@@ -443,8 +445,16 @@ describe("symbol extraction and reachability", () => {
       "/b.ts": `export function* b() { return 2; }`,
     };
 
-    const r1 = compileGraph({ roots: ["/root.ts"], readFile: makeReadFile(files), validate: false });
-    const r2 = compileGraph({ roots: ["/root.ts"], readFile: makeReadFile(files), validate: false });
+    const r1 = compileGraph({
+      roots: ["/root.ts"],
+      readFile: makeReadFile(files),
+      validate: false,
+    });
+    const r2 = compileGraph({
+      roots: ["/root.ts"],
+      readFile: makeReadFile(files),
+      validate: false,
+    });
 
     expect(r1.graph.compiled).toEqual(r2.graph.compiled);
   });
@@ -494,9 +504,7 @@ describe("name conflicts", () => {
     });
 
     // Should have three distinct names for the three helpers
-    const helperNames = result.graph.compiled.filter(
-      (n) => n !== "main" && n !== "a" && n !== "b",
-    );
+    const helperNames = result.graph.compiled.filter((n) => n !== "main" && n !== "a" && n !== "b");
     expect(helperNames.length).toBe(3);
     // All distinct (EN2)
     expect(new Set(helperNames).size).toBe(3);
@@ -515,8 +523,16 @@ describe("artifact identity and determinism", () => {
       "/h.ts": `export function* helper() { return 42; }`,
     };
 
-    const r1 = compileGraph({ roots: ["/root.ts"], readFile: makeReadFile(files), validate: false });
-    const r2 = compileGraph({ roots: ["/root.ts"], readFile: makeReadFile(files), validate: false });
+    const r1 = compileGraph({
+      roots: ["/root.ts"],
+      readFile: makeReadFile(files),
+      validate: false,
+    });
+    const r2 = compileGraph({
+      roots: ["/root.ts"],
+      readFile: makeReadFile(files),
+      validate: false,
+    });
 
     expect(r1.source).toBe(r2.source);
   });
@@ -526,8 +542,18 @@ describe("artifact identity and determinism", () => {
       "/root.ts": `export function* main() { return 42; }`,
     };
 
-    const r1 = compileGraph({ roots: ["/root.ts"], readFile: makeReadFile(files), validate: false, format: "json" });
-    const r2 = compileGraph({ roots: ["/root.ts"], readFile: makeReadFile(files), validate: false, format: "json" });
+    const r1 = compileGraph({
+      roots: ["/root.ts"],
+      readFile: makeReadFile(files),
+      validate: false,
+      format: "json",
+    });
+    const r2 = compileGraph({
+      roots: ["/root.ts"],
+      readFile: makeReadFile(files),
+      validate: false,
+      format: "json",
+    });
 
     expect(r1.source).toBe(r2.source);
   });
@@ -588,9 +614,7 @@ describe("artifact identity and determinism", () => {
       validate: false,
     });
 
-    const helperNames = result.graph.compiled.filter(
-      (n) => n !== "main" && n !== "a" && n !== "b",
-    );
+    const helperNames = result.graph.compiled.filter((n) => n !== "main" && n !== "a" && n !== "b");
     expect(helperNames.length).toBe(2);
     expect(helperNames[0]).not.toBe(helperNames[1]);
   });
@@ -608,8 +632,16 @@ describe("artifact identity and determinism", () => {
       `,
     };
 
-    const r1 = compileGraph({ roots: ["/root.ts"], readFile: makeReadFile(files), validate: false });
-    const r2 = compileGraph({ roots: ["/root.ts"], readFile: makeReadFile(files), validate: false });
+    const r1 = compileGraph({
+      roots: ["/root.ts"],
+      readFile: makeReadFile(files),
+      validate: false,
+    });
+    const r2 = compileGraph({
+      roots: ["/root.ts"],
+      readFile: makeReadFile(files),
+      validate: false,
+    });
 
     expect(r1.graph.compiled).toEqual(r2.graph.compiled);
   });
@@ -619,13 +651,33 @@ describe("artifact identity and determinism", () => {
       "/root.ts": `export function* main() { return 42; }`,
     };
 
-    const printed = compileGraph({ roots: ["/root.ts"], readFile: makeReadFile(files), validate: false, format: "printed" });
-    const json = compileGraph({ roots: ["/root.ts"], readFile: makeReadFile(files), validate: false, format: "json" });
+    const printed = compileGraph({
+      roots: ["/root.ts"],
+      readFile: makeReadFile(files),
+      validate: false,
+      format: "printed",
+    });
+    const json = compileGraph({
+      roots: ["/root.ts"],
+      readFile: makeReadFile(files),
+      validate: false,
+      format: "json",
+    });
 
     expect(printed.source).not.toBe(json.source);
     // Each is internally deterministic
-    const p2 = compileGraph({ roots: ["/root.ts"], readFile: makeReadFile(files), validate: false, format: "printed" });
-    const j2 = compileGraph({ roots: ["/root.ts"], readFile: makeReadFile(files), validate: false, format: "json" });
+    const p2 = compileGraph({
+      roots: ["/root.ts"],
+      readFile: makeReadFile(files),
+      validate: false,
+      format: "printed",
+    });
+    const j2 = compileGraph({
+      roots: ["/root.ts"],
+      readFile: makeReadFile(files),
+      validate: false,
+      format: "json",
+    });
     expect(printed.source).toBe(p2.source);
     expect(json.source).toBe(j2.source);
   });
@@ -788,9 +840,7 @@ describe("artifact structure", () => {
 
     // Should import only MyAgent, not workflows/inputSchemas/agents
     expect(result.source).toContain("MyAgent");
-    const importLine = result.source
-      .split("\n")
-      .find((l) => l.includes("prior.generated.ts"));
+    const importLine = result.source.split("\n").find((l) => l.includes("prior.generated.ts"));
     expect(importLine).toBeDefined();
     expect(importLine).toContain("MyAgent");
     expect(importLine).not.toContain("workflows");

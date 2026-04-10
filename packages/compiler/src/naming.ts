@@ -19,10 +19,7 @@ import { CompileError } from "./errors.js";
  * The scheme for non-exported symbols is: `__m${moduleIndex}_${localName}`
  * where moduleIndex is the module's position in lexicographic ordering.
  */
-export function assignEmittedNames(
-  symbols: CompiledSymbol[],
-  modulePaths: string[],
-): void {
+export function assignEmittedNames(symbols: CompiledSymbol[], modulePaths: string[]): void {
   // Build module index map: path → lexicographic position
   const sorted = [...modulePaths].sort();
   const moduleIndex = new Map<string, number>();
@@ -51,9 +48,7 @@ export function assignEmittedNames(
  * NC2: Diagnostic lists both modules.
  * NC3: No implicit renaming.
  */
-export function checkNameConflicts(
-  symbols: CompiledSymbol[],
-): void {
+export function checkNameConflicts(symbols: CompiledSymbol[]): void {
   // Only exported symbols participate in conflict detection (§19.2)
   const exported = symbols.filter((s) => s.isExported);
 
@@ -70,9 +65,7 @@ export function checkNameConflicts(
 
   for (const [name, syms] of byName) {
     if (syms.length > 1) {
-      const locations = syms
-        .map((s) => `'${s.id.modulePath}'`)
-        .join(" and ");
+      const locations = syms.map((s) => `'${s.id.modulePath}'`).join(" and ");
       throw new CompileError(
         "E-NAME-001",
         `Duplicate exported symbol '${name}' in modules ${locations}`,

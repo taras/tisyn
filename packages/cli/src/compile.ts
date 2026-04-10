@@ -68,9 +68,7 @@ export function* runBuild(
  * Seeds from explicit dependsOn, then scans each pass's root source files
  * for relative imports that resolve to another pass's output path.
  */
-function* inferDependencyGraph(
-  passes: ResolvedPass[],
-): Operation<Map<string, Set<string>>> {
+function* inferDependencyGraph(passes: ResolvedPass[]): Operation<Map<string, Set<string>>> {
   const graph = new Map<string, Set<string>>();
   const outputsToPass = new Map<string, string>();
 

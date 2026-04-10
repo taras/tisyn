@@ -36,15 +36,15 @@ export interface ReachabilityResult {
  * Entrypoints are exported generator functions in workflow-implementation modules (ER1).
  * The closure includes all symbols referenced via yield* or direct calls (ER2-ER3).
  */
-export function computeReachability(
-  modules: Map<string, ModuleInfo>,
-): ReachabilityResult {
+export function computeReachability(modules: Map<string, ModuleInfo>): ReachabilityResult {
   // ER1: Find entrypoints — exported generators in workflow-implementation modules
   const entrypoints: SymbolId[] = [];
   const allExportedSymbols: SymbolId[] = [];
 
   for (const [path, mod] of modules) {
-    if (mod.category !== "workflow-implementation") { continue; }
+    if (mod.category !== "workflow-implementation") {
+      continue;
+    }
 
     for (const gen of mod.generators) {
       const exportedAs = findExportedName(gen.name, mod);
@@ -84,7 +84,9 @@ export function computeReachability(
     const [modulePath, localName] = parseSymbolKey(key);
 
     const mod = modules.get(modulePath);
-    if (!mod) { continue; }
+    if (!mod) {
+      continue;
+    }
 
     // Find the function body for this symbol
     const callTargets = findCallTargets(localName, mod, modules);
@@ -99,9 +101,7 @@ export function computeReachability(
   }
 
   // ER4: Unreachable exported symbols
-  const unreachableExports = allExportedSymbols.filter(
-    (id) => !reachable.has(symbolKey(id)),
-  );
+  const unreachableExports = allExportedSymbols.filter((id) => !reachable.has(symbolKey(id)));
 
   return { entrypoints, reachable, unreachableExports };
 }
@@ -122,18 +122,16 @@ function findCallTargets(
 ): SymbolId[] {
   // Find the function body
   const body = findFunctionBody(localName, mod);
-  if (!body) { return []; }
+  if (!body) {
+    return [];
+  }
 
   const targets: SymbolId[] = [];
   const seen = new Set<string>();
 
   function visitNode(node: ts.Node): void {
     // yield* expr — look at the expression
-    if (
-      ts.isYieldExpression(node) &&
-      node.asteriskToken &&
-      node.expression
-    ) {
+    if (ts.isYieldExpression(node) && node.asteriskToken && node.expression) {
       const callee = extractCallee(node.expression);
       if (callee) {
         resolveAndAdd(callee);
@@ -152,7 +150,9 @@ function findCallTargets(
   }
 
   function resolveAndAdd(name: string): void {
-    if (seen.has(name)) { return; }
+    if (seen.has(name)) {
+      return;
+    }
     seen.add(name);
 
     // Check if it's a local function in this module
@@ -210,15 +210,16 @@ function extractCallee(expr: ts.Expression): string | undefined {
   return undefined;
 }
 
-function findFunctionBody(
-  name: string,
-  mod: ModuleInfo,
-): ts.Block | ts.Expression | undefined {
+function findFunctionBody(name: string, mod: ModuleInfo): ts.Block | ts.Expression | undefined {
   for (const gen of mod.generators) {
-    if (gen.name === name) { return gen.body; }
+    if (gen.name === name) {
+      return gen.body;
+    }
   }
   for (const fn of mod.nonGeneratorFunctions) {
-    if (fn.name === name) { return fn.body; }
+    if (fn.name === name) {
+      return fn.body;
+    }
   }
   return undefined;
 }
@@ -232,7 +233,9 @@ function findFunctionByName(name: string, mod: ModuleInfo): boolean {
 
 function findExportedName(localName: string, mod: ModuleInfo): string | undefined {
   for (const [exportedName, local] of mod.exportMap.local) {
-    if (local === localName) { return exportedName; }
+    if (local === localName) {
+      return exportedName;
+    }
   }
   return undefined;
 }
@@ -264,12 +267,12 @@ export function computeEmitOrder(
   for (const key of reachable) {
     const [modulePath, localName] = parseSymbolKey(key);
     const mod = modules.get(modulePath);
-    if (!mod) { continue; }
+    if (!mod) {
+      continue;
+    }
 
     const targets = findCallTargets(localName, mod, modules);
-    const targetKeys = targets
-      .map(symbolKey)
-      .filter((k) => reachable.has(k));
+    const targetKeys = targets.map(symbolKey).filter((k) => reachable.has(k));
     adj.set(key, targetKeys);
   }
 

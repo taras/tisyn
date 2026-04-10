@@ -101,7 +101,9 @@ function traverseModule(
   visited: Set<string>,
 ): void {
   // G8 / §14.3: Cycle handling via visited set
-  if (visited.has(modulePath)) { return; }
+  if (visited.has(modulePath)) {
+    return;
+  }
   visited.add(modulePath);
 
   // Read source
@@ -142,9 +144,10 @@ function traverseModule(
   const category = classifyModule(sourceFile, modulePath, generatedSet, source);
 
   // Extract symbols based on category
-  const generators = category === "generated" || category === "type-only" || category === "external"
-    ? []
-    : [...parseGenerators(sourceFile), ...parseConstBoundGenerators(sourceFile)];
+  const generators =
+    category === "generated" || category === "type-only" || category === "external"
+      ? []
+      : [...parseGenerators(sourceFile), ...parseConstBoundGenerators(sourceFile)];
 
   const nonGeneratorFunctions =
     category === "generated" || category === "type-only" || category === "external"
@@ -251,10 +254,7 @@ function classifyModule(
         hasFunctionDeclarations = true;
       }
       // Check for ambient contract declaration
-      if (
-        !stmt.body &&
-        stmt.modifiers?.some((m) => m.kind === ts.SyntaxKind.DeclareKeyword)
-      ) {
+      if (!stmt.body && stmt.modifiers?.some((m) => m.kind === ts.SyntaxKind.DeclareKeyword)) {
         // Quick check: does it look like a contract? (declare function with return type literal)
         if (stmt.type && ts.isTypeLiteralNode(stmt.type)) {
           hasContractDeclarations = true;
@@ -266,9 +266,11 @@ function classifyModule(
       }
     }
 
-    if (ts.isVariableStatement(stmt) && (stmt.declarationList.flags & ts.NodeFlags.Const)) {
+    if (ts.isVariableStatement(stmt) && stmt.declarationList.flags & ts.NodeFlags.Const) {
       for (const decl of stmt.declarationList.declarations) {
-        if (!decl.initializer) { continue; }
+        if (!decl.initializer) {
+          continue;
+        }
         if (ts.isFunctionExpression(decl.initializer)) {
           if (decl.initializer.asteriskToken) {
             hasGenerators = true;
@@ -330,10 +332,7 @@ interface ExtractedImports {
  *
  * Implements §2.3 Import Semantics (IS1-IS9).
  */
-export function extractImports(
-  sourceFile: ts.SourceFile,
-  modulePath: string,
-): ExtractedImports {
+export function extractImports(sourceFile: ts.SourceFile, modulePath: string): ExtractedImports {
   const valueImports: ValueImport[] = [];
   const typeImportTexts: string[] = [];
   const rejections: ImportRejection[] = [];
@@ -352,7 +351,9 @@ export function extractImports(
 
     // Check import clause type
     const clause = stmt.importClause;
-    if (!clause) { continue; } // side-effect import — skip
+    if (!clause) {
+      continue;
+    } // side-effect import — skip
 
     // IS2: Type-only imports — forward without resolution
     if (clause.isTypeOnly) {
@@ -387,7 +388,9 @@ export function extractImports(
     }
 
     // Must be named imports (IS1)
-    if (!namedBindings || !ts.isNamedImports(namedBindings)) { continue; }
+    if (!namedBindings || !ts.isNamedImports(namedBindings)) {
+      continue;
+    }
 
     // Classify specifier
     const isRelative = specifierText.startsWith("./") || specifierText.startsWith("../");
@@ -429,7 +432,9 @@ export function extractImports(
 
     // Extract named value imports (IS1)
     for (const el of namedBindings.elements) {
-      if (el.isTypeOnly) { continue; }
+      if (el.isTypeOnly) {
+        continue;
+      }
 
       const importedName = el.propertyName?.text ?? el.name.text;
       const localName = el.name.text;
@@ -452,15 +457,9 @@ export function extractImports(
   return { valueImports, typeImportTexts, rejections, typeOnlyModulePaths, externalSpecifiers };
 }
 
-function scanForDynamicImports(
-  sourceFile: ts.SourceFile,
-  rejections: ImportRejection[],
-): void {
+function scanForDynamicImports(sourceFile: ts.SourceFile, rejections: ImportRejection[]): void {
   function visit(node: ts.Node): void {
-    if (
-      ts.isCallExpression(node) &&
-      node.expression.kind === ts.SyntaxKind.ImportKeyword
-    ) {
+    if (ts.isCallExpression(node) && node.expression.kind === ts.SyntaxKind.ImportKeyword) {
       const loc = getNodeLocation(node, sourceFile);
       rejections.push({
         code: "E-IMPORT-006",
@@ -473,16 +472,9 @@ function scanForDynamicImports(
   ts.forEachChild(sourceFile, visit);
 }
 
-function scanForReExports(
-  sourceFile: ts.SourceFile,
-  rejections: ImportRejection[],
-): void {
+function scanForReExports(sourceFile: ts.SourceFile, rejections: ImportRejection[]): void {
   for (const stmt of sourceFile.statements) {
-    if (
-      ts.isExportDeclaration(stmt) &&
-      stmt.moduleSpecifier &&
-      !stmt.isTypeOnly
-    ) {
+    if (ts.isExportDeclaration(stmt) && stmt.moduleSpecifier && !stmt.isTypeOnly) {
       // Check if any elements are value (non-type-only) re-exports
       if (stmt.exportClause && ts.isNamedExports(stmt.exportClause)) {
         const hasValueReExports = stmt.exportClause.elements.some((el) => !el.isTypeOnly);
