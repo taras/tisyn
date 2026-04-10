@@ -9,7 +9,7 @@ import { describe, it } from "@effectionx/vitest";
 import { expect } from "vitest";
 import { Call, Ref } from "@tisyn/ir";
 import { execute } from "@tisyn/runtime";
-import { compileOne } from "./index.js";
+import { compileOne, compileGraphForRuntime } from "./index.js";
 import { agent, operation } from "@tisyn/agent";
 import { inprocessTransport } from "@tisyn/transport";
 
@@ -541,5 +541,210 @@ describe("useTransport with property-access factory expression", () => {
     });
 
     expect(result).toEqual({ status: "ok", value: "hello world" });
+  });
+});
+
+// ── Runtime binding resolution behavioral tests ──
+
+function makeReadFile(files: Record<string, string>): (path: string) => string {
+  return (path) => {
+    if (!(path in files)) {
+      throw new Error(`ENOENT: ${path}`);
+    }
+    return files[path]!;
+  };
+}
+
+function compileAndExecute(
+  files: Record<string, string>,
+  exportName: string,
+  input?: Record<string, unknown>,
+) {
+  const compiled = compileGraphForRuntime({
+    roots: ["/root.ts"],
+    readFile: makeReadFile(files),
+    validate: false,
+    exportName,
+  });
+
+  const fn = compiled.ir;
+  if (fn && typeof fn === "object" && "tisyn" in fn && fn.tisyn === "fn") {
+    const params = (fn as { params: string[] }).params;
+    if (params.length === 0) {
+      return execute({ ir: Call(fn), env: { ...compiled.runtimeBindings } });
+    }
+    const paramName = params[0]!;
+    return execute({
+      ir: Call(fn, Ref(paramName)),
+      env: { [paramName]: input ?? {}, ...compiled.runtimeBindings },
+    });
+  }
+  return execute({ ir: fn, env: { ...compiled.runtimeBindings } });
+}
+
+describe("runtime binding resolution — behavioral", () => {
+  it("RT-006: same-file helper executes successfully", function* () {
+    const { result } = yield* compileAndExecute(
+      {
+        "/root.ts": `
+          function* helper() { return 42; }
+          export function* main() { return yield* helper(); }
+        `,
+      },
+      "main",
+    );
+    expect(result).toEqual({ status: "ok", value: 42 });
+  });
+
+  it("RT-007: cross-module helper executes successfully", function* () {
+    const { result } = yield* compileAndExecute(
+      {
+        "/root.ts": `
+          import { helper } from "./utils.ts";
+          export function* main() { return yield* helper(); }
+        `,
+        "/utils.ts": `
+          export function* helper() { return 99; }
+        `,
+      },
+      "main",
+    );
+    expect(result).toEqual({ status: "ok", value: 99 });
+  });
+
+  it("RT-008: aliased import executes successfully", function* () {
+    const { result } = yield* compileAndExecute(
+      {
+        "/root.ts": `
+          import { helper as h } from "./utils.ts";
+          export function* main() { return yield* h(); }
+        `,
+        "/utils.ts": `
+          export function* helper() { return 77; }
+        `,
+      },
+      "main",
+    );
+    expect(result).toEqual({ status: "ok", value: 77 });
+  });
+
+  it("RT-009: two modules with same-named non-exported helper execute correctly", function* () {
+    const { result } = yield* compileAndExecute(
+      {
+        "/root.ts": `
+          import { processA } from "./a.ts";
+          import { processB } from "./b.ts";
+          export function* main() {
+            const a = yield* processA();
+            const b = yield* processB();
+            return a + b;
+          }
+        `,
+        "/a.ts": `
+          function* helper() { return 10; }
+          export function* processA() { return yield* helper(); }
+        `,
+        "/b.ts": `
+          function* helper() { return 20; }
+          export function* processB() { return yield* helper(); }
+        `,
+      },
+      "main",
+    );
+    expect(result).toEqual({ status: "ok", value: 30 });
+  });
+
+  it("RT-010: self-recursive exported workflow executes successfully", function* () {
+    const compiled = compileGraphForRuntime({
+      roots: ["/root.ts"],
+      readFile: makeReadFile({
+        "/root.ts": `
+          export function* countdown(n: number) {
+            if (n <= 0) { return 0; }
+            return yield* countdown(n - 1);
+          }
+        `,
+      }),
+      validate: false,
+      exportName: "countdown",
+    });
+
+    expect(compiled.runtimeBindings["__rtexport_countdown"]).toBeDefined();
+
+    const fn = compiled.ir as { tisyn: string; params: string[] };
+    const { result } = yield* execute({
+      ir: Call(compiled.ir, Ref(fn.params[0]!)),
+      env: { [fn.params[0]!]: 3, ...compiled.runtimeBindings },
+    });
+    expect(result).toEqual({ status: "ok", value: 0 });
+  });
+
+  it("RT-011: exported workflow with export name = parameter name executes correctly", function* () {
+    const { result } = yield* compileAndExecute(
+      {
+        "/root.ts": `
+          export function* x(x: number) {
+            if (x <= 0) { return 0; }
+            return x;
+          }
+        `,
+      },
+      "x",
+      5,
+    );
+    expect(result).toEqual({ status: "ok", value: 5 });
+  });
+
+  it("RT-013: reachable exported callee with export name = parameter name", function* () {
+    const { result } = yield* compileAndExecute(
+      {
+        "/root.ts": `
+          import { helper } from "./utils.ts";
+          export function* main() { return yield* helper(3); }
+        `,
+        "/utils.ts": `
+          export function* helper(helper: number) {
+            if (helper <= 0) { return 0; }
+            return helper;
+          }
+        `,
+      },
+      "main",
+    );
+    expect(result).toEqual({ status: "ok", value: 3 });
+  });
+
+  it("RT-014: self-recursive exported callee reached transitively", function* () {
+    const compiled = compileGraphForRuntime({
+      roots: ["/root.ts"],
+      readFile: makeReadFile({
+        "/root.ts": `
+          import { helper } from "./utils.ts";
+          export function* main() { return yield* helper(3); }
+        `,
+        "/utils.ts": `
+          export function* helper(n: number) {
+            if (n <= 0) { return 0; }
+            return yield* helper(n - 1);
+          }
+        `,
+      }),
+      validate: false,
+      exportName: "main",
+    });
+
+    expect(compiled.runtimeBindings["__rtexport_helper"]).toBeDefined();
+
+    // Verify helper's rewritten IR uses __rtexport_helper for self-recursion
+    const helperIr = compiled.runtimeBindings["__rtexport_helper"];
+    const refs = JSON.stringify(helperIr);
+    expect(refs).toContain("__rtexport_helper");
+
+    // main() has zero params — call directly
+    const { result } = yield* execute({
+      ir: Call(compiled.ir),
+      env: { ...compiled.runtimeBindings },
+    });
+    expect(result).toEqual({ status: "ok", value: 0 });
   });
 });

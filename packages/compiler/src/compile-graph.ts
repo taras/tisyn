@@ -13,6 +13,7 @@
 import { readFileSync } from "node:fs";
 import { dirname, relative } from "node:path";
 import type { TisynExpr as Expr } from "@tisyn/ir";
+import { collectFreeRefs, isRefNode, isEvalNode, isFnNode, isQuoteNode } from "@tisyn/ir";
 import { collectReferencedTypeImports, type DiscoveredContract } from "./discover.js";
 import { buildGraph, type ModuleCategory, type ModuleInfo } from "./graph.js";
 import { computeReachability, computeEmitOrder } from "./reachability.js";
@@ -23,8 +24,9 @@ import {
   checkContractNameConflicts,
   checkContractSymbolConflicts,
 } from "./naming.js";
-import { generateGraphCode } from "./codegen.js";
+import { generateGraphCode, type InputSchema } from "./codegen.js";
 import { Counter } from "./counter.js";
+import { CompileError } from "./errors.js";
 
 export type { ModuleCategory } from "./graph.js";
 
@@ -38,6 +40,31 @@ export interface CompileGraphOptions {
   generatedModulePaths?: string[];
   /** Output file path. Used to emit generated-module imports as relative specifiers. */
   outputPath?: string;
+}
+
+/** Options for runtime compilation of a selected workflow export. */
+export interface CompileForExecutionOptions extends CompileGraphOptions {
+  /** The export name to select for execution. */
+  exportName: string;
+}
+
+/** Result of compiling a selected workflow for direct execution. */
+export interface RuntimeCompilationResult {
+  /** The selected workflow's compiled IR, rewritten with globally unique binding names. */
+  ir: Expr;
+  /** Input schema for the selected workflow. */
+  inputSchema: InputSchema;
+  /**
+   * Runtime binding map for all reachable compiled symbols, including the selected export.
+   *
+   * Keys are collision-safe runtime names:
+   * - Exported symbols: `__rtexport_{emittedName}` (prevents collision with own parameter names)
+   * - Non-exported symbols: `__m{idx}_{localName}` (standard mangled emitted name)
+   *
+   * All keys start with `__`, preventing collisions with user-chosen parameter names.
+   * The selected export is included so self-recursive workflows can resolve their own Ref.
+   */
+  runtimeBindings: Record<string, Expr>;
 }
 
 export interface CompileGraphResult {
@@ -79,6 +106,8 @@ interface PipelineResult {
   warnings: string[];
   modules: Map<string, ModuleInfo>;
   traversalOrder: string[];
+  /** Graph-wide reachable symbol keys (modulePath::localName). */
+  reachable: Set<string>;
 }
 
 /**
@@ -220,6 +249,7 @@ function runPipeline(options: {
     warnings,
     modules: graph.modules,
     traversalOrder: graph.traversalOrder,
+    reachable,
   };
 }
 
@@ -305,15 +335,14 @@ export function runSingleSourcePipeline(options: {
 }
 
 /**
- * Compile a rooted graph and return per-export IR and input schemas.
+ * Compile a rooted graph and return per-export IR, input schema, and runtime bindings.
  *
  * Used by the CLI's `tsn run` to compile authored .ts sources at runtime
- * without writing a temp artifact file. Returns the compiled IR objects
- * and input schemas directly, avoiding file IO and package resolution issues.
+ * without writing a temp artifact file. Returns the selected export's compiled IR
+ * rewritten with globally unique binding names, plus a runtime binding map
+ * for all reachable compiled symbols.
  */
-export function compileGraphForRuntime(options: CompileGraphOptions): {
-  exports: Record<string, { ir: Expr; inputSchema: import("./codegen.js").InputSchema }>;
-} {
+export function compileGraphForRuntime(options: CompileForExecutionOptions): RuntimeCompilationResult {
   const readFile = options.readFile ?? defaultReadFile;
 
   const result = runPipeline({
@@ -324,17 +353,351 @@ export function compileGraphForRuntime(options: CompileGraphOptions): {
     generatedModulePaths: options.generatedModulePaths,
   });
 
-  const exports: Record<string, { ir: Expr; inputSchema: import("./codegen.js").InputSchema }> = {};
+  // Find the selected export
+  const selectedSymbol = result.compiledSymbols.find(
+    (s) => s.isExported && (s.exportedName ?? s.id.localName) === options.exportName,
+  );
+  if (!selectedSymbol) {
+    const available =
+      result.compiledSymbols
+        .filter((s) => s.isExported)
+        .map((s) => s.exportedName ?? s.id.localName)
+        .join(", ") || "(none)";
+    throw new CompileError(
+      "E-GRAPH-002",
+      `Workflow source does not export '${options.exportName}'. Exported: ${available}`,
+      1,
+      1,
+    );
+  }
+
+  // Build symbol lookup by key
+  const symbolByKey = new Map<string, CompiledSymbol>();
   for (const sym of result.compiledSymbols) {
+    symbolByKey.set(`${sym.id.modulePath}::${sym.id.localName}`, sym);
+  }
+
+  // Step 3: Compute per-export reachability
+  const perExportReachable = buildPerExportReachable(
+    selectedSymbol,
+    symbolByKey,
+    result.modules,
+  );
+
+  // Step 2: Assign synthetic runtime names
+  const runtimeNames = new Map<string, string>();
+  for (const key of perExportReachable) {
+    const sym = symbolByKey.get(key)!;
     if (sym.isExported) {
-      exports[sym.exportedName ?? sym.id.localName] = {
-        ir: sym.ir,
-        inputSchema: sym.inputSchema,
-      };
+      runtimeNames.set(key, `__rtexport_${sym.emittedName}`);
+    } else {
+      runtimeNames.set(key, sym.emittedName);
     }
   }
 
-  return { exports };
+  // Step 4: Build per-module name maps
+  const moduleNameMaps = buildModuleNameMaps(
+    perExportReachable,
+    runtimeNames,
+    symbolByKey,
+    result.modules,
+  );
+
+  // Step 5: Rewrite IR and build binding map
+  const runtimeBindings: Record<string, Expr> = {};
+  let rewrittenSelectedIr: Expr | undefined;
+
+  for (const key of perExportReachable) {
+    const sym = symbolByKey.get(key)!;
+    const nameMap = moduleNameMaps.get(sym.id.modulePath) ?? {};
+    const rewritten = rewriteRefs(sym.ir, nameMap, new Set<string>());
+    const rtName = runtimeNames.get(key)!;
+    runtimeBindings[rtName] = rewritten;
+
+    if (key === `${selectedSymbol.id.modulePath}::${selectedSymbol.id.localName}`) {
+      rewrittenSelectedIr = rewritten;
+    }
+  }
+
+  return {
+    ir: rewrittenSelectedIr!,
+    inputSchema: selectedSymbol.inputSchema,
+    runtimeBindings,
+  };
+}
+
+// ── Per-export reachability ──
+
+/**
+ * Compute the set of compiled symbol keys reachable from the selected export.
+ *
+ * Traces through IR free variables and resolves them via module imports
+ * and local definitions to find transitively reachable compiled symbols.
+ */
+function buildPerExportReachable(
+  selectedSymbol: CompiledSymbol,
+  symbolByKey: Map<string, CompiledSymbol>,
+  modules: Map<string, ModuleInfo>,
+): Set<string> {
+  const selectedKey = `${selectedSymbol.id.modulePath}::${selectedSymbol.id.localName}`;
+  const reachable = new Set<string>();
+  const worklist = [selectedKey];
+
+  while (worklist.length > 0) {
+    const key = worklist.pop()!;
+    if (reachable.has(key)) {
+      continue;
+    }
+    reachable.add(key);
+
+    const sym = symbolByKey.get(key);
+    if (!sym) {
+      continue;
+    }
+
+    const freeRefs = collectFreeRefs(sym.ir);
+    const mod = modules.get(sym.id.modulePath);
+    if (!mod) {
+      continue;
+    }
+
+    for (const refName of freeRefs) {
+      // Check if it's a local compiled symbol
+      const localKey = `${sym.id.modulePath}::${refName}`;
+      if (symbolByKey.has(localKey)) {
+        if (!reachable.has(localKey)) {
+          worklist.push(localKey);
+        }
+        continue;
+      }
+
+      // Check if it's an import
+      const imp = mod.valueImports.find((v) => v.localName === refName);
+      if (imp) {
+        const targetMod = modules.get(imp.resolvedPath);
+        if (targetMod) {
+          const targetLocalName = targetMod.exportMap.local.get(imp.importedName);
+          if (targetLocalName) {
+            const targetKey = `${imp.resolvedPath}::${targetLocalName}`;
+            if (symbolByKey.has(targetKey) && !reachable.has(targetKey)) {
+              worklist.push(targetKey);
+            }
+          }
+        }
+      }
+    }
+  }
+
+  return reachable;
+}
+
+// ── Per-module name maps ──
+
+/**
+ * Build a name map for each module with symbols in the per-export reachable set.
+ *
+ * Maps source-local identifiers to their globally unique runtime names,
+ * so that IR Ref nodes can be rewritten to use collision-safe names.
+ */
+function buildModuleNameMaps(
+  perExportReachable: Set<string>,
+  runtimeNames: Map<string, string>,
+  symbolByKey: Map<string, CompiledSymbol>,
+  modules: Map<string, ModuleInfo>,
+): Map<string, Record<string, string>> {
+  const result = new Map<string, Record<string, string>>();
+
+  // Collect all module paths that have reachable symbols
+  const modulePaths = new Set<string>();
+  for (const key of perExportReachable) {
+    const sym = symbolByKey.get(key)!;
+    modulePaths.add(sym.id.modulePath);
+  }
+
+  for (const modPath of modulePaths) {
+    const nameMap: Record<string, string> = {};
+    const mod = modules.get(modPath);
+    if (!mod) {
+      continue;
+    }
+
+    // Map local compiled symbols
+    for (const key of perExportReachable) {
+      const sym = symbolByKey.get(key)!;
+      if (sym.id.modulePath === modPath) {
+        nameMap[sym.id.localName] = runtimeNames.get(key)!;
+      }
+    }
+
+    // Map imports that resolve to reachable compiled symbols
+    for (const imp of mod.valueImports) {
+      const targetMod = modules.get(imp.resolvedPath);
+      if (!targetMod) {
+        continue;
+      }
+      const targetLocalName = targetMod.exportMap.local.get(imp.importedName);
+      if (targetLocalName) {
+        const targetKey = `${imp.resolvedPath}::${targetLocalName}`;
+        if (perExportReachable.has(targetKey)) {
+          nameMap[imp.localName] = runtimeNames.get(targetKey)!;
+        }
+      }
+    }
+
+    result.set(modPath, nameMap);
+  }
+
+  return result;
+}
+
+// ── Scope-aware IR Ref rewriting ──
+
+/**
+ * Rewrite Ref nodes in an IR tree, replacing source-local names with
+ * globally unique runtime names. Scope-aware: respects fn params,
+ * let bindings, and try catch params.
+ */
+function rewriteRefs(
+  expr: Expr,
+  nameMap: Record<string, string>,
+  bound: Set<string>,
+): Expr {
+  if (expr === null || typeof expr !== "object") {
+    return expr;
+  }
+
+  if (Array.isArray(expr)) {
+    let changed = false;
+    const newArr = expr.map((item) => {
+      const rewritten = rewriteRefs(item as Expr, nameMap, bound);
+      if (rewritten !== item) {
+        changed = true;
+      }
+      return rewritten;
+    });
+    return changed ? newArr : expr;
+  }
+
+  if (isRefNode(expr)) {
+    if (!bound.has(expr.name) && expr.name in nameMap) {
+      return { tisyn: "ref", name: nameMap[expr.name]! };
+    }
+    return expr;
+  }
+
+  if (isFnNode(expr)) {
+    const newBound = new Set(bound);
+    for (const p of expr.params) {
+      newBound.add(p);
+    }
+    const newBody = rewriteRefs(expr.body as Expr, nameMap, newBound);
+    if (newBody === expr.body) {
+      return expr;
+    }
+    return { tisyn: "fn", params: expr.params, body: newBody };
+  }
+
+  if (isEvalNode(expr)) {
+    if (expr.id === "let") {
+      const data = expr.data as Record<string, unknown>;
+      const shape =
+        data &&
+        typeof data === "object" &&
+        "tisyn" in data &&
+        (data as Record<string, unknown>)["tisyn"] === "quote"
+          ? (data as { expr: Record<string, unknown> }).expr
+          : data;
+      const s = shape as { name: string; value: Expr; body: Expr };
+      const newValue = rewriteRefs(s.value, nameMap, bound);
+      const newBound = new Set(bound);
+      newBound.add(s.name);
+      const newBody = rewriteRefs(s.body, nameMap, newBound);
+      if (newValue === s.value && newBody === s.body) {
+        return expr;
+      }
+      const newShape = { name: s.name, value: newValue, body: newBody };
+      if (isQuoteNode(data as Expr)) {
+        return { tisyn: "eval", id: "let", data: { tisyn: "quote", expr: newShape } } as unknown as Expr;
+      }
+      return { tisyn: "eval", id: "let", data: newShape } as unknown as Expr;
+    }
+
+    if (expr.id === "try") {
+      const data = expr.data as Record<string, unknown>;
+      const shape =
+        data &&
+        typeof data === "object" &&
+        "tisyn" in data &&
+        (data as Record<string, unknown>)["tisyn"] === "quote"
+          ? (data as { expr: Record<string, unknown> }).expr
+          : data;
+      const s = shape as {
+        body: Expr;
+        catchParam?: string;
+        catchBody?: Expr;
+        finally?: Expr;
+        finallyPayload?: string;
+      };
+      const newTryBody = rewriteRefs(s.body, nameMap, bound);
+      let newCatchBody = s.catchBody;
+      if (s.catchBody !== undefined) {
+        const catchBound = s.catchParam ? new Set([...bound, s.catchParam]) : bound;
+        newCatchBody = rewriteRefs(s.catchBody, nameMap, catchBound);
+      }
+      const newFinally = s.finally !== undefined ? rewriteRefs(s.finally, nameMap, bound) : s.finally;
+      if (newTryBody === s.body && newCatchBody === s.catchBody && newFinally === s.finally) {
+        return expr;
+      }
+      const newShape: Record<string, unknown> = { body: newTryBody };
+      if (s.catchParam !== undefined) {
+        newShape["catchParam"] = s.catchParam;
+      }
+      if (newCatchBody !== undefined) {
+        newShape["catchBody"] = newCatchBody;
+      }
+      if (newFinally !== undefined) {
+        newShape["finally"] = newFinally;
+      }
+      if (s.finallyPayload !== undefined) {
+        newShape["finallyPayload"] = s.finallyPayload;
+      }
+      if (isQuoteNode(data as Expr)) {
+        return { tisyn: "eval", id: "try", data: { tisyn: "quote", expr: newShape } } as unknown as Expr;
+      }
+      return { tisyn: "eval", id: "try", data: newShape } as unknown as Expr;
+    }
+
+    // All other eval nodes: recurse into data
+    const newData = rewriteRefs(expr.data as Expr, nameMap, bound);
+    if (newData === expr.data) {
+      return expr;
+    }
+    return { tisyn: "eval", id: expr.id, data: newData };
+  }
+
+  if (typeof expr === "object" && "tisyn" in expr) {
+    const tisyn = (expr as Record<string, unknown>)["tisyn"];
+    if (tisyn === "quote") {
+      const newInner = rewriteRefs((expr as { expr: Expr }).expr, nameMap, bound);
+      if (newInner === (expr as { expr: Expr }).expr) {
+        return expr;
+      }
+      return { tisyn: "quote", expr: newInner } as Expr;
+    }
+  }
+
+  // Plain object — recurse into values
+  let changed = false;
+  const newObj: Record<string, Expr> = {};
+  for (const key of Object.keys(expr)) {
+    const val = (expr as Record<string, Expr>)[key] as Expr;
+    const newVal = rewriteRefs(val, nameMap, bound);
+    if (newVal !== val) {
+      changed = true;
+    }
+    newObj[key] = newVal;
+  }
+  return changed ? newObj : expr;
 }
 
 // ── Participation profiles (§15.7) ──

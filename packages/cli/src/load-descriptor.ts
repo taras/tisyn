@@ -12,13 +12,15 @@ import type { Operation } from "effection";
 import { loadModule } from "./load-module.js";
 import { isTypeScriptFile } from "./load-module.js";
 import type { TisynExpr as Expr } from "@tisyn/ir";
-import { compileGraphForRuntime } from "@tisyn/compiler";
+import { compileGraphForRuntime, CompileError } from "@tisyn/compiler";
 import type { InputSchema } from "@tisyn/compiler";
 import type { WorkflowDescriptor } from "@tisyn/config";
 
 export interface WorkflowExport {
   ir: Expr;
   inputSchema?: InputSchema;
+  /** Compiler-provided runtime bindings for reachable compiled symbols. */
+  runtimeBindings?: Record<string, Expr>;
 }
 
 /**
@@ -133,22 +135,24 @@ export function* resolveWorkflowExport(
   // Rule 3: .ts source → compile via compileGraph, extract IR directly
   let result;
   try {
-    result = compileGraphForRuntime({ roots: [workflowPath] });
+    result = compileGraphForRuntime({ roots: [workflowPath], exportName });
   } catch (err) {
+    // E-GRAPH-002: selected export not found → exit code 2
+    if (err instanceof CompileError && err.code === "E-GRAPH-002") {
+      throw new CliError(
+        2,
+        `Workflow source '${workflowPath}' does not export '${exportName}'. ${err.message}`,
+      );
+    }
     const msg = err instanceof Error ? err.message : String(err);
     throw new CliError(1, `Failed to compile workflow source '${workflowPath}': ${msg}`);
   }
 
-  const exported = result.exports[exportName];
-  if (!exported) {
-    const available = Object.keys(result.exports).join(", ") || "(none)";
-    throw new CliError(
-      2,
-      `Workflow source '${workflowPath}' does not export '${exportName}'. Exported: ${available}`,
-    );
-  }
-
-  return { ir: exported.ir, inputSchema: exported.inputSchema };
+  return {
+    ir: result.ir,
+    inputSchema: result.inputSchema,
+    runtimeBindings: result.runtimeBindings,
+  };
 }
 
 /**

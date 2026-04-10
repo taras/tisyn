@@ -1683,6 +1683,52 @@ in-memory root via `readFile` and delegates to
 | 2 | Validation error |
 | 3 | Internal error |
 
+### 13.4 `compileGraphForRuntime()` — Runtime Compilation for Direct Execution
+
+`compileGraphForRuntime(options: CompileForExecutionOptions): RuntimeCompilationResult`
+
+Compiles authored TypeScript source for direct execution by `tsn run`
+without writing a generated artifact file. Accepts a
+`CompileForExecutionOptions` (extends `CompileGraphOptions` with
+`exportName: string`) and returns a `RuntimeCompilationResult`:
+
+```typescript
+interface RuntimeCompilationResult {
+  ir: Expr;
+  inputSchema: InputSchema;
+  runtimeBindings: Record<string, Expr>;
+}
+```
+
+**Per-export scoping.** The `runtimeBindings` map contains only
+symbols reachable from the selected export's transitive closure,
+not the full module graph. Unreachable workflows and their helpers
+are excluded.
+
+**Emitted-name rewriting.** All `Ref()` nodes in the returned `ir`
+and in binding values are rewritten to use globally unique runtime
+names. This ensures module-local identity is preserved when multiple
+modules define helpers with the same source-local name.
+
+**Synthetic runtime names.** All exported symbols in the per-export
+closure use `__rtexport_{emittedName}` as their binding key, not
+their raw export name. This prevents collisions between any exported
+symbol's binding and its own parameter names in the execution
+environment. Non-exported symbols already use collision-safe mangled
+names (`__m{idx}_{localName}`). All runtime binding keys start with
+`__`.
+
+**Name-resolution process:**
+1. Compute per-export reachability from the selected export via
+   IR free-variable analysis.
+2. Build per-module name maps: source-local identifiers → runtime names.
+3. Rewrite all IR in the closure using per-module name maps.
+4. Build the binding map keyed by runtime names.
+
+**Cross-module import-alias handling.** An import's `localName` in
+the importing module is mapped to the target symbol's runtime name,
+so aliased imports resolve correctly after rewriting.
+
 ## 14. Module Graph Construction
 
 Starting from the supplied roots, the compiler constructs a

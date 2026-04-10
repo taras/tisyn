@@ -150,6 +150,11 @@ export function* runRun(
     execEnv = inputFlags.parsed;
   }
 
+  // Merge compiler-provided runtime bindings into the execution environment
+  if (workflowExport.runtimeBindings) {
+    execEnv = { ...execEnv, ...workflowExport.runtimeBindings };
+  }
+
   // Execute workflow
   const { result } = yield* execute({
     ir: executableIr,

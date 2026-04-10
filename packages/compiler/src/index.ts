@@ -5,6 +5,8 @@ export {
   compileGraphForRuntime,
   type CompileGraphOptions,
   type CompileGraphResult,
+  type CompileForExecutionOptions,
+  type RuntimeCompilationResult,
   type ModuleCategory,
 } from "./compile-graph.js";
 export type { DiscoveredContract, ContractMethod } from "./discover.js";

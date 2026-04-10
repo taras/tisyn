@@ -277,7 +277,28 @@ interface CompilerFixtureRejection {
 
 ---
 
-## 10. Out of Scope
+## 10. Runtime Binding Resolution (`compileGraphForRuntime`)
+
+| ID | Description | Fixture |
+| --- | --- | --- |
+| RT-001 | Same-file helper produces correct emitted-name binding | Single root: exported generator + non-exported helper |
+| RT-002 | Cross-module import produces correct emitted-name binding | Root imports helper from `./utils.ts` |
+| RT-003 | Aliased import resolves to target's emitted name | `import { helper as h }` |
+| RT-004 | Two modules with same-named `helper` → distinct emitted-name bindings | Root calls `processA`/`processB` from `./a.ts`/`./b.ts`, each with own `helper` |
+| RT-005 | Per-export scoping: only selected export's reachable bindings included | Two exported workflows with separate helpers; select one |
+| RT-006 | Execute with same-file helper succeeds | Compile + execute, assert return value |
+| RT-007 | Execute with cross-module helper succeeds | Multi-file compile + execute |
+| RT-008 | Execute with aliased import succeeds | Aliased import compile + execute |
+| RT-009 | Execute with same-named helpers from different modules succeeds | Distinct helper values verified at runtime |
+| RT-010 | Self-recursive exported workflow executes successfully | `countdown(n)` with `exportName` selection |
+| RT-011 | Exported workflow with export name = parameter name produces no collision | Synthetic runtime name prevents shadowing |
+| RT-012 | Self-recursive workflow with same-named parameter matches TypeScript scoping | Parameter shadows function name in non-recursive body |
+| RT-013 | Reachable exported callee with export name = parameter name uses synthetic runtime name | Transitive callee with `helper(helper: number)` |
+| RT-014 | Self-recursive exported callee reached transitively executes correctly | `main → helper(n)` where helper self-recurses |
+
+---
+
+## 11. Out of Scope
 
 - Kernel evaluation semantics
 - Journal replay semantics
