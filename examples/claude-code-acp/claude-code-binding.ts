@@ -1,37 +1,20 @@
-import { agent, operation } from "@tisyn/agent";
-import { inprocessTransport } from "@tisyn/transport";
+import { createBinding as createAcpBinding } from "@tisyn/claude-code";
+import type { AcpAdapterConfig } from "@tisyn/claude-code";
 import type { LocalAgentBinding } from "@tisyn/transport";
-import type { SessionHandle, PlanResult, ForkData } from "./src/types.ts";
 
-const ClaudeCode = () =>
-  agent("claude-code", {
-    newSession: operation<{ config: { model: string } }, SessionHandle>(),
-    closeSession: operation<{ handle: SessionHandle }, void>(),
-    plan: operation<{ args: { session: SessionHandle; prompt: string } }, PlanResult>(),
-    fork: operation<{ session: SessionHandle }, ForkData>(),
-    openFork: operation<{ data: ForkData }, SessionHandle>(),
+/**
+ * Claude Code ACP binding for this example.
+ *
+ * Wraps @tisyn/claude-code's createBinding() with defaults that use
+ * the repo-local Claude CLI installed through @anthropic-ai/claude-code,
+ * so the example is reproducible from the workspace without a globally
+ * installed `claude` binary.
+ */
+export function createBinding(config?: AcpAdapterConfig): LocalAgentBinding {
+  return createAcpBinding({
+    command: "pnpm",
+    arguments: ["exec", "claude", "--acp"],
+    cwd: import.meta.dirname,
+    ...config,
   });
-
-let sessionCounter = 0;
-
-export function createBinding(): LocalAgentBinding {
-  return {
-    transport: inprocessTransport(ClaudeCode(), {
-      *newSession({ config }) {
-        sessionCounter++;
-        return { sessionId: `mock-session-${sessionCounter}` };
-      },
-      *closeSession() {},
-      *plan({ args }) {
-        return { response: `[mock] Plan result for: ${args.prompt}` };
-      },
-      *fork({ session }) {
-        return { parentSessionId: session.sessionId, forkId: `fork-${Date.now()}` };
-      },
-      *openFork() {
-        sessionCounter++;
-        return { sessionId: `mock-session-${sessionCounter}` };
-      },
-    }),
-  };
 }

@@ -309,7 +309,7 @@ describe("Claude Code ACP Binding Path", () => {
     });
   });
 
-  it("createBinding routes plan calls through ACP subprocess", function* () {
+  it("adapter unwraps wrapped plan payload so ACP subprocess receives prompt at top level", function* () {
     const binding = createBinding({
       command: "npx",
       arguments: ["tsx", mockAcpServer],
@@ -322,10 +322,15 @@ describe("Claude Code ACP Binding Path", () => {
         config: { model: "opus-4" },
       } as unknown as Val);
 
+      // Dispatch using the wrapped shape the compiler emits.
+      // The adapter must unwrap { args: { ... } } → { session, prompt }
+      // before sending to ACP, so the mock server can read prompt at top level.
       const result = yield* dispatch("claude-code.plan", {
         args: { session: { sessionId: "test-session-1" }, prompt: "Implement auth" },
       } as unknown as Val);
 
+      // The mock ACP server echoes msg.params.prompt — this assertion
+      // fails if the adapter sends the wrapped envelope as-is.
       expect(result).toEqual({
         response: "mock plan result for: Implement auth",
       });
@@ -355,9 +360,12 @@ describe("Claude Code ACP Binding Path", () => {
       } as unknown as Val);
       expect(r2).toEqual({ response: "mock plan result for: Task 2" });
 
-      yield* dispatch("claude-code.closeSession", {
+      // Wrapped closeSession({ handle }) must unwrap to the bare SessionHandle
+      // before reaching ACP. The mock server returns null for session/close.
+      const closeResult = yield* dispatch("claude-code.closeSession", {
         handle: { sessionId: "test-session-1" },
       } as unknown as Val);
+      expect(closeResult).toBeNull();
     });
   });
 });

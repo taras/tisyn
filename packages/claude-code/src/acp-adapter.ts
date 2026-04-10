@@ -10,7 +10,7 @@
  */
 
 import type { Operation, Stream } from "effection";
-import { resource } from "effection";
+import { resource, spawn } from "effection";
 import { exec } from "@effectionx/process";
 import { lines, filter, map } from "@effectionx/stream-helpers";
 import { pipe } from "remeda";
@@ -76,22 +76,55 @@ function resolveAcpMethod(operation: string): string {
   return method;
 }
 
+/**
+ * Per-operation unwrap key for compiled workflow payloads.
+ *
+ * The Tisyn compiler wraps each operation's single parameter under the
+ * authored parameter name (e.g. `plan(args: {...})` becomes
+ * `{ args: { session, prompt } }`). ACP expects unwrapped top-level
+ * params, so the adapter strips the envelope before writing to the wire.
+ *
+ * If the unwrap key is present in the args object, its value is used as
+ * the ACP params. Otherwise the args object is passed through as-is,
+ * which keeps the adapter resilient to already-unwrapped payloads.
+ */
+const OPERATION_UNWRAP_KEY: Record<string, string> = {
+  newSession: "config",
+  closeSession: "handle",
+  plan: "args",
+  fork: "session",
+  openFork: "data",
+};
+
 // ── ACP ↔ Tisyn translation (pure functions) ──
 
 /**
  * Translate a Tisyn ExecuteRequest into an ACP request.
- * Maps the Tisyn operation name to the corresponding ACP wire method.
+ * Maps the Tisyn operation name to the corresponding ACP wire method
+ * and unwraps the single-parameter envelope the compiler emits.
  *
  * The operation may be fully qualified (e.g. "claude-code.newSession")
  * or bare (e.g. "newSession"). The agent prefix is stripped before lookup.
  */
 export function tisynExecuteToAcp(id: string, operation: string, args: unknown): AcpRequest {
   const bare = operation.includes(".") ? operation.split(".").pop()! : operation;
+  const unwrapKey = OPERATION_UNWRAP_KEY[bare];
+  let params: Record<string, unknown>;
+  if (
+    unwrapKey &&
+    args &&
+    typeof args === "object" &&
+    unwrapKey in (args as Record<string, unknown>)
+  ) {
+    params = (args as Record<string, unknown>)[unwrapKey] as Record<string, unknown>;
+  } else {
+    params = (args as Record<string, unknown>) ?? {};
+  }
   return {
     jsonrpc: "2.0",
     id,
     method: resolveAcpMethod(bare),
-    params: (args as Record<string, unknown>) ?? {},
+    params,
   };
 }
 
@@ -213,6 +246,34 @@ export function createAcpAdapter(config?: AcpAdapterConfig): Operation<AcpAdapte
       arguments: args,
       env: config?.env,
       cwd: config?.cwd,
+    });
+
+    // Capture stderr for diagnostic context when the process exits unexpectedly
+    const stderrChunks: string[] = [];
+    const decoder = new TextDecoder();
+    yield* spawn(function* () {
+      const sub = yield* proc.stderr;
+      for (;;) {
+        const { value, done } = yield* sub.next();
+        if (done) break;
+        stderrChunks.push(decoder.decode(value));
+      }
+    });
+
+    // Monitor process exit — if the subprocess dies while the adapter is
+    // still active, surface an actionable error instead of the generic
+    // "Transport closed with in-flight request" from the session layer.
+    yield* spawn(function* () {
+      const status = yield* proc.join();
+      const stderr = stderrChunks.join("").trim();
+      const exitInfo = status.signal
+        ? `killed by signal ${status.signal}`
+        : `exited with code ${status.code ?? "unknown"}`;
+      throw new Error(
+        `Claude ACP subprocess ${exitInfo}` +
+          ` (command: ${command} ${args.join(" ")})` +
+          (stderr ? `\nstderr:\n${stderr}` : ""),
+      );
     });
 
     // Track pending request IDs to their progress tokens
