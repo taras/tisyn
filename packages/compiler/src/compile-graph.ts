@@ -11,6 +11,7 @@
  */
 
 import { readFileSync } from "node:fs";
+import { dirname, relative } from "node:path";
 import type { TisynExpr as Expr } from "@tisyn/ir";
 import { collectReferencedTypeImports, type DiscoveredContract } from "./discover.js";
 import { buildGraph, type ModuleCategory, type ModuleInfo } from "./graph.js";
@@ -35,6 +36,8 @@ export interface CompileGraphOptions {
   validate?: boolean;
   format?: "printed" | "json";
   generatedModulePaths?: string[];
+  /** Output file path. Used to emit generated-module imports as relative specifiers. */
+  outputPath?: string;
 }
 
 export interface CompileGraphResult {
@@ -90,8 +93,16 @@ function runPipeline(options: {
   validate?: boolean;
   format?: "printed" | "json";
   generatedModulePaths?: string[];
+  outputPath?: string;
 }): PipelineResult {
-  const { roots, readFile, validate = true, format = "printed", generatedModulePaths } = options;
+  const {
+    roots,
+    readFile,
+    validate = true,
+    format = "printed",
+    generatedModulePaths,
+    outputPath,
+  } = options;
 
   // Stage 1-3: Build graph, classify modules, extract symbols
   const graph = buildGraph(roots, readFile, generatedModulePaths);
@@ -180,9 +191,17 @@ function runPipeline(options: {
   }
 
   const generatedImports: { names: string[]; path: string }[] = [];
-  for (const [path, names] of referencedFromGenerated) {
+  const outputDir = outputPath ? dirname(outputPath) : undefined;
+  for (const [absPath, names] of referencedFromGenerated) {
     if (names.size > 0) {
-      generatedImports.push({ names: [...names], path });
+      let specifier: string;
+      if (outputDir) {
+        const rel = relative(outputDir, absPath);
+        specifier = rel.startsWith(".") ? rel : `./${rel}`;
+      } else {
+        specifier = absPath;
+      }
+      generatedImports.push({ names: [...names], path: specifier });
     }
   }
 
@@ -223,6 +242,7 @@ export function compileGraph(options: CompileGraphOptions): CompileGraphResult {
     validate: options.validate,
     format: options.format,
     generatedModulePaths: options.generatedModulePaths,
+    outputPath: options.outputPath,
   });
 
   // Project internal state to public result

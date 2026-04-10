@@ -9,14 +9,15 @@ import { ConfigError } from "./config.js";
 export function* runGenerate(options: GenerateCommandOptions, cwd: string): Operation<void> {
   const roots = options.roots.map((r) => resolve(cwd, r));
 
+  const outputPath = options.output ? resolve(cwd, options.output) : undefined;
   const result = compileGraph({
     roots,
     validate: options.validate,
     format: options.format,
+    outputPath,
   });
 
-  if (options.output) {
-    const outputPath = resolve(cwd, options.output);
+  if (outputPath) {
     yield* call(() => mkdir(dirname(outputPath), { recursive: true }));
     yield* call(() => writeFile(outputPath, result.source));
   } else {
@@ -53,6 +54,7 @@ export function* runBuild(
       validate: !pass.noValidate,
       format: pass.format,
       generatedModulePaths: priorOutputPaths.length > 0 ? [...priorOutputPaths] : undefined,
+      outputPath: pass.output,
     });
 
     yield* call(() => mkdir(dirname(pass.output), { recursive: true }));
