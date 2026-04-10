@@ -1,44 +1,18 @@
-import { glob, mkdir, readFile, writeFile } from "node:fs/promises";
-import { dirname, extname, relative, resolve } from "node:path";
+import { mkdir, writeFile } from "node:fs/promises";
+import { dirname, resolve } from "node:path";
 import { call, type Operation } from "effection";
-import ts from "typescript";
-import {
-  generateWorkflowModule,
-  CompileError,
-  type GenerateResult,
-  type DiscoveredContract,
-} from "@tisyn/compiler";
+import { compileGraph, CompileError } from "@tisyn/compiler";
 import type { GenerateCommandOptions, ResolvedPass } from "./types.js";
 import { ConfigError } from "./config.js";
 
 export function* runGenerate(options: GenerateCommandOptions, cwd: string): Operation<void> {
-  const inputPath = resolve(cwd, options.input);
-  const includePaths = yield* expandPatterns(options.include, cwd);
-  const assembled = yield* assembleSource({
-    inputPath,
-    workflowPaths: includePaths,
-    stubBlocks: [],
-    stripImportsFrom: new Set(),
+  const roots = options.roots.map((r) => resolve(cwd, r));
+
+  const result = compileGraph({
+    roots,
+    validate: options.validate,
+    format: options.format,
   });
-
-  const inputRelPath = relative(cwd, inputPath) || inputPath;
-  const filename = options.output
-    ? relative(cwd, resolve(cwd, options.output)) || options.output
-    : inputRelPath;
-
-  let result: GenerateResult;
-  try {
-    result = generateWorkflowModule(assembled.source, {
-      filename,
-      validate: options.validate,
-      workflowFormat: options.format,
-    });
-  } catch (err) {
-    if (err instanceof CompileError) {
-      (err as CompileError & { inputFile: string }).inputFile = filename;
-    }
-    throw err;
-  }
 
   if (options.output) {
     const outputPath = resolve(cwd, options.output);
@@ -54,17 +28,7 @@ export function* runBuild(
   options: { filter?: string; verbose: boolean },
   configDir: string,
 ): Operation<void> {
-  const sourcesByPass = new Map<string, string[]>();
-  const results = new Map<string, GenerateResult>();
-  const outputsToPass = new Map<string, string>();
-
-  for (const pass of passes) {
-    outputsToPass.set(pass.output, pass.name);
-    const workflowPaths = yield* expandPatterns(pass.include, configDir);
-    sourcesByPass.set(pass.name, [pass.input, ...workflowPaths]);
-  }
-
-  const graph = yield* inferDependencyGraph(passes, sourcesByPass, outputsToPass);
+  const graph = buildDependencyGraph(passes);
   const ordered = topoSort(
     passes.map((pass) => pass.name),
     graph,
@@ -72,87 +36,36 @@ export function* runBuild(
   const selected = selectPasses(ordered, graph, options.filter);
   const passByName = new Map(passes.map((pass) => [pass.name, pass]));
 
+  // Track prior output paths for generated-module detection
+  const priorOutputPaths: string[] = [];
+
   for (const name of ordered) {
     if (!selected.has(name)) {
       continue;
     }
 
     const pass = passByName.get(name)!;
-    const deps = [...(graph.get(name) ?? [])]
-      .map((depName) => results.get(depName))
-      .filter(Boolean) as GenerateResult[];
-    const stripImportsFrom = new Set(
-      [...(graph.get(name) ?? [])].map((depName) => passByName.get(depName)!.output),
-    );
-    const workflowPaths = sourcesByPass.get(name)!.filter((path) => path !== pass.input);
-    const assembled = yield* assembleSource({
-      inputPath: pass.input,
-      workflowPaths,
-      stubBlocks: deps.map(createStubBlock),
-      stripImportsFrom,
-    });
+    const roots = pass.roots.map((r) => resolve(configDir, r));
 
-    const filename = relative(configDir, pass.output) || pass.output;
-    let result: GenerateResult;
-    try {
-      result = generateWorkflowModule(assembled.source, {
-        filename,
-        validate: !pass.noValidate,
-        workflowFormat: pass.format,
-      });
-    } catch (err) {
-      if (err instanceof CompileError) {
-        (err as CompileError & { inputFile: string }).inputFile = filename;
-      }
-      throw err;
-    }
-    results.set(name, result);
+    const result = compileGraph({
+      roots,
+      validate: !pass.noValidate,
+      format: pass.format,
+      generatedModulePaths: priorOutputPaths.length > 0 ? [...priorOutputPaths] : undefined,
+    });
 
     yield* call(() => mkdir(dirname(pass.output), { recursive: true }));
     yield* call(() => writeFile(pass.output, result.source));
+
+    priorOutputPaths.push(pass.output);
   }
 }
 
-function* inferDependencyGraph(
-  passes: ResolvedPass[],
-  sourcesByPass: Map<string, string[]>,
-  outputsToPass: Map<string, string>,
-): Operation<Map<string, Set<string>>> {
+function buildDependencyGraph(passes: ResolvedPass[]): Map<string, Set<string>> {
   const graph = new Map<string, Set<string>>();
-
   for (const pass of passes) {
     graph.set(pass.name, new Set(pass.dependsOn));
   }
-
-  for (const pass of passes) {
-    const deps = graph.get(pass.name)!;
-    for (const sourcePath of sourcesByPass.get(pass.name) ?? []) {
-      const source = yield* call(() => readFile(sourcePath, "utf-8"));
-      const sourceFile = ts.createSourceFile(
-        sourcePath,
-        source,
-        ts.ScriptTarget.Latest,
-        true,
-        sourcePath.endsWith(".ts") ? ts.ScriptKind.TS : ts.ScriptKind.JS,
-      );
-      for (const statement of sourceFile.statements) {
-        if (!ts.isImportDeclaration(statement)) {
-          continue;
-        }
-        const raw = statement.moduleSpecifier.getText(sourceFile).slice(1, -1);
-        if (!raw.startsWith("./") && !raw.startsWith("../")) {
-          continue;
-        }
-
-        const resolvedImport = resolveImportPath(raw, dirname(sourcePath));
-        const dep = outputsToPass.get(resolvedImport);
-        if (dep && dep !== pass.name) {
-          deps.add(dep);
-        }
-      }
-    }
-  }
-
   return graph;
 }
 
@@ -214,109 +127,6 @@ function selectPasses(
 
   visit(filter);
   return selected;
-}
-
-function* assembleSource(input: {
-  inputPath: string;
-  workflowPaths: string[];
-  stubBlocks: string[];
-  stripImportsFrom: Set<string>;
-}): Operation<{ source: string }> {
-  const declarationSource = yield* call(() => readFile(input.inputPath, "utf-8"));
-  const workflowSources: string[] = [];
-  for (const path of input.workflowPaths) {
-    const source = yield* call(() => readFile(path, "utf-8"));
-    workflowSources.push(stripImportsFromSource(source, path, input.stripImportsFrom));
-  }
-
-  const parts = [declarationSource];
-  if (input.stubBlocks.length > 0) {
-    parts.push(input.stubBlocks.filter(Boolean).join("\n"));
-  }
-  parts.push(...workflowSources.filter(Boolean));
-
-  return { source: parts.filter(Boolean).join("\n\n") };
-}
-
-function* expandPatterns(patterns: string[], cwd: string): Operation<string[]> {
-  const files = new Set<string>();
-  for (const pattern of patterns) {
-    const matches = yield* call(async () => {
-      const found: string[] = [];
-      for await (const match of glob(pattern, { cwd })) {
-        found.push(match);
-      }
-      return found;
-    });
-    for (const match of matches) {
-      files.add(resolve(cwd, match));
-    }
-  }
-  return [...files].sort();
-}
-
-function createStubBlock(result: GenerateResult): string {
-  const workflowStubs = Object.keys(result.workflows)
-    .sort()
-    .map((name) => `declare const ${name}: unknown;`);
-  const contractStubs = result.contracts.map(
-    (contract: DiscoveredContract) => `declare function ${contract.name}(): unknown;`,
-  );
-  return [...contractStubs, ...workflowStubs].join("\n");
-}
-
-function stripImportsFromSource(
-  source: string,
-  sourcePath: string,
-  stripImportsFrom: Set<string>,
-): string {
-  if (stripImportsFrom.size === 0) {
-    return source;
-  }
-
-  const sourceFile = ts.createSourceFile(
-    sourcePath,
-    source,
-    ts.ScriptTarget.Latest,
-    true,
-    ts.ScriptKind.TS,
-  );
-
-  const removals: Array<{ start: number; end: number }> = [];
-  for (const statement of sourceFile.statements) {
-    if (!ts.isImportDeclaration(statement)) {
-      continue;
-    }
-    const raw = statement.moduleSpecifier.getText(sourceFile).slice(1, -1);
-    if (!raw.startsWith("./") && !raw.startsWith("../")) {
-      continue;
-    }
-    const resolvedImport = resolveImportPath(raw, dirname(sourcePath));
-    if (stripImportsFrom.has(resolvedImport)) {
-      removals.push({ start: statement.getFullStart(), end: statement.getEnd() });
-    }
-  }
-
-  if (removals.length === 0) {
-    return source;
-  }
-
-  let cursor = 0;
-  let result = "";
-  for (const removal of removals) {
-    result += source.slice(cursor, removal.start);
-    cursor = removal.end;
-  }
-  result += source.slice(cursor);
-  return result.trim();
-}
-
-function resolveImportPath(specifier: string, fromDir: string): string {
-  const resolved = resolve(fromDir, specifier);
-  if (extname(resolved)) {
-    return resolved;
-  }
-  return `${resolved}.ts`;
 }
 
 export function formatCompileError(error: unknown): string {

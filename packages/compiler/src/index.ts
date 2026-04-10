@@ -1,5 +1,6 @@
 export { compile, compileOne, type CompileOptions, type CompileResult } from "./compile.js";
 export { generateWorkflowModule, type GenerateOptions, type GenerateResult } from "./generate.js";
+export { compileGraph, compileGraphForRuntime, type CompileGraphOptions, type CompileGraphResult, type ModuleCategory } from "./compile-graph.js";
 export type { DiscoveredContract, ContractMethod } from "./discover.js";
 export { buildInputSchema, type InputSchema, type InputFieldSchema } from "./codegen.js";
 export { toAgentId } from "./agent-id.js";

@@ -107,7 +107,7 @@ describe("validateAndResolveConfig", () => {
     const configPath = join(dir, "tisyn.config.ts");
 
     const config = {
-      generates: [{ name: "my-pass", input: "workflow.ts", output: "out.ts" }],
+      generates: [{ name: "my-pass", roots: ["workflow.ts"], output: "out.ts" }],
     };
     const passes = yield* validateAndResolveConfig(config, configPath);
     expect(passes).toHaveLength(1);
@@ -134,8 +134,8 @@ describe("validateAndResolveConfig", () => {
     const configPath = join(dir, "tisyn.config.ts");
     const config = {
       generates: [
-        { name: "pass", input: "workflow.ts", output: "out1.ts" },
-        { name: "pass", input: "workflow.ts", output: "out2.ts" },
+        { name: "pass", roots: ["workflow.ts"], output: "out1.ts" },
+        { name: "pass", roots: ["workflow.ts"], output: "out2.ts" },
       ],
     };
     let threw = false;
@@ -155,7 +155,7 @@ describe("validateAndResolveConfig", () => {
     const configPath = join(dir, "tisyn.config.ts");
     const config = {
       generates: [
-        { name: "pass", input: "workflow.ts", output: "out.ts", dependsOn: ["nonexistent"] },
+        { name: "pass", roots: ["workflow.ts"], output: "out.ts", dependsOn: ["nonexistent"] },
       ],
     };
     let threw = false;
@@ -186,8 +186,7 @@ describe("runGenerate", () => {
 
     yield* runGenerate(
       {
-        input: inputPath,
-        include: [],
+        roots: [inputPath],
         output: outputPath,
         format: "printed",
         validate: false,
@@ -215,8 +214,7 @@ describe("runGenerate", () => {
     try {
       yield* runGenerate(
         {
-          input: inputPath,
-          include: [],
+          roots: [inputPath],
           output: undefined,
           format: "printed",
           validate: false,
@@ -256,8 +254,7 @@ export function* greet() {
     const passes = [
       {
         name: "pass-a",
-        input: workflow1,
-        include: [],
+        roots: [workflow1],
         output: join(dir, "out-a.ts"),
         format: "printed" as const,
         noValidate: true,
@@ -265,8 +262,7 @@ export function* greet() {
       },
       {
         name: "pass-b",
-        input: workflow2,
-        include: [],
+        roots: [workflow2],
         output: join(dir, "out-b.ts"),
         format: "printed" as const,
         noValidate: true,
@@ -1165,7 +1161,7 @@ export default {
 export function* local() {
   return 1;
 }
-export { chat } from "./other";
+export { chat } from "./other.js";
 `,
       ),
     );
@@ -1189,8 +1185,9 @@ export default {
       arguments: [CLI_BIN, "run", join(dir, "descriptor.mjs")],
     }).join();
 
-    expect(result.code).toBe(2);
-    expect(result.stderr).toContain("re-exported from another module");
+    // Re-exports are now rejected at compile time (E-IMPORT-007)
+    expect(result.code).toBe(1);
+    expect(result.stderr).toContain("Re-export is not supported");
   });
 });
 

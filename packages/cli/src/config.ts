@@ -68,6 +68,18 @@ export function* validateAndResolveConfig(
     throw new ConfigError("'generates' must contain at least one pass");
   }
 
+  // Reject legacy 'input' field
+  const rawConfig = config as unknown as Record<string, unknown>;
+  if (rawConfig.input !== undefined) {
+    throw new ConfigError("Config field 'input' is no longer supported. Use 'roots' instead.");
+  }
+  for (const pass of config.generates) {
+    const rawPass = pass as unknown as Record<string, unknown>;
+    if (rawPass.input !== undefined) {
+      throw new ConfigError(`Pass '${(rawPass.name as string) ?? "?"}' uses 'input' which is no longer supported. Use 'roots' instead.`);
+    }
+  }
+
   const baseDir = dirname(configPath);
   const seenNames = new Set<string>();
   const resolved = config.generates.map((pass, index) => {
@@ -84,16 +96,15 @@ export function* validateAndResolveConfig(
     }
     seenNames.add(pass.name);
 
-    if (typeof pass.input !== "string" || pass.input.length === 0) {
-      throw new ConfigError(`Pass '${pass.name}' is missing 'input'`);
+    if (!Array.isArray(pass.roots) || pass.roots.length === 0) {
+      throw new ConfigError(`Pass '${pass.name}' is missing 'roots'`);
     }
-    if (typeof pass.output !== "string" || pass.output.length === 0) {
-      throw new ConfigError(`Pass '${pass.name}' is missing 'output'`);
+    if (pass.roots.some((r: unknown) => typeof r !== "string" || (r as string).length === 0)) {
+      throw new ConfigError(`Pass '${pass.name}' has invalid entries in 'roots'`);
     }
 
-    const include = pass.include ?? [];
-    if (!Array.isArray(include) || include.some((value) => typeof value !== "string")) {
-      throw new ConfigError(`Pass '${pass.name}' has an invalid 'include' list`);
+    if (typeof pass.output !== "string" || pass.output.length === 0) {
+      throw new ConfigError(`Pass '${pass.name}' is missing 'output'`);
     }
 
     const dependsOn = pass.dependsOn ?? [];
@@ -107,8 +118,7 @@ export function* validateAndResolveConfig(
 
     return {
       name: pass.name,
-      input: resolve(baseDir, pass.input),
-      include: include.map((pattern) => pattern),
+      roots: pass.roots.map((r) => resolve(baseDir, r)),
       output: resolve(baseDir, pass.output),
       format: pass.format ?? "printed",
       noValidate: pass.noValidate ?? false,
@@ -117,10 +127,12 @@ export function* validateAndResolveConfig(
   });
 
   for (const pass of resolved) {
-    try {
-      yield* call(() => access(pass.input));
-    } catch {
-      throw new ConfigError(`Pass '${pass.name}' input file not found: ${pass.input}`);
+    for (const root of pass.roots) {
+      try {
+        yield* call(() => access(root));
+      } catch {
+        throw new ConfigError(`Pass '${pass.name}' root file not found: ${root}`);
+      }
     }
 
     for (const dep of pass.dependsOn) {

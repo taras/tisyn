@@ -23,11 +23,10 @@ import type { ResolvedConfig } from "@tisyn/runtime";
 import {
   loadDescriptorModule,
   resolveWorkflowModule,
+  resolveWorkflowExport,
   loadWorkflowExport,
-  compileWorkflowFromSource,
   CliError,
 } from "./load-descriptor.js";
-import { isTypeScriptFile } from "./load-module.js";
 import { deriveFlags, parseInputFlags, formatInputHelp } from "./inputs.js";
 import { installAllTransports, createJournalStream, startServer } from "./startup.js";
 import type { LocalServerBinding } from "@tisyn/transport";
@@ -50,10 +49,11 @@ function* loadRunMetadata(modulePath: string, entrypoint?: string) {
     exportName,
     explicit,
   } = resolveWorkflowModule(merged, modulePath);
-  const workflowExport =
-    explicit && isTypeScriptFile(workflowPath)
-      ? yield* compileWorkflowFromSource(workflowPath, exportName)
-      : yield* loadWorkflowExport(workflowPath, exportName);
+  // Non-explicit: descriptor module itself contains exports → load at runtime
+  // Explicit: external module → three-step dispatch (compile if authored .ts)
+  const workflowExport = explicit
+    ? yield* resolveWorkflowExport(workflowPath, exportName)
+    : yield* loadWorkflowExport(workflowPath, exportName);
 
   return { descriptor, merged, workflowPath, exportName, workflowExport };
 }

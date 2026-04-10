@@ -31,16 +31,11 @@ const app = program({
   version,
   config: commands({
     generate: {
-      description: "generate one workflow module",
+      description: "compile workflow module graph",
       ...object({
-        input: {
-          description: "declaration file",
-          ...field(stringSchema, cli.argument()),
-        },
-        include: {
-          description: "additional workflow file glob",
-          aliases: ["-i"],
-          ...field(stringArraySchema, field.array(), field.default([])),
+        roots: {
+          description: "root workflow source file(s)",
+          ...field(stringArraySchema, cli.argument(), field.array()),
         },
         output: {
           description: "output file path",
