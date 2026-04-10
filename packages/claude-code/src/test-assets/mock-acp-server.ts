@@ -35,12 +35,17 @@ rl.on("line", (line: string) => {
     case "session/new":
       result = { sessionId: "test-session-1" };
       break;
-    case "session/prompt":
-      // Echo back part of the input to prove args were forwarded
+    case "session/prompt": {
+      // The adapter forwards args[0] as ACP params. With wrapped shapes from
+      // the compiled workflow, params is { args: { session, prompt } }.
+      const params = msg.params as Record<string, unknown>;
+      const args = params.args as Record<string, unknown> | undefined;
+      const prompt = args?.prompt ?? params.prompt ?? "unknown";
       result = {
-        response: `mock plan result for: ${(msg.params as Record<string, unknown>).prompt ?? "unknown"}`,
+        response: `mock plan result for: ${prompt}`,
       };
       break;
+    }
     case "session/close":
       result = null;
       break;

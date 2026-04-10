@@ -29,9 +29,6 @@ importers:
       '@tisyn/agent':
         specifier: workspace:*
         version: link:../../packages/agent
-      '@tisyn/claude-code':
-        specifier: workspace:*
-        version: link:../../packages/claude-code
       '@tisyn/config':
         specifier: workspace:*
         version: link:../../packages/config

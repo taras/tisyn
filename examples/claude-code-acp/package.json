@@ -9,7 +9,6 @@
   },
   "dependencies": {
     "@tisyn/agent": "workspace:*",
-    "@tisyn/claude-code": "workspace:*",
     "@tisyn/config": "workspace:*",
     "@tisyn/ir": "workspace:*",
     "@tisyn/transport": "workspace:*"
