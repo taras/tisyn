@@ -1,3 +1,4 @@
+import { constants } from "node:fs";
 import { access, readFile, rm, writeFile } from "node:fs/promises";
 import { dirname, resolve } from "node:path";
 import { pathToFileURL } from "node:url";
@@ -142,6 +143,9 @@ export function* validateAndResolveConfig(
         throw new ConfigError(`Pass '${pass.name}' depends on unknown pass '${dep}'`);
       }
     }
+
+    // Validate output path writability
+    yield* checkOutputWritable(pass.name, pass.output);
   }
 
   return resolved;
@@ -151,5 +155,47 @@ export class ConfigError extends Error {
   constructor(message: string) {
     super(message);
     this.name = "ConfigError";
+  }
+}
+
+/**
+ * Check that an output path is writable.
+ *
+ * If the file exists, it must be writable. If it doesn't exist,
+ * the nearest existing ancestor directory must be writable.
+ */
+function* checkOutputWritable(passName: string, outputPath: string): Operation<void> {
+  // Check if the output file already exists and is writable
+  try {
+    yield* call(() => access(outputPath, constants.W_OK));
+    return; // File exists and is writable
+  } catch (err: unknown) {
+    const code = (err as NodeJS.ErrnoException).code;
+    if (code === "EACCES") {
+      throw new ConfigError(`Pass '${passName}' output file is not writable: ${outputPath}`);
+    }
+    // ENOENT — file doesn't exist, check parent directory
+  }
+
+  // Walk up to the nearest existing ancestor and check it's writable
+  let dir = dirname(outputPath);
+  while (true) {
+    try {
+      yield* call(() => access(dir, constants.W_OK));
+      return; // Ancestor directory is writable
+    } catch (err: unknown) {
+      const code = (err as NodeJS.ErrnoException).code;
+      if (code === "EACCES") {
+        throw new ConfigError(`Pass '${passName}' output directory is not writable: ${dir}`);
+      }
+      // ENOENT — directory doesn't exist, go up
+      const parent = dirname(dir);
+      if (parent === dir) {
+        throw new ConfigError(
+          `Pass '${passName}' output path has no writable ancestor: ${outputPath}`,
+        );
+      }
+      dir = parent;
+    }
   }
 }

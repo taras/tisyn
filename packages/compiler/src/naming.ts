@@ -111,3 +111,26 @@ export function checkContractNameConflicts(
     }
   }
 }
+
+/**
+ * Check for name collisions between compiled workflow symbols and contract declarations.
+ */
+export function checkContractSymbolConflicts(
+  symbols: CompiledSymbol[],
+  contracts: DiscoveredContract[],
+): void {
+  const contractNames = new Set(contracts.map((c) => c.name));
+  for (const sym of symbols) {
+    if (sym.isExported) {
+      const name = sym.exportedName ?? sym.id.localName;
+      if (contractNames.has(name)) {
+        throw new CompileError(
+          "E-NAME-001",
+          `Workflow name '${name}' collides with contract name '${name}'`,
+          1,
+          1,
+        );
+      }
+    }
+  }
+}

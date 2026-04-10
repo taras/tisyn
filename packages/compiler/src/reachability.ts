@@ -167,6 +167,26 @@ function findCallTargets(
     if (imp) {
       const targetMod = modules.get(imp.resolvedPath);
       if (targetMod) {
+        // E-IMPORT-001: reachable code references a bare/node: external boundary
+        if (targetMod.category === "external" && targetMod.provenance === "boundary") {
+          throw new CompileError(
+            "E-IMPORT-001",
+            `Cannot use '${name}' from external module '${imp.fromModule}' in workflow code`,
+            imp.line,
+            imp.column,
+          );
+        }
+
+        // E-IMPORT-004: reachable code references a traversed module with no workflow-relevant symbols
+        if (targetMod.category === "external" && targetMod.provenance === "traversed") {
+          throw new CompileError(
+            "E-IMPORT-004",
+            `Module '${imp.resolvedPath}' contains no workflow-relevant declarations`,
+            imp.line,
+            imp.column,
+          );
+        }
+
         // Resolve through export map: importedName → localName in target module
         const targetLocalName = resolveExportToLocal(imp.importedName, targetMod);
         if (targetLocalName) {
@@ -227,7 +247,8 @@ function findFunctionBody(name: string, mod: ModuleInfo): ts.Block | ts.Expressi
 function findFunctionByName(name: string, mod: ModuleInfo): boolean {
   return (
     mod.generators.some((g) => g.name === name) ||
-    mod.nonGeneratorFunctions.some((f) => f.name === name)
+    mod.nonGeneratorFunctions.some((f) => f.name === name) ||
+    mod.nonFunctionExports.includes(name)
   );
 }
 

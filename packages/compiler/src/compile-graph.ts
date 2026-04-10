@@ -12,11 +12,16 @@
 
 import { readFileSync } from "node:fs";
 import type { TisynExpr as Expr } from "@tisyn/ir";
-import type { DiscoveredContract } from "./discover.js";
+import { collectReferencedTypeImports, type DiscoveredContract } from "./discover.js";
 import { buildGraph, type ModuleCategory, type ModuleInfo } from "./graph.js";
 import { computeReachability, computeEmitOrder } from "./reachability.js";
 import { compileReachableSymbols, type CompiledSymbol } from "./compile-symbols.js";
-import { assignEmittedNames, checkNameConflicts, checkContractNameConflicts } from "./naming.js";
+import {
+  assignEmittedNames,
+  checkNameConflicts,
+  checkContractNameConflicts,
+  checkContractSymbolConflicts,
+} from "./naming.js";
 import { generateGraphCode } from "./codegen.js";
 import { Counter } from "./counter.js";
 
@@ -35,6 +40,14 @@ export interface CompileGraphOptions {
 export interface CompileGraphResult {
   /** Emitted artifact text. */
   source: string;
+  /** Discovered ambient factory contracts. */
+  contracts: DiscoveredContract[];
+  /** Compiled workflow IR by exported name. */
+  workflows: Record<string, Expr>;
+  /** Compiled helper IR by emitted name. */
+  helpers: Record<string, Expr>;
+  /** Diagnostic warnings (e.g. W-GRAPH-001 for unreachable exports). */
+  warnings: string[];
   /** Module graph metadata. */
   graph: {
     /** Module category and participation profile keyed by resolved path. */
@@ -59,6 +72,8 @@ interface PipelineResult {
   compiledSymbols: CompiledSymbol[];
   discoveredContracts: DiscoveredContract[];
   compiledWorkflows: Record<string, Expr>;
+  compiledHelpers: Record<string, Expr>;
+  warnings: string[];
   modules: Map<string, ModuleInfo>;
   traversalOrder: string[];
 }
@@ -82,18 +97,43 @@ function runPipeline(options: {
   const graph = buildGraph(roots, readFile, generatedModulePaths);
 
   // Stage 4: Compute reachability and emission order
-  const { reachable } = computeReachability(graph.modules);
+  const { reachable, unreachableExports } = computeReachability(graph.modules);
   const emitOrder = computeEmitOrder(reachable, graph.modules);
+
+  // Collect warnings for unreachable exported symbols (W-GRAPH-001)
+  const warnings: string[] = [];
+  for (const id of unreachableExports) {
+    warnings.push(
+      `W-GRAPH-001: Exported symbol '${id.localName}' in '${id.modulePath}' is not reachable from any entrypoint`,
+    );
+  }
 
   // Stage 5: Compile reachable symbols
   const counter = new Counter();
-  const { symbols, discoveredContracts, compiledWorkflows } = compileReachableSymbols(
-    graph.modules,
-    reachable,
-    emitOrder,
-    counter,
-    { validate },
-  );
+  const { symbols, discoveredContracts, compiledWorkflows, compiledHelpers } =
+    compileReachableSymbols(graph.modules, reachable, emitOrder, counter, { validate });
+
+  // Stage 5b: Module reclassification (§15.7)
+  for (const [, mod] of graph.modules) {
+    if (mod.provenance !== "traversed") {
+      continue;
+    }
+    const hasCompiledSymbols = symbols.some((s) => s.id.modulePath === mod.path);
+
+    // MC2/MC8: workflow-implementation with no generators and no compiled symbols → external
+    if (
+      mod.category === "workflow-implementation" &&
+      mod.generators.length === 0 &&
+      !hasCompiledSymbols
+    ) {
+      mod.category = "external";
+    }
+
+    // MP2: contract-declaration with compiled non-generator symbols → workflow-implementation
+    if (mod.category === "contract-declaration" && hasCompiledSymbols) {
+      mod.category = "workflow-implementation";
+    }
+  }
 
   // Assign emitted names (§21)
   const modulePaths = [...graph.modules.keys()];
@@ -102,13 +142,17 @@ function runPipeline(options: {
   // Name conflict detection (§19)
   checkNameConflicts(symbols);
   checkContractNameConflicts(discoveredContracts, graph.modules);
+  checkContractSymbolConflicts(symbols, discoveredContracts);
 
-  // Collect type imports from across the graph
+  // Collect type imports from across the graph, filtered to only contract-referenced types
   const typeImports: string[] = [];
   for (const mod of graph.modules.values()) {
-    for (const t of mod.typeImportTexts) {
-      if (!typeImports.includes(t)) {
-        typeImports.push(t);
+    if (mod.contractTypeNodes.length > 0) {
+      const filtered = collectReferencedTypeImports(mod.sourceFile, mod.contractTypeNodes);
+      for (const t of filtered) {
+        if (!typeImports.includes(t)) {
+          typeImports.push(t);
+        }
       }
     }
   }
@@ -156,6 +200,8 @@ function runPipeline(options: {
     compiledSymbols: symbols,
     discoveredContracts,
     compiledWorkflows,
+    compiledHelpers,
+    warnings,
     modules: graph.modules,
     traversalOrder: graph.traversalOrder,
   };
@@ -191,6 +237,10 @@ export function compileGraph(options: CompileGraphOptions): CompileGraphResult {
 
   return {
     source: result.emittedSource,
+    contracts: result.discoveredContracts,
+    workflows: result.compiledWorkflows,
+    helpers: result.compiledHelpers,
+    warnings: result.warnings,
     graph: {
       modules,
       traversed: result.traversalOrder,

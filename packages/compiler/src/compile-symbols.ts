@@ -80,6 +80,11 @@ export function compileReachableSymbols(
       continue;
     }
 
+    // GM8: Generated-module symbols are placeholder entries only — do not compile
+    if (mod.category === "generated") {
+      continue;
+    }
+
     const contractMap = contractMaps.get(id.modulePath) ?? new Map();
 
     // Find the function
@@ -125,9 +130,11 @@ export function compileReachableSymbols(
       if (err instanceof CompileError) {
         // HC3: If compilation fails, report E-HELPER-001
         if (!isGenerator) {
+          // Extract the reason from the inner error, stripping its code prefix
+          const reason = err.message.replace(/^\S+ at \d+:\d+: /, "");
           throw new CompileError(
             "E-HELPER-001",
-            `Cannot compile helper '${id.localName}' in '${id.modulePath}': ${err.message}`,
+            `Cannot compile helper '${id.localName}' in '${id.modulePath}' [${err.code}]: ${reason}`,
             err.line,
             err.column,
           );

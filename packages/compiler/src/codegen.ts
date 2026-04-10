@@ -214,7 +214,7 @@ export function generateCode(
       const indented = indentContinuation(printedMap[name]!);
       lines.push(`export const ${name}: ${fnType} =\n  ${indented};`);
     } else {
-      const json = JSON.stringify(wf.ir, null, 2);
+      const json = sortedStringify(wf.ir, 2);
       const indented = indentContinuation(json);
       lines.push(generateWorkflowDoc(name, wf.ir));
       lines.push(`export const ${name}: ${fnType} = ${indented} as const;`);
@@ -240,7 +240,7 @@ export function generateCode(
     for (const name of sortedWorkflowNames) {
       const wf = workflows[name]!;
       const schema = buildInputSchema(wf.paramTypes);
-      schemaEntries.push(`  ${name}: ${JSON.stringify(schema)}`);
+      schemaEntries.push(`  ${name}: ${sortedStringify(schema)}`);
     }
     lines.push(`export const inputSchemas = {`);
     lines.push(schemaEntries.join(",\n"));
@@ -289,6 +289,26 @@ function generateFactory(contract: DiscoveredContract): string {
   lines.push(`}`);
 
   return lines.join("\n");
+}
+
+/**
+ * JSON.stringify with sorted keys for deterministic output.
+ */
+function sortedStringify(value: unknown, indent?: number): string {
+  return JSON.stringify(
+    value,
+    (_key, val) => {
+      if (val && typeof val === "object" && !Array.isArray(val)) {
+        const sorted: Record<string, unknown> = {};
+        for (const k of Object.keys(val).sort()) {
+          sorted[k] = (val as Record<string, unknown>)[k];
+        }
+        return sorted;
+      }
+      return val;
+    },
+    indent,
+  );
 }
 
 function indentContinuation(source: string): string {
@@ -397,7 +417,7 @@ export function generateGraphCode(options: GenerateGraphCodeOptions): string {
       const indented = indentContinuation(printed);
       lines.push(`${exportPrefix}const ${sym.emittedName}: ${fnType} =\n  ${indented};`);
     } else {
-      const json = JSON.stringify(sym.ir, null, 2);
+      const json = sortedStringify(sym.ir, 2);
       const indented = indentContinuation(json);
       if (sym.isExported) {
         lines.push(generateWorkflowDoc(sym.emittedName, sym.ir));
@@ -423,7 +443,7 @@ export function generateGraphCode(options: GenerateGraphCodeOptions): string {
     lines.push("");
     const schemaEntries: string[] = [];
     for (const sym of exportedWorkflows) {
-      schemaEntries.push(`  ${sym.emittedName}: ${JSON.stringify(sym.inputSchema)}`);
+      schemaEntries.push(`  ${sym.emittedName}: ${sortedStringify(sym.inputSchema)}`);
     }
     lines.push(`export const inputSchemas = {`);
     lines.push(schemaEntries.join(",\n"));

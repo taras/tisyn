@@ -37,19 +37,28 @@ export interface ValueImport {
   fromModule: string;
   /** Resolved absolute path of the target module. */
   resolvedPath: string;
+  /** Source location of the import declaration. */
+  line: number;
+  column: number;
 }
 
 export interface ModuleInfo {
   path: string;
   category: ModuleCategory;
+  /** How this module entered the graph. */
+  provenance: "traversed" | "boundary";
   sourceFile: ts.SourceFile;
   generators: ParsedFunction[];
   nonGeneratorFunctions: ParsedNonGeneratorFunction[];
   discoveredContracts: DiscoveredContract[];
+  /** AST type nodes from contract signatures, for import filtering. */
+  contractTypeNodes: ts.TypeNode[];
   exportMap: ModuleExports;
   valueImports: ValueImport[];
   /** Raw type-only import declaration text for forwarding to output. */
   typeImportTexts: string[];
+  /** Names of exported non-function value bindings (GM4: for generated modules). */
+  nonFunctionExports: string[];
 }
 
 export interface GraphResult {
@@ -144,33 +153,55 @@ function traverseModule(
   const category = classifyModule(sourceFile, modulePath, generatedSet, source);
 
   // Extract symbols based on category
+  // GM3: Generated modules have their symbols extracted (metadata-only, not compiled per GM8)
   const generators =
-    category === "generated" || category === "type-only" || category === "external"
+    category === "type-only" || category === "external"
       ? []
       : [...parseGenerators(sourceFile), ...parseConstBoundGenerators(sourceFile)];
 
   const nonGeneratorFunctions =
-    category === "generated" || category === "type-only" || category === "external"
+    category === "type-only" || category === "external"
       ? []
       : parseNonGeneratorFunctions(sourceFile);
 
-  const discoveredContracts =
-    category === "generated" || category === "type-only" || category === "external"
-      ? []
-      : discoverContracts(sourceFile).contracts;
+  // GM5: Generated modules have their contracts discovered
+  const discoveryResult =
+    category === "type-only" || category === "external"
+      ? { contracts: [], contractTypeNodes: [] as ts.TypeNode[] }
+      : discoverContracts(sourceFile);
 
   const exportMap = collectAllExportedNames(sourceFile);
+
+  // GM4: For generated modules, compute non-function exports
+  let nonFunctionExports: string[] = [];
+  if (category === "generated") {
+    const functionNames = new Set<string>();
+    for (const g of generators) {
+      functionNames.add(g.name);
+    }
+    for (const f of nonGeneratorFunctions) {
+      functionNames.add(f.name);
+    }
+    for (const [, localName] of exportMap.local) {
+      if (!functionNames.has(localName)) {
+        nonFunctionExports.push(localName);
+      }
+    }
+  }
 
   const info: ModuleInfo = {
     path: modulePath,
     category,
+    provenance: "traversed",
     sourceFile,
     generators,
     nonGeneratorFunctions,
-    discoveredContracts,
+    discoveredContracts: discoveryResult.contracts,
+    contractTypeNodes: discoveryResult.contractTypeNodes,
     exportMap,
     valueImports,
     typeImportTexts,
+    nonFunctionExports,
   };
 
   modules.set(modulePath, info);
@@ -190,7 +221,26 @@ function traverseModule(
   // G4: Recursively traverse workflow-implementation and contract-declaration modules
   if (category === "workflow-implementation" || category === "contract-declaration") {
     for (const imp of valueImports) {
+      // Skip bare specifier / node: protocol imports — they are boundary modules, not traversable
+      if (!imp.fromModule.startsWith("./") && !imp.fromModule.startsWith("../")) {
+        continue;
+      }
       traverseModule(imp.resolvedPath, readFile, generatedSet, modules, visited);
+    }
+
+    // E-IMPORT-005: Verify imported names exist in target module's exports
+    for (const imp of valueImports) {
+      const targetMod = modules.get(imp.resolvedPath);
+      if (targetMod && targetMod.provenance === "traversed") {
+        if (!targetMod.exportMap.local.has(imp.importedName)) {
+          throw new CompileError(
+            "E-IMPORT-005",
+            `Module '${imp.resolvedPath}' does not export '${imp.importedName}' (imported from '${modulePath}')`,
+            imp.line,
+            imp.column,
+          );
+        }
+      }
     }
   }
   // G5: Generated → export names extracted, stop traversal
@@ -206,13 +256,16 @@ function makeBoundaryModule(path: string, category: "type-only" | "external"): M
   return {
     path,
     category,
+    provenance: "boundary",
     sourceFile: emptySource,
     generators: [],
     nonGeneratorFunctions: [],
     discoveredContracts: [],
+    contractTypeNodes: [],
     exportMap: { local: new Map(), reExports: [] },
     valueImports: [],
     typeImportTexts: [],
+    nonFunctionExports: [],
   };
 }
 
@@ -409,6 +462,19 @@ export function extractImports(sourceFile: ts.SourceFile, modulePath: string): E
       if (hasValueBindings) {
         // Record as external boundary
         externalSpecifiers.push(specifierText);
+
+        // Also record individual value imports so resolveAndAdd can detect E-IMPORT-001
+        for (const el of namedBindings.elements) {
+          if (!el.isTypeOnly) {
+            valueImports.push({
+              localName: el.name.text,
+              importedName: el.propertyName?.text ?? el.name.text,
+              fromModule: specifierText,
+              resolvedPath: specifierText,
+              ...loc,
+            });
+          }
+        }
         continue;
       }
 
@@ -444,6 +510,7 @@ export function extractImports(sourceFile: ts.SourceFile, modulePath: string): E
         importedName,
         fromModule: specifierText,
         resolvedPath,
+        ...loc,
       });
     }
   }
