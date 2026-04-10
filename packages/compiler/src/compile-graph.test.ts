@@ -1577,4 +1577,34 @@ describe("runtime binding resolution", () => {
     expect(result.runtimeBindings["__rtexport_myHelper"]).toBeDefined();
     expect(result.runtimeBindings["__rtexport_main"]).toBeDefined();
   });
+
+  it("DG-019: E-GRAPH-002 when selected export does not exist", () => {
+    expect(() =>
+      compileGraphForRuntime({
+        roots: ["/root.ts"],
+        readFile: makeReadFile({
+          "/root.ts": `
+            export function* main() { return 1; }
+          `,
+        }),
+        validate: false,
+        exportName: "nonexistent",
+      }),
+    ).toThrow(CompileError);
+
+    try {
+      compileGraphForRuntime({
+        roots: ["/root.ts"],
+        readFile: makeReadFile({
+          "/root.ts": `export function* main() { return 1; }`,
+        }),
+        validate: false,
+        exportName: "nonexistent",
+      });
+    } catch (e) {
+      expect((e as CompileError).code).toBe("E-GRAPH-002");
+      expect((e as CompileError).message).toContain("nonexistent");
+      expect((e as CompileError).message).toContain("main");
+    }
+  });
 });

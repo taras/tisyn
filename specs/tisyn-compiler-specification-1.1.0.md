@@ -1950,6 +1950,7 @@ they would otherwise conflict.
 | `E-HELPER-001` | Reachable non-generator helper contains unsupported authored construct |
 | `E-NAME-001` | Duplicate reachable exported symbol names across modules |
 | `E-GRAPH-001` | No exported generator workflows found in the graph |
+| `E-GRAPH-002` | Selected export name not found among compiled exported symbols during `compileGraphForRuntime()` |
 
 ### 24.2 Warning Codes
 
