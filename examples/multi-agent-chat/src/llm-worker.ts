@@ -1,11 +1,23 @@
 import { workerMain } from "@effectionx/worker";
-import { implementAgent } from "@tisyn/agent";
+import { agent, implementAgent, operation } from "@tisyn/agent";
 import type { AgentMessage, HostMessage } from "@tisyn/protocol";
 import { parseHostMessage } from "@tisyn/protocol";
 import { createProtocolServer } from "@tisyn/transport";
 import { createQueue, spawn } from "effection";
-import { Llm } from "./workflow.generated.ts";
 import { logInfo } from "./logger.ts";
+
+const Llm = () =>
+  agent("llm", {
+    sample: operation<
+      {
+        input: {
+          history: Array<{ role: string; content: string }>;
+          message: string;
+        };
+      },
+      { message: string }
+    >(),
+  });
 
 const impl = implementAgent(Llm(), {
   *sample({ input }) {

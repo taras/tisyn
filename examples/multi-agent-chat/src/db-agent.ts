@@ -7,9 +7,18 @@
 
 import { readFileSync, writeFileSync, mkdirSync } from "node:fs";
 import { dirname } from "node:path";
+import { agent, operation } from "@tisyn/agent";
 import { inprocessTransport } from "@tisyn/transport";
 import type { LocalAgentBinding } from "@tisyn/transport";
-import { DB } from "./workflow.generated.js";
+
+const DB = () =>
+  agent("d-b", {
+    loadMessages: operation<
+      { input: Record<string, never> },
+      Array<{ role: string; content: string }>
+    >(),
+    appendMessage: operation<{ input: { role: string; content: string } }, void>(),
+  });
 
 type Message = { role: string; content: string };
 

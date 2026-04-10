@@ -9,7 +9,7 @@
     "build": "pnpm run build:workflow && pnpm run build:node",
     "pretest": "pnpm run build:workflow",
     "test": "vitest run",
-    "predev": "pnpm run build && pnpm run build:browser",
+    "predev": "pnpm run build:node && pnpm run build:browser",
     "dev": "tsn run src/workflow.ts -e dev",
     "dev:browser": "vite",
     "build:browser": "vite build",

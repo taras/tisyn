@@ -260,8 +260,8 @@ and middleware examples.
 pnpm dev
 ```
 
-This runs `predev` (builds workflow IR, compiles TypeScript, builds browser
-bundle) then `tsn run src/workflow.ts -e dev`.
+This runs `predev` (compiles TypeScript, builds browser bundle) then
+`tsn run src/workflow.ts -e dev`.
 
 The workflow module configures three agents, a memory journal, and a dev
 entrypoint with a WebSocket server serving the browser bundle.
