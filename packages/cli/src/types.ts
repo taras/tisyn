@@ -1,7 +1,6 @@
 export interface GeneratePass {
   name: string;
-  input: string;
-  include?: string[];
+  roots: string[];
   output: string;
   format?: "printed" | "json";
   noValidate?: boolean;
@@ -13,8 +12,7 @@ export interface TisynConfig {
 }
 
 export interface GenerateCommandOptions {
-  input: string;
-  include: string[];
+  roots: string[];
   output?: string;
   format: "printed" | "json";
   validate: boolean;
@@ -40,8 +38,8 @@ export interface CheckCommandOptions {
   verbose: boolean;
 }
 
-export interface ResolvedPass extends Required<Pick<GeneratePass, "name" | "input" | "output">> {
-  include: string[];
+export interface ResolvedPass extends Required<Pick<GeneratePass, "name" | "output">> {
+  roots: string[];
   format: "printed" | "json";
   noValidate: boolean;
   dependsOn: string[];

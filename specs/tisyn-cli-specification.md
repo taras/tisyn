@@ -13,7 +13,7 @@ This document specifies `tsn`, the Tisyn command-line interface.
 `tsn` provides four commands:
 
 - `tsn generate` — compile one workflow source into a generated
-  module
+  module artifact from one or more roots
 - `tsn build` — run config-driven multi-pass generation
 - `tsn run` — load a workflow descriptor, validate readiness,
   and execute
@@ -31,8 +31,7 @@ The package MUST register `tsn` as a `bin` entry in
 The CLI is responsible for:
 
 - command dispatch, flag parsing, and help generation
-- source assembly and compilation orchestration
-  (`generate`, `build`)
+- rooted compilation orchestration (`generate`, `build`)
 - workflow descriptor loading, entrypoint selection, and
   environment validation (`run`, `check`)
 - module loading with first-class TypeScript support
@@ -44,7 +43,8 @@ The CLI is responsible for:
 
 The CLI is NOT responsible for:
 
-- IR lowering or validation (compiler)
+- import resolution, graph construction, module
+  classification, or IR lowering (compiler)
 - IR execution, replay, or transport management (runtime)
 - descriptor data model, constructor vocabulary, or
   `Config.useConfig()` semantics (config specification)
@@ -79,18 +79,18 @@ are used as defined in RFC 2119.
 
 ### 2.1 `tsn generate`
 
-Single-file generation. Compiles one set of source files into
-one output module.
+Compile the workflow module graph rooted at one or more
+source files.
 
 ```
-tsn generate <input> [options]
+tsn generate <root> [<root>...] [options]
 ```
 
 **Arguments:**
 
 | Argument | Required | Description |
 | --- | --- | --- |
-| `input` | YES | Path to declaration file (`.ts`) |
+| `root` | YES (1+) | Root workflow source file(s) |
 
 **Options:**
 
@@ -99,7 +99,6 @@ tsn generate <input> [options]
 | `--output <path>` | `-o` | stdout | Output file path |
 | `--format <type>` | | `printed` | Output format: `printed` or `json` |
 | `--no-validate` | | validate | Skip IR validation |
-| `--include <glob>` | `-i` | | Additional workflow files to include |
 | `--verbose` | | false | Show detailed diagnostics |
 | `--help` | `-h` | | Show help |
 | `--version` | `-v` | | Show version |
@@ -107,16 +106,15 @@ tsn generate <input> [options]
 **Behavior:**
 
 1. Parse and validate options.
-2. Read the declaration file at `<input>`.
-3. If `--include` is specified, read each matching workflow
-   file.
-4. Concatenate declaration source with workflow source texts,
-   separated by blank lines (§6).
-5. Call `generateWorkflowModule()` with the concatenated
-   source.
-6. If `--output` is specified, write the generated source to
+2. Call `compileGraph()` with the specified roots, output
+   format, and validation settings.
+3. If `--output` is specified, write the generated source to
    the file. Otherwise, write to stdout.
-7. Exit with code 0 on success.
+4. Exit with code 0 on success.
+
+The `--include` flag is removed. The CLI MUST NOT assemble
+source text, strip imports, or inject stubs for
+`tsn generate`; those are compiler responsibilities.
 
 ### 2.2 `tsn build`
 
@@ -154,11 +152,10 @@ none is found, the CLI MUST fail with exit code 2.
 6. If `--filter` is specified, execute only the named pass
    (and its dependencies). Unknown name → exit code 2.
 7. For each pass in dependency order:
-   a. Read source files.
-   b. Inject stubs if needed (§5.3).
-   c. Concatenate sources (§6).
-   d. Call `generateWorkflowModule()`.
-   e. Write generated output.
+   a. Call `compileGraph()` with the pass's `roots`, format,
+      validation setting, and `generatedModulePaths` derived
+      from prior pass outputs.
+   b. Write generated output.
 8. Exit with code 0 on success.
 
 ### 2.3 `tsn run`
@@ -279,8 +276,8 @@ process exit, and a scope boundary for async operations.
 
 ### 3.2 Compilation Is Synchronous
 
-For `tsn generate` and `tsn build`, `generateWorkflowModule()`
-is a pure synchronous function. The CLI MUST NOT introduce
+For `tsn generate` and `tsn build`, rooted compilation via
+`compileGraph()` is synchronous. The CLI MUST NOT introduce
 unnecessary async boundaries around it.
 
 ### 3.3 `tsn run` Is Long-Lived
@@ -351,8 +348,7 @@ export default defineConfig({
   generates: [
     {
       name: "dom-workflows",
-      input: "workflows/dom-declarations.ts",
-      include: ["workflows/dom/**/*.workflow.ts"],
+      roots: ["workflows/dom/main.workflow.ts"],
       output: "dom-workflows.generated.ts",
       format: "json",
     },
@@ -375,8 +371,7 @@ interface TsynConfig {
 
 interface GeneratePass {
   name: string;
-  input: string;
-  include?: string[];
+  roots: string[];
   output: string;
   format?: "printed" | "json";
   noValidate?: boolean;
@@ -388,7 +383,8 @@ interface GeneratePass {
 
 - `generates` MUST contain at least one entry.
 - Each `name` MUST be unique and match `[a-z][a-z0-9-]*`.
-- Each `input` MUST resolve to an existing file.
+- Each `roots` array MUST contain at least one path.
+- Each root path MUST resolve to an existing file.
 - Each `output` MUST be writable.
 - `dependsOn` references MUST name passes in `generates`.
 
@@ -398,11 +394,15 @@ interface GeneratePass {
 
 ### 5.1 Import-Graph Inference
 
-The CLI MUST infer pass dependencies from the import graph
-of source files. For each pass, the CLI collects source files
-and extracts relative import specifiers. If an import
-resolves to another pass's output path, the other pass MUST
-run first.
+The CLI MUST infer pass dependencies from the declared
+roots and output paths. For each pass `P`, if any root
+module's import graph would encounter a resolved import path
+matching another pass's declared output, that other pass
+MUST run first.
+
+The CLI MAY approximate this by scanning root files'
+relative import declarations for specifiers that resolve to
+other passes' output paths.
 
 ### 5.2 `dependsOn` Escape Hatch
 
@@ -410,13 +410,12 @@ Explicit ordering for cases where dependencies are not
 visible in imports. Inferred and explicit edges are
 equivalent.
 
-### 5.3 Cross-Pass Stub Injection
+### 5.3 Cross-Pass Boundary Handling
 
-When pass `B` depends on pass `A`, the CLI MUST inject
-declaration stubs into `B`'s source for contracts and
-workflows exported by `A`'s generated module. Import
-declarations referencing `A`'s output MUST be stripped
-and replaced by stubs.
+Cross-pass boundaries are handled by the compiler during
+graph traversal. The CLI communicates prior pass output
+paths via `generatedModulePaths`. The CLI MUST NOT perform
+source-level stub injection or import stripping.
 
 ### 5.4 Single-Pass Shortcut
 
@@ -426,21 +425,12 @@ A single pass with no dependencies skips dependency analysis.
 
 ## 6. Source Assembly
 
-### 6.1 Concatenation Model
+### 6.1 Reserved
 
-For `tsn generate` and each pass in `tsn build`, source
-assembly order is: declaration file, blank line, cross-pass
-stubs (if any), blank line, workflow files.
-
-### 6.2 Filename
-
-The CLI MUST pass a `filename` option to
-`generateWorkflowModule()` for error messages.
-
-### 6.3 Deduplication
-
-If the declaration file matches an `include` glob, the CLI
-MUST NOT include it twice.
+This section is reserved. Source assembly, concatenation,
+deduplication, and filename derivation are no longer CLI
+concerns. The compiler owns file reading, import
+resolution, and module classification.
 
 ---
 
@@ -678,21 +668,23 @@ the following steps in order:
    valid `WorkflowDescriptor`, fail with exit code 2.
 
 2. **Run target resolution.** Resolve the descriptor's
-   `run` field to a workflow function. If `run.module`
-   is specified, determine the loading path:
+   `run` field to a workflow function. The descriptor
+   module itself is always runtime-loaded; it is never a
+   compilation root.
 
-   - If `run.module` points to a `.ts` source file, the
-     CLI compiles the workflow at runtime using the Tisyn
-     compiler (§10.5.4). This is source compilation, not
-     module loading.
-   - If `run.module` points to a `.js` file, the CLI
-     loads the pre-compiled module via the bootstrap
-     loading path (§10.5) and locates the named export.
+   If `run.module` is omitted, locate the named export in
+   the same module that produced the descriptor (§10.2).
+   If the export does not exist, fail with exit code 2.
 
-   If `run.module` is omitted, locate the named export
-   in the same module that produced the descriptor
-   (§10.2). If the export does not exist, fail with
-   exit code 2.
+   If `run.module` is specified, dispatch by the resolved
+   workflow module:
+
+   - If it points to a pre-compiled generated module, load
+     the module at runtime and extract the named export.
+     The compiler is not invoked.
+   - If it points to authored workflow source, compile that
+     source module using the rooted import-graph compiler
+     model and execute the resulting artifact.
 
 3. **Entrypoint overlay.** If `--entrypoint` is specified,
    look up the named entrypoint and apply the overlay per the
@@ -770,20 +762,21 @@ in the same module:
 | **Workflow function module** | The module containing the executable workflow function | `run` field of the descriptor |
 
 When `run.module` is omitted, the workflow function is
-resolved from the descriptor module itself. When `run.module`
-is specified, the CLI imports that module separately.
+resolved from the descriptor module itself. When
+`run.module` is specified, the CLI resolves it relative to
+the descriptor module and then dispatches based on whether
+the target is authored source or a generated workflow
+module.
 
-The CLI imposes no constraint on whether these modules are
-authored source, generated output, or any other form. The
-contract is:
+The contract is:
 
 M1. The descriptor module MUST have a `default` export
     that is a valid `WorkflowDescriptor`.
 
 M2. The workflow function module MUST export the workflow
-    entrypoint function under the name specified by
-    `run.export`. The CLI does not prescribe how this
-    function was produced.
+    entrypoint under the name specified by `run.export`.
+    Generated modules are loaded at runtime. Authored source
+    modules are compilation roots.
 
 M3. `run.module`, if specified, is resolved relative to
     the descriptor module's location.
@@ -890,17 +883,17 @@ produced by `tsn generate` or `tsn build`. Module loading
 evaluates the module and returns its exports.
 
 **Source compilation** (compiler specification). When
-`run.module` points to a `.ts` workflow source file, the
-CLI reads the source text and passes it through the Tisyn
-compiler to produce IR. This is source analysis, not
-module loading. The compiler operates on text, not on
-evaluated modules.
+`run.module` points to authored workflow source, the CLI
+invokes `compileGraph()` using the workflow module as a
+root. The compiler reads source through its `readFile`
+path, resolves imports, classifies generated-module
+boundaries, and produces the compiled artifact.
 
 Module loading MUST NOT replace workflow source
-compilation. When `run.module` is a `.ts` workflow source,
-the CLI MUST use the Tisyn compiler to produce IR.
-Loading the `.ts` file as a module via `tsImport()` would
-produce runtime values, not inspectable IR.
+compilation. When `run.module` is authored workflow source,
+the CLI MUST use the Tisyn compiler to produce IR. Loading
+that file as a runtime module would produce JavaScript
+values, not inspectable workflow IR.
 
 Module loading (via `tsImport()` or `import()`) is for
 descriptor modules and transport binding modules —
@@ -1012,17 +1005,18 @@ execution starts.
 
 ## 12. Compiler API
 
-### 12.1 `generateWorkflowModule()` Is the Core
+### 12.1 `compileGraph()` Is the Core
 
-The CLI wraps `generateWorkflowModule()` for compilation. It
-does NOT introduce a new compilation API, replace it, or
-bypass it.
+The CLI invokes `compileGraph()` for rooted compilation. It
+MUST NOT read workflow source files, resolve imports,
+classify modules, concatenate source, strip imports, or
+inject stubs itself.
 
 ### 12.2 What the CLI Adds
 
-Beyond compilation, the CLI provides: file I/O, multi-pass
-orchestration, source assembly, and workflow invocation
-lifecycle.
+Beyond compilation, the CLI provides file I/O, multi-pass
+orchestration, generated-module path handoff, diagnostics
+formatting, and workflow invocation lifecycle.
 
 ---
 
@@ -1076,14 +1070,18 @@ setup, and connection management move to the runtime.
 
 ### 15.1 Compiler API Stability
 
-The CLI depends on `GenerateResult` exposing `workflows` and
-`contracts`. These MUST be treated as stable public API.
+The CLI depends on `compileGraph()` and its public result
+shape. The rooted compiler entry point, generated-module
+boundary behavior, and public graph metadata MUST be treated
+as stable public API.
 
-### 15.2 Source Concatenation Fragility
+### 15.2 Rooted Graph Boundary Drift
 
-Edge cases in concatenation (conflicting declarations,
-duplicate imports, name collisions) SHOULD be handled by
-clear compiler error surfacing, not heroic merges.
+The highest-risk drift area is responsibility leakage
+between CLI and compiler. The CLI MUST NOT reintroduce
+source assembly, stub injection, or its own import
+classification logic; those belong to the compiler's rooted
+graph model.
 
 ### 15.3 Input Derivation Scope
 

@@ -99,6 +99,10 @@ export function discoverContracts(sourceFile: ts.SourceFile): DiscoveryResult {
 
     // Extract methods from the type literal
     const { methods, typeNodes } = extractMethods(name, returnType, sourceFile);
+
+    // Validate type operators in contract signatures (v1 restriction)
+    validateContractTypeNodes(typeNodes, sourceFile);
+
     allTypeNodes.push(...typeNodes);
 
     contracts.push({
@@ -110,6 +114,47 @@ export function discoverContracts(sourceFile: ts.SourceFile): DiscoveryResult {
   }
 
   return { contracts, contractTypeNodes: allTypeNodes };
+}
+
+/**
+ * Walk contract type nodes and reject unsupported type operators (typeof, keyof, readonly, unique).
+ */
+function validateContractTypeNodes(typeNodes: ts.TypeNode[], sourceFile: ts.SourceFile): void {
+  function visit(node: ts.Node) {
+    if (ts.isTypeQueryNode(node)) {
+      const loc = getLocation(node, sourceFile);
+      throw new CompileError(
+        "E999",
+        `Type operator 'typeof' is not supported in contract signatures (v1 restriction)`,
+        loc.line,
+        loc.column,
+      );
+    }
+
+    if (ts.isTypeOperatorNode(node)) {
+      const operatorText =
+        node.operator === ts.SyntaxKind.KeyOfKeyword
+          ? "keyof"
+          : node.operator === ts.SyntaxKind.ReadonlyKeyword
+            ? "readonly"
+            : node.operator === ts.SyntaxKind.UniqueKeyword
+              ? "unique"
+              : "type operator";
+      const loc = getLocation(node, sourceFile);
+      throw new CompileError(
+        "E999",
+        `Type operator '${operatorText}' is not supported in contract signatures (v1 restriction)`,
+        loc.line,
+        loc.column,
+      );
+    }
+
+    ts.forEachChild(node, visit);
+  }
+
+  for (const typeNode of typeNodes) {
+    visit(typeNode);
+  }
 }
 
 // ── Type import collection ──

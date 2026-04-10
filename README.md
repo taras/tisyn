@@ -124,10 +124,13 @@ For the detailed agent model and API examples, see [`@tisyn/agent`](./packages/a
 | --- | --- |
 | [Configuration Specification](./specs/tisyn-config-specification.md) | Workflow runtime-topology config descriptors, validation, env resolution |
 | [Configuration Test Plan](./specs/tisyn-config-test-plan.md) | Conformance test plan for the configuration specification |
+| [CLI Specification](./specs/tisyn-cli-specification.md) | `tsn generate`, `tsn build`, `tsn run`, and `tsn check` command behavior |
+| [CLI Test Plan](./specs/tisyn-cli-test-plan.md) | Conformance test plan for the CLI specification |
 | [Tisyn Specification 1.0](./specs/tisyn-specification-1.0.md) | Core language: values, expressions, and evaluation rules |
 | [Kernel Specification](./specs/tisyn-kernel-specification.md) | Kernel semantics, environments, and effect dispatch |
 | [Agent Specification 1.1.0](./specs/tisyn-agent-specification-1.1.0.md) | Typed agent declarations, implementations, and invocation |
 | [Compiler Specification 1.2.0](./specs/tisyn-compiler-specification-1.1.0.md) | TypeScript-to-IR compilation rules and restrictions |
+| [Compiler Test Plan](./specs/tisyn-compiler-test-plan.md) | Conformance test plan for rooted import-graph compilation and diagnostics |
 | [Compound Concurrency Spec](./specs/tisyn-compound-concurrency-spec.md) | `all`, `race`, `spawn`, and `join` orchestration semantics |
 | [Spawn Specification](./specs/tisyn-spawn-specification.md) | Authored `spawn(...)`, task handles, `join`, and structured child-task lifecycle |
 | [Resource Specification](./specs/tisyn-resource-specification.md) | `resource(...)` and `provide(...)` scope-creating primitives for managed initialization and cleanup |

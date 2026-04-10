@@ -10,10 +10,12 @@ If `@tisyn/ir` defines the language of Tisyn, `@tisyn/compiler` is what lets aut
 
 `@tisyn/compiler` owns the boundary between authoring and execution:
 
+- builds a static import graph from one or more root module paths
+- classifies modules (workflow-implementation, contract-declaration, generated, type-only, external)
 - discovers ambient agent contract declarations
 - validates that authored workflows stay within the supported deterministic subset
-- lowers exported generator workflows into Tisyn IR
-- generates a TypeScript module containing agent factories, compiled workflows, and grouped exports
+- lowers exported generator workflows and reachable helpers into Tisyn IR
+- generates a TypeScript module containing agent factories, compiled workflows, helpers, and grouped exports
 
 The output is portable, inspectable, and ready to plug into runtime execution or transport across boundaries.
 
@@ -88,7 +90,9 @@ At runtime, that generated module is consumed by the rest of the Tisyn system.
 
 The public API from `src/index.ts` includes:
 
-- `generateWorkflowModule`: discover contracts, compile workflows, and generate a TypeScript module
+- `compileGraph`: compile a rooted import graph to a workflow module artifact. Accepts `CompileGraphOptions` with `roots: string[]` and returns `CompileGraphResult` containing the emitted source, discovered contracts, compiled workflows/helpers, warnings, and module graph metadata
+- `compileGraphForRuntime`: compile a rooted graph and return per-export IR and input schemas directly, without emitting a source artifact. Used by `tsn run` for runtime compilation
+- `generateWorkflowModule`: compatibility wrapper around `compileGraph` for single-source compilation. Discovers contracts, compiles workflows, and generates a TypeScript module
 - `compile`: compile authored workflow source into IR
 - `compileOne`: compile a single workflow and return its IR directly
 - `DiscoveredContract`: metadata for one discovered ambient contract

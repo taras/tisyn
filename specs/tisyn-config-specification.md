@@ -1171,3 +1171,54 @@ a CLI feature.
 
 5. **No semantic changes.** All architecture, data model,
    validation, resolution, and security rules unchanged.
+
+---
+
+## 13. CLI Build Generation Config
+
+This section defines the config shape used by `tsn build`.
+It is distinct from the `WorkflowDescriptor` model above.
+`WorkflowDescriptor` config is runtime-facing. Build
+generation config is compile-time orchestration data owned
+by the CLI/build toolchain.
+
+### 13.1 Build Config Shape
+
+```typescript
+interface TsynConfig {
+  generates: GeneratePass[];
+}
+
+interface GeneratePass {
+  name: string;
+  roots: string[];
+  output: string;
+  format?: "printed" | "json";
+  noValidate?: boolean;
+  dependsOn?: string[];
+}
+```
+
+`roots` replaces the legacy `input` and `include` fields.
+Each root is a workflow-source compilation root passed to
+the compiler's rooted import-graph entry point.
+
+### 13.2 Validation Rules
+
+- `generates` MUST contain at least one entry.
+- Each `name` MUST be unique and match `[a-z][a-z0-9-]*`.
+- Each `roots` array MUST contain at least one path.
+- Each root path MUST resolve to an existing file.
+- Each `output` path MUST be writable.
+- `dependsOn` references MUST name passes in `generates`.
+
+### 13.3 Multi-Pass Boundary Semantics
+
+During `tsn build`, earlier pass outputs are treated as
+generated-module boundaries for later passes. The CLI
+communicates those paths to the compiler via
+`generatedModulePaths`.
+
+The CLI MUST NOT assemble source, inject stubs, or strip
+imports across passes. Cross-pass boundary handling belongs
+to the compiler's generated-module model.

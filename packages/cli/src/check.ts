@@ -17,10 +17,9 @@ import { applyOverlay, resolveEnv, ConfigError } from "@tisyn/runtime";
 import {
   loadDescriptorModule,
   resolveWorkflowModule,
+  resolveWorkflowExport,
   loadWorkflowExport,
-  compileWorkflowFromSource,
 } from "./load-descriptor.js";
-import { isTypeScriptFile } from "./load-module.js";
 import { deriveFlags, formatInputHelp } from "./inputs.js";
 import type { CheckCommandOptions } from "./types.js";
 
@@ -39,10 +38,9 @@ export function* runCheck(options: CheckCommandOptions, cwd: string): Operation<
     exportName,
     explicit,
   } = resolveWorkflowModule(merged, modulePath);
-  const workflowExport =
-    explicit && isTypeScriptFile(workflowPath)
-      ? yield* compileWorkflowFromSource(workflowPath, exportName)
-      : yield* loadWorkflowExport(workflowPath, exportName);
+  const workflowExport = explicit
+    ? yield* resolveWorkflowExport(workflowPath, exportName)
+    : yield* loadWorkflowExport(workflowPath, exportName);
 
   // Phase C: Resolve environment
   const envNodes = collectEnvNodes(merged);

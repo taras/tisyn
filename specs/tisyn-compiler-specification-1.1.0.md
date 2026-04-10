@@ -8,7 +8,17 @@
 
 ## 1. Overview
 
-This document specifies a compiler that transforms a restricted subset of JavaScript generator functions into Tisyn IR. The output is a Tisyn `Fn` node — a JSON document — that, when interpreted by the Tisyn evaluator, produces the same journal as executing the original generator in the Effection runtime.
+This document specifies a compiler that transforms a
+restricted subset of TypeScript source modules into Tisyn
+IR. The compiler accepts one or more root module paths,
+constructs the static import graph reachable from those
+roots, classifies each module, extracts and compiles
+workflow-relevant symbols, and emits a compiled artifact.
+Depending on the selected output format, the artifact is
+either a generated TypeScript module or serialized IR.
+The artifact contains compiled callable bindings for
+workflows and helpers, reflects compiler-visible contract
+metadata, and provides grouped exports.
 
 ### 1.1 Correctness Criterion
 
@@ -64,25 +74,93 @@ The accepted stream-iteration form is intentionally narrow: only `for (const x o
 
 **Rule:** `yield*` MUST appear only in statement position — as the RHS of `const x = yield* ...` or as a bare statement. It MUST NOT appear in condition expressions, short-circuit operands, function arguments, or array/object literals.
 
+### 2.3 Import Semantics
+
+Imports define composition. Cross-module references to
+helpers, workflows, and contracts are resolved through
+explicit import/export bindings in the source graph.
+
+The compiler MUST support:
+
+- Named value imports with relative specifiers and explicit
+  extensions, e.g. `import { x } from "./mod.ts"`.
+- Type-only imports from any specifier. Type-only imports
+  are forwarded to generated output and do not participate
+  in workflow compilation.
+
+The compiler MUST reject the following forms when they are
+required by compiled code:
+
+- Dynamic imports: `E-IMPORT-006`
+- Import specifiers without file extensions: `E-IMPORT-002`
+- Value imports from bare specifiers or `node:` modules:
+  `E-IMPORT-001`
+- Default imports, namespace imports, and re-exports:
+  `E-IMPORT-007`
+
+Bare specifiers and `node:` imports are graph boundaries.
+The compiler does not resolve them and does not read the
+target module.
+
 ---
 
 ## 3. Compilation Pipeline
 
-### 3.1 Four Phases
+### 3.1 Six Stages
 
 ```
-Source (.ts) → [Parse] → AST → [Discover] → AnnotatedAST
-                                                   ↓
-           Tisyn IR (JSON) ← [Emit] ← TransformedAST ← [Transform]
+Roots (.ts files)
+  → [Graph Construction]
+  → [Module Classification]
+  → [Symbol Extraction]
+  → [Reachability]
+  → [Compilation]
+  → [Emission]
+  → Compiled artifact
 ```
+
+**Stage 1 — Graph construction.** The compiler resolves
+relative imports from the supplied roots, records boundary
+modules, and builds a visited module graph.
+
+**Stage 2 — Module classification.** Each module is
+classified as one of:
+`"workflow-implementation"`, `"contract-declaration"`,
+`"generated"`, `"type-only"`, or `"external"`.
+
+**Stage 3 — Symbol extraction.** The compiler records
+export maps, function declarations, contract declarations,
+and imported bindings relevant to workflow compilation.
+
+**Stage 4 — Reachability.** Exported generator workflows
+seed the reachable symbol closure. Cross-module helper and
+workflow references resolve through the import/export graph.
+
+**Stage 5 — Compilation.** Reachable generators and
+qualified helpers compile to callable `Fn` bindings.
+Unreachable extracted symbols are not compiled.
+
+**Stage 6 — Emission.** Compiled bindings, compiler-visible
+contract metadata, forwarded type-only imports, and runtime
+imports for generated-module dependencies are assembled into
+the emitted artifact.
 
 ### 3.2 Determinism
 
-Same source → byte-identical JSON. Monotonic counter for synthetic names. Canonical JSON encoding. Source-order traversal.
+Same roots + same source contents + same options MUST
+produce byte-identical output.
+
+Module compilation order is lexicographic by resolved path.
+A single monotonic counter spans the entire graph.
+Counter-derived synthetic names are assigned in compilation
+order. JSON output MUST use canonical key ordering.
 
 ### 3.3 Naming
 
-Compiler names: `__discard_0`, `__all_0`, `__loop_0`, `__sub_0`. User variables MUST NOT start with `__`.
+Exported symbols keep their source names. Non-exported
+symbols use deterministic compiler-generated names that are
+collision-free and stable across recompilation for the same
+graph. User variables MUST NOT start with `__`.
 
 ---
 
@@ -1534,15 +1612,322 @@ Every compiled IR MUST:
 
 ## 13. Compiler Interface
 
-```
-tisyn compile <input.ts> [--output <output.json>] [--validate] [--pretty]
+### 13.1 `compileGraph`
+
+Primary compilation entry point. The compiler owns graph
+construction, module classification, symbol extraction,
+reachability analysis, compilation, and emission.
+
+```typescript
+interface CompileGraphOptions {
+  roots: string[];
+  readFile?: (path: string) => string;
+  validate?: boolean;
+  format?: "printed" | "json";
+  generatedModulePaths?: string[];
+}
+
+interface CompileGraphResult {
+  source: string;
+  contracts: DiscoveredContract[];
+  workflows: Record<string, Expr>;
+  helpers: Record<string, Expr>;
+  graph: {
+    modules: Record<string, {
+      category: ModuleCategory;
+      participation?: ("implementation" | "declaration")[];
+    }>;
+    traversed: string[];
+    compiled: string[];
+  };
+  warnings?: string[];
+}
+
+type ModuleCategory =
+  | "workflow-implementation"
+  | "contract-declaration"
+  | "generated"
+  | "type-only"
+  | "external";
+
+function compileGraph(
+  options: CompileGraphOptions,
+): CompileGraphResult;
 ```
 
-| Code | Meaning           |
-| ---- | ----------------- |
-| 0    | Success           |
-| 1    | Compilation error |
-| 2    | Validation error  |
-| 3    | Internal error    |
+CG1. `roots` MUST contain at least one path.
 
-Errors include source locations. Partial compilation: failing workflows produce errors; remaining workflows compile and output.
+CG2. `readFile` defaults to synchronous filesystem reads.
+The compiler MUST use only this callback for file access.
+
+CG3. `format` defaults to `"printed"`. `"printed"` emits IR
+using constructor-function notation. `"json"` emits
+serialized IR data.
+
+CG4. `generatedModulePaths` lists paths known to be outputs
+of prior compilation passes.
+
+### 13.2 `generateWorkflowModule` (Compatibility)
+
+`generateWorkflowModule(source: string, options?)` is
+preserved as a convenience wrapper. It creates a single
+in-memory root via `readFile` and delegates to
+`compileGraph`.
+
+### 13.3 Exit Conditions
+
+| Code | Meaning |
+| --- | --- |
+| 0 | Success |
+| 1 | Compilation error |
+| 2 | Validation error |
+| 3 | Internal error |
+
+## 14. Module Graph Construction
+
+Starting from the supplied roots, the compiler constructs a
+static import graph.
+
+G1. Roots are parsed and recorded.
+
+G2. Relative value imports recurse into the target module.
+
+G3. Type-only imports are recorded as boundaries and do not
+seed traversal.
+
+G4. Bare specifiers and `node:` imports are recorded as
+external boundaries and do not seed traversal.
+
+G5. Generated modules are recorded as boundaries and MUST
+NOT have their own imports followed.
+
+G6. Traversal MUST use a visited set so cyclic imports do
+not cause re-entry.
+
+## 15. Module Classification
+
+Every discovered module is classified as exactly one of:
+
+- `workflow-implementation`
+- `contract-declaration`
+- `generated`
+- `type-only`
+- `external`
+
+Modules may also report participation profiles:
+
+- `implementation`
+- `declaration`
+
+Classification starts as a structural pass and may be
+refined after helper qualification. Modules with only
+non-generator functions that fail helper compilation are
+treated as `external`. Contract-only modules with
+qualifying helpers are reclassified to
+`workflow-implementation`.
+
+## 16. Symbol Extraction and Reachability
+
+### 16.1 Extraction
+
+The compiler records:
+
+- exported generators
+- non-generator helper candidates
+- discovered contracts
+- import/export bindings
+
+Generated modules contribute exported names, type
+annotations, placeholder symbol entries, and placeholder
+contract entries, but are not compiled.
+
+### 16.2 Reachability
+
+ER1. Exported generator workflows are entrypoints.
+
+ER2. Reachability follows direct calls and imported helper
+calls recursively.
+
+ER3. Cross-module resolution uses the recorded import/export
+bindings.
+
+ER4. Extracted symbols not in the closure MUST NOT be
+compiled. The compiler MAY emit `W-GRAPH-001` for exported
+symbols left unreachable.
+
+ER5. If the graph contains no exported generator
+entrypoints, the compiler MUST reject with `E-GRAPH-001`.
+
+### 16.3 Emission Ordering
+
+Compiled bindings MUST be emitted in an order such that
+every referenced `Ref` target is bound before evaluation.
+Strongly connected components use letrec-style binding
+semantics.
+
+## 17. Helper Compilation Semantics
+
+All helpers compile to callable `Fn` bindings invoked via
+`Call`.
+
+HC1. Generator helpers compile through the generator
+pipeline.
+
+HC2. Non-generator helpers compile through
+`emitBlock`/`emitExpression`. When successful, the helper is
+workflow-relevant and emits as `Fn(params, body)`.
+
+HC3. If compilation of a reachable non-generator helper
+fails, the compiler MUST reject with `E-HELPER-001`.
+
+Cross-module helpers resolve through import/export bindings.
+Cross-module helpers MUST NOT be inlined.
+
+The closure restriction applies to helpers exactly as it
+does to any other emitted `Fn`: free references must be
+valid at every call site.
+
+## 18. Contract Visibility
+
+Contracts are import-scoped.
+
+CV1. A contract declared in a module is visible in that
+module.
+
+CV2. A contract imported from another module is visible only
+in the importing module.
+
+CV3. There is no ambient global contract map. A workflow or
+helper that uses a contract it did not import MUST be
+rejected.
+
+Contract-only modules do not emit callable `Fn` bindings by
+virtue of declaring contracts alone.
+
+## 19. Name Conflict Resolution
+
+NC1. Two reachable exported symbols with the same name from
+different modules MUST be rejected with `E-NAME-001`.
+
+NC2. The diagnostic MUST identify both conflicting module
+paths and both source locations.
+
+NC3. The compiler MUST NOT silently rename reachable
+exported conflicts to make the program compile.
+
+Non-exported helpers may use compiler-generated names as
+long as the naming rules in §21 are preserved.
+
+## 20. Generated Module Boundaries
+
+A generated module is a declared compilation boundary.
+
+GM1. Paths supplied in `generatedModulePaths` take
+precedence for generated-module classification.
+
+GM2. The compiler MAY also classify a module as generated by
+content-based heuristics such as an auto-generated banner.
+
+For each generated module, the compiler MUST:
+
+GM3. Extract exported names and type annotations from
+top-level declarations.
+
+GM4. Create a placeholder symbol-table entry for each
+exported binding.
+
+GM5. Create a placeholder contract entry for each exported
+contract factory.
+
+GM6. Emit runtime `import { ... } from "<path>"` statements
+for generated-module imports actually referenced across the
+compilation boundary.
+
+GM7. NOT follow the generated module's own imports.
+
+GM8. NOT compile any of the generated module's content.
+
+## 21. Emitted Naming
+
+EN1. Exported symbols keep their source names.
+
+EN2. Non-exported symbols receive deterministic,
+collision-free compiler-generated names.
+
+EN3. Synthetic naming is module-scoped and stable for the
+same compilation graph.
+
+EN4. Tests and conformance requirements apply to naming
+properties, not exact synthetic spellings.
+
+## 22. Compiled Artifact Identity
+
+### 22.1 Replay Boundary
+
+Replay compatibility is tied to the specific compiled
+artifact that produced a journal. Different artifacts are
+not replay-compatible merely because they originated from
+similar source.
+
+### 22.2 Same Inputs → Same Artifact
+
+Same roots, source contents, options, and generated-module
+boundaries MUST produce byte-identical emitted output.
+
+### 22.3 Changed Relevant Input → Different Artifact
+
+Changes to reachable helpers, reachable imported modules,
+or generated-module boundary inputs MUST produce a different
+artifact.
+
+## 23. Preservation Note
+
+Sections 4 through 12 remain normative for authored-source
+lowering of the supported subset. Sections 14 through 22
+extend that model to rooted import-graph compilation and
+replace any older single-source interface assumptions where
+they would otherwise conflict.
+
+## 24. Diagnostics
+
+### 24.1 Error Codes
+
+| Code | Trigger |
+| --- | --- |
+| `E-IMPORT-001` | Referenced value import from bare specifier or `node:` boundary |
+| `E-IMPORT-002` | Import specifier missing file extension |
+| `E-IMPORT-003` | Resolved import path cannot be read |
+| `E-IMPORT-004` | Referenced value import from a traversed relative module with no workflow-relevant symbols |
+| `E-IMPORT-005` | Named import references a symbol not exported by the target module |
+| `E-IMPORT-006` | Dynamic import expression in workflow code |
+| `E-IMPORT-007` | Unsupported import form |
+| `E-HELPER-001` | Reachable non-generator helper contains unsupported authored construct |
+| `E-NAME-001` | Duplicate reachable exported symbol names across modules |
+| `E-GRAPH-001` | No exported generator workflows found in the graph |
+
+### 24.2 Warning Codes
+
+| Code | Trigger |
+| --- | --- |
+| `W-GRAPH-001` | Exported symbol in a workflow-implementation module is not reachable from any entrypoint |
+
+### 24.3 Diagnostic Content Requirements
+
+DQ1. Every error diagnostic MUST include the symbol name
+that triggered the error when a symbol is involved.
+
+DQ2. Every error diagnostic MUST include the relevant module
+path.
+
+DQ3. Every error diagnostic MUST include the specific reason
+the symbol is unavailable or invalid.
+
+DQ4. `E-HELPER-001` MUST identify the unsupported construct
+and its source location within the helper body.
+
+DQ5. `E-IMPORT-004` SHOULD explain that the target module
+contains no workflow-relevant declarations and why it was
+classified as external.
+
+DQ6. `E-NAME-001` MUST list both conflicting module paths
+and the source location of each conflicting export.

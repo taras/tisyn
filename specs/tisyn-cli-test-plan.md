@@ -20,7 +20,9 @@ lock down output format through snapshot comparison.
 This test plan covers:
 
 - Command dispatch and surface
+- Rooted `tsn generate` and graph-aware `tsn build`
 - Descriptor loading and workflow function loading
+- `tsn run` dispatch between authored source and generated modules
 - TypeScript-family module loading for descriptors and transport bindings
 - Invocation input schema contract (IS1–IS3)
 - CLI flag derivation and mapping
@@ -38,7 +40,9 @@ This test plan does NOT cover:
   (config test plan)
 - `Config.useConfig()` semantics (config test plan)
 - Environment resolution rules (config test plan)
-- IR compilation correctness (compiler tests)
+- Rooted compiler graph semantics, helper compilation,
+  contract visibility, or generated-module compiler
+  boundaries (compiler test plan)
 
 ## 3. Conformance Targets
 
@@ -108,6 +112,11 @@ instrumentation:
 | Fixture | Purpose | Used by |
 | --- | --- | --- |
 | `fixtures/minimal.ts` | Minimal valid descriptor, zero-parameter workflow | CMD, LOAD, CHK, SNAP |
+| `fixtures/generate-root.ts` | Minimal authored workflow root for `tsn generate` | GEN |
+| `fixtures/generate-multi/` | Two-root authored workflow project | GEN |
+| `fixtures/build-roots/` | Multi-pass rooted build config and source graph | BLD |
+| `fixtures/generated-run.ts` | Descriptor whose `run.module` points to a generated workflow module | LOAD |
+| `fixtures/source-run.ts` | Descriptor whose `run.module` points to authored workflow source | LOAD, LIFE |
 | `fixtures/multi-agent.ts` | Multi-agent descriptor with journal and entrypoint | ENT, CHK, SNAP |
 | `fixtures/with-inputs.ts` | Workflow with `{ maxTurns: number; model?: string; verbose: boolean }` | FLG, BOOL, HLP, SNAP |
 | `fixtures/separate-module.ts` | Descriptor with `run.module` pointing to separate file | LOAD |
@@ -156,28 +165,30 @@ instrumentation:
 
 | ID | P | Type | Spec | Assertion |
 | --- | --- | --- | --- | --- |
-| CLI-GEN-001 | P0 | E2E | §2.1 | Valid input → exits 0, generated output on stdout |
-| CLI-GEN-002 | P0 | E2E | §2.1 | Valid input with `-o` → exits 0, output file written |
-| CLI-GEN-003 | P0 | E2E | §3.4 | Nonexistent input file → exit code 3 |
+| CLI-GEN-001 | P0 | E2E | §2.1 | Single valid root → exits 0, generated output on stdout |
+| CLI-GEN-002 | P0 | E2E | §2.1 | Multiple valid roots with `-o` → exits 0, output file written |
+| CLI-GEN-003 | P0 | E2E | §3.4 | Nonexistent root file → exit code 3 |
 | CLI-GEN-004 | P0 | E2E | §3.4 | Unrecognized built-in flag → exit code 2 |
-| CLI-GEN-005 | P0 | E2E | §2.1 | `--include` glob resolves and includes matching files |
-| CLI-GEN-006 | P0 | E2E | §6.3 | Declaration file matching `--include` glob is not duplicated |
+| CLI-GEN-005 | P0 | E2E | §2.1 | `--format json` → exits 0 with JSON output |
+| CLI-GEN-006 | P0 | E2E | §2.1 | Legacy `--include` flag is rejected as unrecognized |
 
 ### C. `tsn build`
 
 | ID | P | Type | Spec | Assertion |
 | --- | --- | --- | --- | --- |
-| CLI-BLD-001 | P0 | E2E | §2.2 | Valid config → exits 0, output files written |
+| CLI-BLD-001 | P0 | E2E | §2.2 | Valid rooted config → exits 0, output files written |
 | CLI-BLD-002 | P0 | E2E | §3.4 | No config file found → exit code 2 |
 | CLI-BLD-003 | P0 | E2E | §4.3 | Empty `generates` array → exit code 2 |
 | CLI-BLD-004 | P0 | E2E | §5.1 | Dependency cycle → exit code 2 with diagnostic |
 | CLI-BLD-005 | P0 | E2E | §2.2 | `--filter` runs named pass and its dependencies |
 | CLI-BLD-006 | P0 | E2E | §2.2 | `--filter` unknown name → exit code 2 |
-| CLI-BLD-007 | P1 | E2E | §5.3 | Multi-pass build with cross-pass dependency produces valid output |
+| CLI-BLD-007 | P0 | E2E | §5.3 | Multi-pass rooted build passes prior outputs as generated-module boundaries; no stub injection or import stripping required |
+| CLI-BLD-008 | P0 | E2E | §4.3 | Legacy `input` field in build config is rejected |
+| CLI-BLD-009 | P1 | E2E | §5.1 | Inferred import-graph dependency ordering matches declared output paths in a two-pass build |
 
-**Note on CLI-BLD-007.** P1 because the primary correctness
-of stub injection depends on compiler internals. The CLI's
-normative contribution is orchestration.
+**Note on CLI-BLD-007.** The CLI's normative contribution is
+generated-module path handoff and pass ordering. Compiler
+internals remain out of scope.
 
 ### D. Descriptor Loading (`tsn run`)
 
@@ -193,8 +204,10 @@ normative contribution is orchestration.
 | CLI-LOAD-008 | P0 | E2E | §10.1/2 | `run.module` omitted → workflow function resolved from descriptor module. Observable: successful execution. |
 | CLI-LOAD-009 | P0 | E2E | §10.5.1, §10.5.2 | TypeScript descriptor module (`.ts`/`.mts`/`.cts`) loads successfully. Observable: reaches a later phase, not a load-phase error. |
 | CLI-LOAD-010 | P0 | E2E | §10.5.5 | Unsupported extension (for example `.tsx`) → exit code 3 with unsupported-extension diagnostic. |
-| CLI-LOAD-011 | P0 | E2E | §10.5.4 | Explicit TypeScript-family `run.module` target uses compiler-based source compilation, not module loading. Observable: `tsn check` succeeds for a TS workflow source fixture. |
+| CLI-LOAD-011 | P0 | E2E | §10.5.4 | Explicit TypeScript `run.module` target that is authored workflow source uses compiler-based rooted compilation, not module loading. Observable: `tsn check` succeeds for a TS workflow source fixture. |
 | CLI-LOAD-012 | P0 | E2E | §10.1/2, §10.5.4 | Same-module workflow export in a TypeScript descriptor resolves from the descriptor module instead of the compiler path. Observable: successful execution or check. |
+| CLI-LOAD-013 | P0 | E2E | §10.1/2 | `run.module` pointing to a generated workflow module is runtime-loaded; compiler is not invoked |
+| CLI-LOAD-014 | P0 | E2E | §10.1/2 | Descriptor module itself is runtime-loaded and not treated as a workflow compilation root |
 
 ### E. Entrypoint Selection (`tsn run`)
 
@@ -375,8 +388,8 @@ continued diagnostic collection. P1.
 | --- | --- | --- | --- | --- |
 | A. Command surface | 7 | 0 | 0 | 7 |
 | B. `tsn generate` | 6 | 0 | 0 | 6 |
-| C. `tsn build` | 6 | 1 | 0 | 7 |
-| D. Descriptor loading | 12 | 0 | 0 | 12 |
+| C. `tsn build` | 8 | 1 | 0 | 9 |
+| D. Descriptor loading | 14 | 0 | 0 | 14 |
 | E. Entrypoint selection | 4 | 0 | 0 | 4 |
 | F. Input schema contract | 11 | 0 | 0 | 11 |
 | G. Flag derivation | 20 | 0 | 0 | 20 |
@@ -388,7 +401,7 @@ continued diagnostic collection. P1.
 | M. Exit codes | 13 | 1 | 0 | 14 |
 | N. Combined reporting | 0 | 1 | 0 | 1 |
 | O. Golden/snapshot | 0 | 0 | 7 | 7 |
-| **Total** | **113** | **7** | **9** | **129** |
+| **Total** | **117** | **7** | **9** | **133** |
 
 GOLDEN counts are **orthogonal output-stability coverage**,
 not a third priority bucket parallel to P0/P1. An

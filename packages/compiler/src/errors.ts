@@ -79,4 +79,20 @@ export const ErrorCodes = {
   UC1: "Config.useConfig() requires exactly one ConfigToken argument",
   UC2: "Config.useConfig() argument must be a ConfigToken identifier",
   UC3: "useConfig() must be called as Config.useConfig(Token)",
+  // ── Import-graph compilation (Amendment §24) ──
+  "E-IMPORT-001": "Value import from external module referenced in compiled code",
+  "E-IMPORT-002": "Import specifier missing file extension",
+  "E-IMPORT-003": "Import specifier resolves to unreadable path",
+  "E-IMPORT-004": "Value import from module with no workflow-relevant symbols",
+  "E-IMPORT-005": "Named import references symbol not exported by target module",
+  "E-IMPORT-006": "Dynamic import expression in workflow code",
+  "E-IMPORT-007": "Unsupported import form",
+  "E-HELPER-001": "Helper body contains unsupported construct",
+  "E-NAME-001": "Duplicate exported symbol name across modules",
+  "E-GRAPH-001": "No workflow entrypoints found in compilation graph",
+} as const;
+
+/** Warning code catalog for import-graph compilation. */
+export const WarningCodes = {
+  "W-GRAPH-001": "Exported symbol not reachable from any entrypoint",
 } as const;
