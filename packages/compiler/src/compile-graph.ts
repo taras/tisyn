@@ -191,16 +191,13 @@ function runPipeline(options: {
   }
 
   const generatedImports: { names: string[]; path: string }[] = [];
-  const outputDir = outputPath ? dirname(outputPath) : undefined;
+  // Derive the directory for relative specifier computation:
+  // explicit outputPath > first root's directory as fallback
+  const outputDir = outputPath ? dirname(outputPath) : dirname(roots[0]!);
   for (const [absPath, names] of referencedFromGenerated) {
     if (names.size > 0) {
-      let specifier: string;
-      if (outputDir) {
-        const rel = relative(outputDir, absPath);
-        specifier = rel.startsWith(".") ? rel : `./${rel}`;
-      } else {
-        specifier = absPath;
-      }
+      const rel = relative(outputDir, absPath);
+      const specifier = rel.startsWith(".") ? rel : `./${rel}`;
       generatedImports.push({ names: [...names], path: specifier });
     }
   }
