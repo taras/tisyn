@@ -1,6 +1,7 @@
-import { mkdir, writeFile } from "node:fs/promises";
-import { dirname, resolve } from "node:path";
+import { mkdir, readFile, writeFile } from "node:fs/promises";
+import { dirname, extname, resolve } from "node:path";
 import { call, type Operation } from "effection";
+import ts from "typescript";
 import { compileGraph, CompileError } from "@tisyn/compiler";
 import type { GenerateCommandOptions, ResolvedPass } from "./types.js";
 import { ConfigError } from "./config.js";
@@ -28,7 +29,7 @@ export function* runBuild(
   options: { filter?: string; verbose: boolean },
   configDir: string,
 ): Operation<void> {
-  const graph = buildDependencyGraph(passes);
+  const graph = yield* inferDependencyGraph(passes);
   const ordered = topoSort(
     passes.map((pass) => pass.name),
     graph,
@@ -61,12 +62,61 @@ export function* runBuild(
   }
 }
 
-function buildDependencyGraph(passes: ResolvedPass[]): Map<string, Set<string>> {
+/**
+ * Infer pass dependency graph from import analysis.
+ *
+ * Seeds from explicit dependsOn, then scans each pass's root source files
+ * for relative imports that resolve to another pass's output path.
+ */
+function* inferDependencyGraph(
+  passes: ResolvedPass[],
+): Operation<Map<string, Set<string>>> {
   const graph = new Map<string, Set<string>>();
+  const outputsToPass = new Map<string, string>();
+
   for (const pass of passes) {
     graph.set(pass.name, new Set(pass.dependsOn));
+    outputsToPass.set(pass.output, pass.name);
   }
+
+  for (const pass of passes) {
+    const deps = graph.get(pass.name)!;
+    for (const sourcePath of pass.roots) {
+      const source = yield* call(() => readFile(sourcePath, "utf-8"));
+      const sourceFile = ts.createSourceFile(
+        sourcePath,
+        source,
+        ts.ScriptTarget.Latest,
+        true,
+        sourcePath.endsWith(".ts") ? ts.ScriptKind.TS : ts.ScriptKind.JS,
+      );
+      for (const statement of sourceFile.statements) {
+        if (!ts.isImportDeclaration(statement)) {
+          continue;
+        }
+        const raw = statement.moduleSpecifier.getText(sourceFile).slice(1, -1);
+        if (!raw.startsWith("./") && !raw.startsWith("../")) {
+          continue;
+        }
+
+        const resolvedImport = resolveImportPath(raw, dirname(sourcePath));
+        const dep = outputsToPass.get(resolvedImport);
+        if (dep && dep !== pass.name) {
+          deps.add(dep);
+        }
+      }
+    }
+  }
+
   return graph;
+}
+
+function resolveImportPath(specifier: string, fromDir: string): string {
+  const resolved = resolve(fromDir, specifier);
+  if (extname(resolved)) {
+    return resolved;
+  }
+  return `${resolved}.ts`;
 }
 
 export function topoSort(nodes: string[], graph: Map<string, Set<string>>): string[] {

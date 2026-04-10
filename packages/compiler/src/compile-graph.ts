@@ -119,12 +119,29 @@ function runPipeline(options: {
   }
 
   // Collect generated-module imports (GM6)
+  // Narrow to only names actually referenced across the compilation boundary
+  // to avoid pulling in bookkeeping exports (workflows, inputSchemas) that
+  // would collide with the current module's own wrapper exports.
+  const referencedFromGenerated = new Map<string, Set<string>>();
+  for (const mod of graph.modules.values()) {
+    if (mod.category === "generated") { continue; }
+    for (const imp of mod.valueImports) {
+      const targetMod = graph.modules.get(imp.resolvedPath);
+      if (targetMod && targetMod.category === "generated") {
+        let names = referencedFromGenerated.get(imp.resolvedPath);
+        if (!names) {
+          names = new Set();
+          referencedFromGenerated.set(imp.resolvedPath, names);
+        }
+        names.add(imp.importedName);
+      }
+    }
+  }
+
   const generatedImports: { names: string[]; path: string }[] = [];
-  for (const [path, mod] of graph.modules) {
-    if (mod.category !== "generated") { continue; }
-    const names = [...mod.exportMap.local.keys()];
-    if (names.length > 0) {
-      generatedImports.push({ names, path });
+  for (const [path, names] of referencedFromGenerated) {
+    if (names.size > 0) {
+      generatedImports.push({ names: [...names], path });
     }
   }
 
