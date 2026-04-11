@@ -1,5 +1,17 @@
 # @tisyn/transport
 
+## 0.12.0
+
+### Patch Changes
+
+- 9801960: The mock LLM test helper now suspends cleanly when configured to never complete, instead of sleeping for a near-infinite duration.
+- Updated dependencies [34d48ce]
+  - @tisyn/agent@0.12.0
+  - @tisyn/ir@0.12.0
+  - @tisyn/kernel@0.12.0
+  - @tisyn/protocol@0.12.0
+  - @tisyn/validate@0.12.0
+
 ## 0.11.0
 
 ### Minor Changes
