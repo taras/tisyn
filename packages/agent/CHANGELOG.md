@@ -1,5 +1,16 @@
 # @tisyn/agent
 
+## 0.12.0
+
+### Minor Changes
+
+- 34d48ce: Export `resource` and `provide` as typed stub functions, enabling `import { Workflow, resource, provide } from "@tisyn/agent"` for authored workflow source instead of ambient declarations.
+
+### Patch Changes
+
+- @tisyn/ir@0.12.0
+- @tisyn/kernel@0.12.0
+
 ## 0.11.0
 
 ### Minor Changes
