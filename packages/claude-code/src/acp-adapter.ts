@@ -45,6 +45,11 @@ export interface AcpAdapter {
    * (translated from ACP format).
    */
   tisynMessages: Stream<AgentMessage, void>;
+  /**
+   * Block until the subprocess exits, then return a diagnostic Error
+   * containing exit code/signal, command, and captured stderr.
+   */
+  waitForProcessExit(): Operation<Error>;
 }
 
 // ── Tisyn operation → ACP wire method mapping ──
@@ -260,22 +265,6 @@ export function createAcpAdapter(config?: AcpAdapterConfig): Operation<AcpAdapte
       }
     });
 
-    // Monitor process exit — if the subprocess dies while the adapter is
-    // still active, surface an actionable error instead of the generic
-    // "Transport closed with in-flight request" from the session layer.
-    yield* spawn(function* () {
-      const status = yield* proc.join();
-      const stderr = stderrChunks.join("").trim();
-      const exitInfo = status.signal
-        ? `killed by signal ${status.signal}`
-        : `exited with code ${status.code ?? "unknown"}`;
-      throw new Error(
-        `Claude ACP subprocess ${exitInfo}` +
-          ` (command: ${command} ${args.join(" ")})` +
-          (stderr ? `\nstderr:\n${stderr}` : ""),
-      );
-    });
-
     // Track pending request IDs to their progress tokens
     const pendingTokens = new Map<string, string>();
 
@@ -351,6 +340,18 @@ export function createAcpAdapter(config?: AcpAdapterConfig): Operation<AcpAdapte
         }
       },
       tisynMessages,
+      *waitForProcessExit() {
+        const status = yield* proc.join();
+        const stderr = stderrChunks.join("").trim();
+        const exitInfo = status.signal
+          ? `killed by signal ${status.signal}`
+          : `exited with code ${status.code ?? "unknown"}`;
+        return new Error(
+          `Claude ACP subprocess ${exitInfo}` +
+            ` (command: ${command} ${args.join(" ")})` +
+            (stderr ? `\nstderr:\n${stderr}` : ""),
+        );
+      },
     };
 
     yield* provide(adapter);

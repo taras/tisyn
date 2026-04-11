@@ -8,7 +8,7 @@
     "check": "tsc --noEmit"
   },
   "dependencies": {
-    "@anthropic-ai/claude-code": "^1",
+    "@anthropic-ai/claude-agent-sdk": "^0.2",
     "@tisyn/agent": "workspace:*",
     "@tisyn/claude-code": "workspace:*",
     "@tisyn/config": "workspace:*",

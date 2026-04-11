@@ -18,6 +18,8 @@ import type { AcpAdapterConfig } from "./acp-adapter.js";
 
 export type { SessionHandle, PlanResult, ForkData } from "./types.js";
 export type { AcpAdapterConfig } from "./acp-adapter.js";
+export { createSdkBinding } from "./sdk-adapter.js";
+export type { SdkAdapterConfig } from "./sdk-adapter.js";
 
 /**
  * Create a LocalAgentBinding for the Claude Code ACP transport.
@@ -43,17 +45,15 @@ export function createBinding(config?: AcpAdapterConfig): LocalAgentBinding {
         // Forward ACP process messages into the channel
         yield* spawn(function* () {
           const sub = yield* adapter.tisynMessages;
-          try {
-            for (;;) {
-              const { value, done } = yield* sub.next();
-              if (done) {
-                break;
-              }
-              yield* agentToHost.send(value);
-            }
-          } finally {
-            yield* agentToHost.close();
+          for (;;) {
+            const { value, done } = yield* sub.next();
+            if (done) break;
+            yield* agentToHost.send(value);
           }
+          // stdout ended — subprocess died. Throw the diagnostic.
+          // This crashes the binding scope, halting the session receiver
+          // loop before it can deliver the generic "Transport closed" error.
+          throw yield* adapter.waitForProcessExit();
         });
 
         yield* provide({

@@ -36,7 +36,7 @@ function useClaudeCodeSession(config: { model: string }) {
 }
 
 export function* assist(input: { task: string }) {
-  const session = yield* useClaudeCodeSession({ model: "opus-4" });
+  const session = yield* useClaudeCodeSession({ model: "claude-sonnet-4-6" });
 
   // Sequential plan calls — each is a durable YieldEvent
   const analysis = yield* ClaudeCode().plan({

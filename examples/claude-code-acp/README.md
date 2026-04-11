@@ -1,7 +1,7 @@
 # Claude Code ACP Example
 
-Demonstrates a Tisyn workflow that drives Claude Code through the ACP
-(Agent Communication Protocol) stdio transport.
+Demonstrates a Tisyn workflow that drives Claude Code through the
+`@anthropic-ai/claude-agent-sdk` TypeScript API.
 
 ## Prerequisites
 
@@ -11,17 +11,13 @@ Demonstrates a Tisyn workflow that drives Claude Code through the ACP
    pnpm install
    ```
 
-   This pulls `@anthropic-ai/claude-code` as a local dependency so the
-   example does not require a globally installed `claude` binary.
-
 2. Authenticate the Claude CLI:
 
    ```sh
-   pnpm exec claude auth
+   npx @anthropic-ai/claude-code auth
    ```
 
-   The real smoke run sends requests to Claude and requires valid
-   credentials.
+   The example sends requests to Claude and requires valid credentials.
 
 ## Usage
 
@@ -47,8 +43,7 @@ to the console.
 - `src/assist.generated.ts` — compiled Tisyn IR (auto-generated)
 - `src/output-agent.ts` — inprocess agent that prints results to stdout
 - `claude-code-binding.ts` — thin wrapper around `@tisyn/claude-code`'s
-  `createBinding()`, configured to launch the repo-local Claude CLI via
-  `pnpm exec claude --acp`
+  `createSdkBinding()`, configured with model and working directory
 
 ## Note on mocks
 
@@ -56,5 +51,5 @@ Mock transports and the mock ACP subprocess server live in the
 `@tisyn/claude-code` package test infrastructure
 (`packages/claude-code/src/mock.ts` and
 `packages/claude-code/src/test-assets/mock-acp-server.ts`). This
-example exercises the real Claude ACP integration and does not use
+example exercises the real Claude SDK integration and does not use
 mocks at runtime.

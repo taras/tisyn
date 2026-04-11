@@ -1,20 +1,17 @@
-import { createBinding as createAcpBinding } from "@tisyn/claude-code";
-import type { AcpAdapterConfig } from "@tisyn/claude-code";
+import { createSdkBinding } from "@tisyn/claude-code";
+import type { SdkAdapterConfig } from "@tisyn/claude-code";
 import type { LocalAgentBinding } from "@tisyn/transport";
 
 /**
- * Claude Code ACP binding for this example.
+ * Claude Code SDK binding for this example.
  *
- * Wraps @tisyn/claude-code's createBinding() with defaults that use
- * the repo-local Claude CLI installed through @anthropic-ai/claude-code,
- * so the example is reproducible from the workspace without a globally
- * installed `claude` binary.
+ * Uses @tisyn/claude-code's SDK adapter which calls the
+ * @anthropic-ai/claude-agent-sdk TypeScript API directly.
+ * Requires valid Claude credentials (`claude auth`).
  */
-export function createBinding(config?: AcpAdapterConfig): LocalAgentBinding {
-  return createAcpBinding({
-    command: "pnpm",
-    arguments: ["exec", "claude", "--acp"],
-    cwd: import.meta.dirname,
+export function createBinding(config?: SdkAdapterConfig): LocalAgentBinding {
+  return createSdkBinding({
+    model: "claude-sonnet-4-6",
     ...config,
   });
 }

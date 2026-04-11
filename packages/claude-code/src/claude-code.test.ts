@@ -1,5 +1,5 @@
 import { describe, it } from "@effectionx/vitest";
-import { expect } from "vitest";
+import { expect, vi } from "vitest";
 import { scoped, sleep, spawn } from "effection";
 import { resolve } from "node:path";
 import type { Val } from "@tisyn/ir";
@@ -9,6 +9,7 @@ import { ProgressContext, CoroutineContext } from "@tisyn/transport";
 import type { ProgressEvent, AgentTransportFactory, HostMessage } from "@tisyn/transport";
 import { createMockClaudeCodeTransport } from "./mock.js";
 import { createBinding } from "./index.js";
+import { createSdkBinding } from "./sdk-adapter.js";
 
 const claudeCodeDeclaration = agent("claude-code", {
   newSession: operation<Val, Val>(),
@@ -367,5 +368,262 @@ describe("Claude Code ACP Binding Path", () => {
       } as unknown as Val);
       expect(closeResult).toBeNull();
     });
+  });
+
+  it("surfaces subprocess diagnostic when ACP process exits immediately", function* () {
+    const binding = createBinding({
+      command: "node",
+      arguments: ["-e", "process.stderr.write('mock failure\\n'); process.exit(1)"],
+    });
+
+    let caughtError: Error | null = null;
+    try {
+      yield* scoped(function* () {
+        yield* installRemoteAgent(claudeCodeDeclaration, binding.transport);
+        yield* dispatch("claude-code.newSession", {
+          config: { model: "opus-4" },
+        } as unknown as Val);
+      });
+    } catch (e) {
+      caughtError = e as Error;
+    }
+
+    expect(caughtError).not.toBeNull();
+    expect(caughtError!.message).toContain("exited with code 1");
+    expect(caughtError!.message).toContain("mock failure");
+    expect(caughtError!.message).not.toContain("Transport closed with in-flight request");
+  });
+});
+
+// ── SDK adapter tests (mock SDK, no real subprocess) ──
+
+function createMockSdkSession(initSessionId?: string) {
+  const sentMessages: string[] = [];
+  const messageQueue: Array<Record<string, unknown>> = [];
+  let closed = false;
+  let _sessionId: string | null = initSessionId ?? null;
+
+  const session = {
+    get sessionId(): string {
+      if (!_sessionId) throw new Error("Session ID not available");
+      return _sessionId;
+    },
+    async send(msg: string) {
+      if (closed) throw new Error("Cannot send to closed session");
+      sentMessages.push(msg);
+    },
+    async *stream() {
+      while (messageQueue.length > 0) {
+        const msg = messageQueue.shift()!;
+        if (msg.type === "system" && msg.subtype === "init") {
+          _sessionId = msg.session_id as string;
+        }
+        yield msg;
+        if (msg.type === "result") return;
+      }
+    },
+    close() {
+      closed = true;
+    },
+  };
+
+  return {
+    session,
+    sentMessages,
+    enqueue: (msgs: Array<Record<string, unknown>>) =>
+      messageQueue.push(...msgs),
+    get closed() {
+      return closed;
+    },
+  };
+}
+
+describe("Claude Code SDK Adapter", () => {
+  it("newSession returns adapter handle with cc- prefix", function* () {
+    const mock = createMockSdkSession();
+    vi.doMock("@anthropic-ai/claude-agent-sdk", () => ({
+      unstable_v2_createSession: () => mock.session,
+    }));
+
+    const binding = createSdkBinding({ model: "test" });
+
+    yield* scoped(function* () {
+      yield* installRemoteAgent(claudeCodeDeclaration, binding.transport);
+      const handle = yield* dispatch("claude-code.newSession", {
+        config: { model: "test" },
+      } as unknown as Val);
+      expect((handle as any).sessionId).toMatch(/^cc-\d+$/);
+    });
+
+    vi.doUnmock("@anthropic-ai/claude-agent-sdk");
+  });
+
+  it("two sequential plan calls reuse one SDK session", function* () {
+    const mock = createMockSdkSession();
+    vi.doMock("@anthropic-ai/claude-agent-sdk", () => ({
+      unstable_v2_createSession: () => mock.session,
+    }));
+
+    const binding = createSdkBinding({ model: "test" });
+
+    yield* scoped(function* () {
+      yield* installRemoteAgent(claudeCodeDeclaration, binding.transport);
+      const handle = yield* dispatch("claude-code.newSession", {
+        config: { model: "test" },
+      } as unknown as Val);
+      const h = (handle as any).sessionId;
+
+      mock.enqueue([
+        {
+          type: "system",
+          subtype: "init",
+          session_id: "sdk-uuid-1",
+          uuid: "u1",
+        },
+        {
+          type: "result",
+          subtype: "success",
+          result: "result 1",
+          session_id: "sdk-uuid-1",
+          uuid: "u2",
+          is_error: false,
+          num_turns: 1,
+          duration_ms: 0,
+          duration_api_ms: 0,
+          total_cost_usd: 0,
+          stop_reason: null,
+          usage: {},
+          modelUsage: {},
+          permission_denials: [],
+        },
+      ]);
+      const r1 = yield* dispatch("claude-code.plan", {
+        args: { session: { sessionId: h }, prompt: "First" },
+      } as unknown as Val);
+      expect(r1).toEqual({ response: "result 1" });
+
+      mock.enqueue([
+        {
+          type: "result",
+          subtype: "success",
+          result: "result 2",
+          session_id: "sdk-uuid-1",
+          uuid: "u3",
+          is_error: false,
+          num_turns: 1,
+          duration_ms: 0,
+          duration_api_ms: 0,
+          total_cost_usd: 0,
+          stop_reason: null,
+          usage: {},
+          modelUsage: {},
+          permission_denials: [],
+        },
+      ]);
+      const r2 = yield* dispatch("claude-code.plan", {
+        args: { session: { sessionId: h }, prompt: "Second" },
+      } as unknown as Val);
+      expect(r2).toEqual({ response: "result 2" });
+
+      expect(mock.sentMessages).toEqual(["First", "Second"]);
+    });
+
+    vi.doUnmock("@anthropic-ai/claude-agent-sdk");
+  });
+
+  it("closeSession calls close() and invalidates handle", function* () {
+    const mock = createMockSdkSession();
+    vi.doMock("@anthropic-ai/claude-agent-sdk", () => ({
+      unstable_v2_createSession: () => mock.session,
+    }));
+
+    const binding = createSdkBinding({ model: "test" });
+
+    yield* scoped(function* () {
+      yield* installRemoteAgent(claudeCodeDeclaration, binding.transport);
+      const handle = yield* dispatch("claude-code.newSession", {
+        config: { model: "test" },
+      } as unknown as Val);
+      yield* dispatch("claude-code.closeSession", {
+        handle,
+      } as unknown as Val);
+      expect(mock.closed).toBe(true);
+    });
+
+    vi.doUnmock("@anthropic-ai/claude-agent-sdk");
+  });
+
+  it("newSession -> plan -> fork -> openFork lifecycle", function* () {
+    const parentMock = createMockSdkSession();
+    const childMock = createMockSdkSession("forked-uuid");
+    const forkFn = vi.fn().mockResolvedValue({ sessionId: "forked-uuid" });
+    const resumeFn = vi.fn().mockReturnValue(childMock.session);
+
+    vi.doMock("@anthropic-ai/claude-agent-sdk", () => ({
+      unstable_v2_createSession: () => parentMock.session,
+      forkSession: forkFn,
+      unstable_v2_resumeSession: resumeFn,
+    }));
+
+    const binding = createSdkBinding({ model: "test" });
+
+    yield* scoped(function* () {
+      yield* installRemoteAgent(claudeCodeDeclaration, binding.transport);
+
+      // newSession
+      const handle = yield* dispatch("claude-code.newSession", {
+        config: { model: "test" },
+      } as unknown as Val);
+      const h = (handle as any).sessionId;
+
+      // plan — initializes SDK sessionId
+      parentMock.enqueue([
+        {
+          type: "system",
+          subtype: "init",
+          session_id: "sdk-parent-uuid",
+          uuid: "u1",
+        },
+        {
+          type: "result",
+          subtype: "success",
+          result: "done",
+          session_id: "sdk-parent-uuid",
+          uuid: "u2",
+          is_error: false,
+          num_turns: 1,
+          duration_ms: 0,
+          duration_api_ms: 0,
+          total_cost_usd: 0,
+          stop_reason: null,
+          usage: {},
+          modelUsage: {},
+          permission_denials: [],
+        },
+      ]);
+      yield* dispatch("claude-code.plan", {
+        args: { session: { sessionId: h }, prompt: "init" },
+      } as unknown as Val);
+
+      // fork — uses real SDK sessionId, returns adapter handle as parentSessionId
+      const forkData = yield* dispatch("claude-code.fork", {
+        session: { sessionId: h },
+      } as unknown as Val);
+      expect(forkData).toEqual({
+        parentSessionId: h,
+        forkId: "forked-uuid",
+      });
+      expect(forkFn).toHaveBeenCalledWith("sdk-parent-uuid");
+
+      // openFork — creates new session, returns new adapter handle
+      const childHandle = yield* dispatch("claude-code.openFork", {
+        data: forkData,
+      } as unknown as Val);
+      expect((childHandle as any).sessionId).toMatch(/^cc-\d+$/);
+      expect((childHandle as any).sessionId).not.toBe(h);
+      expect(resumeFn).toHaveBeenCalledWith("forked-uuid", expect.any(Object));
+    });
+
+    vi.doUnmock("@anthropic-ai/claude-agent-sdk");
   });
 });

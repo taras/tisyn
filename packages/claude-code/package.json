@@ -27,6 +27,7 @@
     "test": "vitest run"
   },
   "dependencies": {
+    "@anthropic-ai/claude-agent-sdk": "^0.2",
     "@effectionx/process": "^0.7.4",
     "@effectionx/stream-helpers": "^0.8.2",
     "@tisyn/agent": "workspace:*",
