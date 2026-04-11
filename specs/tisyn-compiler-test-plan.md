@@ -240,7 +240,8 @@ interface CompilerFixtureRejection {
 
 | ID | Tier | Rule | Setup | Expected |
 | --- | --- | --- | --- | --- |
-| DG-001 | Core | `E-IMPORT-001` | Bare specifier value import | Code, symbol name, and specifier present |
+| DG-001 | Core | `E-IMPORT-001` | Non-intrinsic bare specifier value import | Code, symbol name, and specifier present |
+| DG-001a | Core | §2.3.1 | Compiler-intrinsic bare specifier value import (e.g. `resource`, `provide` from `@tisyn/agent`) | Accepted; no error |
 | DG-002 | Core | `E-IMPORT-002` | No extension | Code and specifier present |
 | DG-003 | Core | `E-IMPORT-003` | Missing file | Code and resolved path present |
 | DG-004 | Core | `E-IMPORT-004` | Utility module symbol used | Code, module path, and reason present |

@@ -94,13 +94,26 @@ required by compiled code:
 - Dynamic imports: `E-IMPORT-006`
 - Import specifiers without file extensions: `E-IMPORT-002`
 - Value imports from bare specifiers or `node:` modules:
-  `E-IMPORT-001`
+  `E-IMPORT-001`, **except** compiler-recognised intrinsics
+  (see §2.3.1)
 - Default imports, namespace imports, and re-exports:
   `E-IMPORT-007`
 
 Bare specifiers and `node:` imports are graph boundaries.
 The compiler does not resolve them and does not read the
 target module.
+
+### 2.3.1 Compiler-Recognised Intrinsics
+
+Certain value imports from `@tisyn/agent` (or other
+compiler-known bare specifiers) are consumed by the emitter
+through pattern-matching on the callee name. These symbols
+never survive to runtime output. The compiler MUST allow
+them through the `E-IMPORT-001` boundary check.
+
+The current set of compiler-recognised intrinsics is:
+`resource`, `provide`, `scoped`, `spawn`, `all`, `race`,
+`sleep`.
 
 ---
 
@@ -1940,7 +1953,7 @@ they would otherwise conflict.
 
 | Code | Trigger |
 | --- | --- |
-| `E-IMPORT-001` | Referenced value import from bare specifier or `node:` boundary |
+| `E-IMPORT-001` | Referenced value import from bare specifier or `node:` boundary (except compiler-recognised intrinsics per §2.3.1) |
 | `E-IMPORT-002` | Import specifier missing file extension |
 | `E-IMPORT-003` | Resolved import path cannot be read |
 | `E-IMPORT-004` | Referenced value import from a traversed relative module with no workflow-relevant symbols |

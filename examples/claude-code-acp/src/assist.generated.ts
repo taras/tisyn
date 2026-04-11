@@ -30,7 +30,7 @@ export const assist: TisynFn<[{ task: string }], unknown> =
       Call(
         Ref<any>("useClaudeCodeSession"),
         Construct({
-          model: "opus-4"
+          model: "claude-sonnet-4-6"
         })
       ),
       Let(
