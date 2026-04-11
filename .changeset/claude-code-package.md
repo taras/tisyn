@@ -1,6 +1,9 @@
 ---
 "@tisyn/claude-code": minor
-"@tisyn/transport": patch
 ---
 
-Extract Claude Code ACP integration into dedicated `@tisyn/claude-code` package. Remove `./claude-code` subpath export from `@tisyn/transport`. The mock transport helper is moved to `@tisyn/transport/test-helpers`.
+Add dedicated package for driving Claude Code from Tisyn workflows.
+
+- Workflows can open, plan, fork, and close Claude Code sessions through two adapter paths: ACP stdio transport and the `@anthropic-ai/claude-agent-sdk` TypeScript API
+- Session lifecycle types (`SessionHandle`, `PlanResult`, `ForkData`) are published for use in authored workflow signatures
+- When a Claude Code subprocess dies, the binding surfaces exit code and stderr instead of a generic transport error
