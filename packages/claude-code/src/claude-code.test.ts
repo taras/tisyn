@@ -436,8 +436,7 @@ function createMockSdkSession(initSessionId?: string) {
   return {
     session,
     sentMessages,
-    enqueue: (msgs: Array<Record<string, unknown>>) =>
-      messageQueue.push(...msgs),
+    enqueue: (msgs: Array<Record<string, unknown>>) => messageQueue.push(...msgs),
     get closed() {
       return closed;
     },

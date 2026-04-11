@@ -342,7 +342,9 @@ export function runSingleSourcePipeline(options: {
  * rewritten with globally unique binding names, plus a runtime binding map
  * for all reachable compiled symbols.
  */
-export function compileGraphForRuntime(options: CompileForExecutionOptions): RuntimeCompilationResult {
+export function compileGraphForRuntime(
+  options: CompileForExecutionOptions,
+): RuntimeCompilationResult {
   const readFile = options.readFile ?? defaultReadFile;
 
   const result = runPipeline({
@@ -378,11 +380,7 @@ export function compileGraphForRuntime(options: CompileForExecutionOptions): Run
   }
 
   // Step 3: Compute per-export reachability
-  const perExportReachable = buildPerExportReachable(
-    selectedSymbol,
-    symbolByKey,
-    result.modules,
-  );
+  const perExportReachable = buildPerExportReachable(selectedSymbol, symbolByKey, result.modules);
 
   // Step 2: Assign synthetic runtime names
   const runtimeNames = new Map<string, string>();
@@ -557,11 +555,7 @@ function buildModuleNameMaps(
  * globally unique runtime names. Scope-aware: respects fn params,
  * let bindings, and try catch params.
  */
-function rewriteRefs(
-  expr: Expr,
-  nameMap: Record<string, string>,
-  bound: Set<string>,
-): Expr {
+function rewriteRefs(expr: Expr, nameMap: Record<string, string>, bound: Set<string>): Expr {
   if (expr === null || typeof expr !== "object") {
     return expr;
   }
@@ -617,7 +611,11 @@ function rewriteRefs(
       }
       const newShape = { name: s.name, value: newValue, body: newBody };
       if (isQuoteNode(data as Expr)) {
-        return { tisyn: "eval", id: "let", data: { tisyn: "quote", expr: newShape } } as unknown as Expr;
+        return {
+          tisyn: "eval",
+          id: "let",
+          data: { tisyn: "quote", expr: newShape },
+        } as unknown as Expr;
       }
       return { tisyn: "eval", id: "let", data: newShape } as unknown as Expr;
     }
@@ -644,7 +642,8 @@ function rewriteRefs(
         const catchBound = s.catchParam ? new Set([...bound, s.catchParam]) : bound;
         newCatchBody = rewriteRefs(s.catchBody, nameMap, catchBound);
       }
-      const newFinally = s.finally !== undefined ? rewriteRefs(s.finally, nameMap, bound) : s.finally;
+      const newFinally =
+        s.finally !== undefined ? rewriteRefs(s.finally, nameMap, bound) : s.finally;
       if (newTryBody === s.body && newCatchBody === s.catchBody && newFinally === s.finally) {
         return expr;
       }
@@ -662,7 +661,11 @@ function rewriteRefs(
         newShape["finallyPayload"] = s.finallyPayload;
       }
       if (isQuoteNode(data as Expr)) {
-        return { tisyn: "eval", id: "try", data: { tisyn: "quote", expr: newShape } } as unknown as Expr;
+        return {
+          tisyn: "eval",
+          id: "try",
+          data: { tisyn: "quote", expr: newShape },
+        } as unknown as Expr;
       }
       return { tisyn: "eval", id: "try", data: newShape } as unknown as Expr;
     }

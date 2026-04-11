@@ -143,14 +143,10 @@ export function createSdkBinding(config?: SdkAdapterConfig): LocalAgentBinding {
             case "newSession": {
               const model = (params.model as string) ?? currentModel;
               currentModel = model;
-              const sdk = yield* call(
-                () => import("@anthropic-ai/claude-agent-sdk"),
-              );
+              const sdk = yield* call(() => import("@anthropic-ai/claude-agent-sdk"));
               const session = sdk.unstable_v2_createSession({
                 model: currentModel,
-                ...(config?.permissionMode
-                  ? { permissionMode: config.permissionMode as any }
-                  : {}),
+                ...(config?.permissionMode ? { permissionMode: config.permissionMode as any } : {}),
               });
               const handle = `cc-${++handleCounter}`;
               sessions.set(handle, session);
@@ -170,18 +166,15 @@ export function createSdkBinding(config?: SdkAdapterConfig): LocalAgentBinding {
             }
 
             case "plan": {
-              const sessionHandle = (
-                params.session as Record<string, unknown>
-              )?.sessionId as string;
+              const sessionHandle = (params.session as Record<string, unknown>)
+                ?.sessionId as string;
               const session = getSession(sessionHandle);
               const prompt = params.prompt as string;
               if (!prompt) {
                 throw new Error("plan operation requires a prompt parameter");
               }
 
-              yield* call(() =>
-                (session as { send(msg: string): Promise<void> }).send(prompt),
-              );
+              yield* call(() => (session as { send(msg: string): Promise<void> }).send(prompt));
 
               let resultText = "";
               const gen = (
@@ -201,12 +194,7 @@ export function createSdkBinding(config?: SdkAdapterConfig): LocalAgentBinding {
                   msg.type === "tool_progress" ||
                   msg.type === "system"
                 ) {
-                  yield* channel.send(
-                    progressNotification(
-                      progressToken,
-                      msg as unknown as Val,
-                    ),
-                  );
+                  yield* channel.send(progressNotification(progressToken, msg as unknown as Val));
                 }
 
                 if (msg.type === "result") {
@@ -214,10 +202,7 @@ export function createSdkBinding(config?: SdkAdapterConfig): LocalAgentBinding {
                     resultText = msg.result as string;
                   } else {
                     const errors = msg.errors as string[] | undefined;
-                    throw new Error(
-                      errors?.join("; ") ??
-                        `Claude query failed: ${msg.subtype}`,
-                    );
+                    throw new Error(errors?.join("; ") ?? `Claude query failed: ${msg.subtype}`);
                   }
                 }
               }
@@ -236,12 +221,8 @@ export function createSdkBinding(config?: SdkAdapterConfig): LocalAgentBinding {
                   "fork requires at least one plan call before forking (session not yet initialized)",
                 );
               }
-              const sdk = yield* call(
-                () => import("@anthropic-ai/claude-agent-sdk"),
-              );
-              const result = yield* call(() =>
-                sdk.forkSession(sdkSessionId),
-              );
+              const sdk = yield* call(() => import("@anthropic-ai/claude-agent-sdk"));
+              const result = yield* call(() => sdk.forkSession(sdkSessionId));
               return {
                 parentSessionId: sessionHandle,
                 forkId: result.sessionId,
@@ -253,14 +234,10 @@ export function createSdkBinding(config?: SdkAdapterConfig): LocalAgentBinding {
               if (!forkId) {
                 throw new Error("openFork requires forkId in data");
               }
-              const sdk = yield* call(
-                () => import("@anthropic-ai/claude-agent-sdk"),
-              );
+              const sdk = yield* call(() => import("@anthropic-ai/claude-agent-sdk"));
               const newSession = sdk.unstable_v2_resumeSession(forkId, {
                 model: currentModel,
-                ...(config?.permissionMode
-                  ? { permissionMode: config.permissionMode as any }
-                  : {}),
+                ...(config?.permissionMode ? { permissionMode: config.permissionMode as any } : {}),
               });
               const handle = `cc-${++handleCounter}`;
               sessions.set(handle, newSession);
