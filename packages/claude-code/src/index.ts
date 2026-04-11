@@ -47,7 +47,9 @@ export function createBinding(config?: AcpAdapterConfig): LocalAgentBinding {
           const sub = yield* adapter.tisynMessages;
           for (;;) {
             const { value, done } = yield* sub.next();
-            if (done) break;
+            if (done) {
+              break;
+            }
             yield* agentToHost.send(value);
           }
           // stdout ended — subprocess died. Throw the diagnostic.

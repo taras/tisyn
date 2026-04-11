@@ -405,11 +405,15 @@ function createMockSdkSession(initSessionId?: string) {
 
   const session = {
     get sessionId(): string {
-      if (!_sessionId) throw new Error("Session ID not available");
+      if (!_sessionId) {
+        throw new Error("Session ID not available");
+      }
       return _sessionId;
     },
     async send(msg: string) {
-      if (closed) throw new Error("Cannot send to closed session");
+      if (closed) {
+        throw new Error("Cannot send to closed session");
+      }
       sentMessages.push(msg);
     },
     async *stream() {
@@ -419,7 +423,9 @@ function createMockSdkSession(initSessionId?: string) {
           _sessionId = msg.session_id as string;
         }
         yield msg;
-        if (msg.type === "result") return;
+        if (msg.type === "result") {
+          return;
+        }
       }
     },
     close() {

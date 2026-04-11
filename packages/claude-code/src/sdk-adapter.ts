@@ -53,7 +53,9 @@ export function createSdkBinding(config?: SdkAdapterConfig): LocalAgentBinding {
 
         function getSession(handle: string): unknown {
           const session = sessions.get(handle);
-          if (!session) throw new Error(`Unknown session handle: ${handle}`);
+          if (!session) {
+            throw new Error(`Unknown session handle: ${handle}`);
+          }
           return session;
         }
 
@@ -189,7 +191,9 @@ export function createSdkBinding(config?: SdkAdapterConfig): LocalAgentBinding {
               ).stream();
               for (;;) {
                 const { value, done } = yield* call(() => gen.next());
-                if (done) break;
+                if (done) {
+                  break;
+                }
                 const msg = value as Record<string, unknown>;
 
                 if (
