@@ -9,14 +9,22 @@
  * signal. The session manager holds only plain state (prompt text, transcript).
  */
 
+import { agent, operation } from "@tisyn/agent";
 import { inprocessTransport } from "@tisyn/transport";
 import type { LocalAgentBinding, LocalServerBinding } from "@tisyn/transport";
 import { createSignal, each, spawn, withResolvers } from "effection";
 import type { Operation } from "effection";
-import { App } from "./workflow.generated.js";
 import { BrowserSessionManager } from "./browser-session.js";
 import type { BrowserToHost } from "./browser-session.js";
 import { logInfo } from "./logger.js";
+
+const App = () =>
+  agent("app", {
+    elicit: operation<{ input: { message: string } }, { message: string }>(),
+    showAssistantMessage: operation<{ input: { message: string } }, void>(),
+    loadChat: operation<{ messages: Array<{ role: string; content: string }> }, void>(),
+    setReadOnly: operation<{ input: { reason: string } }, void>(),
+  });
 
 export function createBinding(): LocalAgentBinding {
   const userInput = createSignal<string, never>();

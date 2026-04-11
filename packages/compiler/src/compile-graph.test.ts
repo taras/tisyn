@@ -10,7 +10,8 @@
  */
 
 import { describe, it, expect } from "vitest";
-import { compileGraph, CompileError } from "./index.js";
+import { compileGraph, compileGraphForRuntime, CompileError } from "./index.js";
+import { collectRefs } from "@tisyn/ir";
 
 function makeReadFile(files: Record<string, string>): (path: string) => string {
   return (path) => {
@@ -967,6 +968,50 @@ describe("import boundary diagnostics", () => {
     ).toThrow(/E-IMPORT-005/);
   });
 
+  it("allows resource/provide imported from bare specifier (compiler intrinsics)", () => {
+    const result = compileGraph({
+      roots: ["/root.ts"],
+      readFile: makeReadFile({
+        "/root.ts": `
+          import { resource, provide } from "@tisyn/agent";
+          declare function Svc(): {
+            open(cfg: { model: string }): Workflow<{ id: string }>;
+            close(handle: { id: string }): Workflow<void>;
+          };
+          export function* main() {
+            return yield* resource(function* () {
+              const handle = yield* Svc().open({ model: "test" });
+              try {
+                yield* provide(handle);
+              } finally {
+                yield* Svc().close(handle);
+              }
+            });
+          }
+        `,
+      }),
+      validate: false,
+    });
+
+    expect(result.source).toBeDefined();
+    expect(result.graph.compiled).toContain("main");
+  });
+
+  it("still rejects non-intrinsic value imports from bare specifier (E-IMPORT-001)", () => {
+    expect(() =>
+      compileGraph({
+        roots: ["/root.ts"],
+        readFile: makeReadFile({
+          "/root.ts": `
+            import { resource, someUtility } from "@tisyn/agent";
+            export function* main() { return someUtility(); }
+          `,
+        }),
+        validate: false,
+      }),
+    ).toThrow(/E-IMPORT-001/);
+  });
+
   it("allows bare specifier import when not referenced in reachable code", () => {
     const result = compileGraph({
       roots: ["/root.ts"],
@@ -979,6 +1024,70 @@ describe("import boundary diagnostics", () => {
       validate: false,
     });
     expect(result.source).toBeDefined();
+  });
+});
+
+// ── resource() in non-generator helper ──
+
+describe("resource in non-generator helper", () => {
+  const resourceHelperFiles = {
+    "/root.ts": `
+      function useSession() {
+        return resource(function* () {
+          yield* provide(42);
+        });
+      }
+      export function* main() {
+        return yield* useSession();
+      }
+    `,
+  };
+
+  it("compileGraph: non-generator helper returning resource() compiles successfully", () => {
+    const result = compileGraph({
+      roots: ["/root.ts"],
+      readFile: makeReadFile(resourceHelperFiles),
+      validate: false,
+    });
+
+    expect(result.graph.compiled).toContain("main");
+    expect(result.graph.compiled.length).toBe(2);
+    expect(result.source).toContain("Resource(");
+  });
+
+  it("compileGraphForRuntime: same pattern succeeds through runtime path", () => {
+    const result = compileGraphForRuntime({
+      roots: ["/root.ts"],
+      readFile: makeReadFile(resourceHelperFiles),
+      validate: false,
+      exportName: "main",
+    });
+
+    expect(result.ir).toBeDefined();
+    expect(result.runtimeBindings).toBeDefined();
+  });
+
+  it("rejects nested resource() via bare call with RS7", () => {
+    expect(() =>
+      compileGraph({
+        roots: ["/root.ts"],
+        readFile: makeReadFile({
+          "/root.ts": `
+            function nestedResource() {
+              return resource(function* () {
+                yield* provide(resource(function* () {
+                  yield* provide(1);
+                }));
+              });
+            }
+            export function* main() {
+              return yield* nestedResource();
+            }
+          `,
+        }),
+        validate: false,
+      }),
+    ).toThrow(/RS7/);
   });
 });
 
@@ -1313,5 +1422,189 @@ describe("JSON determinism", () => {
     });
 
     expect(rA.source).toBe(rB.source);
+  });
+});
+
+// ── Runtime binding resolution (compileGraphForRuntime) ──
+
+describe("runtime binding resolution", () => {
+  it("RT-001: same-file helper produces selected export and helper in runtimeBindings", () => {
+    const result = compileGraphForRuntime({
+      roots: ["/root.ts"],
+      readFile: makeReadFile({
+        "/root.ts": `
+          function* helper() { return 42; }
+          export function* main() { return yield* helper(); }
+        `,
+      }),
+      validate: false,
+      exportName: "main",
+    });
+
+    expect(result.runtimeBindings["__rtexport_main"]).toBeDefined();
+    const helperKeys = Object.keys(result.runtimeBindings).filter((k) => k.includes("helper"));
+    expect(helperKeys.length).toBe(1);
+    expect(helperKeys[0]).toMatch(/^__m\d+_helper$/);
+
+    // The rewritten IR should reference the helper's emitted name, not "helper"
+    const refs = collectRefs(result.ir);
+    expect(refs).not.toContain("helper");
+    expect(refs.some((r) => r.match(/^__m\d+_helper$/))).toBe(true);
+  });
+
+  it("RT-002: cross-module import produces both symbols in runtimeBindings", () => {
+    const result = compileGraphForRuntime({
+      roots: ["/root.ts"],
+      readFile: makeReadFile({
+        "/root.ts": `
+          import { helper } from "./utils.ts";
+          export function* main() { return yield* helper(); }
+        `,
+        "/utils.ts": `
+          export function* helper() { return 42; }
+        `,
+      }),
+      validate: false,
+      exportName: "main",
+    });
+
+    expect(result.runtimeBindings["__rtexport_main"]).toBeDefined();
+    expect(result.runtimeBindings["__rtexport_helper"]).toBeDefined();
+  });
+
+  it("RT-003: aliased import resolves to target's runtime name", () => {
+    const result = compileGraphForRuntime({
+      roots: ["/root.ts"],
+      readFile: makeReadFile({
+        "/root.ts": `
+          import { helper as h } from "./utils.ts";
+          export function* main() { return yield* h(); }
+        `,
+        "/utils.ts": `
+          export function* helper() { return 42; }
+        `,
+      }),
+      validate: false,
+      exportName: "main",
+    });
+
+    // The alias "h" should be resolved to __rtexport_helper
+    const refs = collectRefs(result.ir);
+    expect(refs).not.toContain("h");
+    expect(refs).not.toContain("helper");
+    expect(result.runtimeBindings["__rtexport_helper"]).toBeDefined();
+    expect(result.runtimeBindings["__rtexport_main"]).toBeDefined();
+  });
+
+  it("RT-004: two modules with same-named non-exported helper get distinct bindings", () => {
+    const result = compileGraphForRuntime({
+      roots: ["/root.ts"],
+      readFile: makeReadFile({
+        "/root.ts": `
+          import { processA } from "./a.ts";
+          import { processB } from "./b.ts";
+          export function* main() {
+            const a = yield* processA();
+            const b = yield* processB();
+            return a;
+          }
+        `,
+        "/a.ts": `
+          function* helper() { return 1; }
+          export function* processA() { return yield* helper(); }
+        `,
+        "/b.ts": `
+          function* helper() { return 2; }
+          export function* processB() { return yield* helper(); }
+        `,
+      }),
+      validate: false,
+      exportName: "main",
+    });
+
+    expect(result.runtimeBindings["__rtexport_main"]).toBeDefined();
+    expect(result.runtimeBindings["__rtexport_processA"]).toBeDefined();
+    expect(result.runtimeBindings["__rtexport_processB"]).toBeDefined();
+
+    // Two distinct helper bindings
+    const helperKeys = Object.keys(result.runtimeBindings).filter((k) => k.includes("helper"));
+    expect(helperKeys.length).toBe(2);
+    expect(helperKeys[0]).not.toBe(helperKeys[1]);
+  });
+
+  it("RT-005: per-export scoping excludes unrelated workflow's closure", () => {
+    const result = compileGraphForRuntime({
+      roots: ["/root.ts"],
+      readFile: makeReadFile({
+        "/root.ts": `
+          function* helperA() { return 1; }
+          function* helperB() { return 2; }
+          export function* workflowA() { return yield* helperA(); }
+          export function* workflowB() { return yield* helperB(); }
+        `,
+      }),
+      validate: false,
+      exportName: "workflowA",
+    });
+
+    expect(result.runtimeBindings["__rtexport_workflowA"]).toBeDefined();
+    const helperAKeys = Object.keys(result.runtimeBindings).filter((k) => k.includes("helperA"));
+    expect(helperAKeys.length).toBe(1);
+
+    // workflowB and helperB should NOT be included
+    expect(result.runtimeBindings["__rtexport_workflowB"]).toBeUndefined();
+    const helperBKeys = Object.keys(result.runtimeBindings).filter((k) => k.includes("helperB"));
+    expect(helperBKeys.length).toBe(0);
+  });
+
+  it("RT-006: exported helper referenced by renamed export uses target's runtime name", () => {
+    const result = compileGraphForRuntime({
+      roots: ["/root.ts"],
+      readFile: makeReadFile({
+        "/root.ts": `
+          import { myHelper } from "./utils.ts";
+          export function* main() { return yield* myHelper(); }
+        `,
+        "/utils.ts": `
+          function* helper() { return 42; }
+          export { helper as myHelper };
+        `,
+      }),
+      validate: false,
+      exportName: "main",
+    });
+
+    expect(result.runtimeBindings["__rtexport_myHelper"]).toBeDefined();
+    expect(result.runtimeBindings["__rtexport_main"]).toBeDefined();
+  });
+
+  it("DG-019: E-GRAPH-002 when selected export does not exist", () => {
+    expect(() =>
+      compileGraphForRuntime({
+        roots: ["/root.ts"],
+        readFile: makeReadFile({
+          "/root.ts": `
+            export function* main() { return 1; }
+          `,
+        }),
+        validate: false,
+        exportName: "nonexistent",
+      }),
+    ).toThrow(CompileError);
+
+    try {
+      compileGraphForRuntime({
+        roots: ["/root.ts"],
+        readFile: makeReadFile({
+          "/root.ts": `export function* main() { return 1; }`,
+        }),
+        validate: false,
+        exportName: "nonexistent",
+      });
+    } catch (e) {
+      expect((e as CompileError).code).toBe("E-GRAPH-002");
+      expect((e as CompileError).message).toContain("nonexistent");
+      expect((e as CompileError).message).toContain("main");
+    }
   });
 });

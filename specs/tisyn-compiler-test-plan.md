@@ -240,7 +240,8 @@ interface CompilerFixtureRejection {
 
 | ID | Tier | Rule | Setup | Expected |
 | --- | --- | --- | --- | --- |
-| DG-001 | Core | `E-IMPORT-001` | Bare specifier value import | Code, symbol name, and specifier present |
+| DG-001 | Core | `E-IMPORT-001` | Non-intrinsic bare specifier value import | Code, symbol name, and specifier present |
+| DG-001a | Core | §2.3.1 | Compiler-intrinsic bare specifier value import (e.g. `resource`, `provide` from `@tisyn/agent`) | Accepted; no error |
 | DG-002 | Core | `E-IMPORT-002` | No extension | Code and specifier present |
 | DG-003 | Core | `E-IMPORT-003` | Missing file | Code and resolved path present |
 | DG-004 | Core | `E-IMPORT-004` | Utility module symbol used | Code, module path, and reason present |
@@ -258,6 +259,7 @@ interface CompilerFixtureRejection {
 | DG-016 | Core | DQ5 | `E-IMPORT-004` | Explains external classification |
 | DG-017 | Extended | §2.3 | Bare-specifier `import type` | Accepted; no error |
 | DG-018 | Extended | `E-IMPORT-001` | `node:path` value import | Rejected with `E-IMPORT-001` |
+| DG-019 | Core | `E-GRAPH-002` | `compileGraphForRuntime` with non-existent export name | Code, requested export name, and available exports present |
 
 ### 9.1 Required Content Matrix
 
@@ -273,11 +275,33 @@ interface CompilerFixtureRejection {
 | `E-HELPER-001` | Symbol name, declaring module, construct name, construct location |
 | `E-NAME-001` | Symbol name, both module paths, both source locations |
 | `E-GRAPH-001` | Root path(s) |
+| `E-GRAPH-002` | Requested export name, available exports, source path |
 | `W-GRAPH-001` | Symbol name, declaring module path |
 
 ---
 
-## 10. Out of Scope
+## 10. Runtime Binding Resolution (`compileGraphForRuntime`)
+
+| ID | Description | Fixture |
+| --- | --- | --- |
+| RT-001 | Same-file helper produces correct emitted-name binding | Single root: exported generator + non-exported helper |
+| RT-002 | Cross-module import produces correct emitted-name binding | Root imports helper from `./utils.ts` |
+| RT-003 | Aliased import resolves to target's emitted name | `import { helper as h }` |
+| RT-004 | Two modules with same-named `helper` → distinct emitted-name bindings | Root calls `processA`/`processB` from `./a.ts`/`./b.ts`, each with own `helper` |
+| RT-005 | Per-export scoping: only selected export's reachable bindings included | Two exported workflows with separate helpers; select one |
+| RT-006 | Execute with same-file helper succeeds | Compile + execute, assert return value |
+| RT-007 | Execute with cross-module helper succeeds | Multi-file compile + execute |
+| RT-008 | Execute with aliased import succeeds | Aliased import compile + execute |
+| RT-009 | Execute with same-named helpers from different modules succeeds | Distinct helper values verified at runtime |
+| RT-010 | Self-recursive exported workflow executes successfully | `countdown(n)` with `exportName` selection |
+| RT-011 | Exported workflow with export name = parameter name produces no collision | Synthetic runtime name prevents shadowing |
+| RT-012 | Self-recursive workflow with same-named parameter matches TypeScript scoping | Parameter shadows function name in non-recursive body |
+| RT-013 | Reachable exported callee with export name = parameter name uses synthetic runtime name | Transitive callee with `helper(helper: number)` |
+| RT-014 | Self-recursive exported callee reached transitively executes correctly | `main → helper(n)` where helper self-recurses |
+
+---
+
+## 11. Out of Scope
 
 - Kernel evaluation semantics
 - Journal replay semantics

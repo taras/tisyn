@@ -94,13 +94,26 @@ required by compiled code:
 - Dynamic imports: `E-IMPORT-006`
 - Import specifiers without file extensions: `E-IMPORT-002`
 - Value imports from bare specifiers or `node:` modules:
-  `E-IMPORT-001`
+  `E-IMPORT-001`, **except** compiler-recognised intrinsics
+  (see §2.3.1)
 - Default imports, namespace imports, and re-exports:
   `E-IMPORT-007`
 
 Bare specifiers and `node:` imports are graph boundaries.
 The compiler does not resolve them and does not read the
 target module.
+
+### 2.3.1 Compiler-Recognised Intrinsics
+
+Certain value imports from `@tisyn/agent` (or other
+compiler-known bare specifiers) are consumed by the emitter
+through pattern-matching on the callee name. These symbols
+never survive to runtime output. The compiler MUST allow
+them through the `E-IMPORT-001` boundary check.
+
+The current set of compiler-recognised intrinsics is:
+`resource`, `provide`, `scoped`, `spawn`, `all`, `race`,
+`sleep`.
 
 ---
 
@@ -1683,6 +1696,52 @@ in-memory root via `readFile` and delegates to
 | 2 | Validation error |
 | 3 | Internal error |
 
+### 13.4 `compileGraphForRuntime()` — Runtime Compilation for Direct Execution
+
+`compileGraphForRuntime(options: CompileForExecutionOptions): RuntimeCompilationResult`
+
+Compiles authored TypeScript source for direct execution by `tsn run`
+without writing a generated artifact file. Accepts a
+`CompileForExecutionOptions` (extends `CompileGraphOptions` with
+`exportName: string`) and returns a `RuntimeCompilationResult`:
+
+```typescript
+interface RuntimeCompilationResult {
+  ir: Expr;
+  inputSchema: InputSchema;
+  runtimeBindings: Record<string, Expr>;
+}
+```
+
+**Per-export scoping.** The `runtimeBindings` map contains only
+symbols reachable from the selected export's transitive closure,
+not the full module graph. Unreachable workflows and their helpers
+are excluded.
+
+**Emitted-name rewriting.** All `Ref()` nodes in the returned `ir`
+and in binding values are rewritten to use globally unique runtime
+names. This ensures module-local identity is preserved when multiple
+modules define helpers with the same source-local name.
+
+**Synthetic runtime names.** All exported symbols in the per-export
+closure use `__rtexport_{emittedName}` as their binding key, not
+their raw export name. This prevents collisions between any exported
+symbol's binding and its own parameter names in the execution
+environment. Non-exported symbols already use collision-safe mangled
+names (`__m{idx}_{localName}`). All runtime binding keys start with
+`__`.
+
+**Name-resolution process:**
+1. Compute per-export reachability from the selected export via
+   IR free-variable analysis.
+2. Build per-module name maps: source-local identifiers → runtime names.
+3. Rewrite all IR in the closure using per-module name maps.
+4. Build the binding map keyed by runtime names.
+
+**Cross-module import-alias handling.** An import's `localName` in
+the importing module is mapped to the target symbol's runtime name,
+so aliased imports resolve correctly after rewriting.
+
 ## 14. Module Graph Construction
 
 Starting from the supplied roots, the compiler constructs a
@@ -1894,7 +1953,7 @@ they would otherwise conflict.
 
 | Code | Trigger |
 | --- | --- |
-| `E-IMPORT-001` | Referenced value import from bare specifier or `node:` boundary |
+| `E-IMPORT-001` | Referenced value import from bare specifier or `node:` boundary (except compiler-recognised intrinsics per §2.3.1) |
 | `E-IMPORT-002` | Import specifier missing file extension |
 | `E-IMPORT-003` | Resolved import path cannot be read |
 | `E-IMPORT-004` | Referenced value import from a traversed relative module with no workflow-relevant symbols |
@@ -1904,6 +1963,7 @@ they would otherwise conflict.
 | `E-HELPER-001` | Reachable non-generator helper contains unsupported authored construct |
 | `E-NAME-001` | Duplicate reachable exported symbol names across modules |
 | `E-GRAPH-001` | No exported generator workflows found in the graph |
+| `E-GRAPH-002` | Selected export name not found among compiled exported symbols during `compileGraphForRuntime()` |
 
 ### 24.2 Warning Codes
 

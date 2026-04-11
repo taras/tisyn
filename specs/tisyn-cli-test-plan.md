@@ -380,6 +380,14 @@ continued diagnostic collection. P1.
 | CLI-SNAP-006 | GOLDEN | Golden | §3.4 | Missing required invocation input diagnostic |
 | CLI-SNAP-007 | GOLDEN | Golden | §3.4 | Unknown flag diagnostic |
 
+### P. Authored Source Execution (`tsn run`)
+
+| ID | P | Type | Spec | Assertion |
+| --- | --- | --- | --- | --- |
+| RUN-SRC-001 | P0 | E2E | §10.1 | Authored `.ts` with same-file helper executes without `UnboundVariable` |
+| RUN-SRC-002 | P0 | E2E | §10.1 | Authored `.ts` with cross-module helper executes without `UnboundVariable` |
+| RUN-SRC-003 | P0 | E2E | §10.1 | Authored `.ts` with aliased import executes without `UnboundVariable` |
+
 ---
 
 ## 7. Summary
@@ -401,7 +409,8 @@ continued diagnostic collection. P1.
 | M. Exit codes | 13 | 1 | 0 | 14 |
 | N. Combined reporting | 0 | 1 | 0 | 1 |
 | O. Golden/snapshot | 0 | 0 | 7 | 7 |
-| **Total** | **117** | **7** | **9** | **133** |
+| P. Authored source execution | 3 | 0 | 0 | 3 |
+| **Total** | **120** | **7** | **9** | **136** |
 
 GOLDEN counts are **orthogonal output-stability coverage**,
 not a third priority bucket parallel to P0/P1. An

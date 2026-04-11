@@ -4933,6 +4933,19 @@ function emitCallExpression(node: ts.CallExpression, ctx: EmitContext): Expr {
     throw error("UC3", "useConfig() must be called as Config.useConfig(Token)", node, ctx);
   }
 
+  // resource(function* () { ... }) — bare call (e.g. inside non-generator helper)
+  if (ts.isIdentifier(callee) && callee.text === "resource") {
+    if (ctx.inResourceBody) {
+      throw error(
+        "RS7",
+        "resource() cannot be nested inside another resource body (deferred to future specification)",
+        node,
+        ctx,
+      );
+    }
+    return emitResource(node, ctx);
+  }
+
   // f(args) → Call(Ref("f"), [args])
   if (ts.isIdentifier(callee)) {
     const args = node.arguments.map((a) => emitExpression(a, ctx));

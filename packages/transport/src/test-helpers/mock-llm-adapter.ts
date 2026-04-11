@@ -1,5 +1,5 @@
 import type { Operation, Task } from "effection";
-import { createChannel, createScope, ensure, spawn, sleep } from "effection";
+import { createChannel, createScope, ensure, spawn, sleep, suspend } from "effection";
 import type { Val } from "@tisyn/ir";
 import type {
   AgentTransport,
@@ -63,9 +63,7 @@ export function createMockLlmTransport(config: MockAdapterConfig): AgentTranspor
             }
 
             if (config.neverComplete) {
-              // Suspend indefinitely — cancelled via scope teardown or cancel message
-              yield* sleep(2_147_483_647);
-              return;
+              yield* suspend();
             }
 
             if (config.delay) {

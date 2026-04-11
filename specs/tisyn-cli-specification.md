@@ -683,8 +683,9 @@ the following steps in order:
      the module at runtime and extract the named export.
      The compiler is not invoked.
    - If it points to authored workflow source, compile that
-     source module using the rooted import-graph compiler
-     model and execute the resulting artifact.
+     source module using `compileGraphForRuntime()` (§13.4
+     of the compiler specification), passing the export name.
+     This returns per-export compiled IR and runtime bindings.
 
 3. **Entrypoint overlay.** If `--entrypoint` is specified,
    look up the named entrypoint and apply the overlay per the
@@ -743,9 +744,15 @@ the following steps in order:
     (backward-compatible fallback). See the config
     specification §10 Q1 for module contract details.
 
-11. **Workflow execution.** Invoke the workflow function with
-    validated invocation arguments. Make resolved workflow
-    config available through `yield* Config.useConfig(Token)`.
+11. **Workflow execution.** Build the execution environment by
+    merging compiler-provided `runtimeBindings` (if present)
+    with invocation input bindings. Runtime binding keys use
+    synthetic or mangled prefixes (`__rtexport_`, `__m{idx}_`)
+    that cannot collide with user parameter names. If an
+    adversarial collision occurs, runtime bindings take
+    precedence. Invoke the workflow function with validated
+    invocation arguments. Make resolved workflow config
+    available through `yield* Config.useConfig(Token)`.
 
 12. **Process lifecycle.** Remain alive until the workflow
     completes, errors, or SIGINT/SIGTERM. Map outcome to

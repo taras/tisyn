@@ -136,12 +136,14 @@ const ALL_IR_CONSTRUCTORS = [
   "ConcatArrays",
   "MergeObjects",
   "Throw",
+  "Try",
   "All",
   "Race",
   "Spawn",
   "Join",
   "Resource",
   "Provide",
+  "Timebox",
 ];
 
 /** Scan printed constructor-form sources and return only the constructor names actually used. */

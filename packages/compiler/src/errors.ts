@@ -90,6 +90,7 @@ export const ErrorCodes = {
   "E-HELPER-001": "Helper body contains unsupported construct",
   "E-NAME-001": "Duplicate exported symbol name across modules",
   "E-GRAPH-001": "No workflow entrypoints found in compilation graph",
+  "E-GRAPH-002": "Selected export not found during runtime compilation",
 } as const;
 
 /** Warning code catalog for import-graph compilation. */
