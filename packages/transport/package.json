@@ -100,8 +100,8 @@
     "ws": "^8"
   },
   "peerDependencies": {
-    "@tisyn/durable-streams": "workspace:*",
-    "@tisyn/runtime": "workspace:*",
+    "@tisyn/durable-streams": ">=0",
+    "@tisyn/runtime": ">=0",
     "effection": "^3 || ^4",
     "playwright-core": "^1.40"
   },
