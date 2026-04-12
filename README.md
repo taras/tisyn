@@ -133,6 +133,8 @@ For the detailed agent model and API examples, see [`@tisyn/agent`](./packages/a
 | [Compiler Test Plan](./specs/tisyn-compiler-test-plan.md) | Conformance test plan for rooted import-graph compilation and diagnostics |
 | [Compound Concurrency Specification](./specs/tisyn-compound-concurrency-specification.md) | `all`, `race`, `spawn`, and `join` orchestration semantics |
 | [Spawn Specification](./specs/tisyn-spawn-specification.md) | Authored `spawn(...)`, task handles, `join`, and structured child-task lifecycle |
+| [Claude Code Specification](./specs/tisyn-claude-code-specification.md) | Claude Code transport adapter bindings: ACP stdio and SDK adapters, protocol translation, operations, and lifecycle |
+| [Claude Code Test Plan](./specs/tisyn-claude-code-test-plan.md) | Conformance test plan for the Claude Code transport adapter layer |
 | [Resource Specification](./specs/tisyn-resource-specification.md) | `resource(...)` and `provide(...)` scope-creating primitives for managed initialization and cleanup |
 | [Stream Iteration Specification](./specs/tisyn-stream-iteration-specification.md) | Authored `for (const x of yield* each(expr))`, `stream.subscribe`, `stream.next`, and subscription-handle runtime rules |
 | [Browser Contract Specification](./specs/tisyn-browser-contract-specification.md) | Browser transport boundary with `navigate`, batched in-browser `execute`, and transport-configured local capability composition |
