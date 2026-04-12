@@ -480,7 +480,7 @@ handles are removed.
 The ACP adapter spawns a subprocess via `exec()` when the
 transport resource is created. The `exec()` resource owns the
 subprocess: when the transport resource scope exits, the
-subprocess is terminated (SIGTERM to the process group).
+subprocess is terminated.
 
 The transport MUST persist across session open/close cycles
 within the same scope. Closing a session does NOT exit the
