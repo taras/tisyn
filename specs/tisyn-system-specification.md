@@ -1,8 +1,5 @@
 # Tisyn System Specification
 
-**Version:** 1.0.0
-**Status:** Normative
-
 ---
 
 ## 1. Overview

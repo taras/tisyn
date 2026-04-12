@@ -1,7 +1,6 @@
 # Tisyn Configuration Test Plan
 
-**Validates:** Tisyn Configuration Specification v0.4.1
-**Status:** Final Draft
+**Validates:** Tisyn Configuration Specification
 **Style reference:** Blocking Scope Conformance Test Plan
 
 ---

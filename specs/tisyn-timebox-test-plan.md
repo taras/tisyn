@@ -1,9 +1,6 @@
 # Tisyn Timebox and Converge — Conformance and Testing Plan
 
-**Version:** 0.1.0
-**Tests:** Tisyn Timebox Specification 0.1.0,
-Tisyn Converge Compiler and Authoring Amendment 0.1.0
-**Status:** Draft
+**Tests:** Tisyn Timebox Specification
 
 ---
 
@@ -13,9 +10,8 @@ Tisyn Converge Compiler and Authoring Amendment 0.1.0
 
 This test plan defines conformance criteria for the `timebox`
 compound external operation and the `converge` compiler
-sugar as specified in the Tisyn Timebox Specification v0.1.0
-and the Tisyn Converge Compiler and Authoring Amendment
-v0.1.0. It covers:
+sugar as specified in the Tisyn Timebox Specification. It
+covers:
 
 - Compiler acceptance and rejection of authored `timebox`
   and `converge` forms

@@ -1,8 +1,6 @@
 # Tisyn Timebox Specification
 
-**Version:** 0.1.0
-**Implements:** Tisyn System Specification 1.0.0
-**Status:** Draft
+**Implements:** Tisyn System Specification
 
 ---
 
@@ -47,8 +45,7 @@ This specification defines:
 This specification does NOT define:
 
 - Retry semantics (`timebox` constrains a single attempt)
-- Polling or convergence behavior (see the `converge`
-  compiler amendment)
+- Polling or convergence behavior (see §16)
 - The runtime's internal orchestration technique (the
   runtime has implementation latitude)
 
@@ -64,7 +61,7 @@ This specification does NOT define:
 | Constructor DSL Specification | `Timebox` is a new base constructor in the constructor table (§14). |
 | Authoring Layer Specification | `TimeboxResult<T>` type and `timebox` authored form are added. |
 | Runtime Specification | `timebox` orchestration handler is added to `driveKernel`. |
-| `converge` Amendment | `converge` is defined in terms of `timebox`. |
+| Converge (§16–§21) | `converge` is defined in terms of `timebox` in this document. |
 | Scope, Spawn, Resource Specs | `timebox` follows the same compound-external patterns for journaling and child coroutineId allocation. |
 
 ---
@@ -934,3 +931,588 @@ handled by the agent's own idempotency, not by `timebox`.
 
 **Duration arithmetic.** No built-in duration types or
 arithmetic. Duration is a plain number in milliseconds.
+
+---
+
+## 16. Converge
+
+`converge` is an authored workflow form and constructor DSL
+macro that implements polling convergence — repeatedly probing
+an external system until a condition is met or a timeout
+fires.
+
+`converge` is NOT a new IR node. It is NOT a kernel
+primitive. It is NOT a runtime operation. The compiler
+recognizes `converge` in authored code and lowers it to a
+`timebox` node whose body is a recursive Fn + Call polling
+loop using existing IR nodes. The constructor DSL provides a
+`Converge` macro that performs the same expansion.
+
+### 16.1 Normative Scope
+
+This section defines:
+
+- The relationship between `converge` and `timebox`
+- The lowering strategy from authored form to IR
+- Result semantics
+- Replay and journaling consequences
+
+This section does NOT define:
+
+- Any new IR node type
+- Any new kernel evaluation rule
+- Any new runtime orchestration behavior
+- Journal compression or compound-level journaling
+
+### 16.2 Relationship to `timebox`
+
+`converge` is defined in terms of `timebox`:
+
+- The timeout behavior of `converge` IS `timebox` timeout
+  behavior (§9.2).
+- The result type of `converge` IS `TimeboxResult<T>`
+  (§5.3).
+- The cancellation behavior of `converge` IS `timebox`
+  cancellation behavior (§9.4).
+- The journaling of `converge` IS the journaling of the
+  `timebox` body's effects — probe effects and interval
+  sleeps (§11).
+- The replay of `converge` IS the replay of the enclosing
+  `timebox` (§10).
+
+`converge` adds one concept on top of `timebox`: a polling
+loop with a `probe`/`until` split inside the body.
+
+---
+
+## 17. Converge Lowering Strategy
+
+### 17.1 Conceptual Model
+
+> **Non-normative.** The following pseudocode shows the
+> logical structure of the lowered form. The actual IR uses
+> the Fn + Call recursive pattern, not generator syntax.
+
+```
+timebox(timeout, function* () {
+  function* __poll() {
+    const probeResult = yield* probe();
+    if (until(probeResult)) {
+      return probeResult;
+    }
+    yield* sleep(interval);
+    return yield* __poll();
+  }
+  return yield* __poll();
+})
+```
+
+### 17.2 Lowered IR — Constructor Function Notation
+
+The authored form:
+
+```typescript
+yield* converge({
+  probe: function* () {
+    return yield* Deployment().status(deployId);
+  },
+  until: (status) => status.state === "ready",
+  interval: 500,
+  timeout: 10_000,
+});
+```
+
+Lowers to the following IR tree, shown in `@tisyn/ir`
+constructor function notation (not DSL parser input text):
+
+```
+Timebox(10000,
+  Let("__until_0",
+    Fn(["v"], Eq(Get(Ref("v"), "state"), "ready")),
+  Let("__poll_0",
+    Fn([],
+      Let("__probe_0",
+        Eval("deployment.status", [Ref("deployId")]),
+      If(
+        Call(Ref("__until_0"), Ref("__probe_0")),
+        Ref("__probe_0"),
+        Let("__discard_0",
+          Eval("sleep", [500]),
+          Call(Ref("__poll_0")))))),
+  Call(Ref("__poll_0")))))
+```
+
+> **Notation.** Named calls — `Timebox`, `Let`, `Fn`, `Eval`,
+> `If`, `Call`, `Ref`, `Eq`, `Get` — are `@tisyn/ir`
+> constructor functions. `Timebox` is the base constructor
+> defined in §14; the rest are existing constructors.
+> `Call` is variadic: `Call(fn, arg₁, ..., argₙ)`. Bracketed
+> values `[Ref("deployId")]` and `[500]` are raw JSON array
+> literals — plain Tisyn Literal expressions (System
+> Specification §3.5), NOT `Arr(...)` constructor calls.
+> `Arr(...)` produces an `Eval("array", ...)` IR node, which
+> is structurally different from a raw array. Effect data for
+> external Eval nodes MUST be a raw array.
+
+**Reading the `__probe_0` Let.** The Let's value position
+holds the compiled probe expression — in this example,
+`Eval("deployment.status", [Ref("deployId")])`. When the
+kernel evaluates this Let, it evaluates the probe expression
+(dispatching the external effect, receiving the journaled
+result), and binds the resulting Val to the name
+`__probe_0`. All subsequent references to
+`Ref("__probe_0")` in the Let body refer to this evaluated
+result, not to the expression tree.
+
+### 17.3 Lowered IR — Full JSON
+
+The same tree in actual Tisyn JSON IR:
+
+```json
+{
+  "tisyn": "eval",
+  "id": "timebox",
+  "data": { "tisyn": "quote", "expr": {
+    "duration": 10000,
+    "body": { "tisyn": "eval", "id": "let", "data": {
+      "tisyn": "quote", "expr": {
+        "name": "__until_0",
+        "value": { "tisyn": "fn", "params": ["v"],
+          "body": { "tisyn": "eval", "id": "eq", "data": {
+            "tisyn": "quote", "expr": {
+              "a": { "tisyn": "eval", "id": "get", "data": {
+                "tisyn": "quote", "expr": {
+                  "obj": { "tisyn": "ref", "name": "v" },
+                  "key": "state" }}},
+              "b": "ready" }}}},
+        "body": { "tisyn": "eval", "id": "let", "data": {
+          "tisyn": "quote", "expr": {
+            "name": "__poll_0",
+            "value": { "tisyn": "fn", "params": [],
+              "body": { "tisyn": "eval", "id": "let", "data": {
+                "tisyn": "quote", "expr": {
+                  "name": "__probe_0",
+                  "value": { "tisyn": "eval",
+                    "id": "deployment.status",
+                    "data": [{ "tisyn": "ref",
+                      "name": "deployId" }] },
+                  "body": { "tisyn": "eval", "id": "if",
+                    "data": { "tisyn": "quote", "expr": {
+                      "condition": { "tisyn": "eval",
+                        "id": "call",
+                        "data": { "tisyn": "quote", "expr": {
+                          "fn": { "tisyn": "ref",
+                            "name": "__until_0" },
+                          "args": [{ "tisyn": "ref",
+                            "name": "__probe_0" }] }}},
+                      "then": { "tisyn": "ref",
+                        "name": "__probe_0" },
+                      "else": { "tisyn": "eval", "id": "let",
+                        "data": { "tisyn": "quote", "expr": {
+                          "name": "__discard_0",
+                          "value": { "tisyn": "eval",
+                            "id": "sleep",
+                            "data": [500] },
+                          "body": { "tisyn": "eval",
+                            "id": "call",
+                            "data": { "tisyn": "quote",
+                              "expr": {
+                                "fn": { "tisyn": "ref",
+                                  "name": "__poll_0" },
+                                "args": [] }}}
+                          }}}
+                      }}}
+                  }}}
+              }},
+            "body": { "tisyn": "eval", "id": "call",
+              "data": { "tisyn": "quote", "expr": {
+                "fn": { "tisyn": "ref", "name": "__poll_0" },
+                "args": [] }}}
+          }}}
+      }}}
+  }}
+}
+```
+
+### 17.4 Multi-Step Probe Lowering
+
+When the probe body contains multiple effects, the compiler
+compiles the entire probe generator body as a single Expr
+tree and places it in the `__probe_0` Let's value position.
+For example:
+
+```typescript
+probe: function* () {
+  const build = yield* CI().getBuild(buildId);
+  const tests = yield* CI().getTestResults(build.testRunId);
+  return { build, tests };
+}
+```
+
+The probe body compiles to a nested Let chain (the same
+lowering the compiler applies to any multi-statement
+generator body), shown in constructor function notation
+(see §17.2 notation note):
+
+```
+Let("build",
+  Eval("ci.getBuild", [Ref("buildId")]),
+Let("tests",
+  Eval("ci.getTestResults", [Get(Ref("build"), "testRunId")]),
+  Construct({
+    "build": Ref("build"),
+    "tests": Ref("tests") })))
+```
+
+> `[Ref("buildId")]` is a raw JSON array (effect data),
+> not an `Arr(...)` call. `Construct({...})` is a base
+> constructor (Constructor DSL Specification §4.3) that
+> produces an `Eval("construct", ...)` IR node — this is
+> correct here because the probe body constructs a runtime
+> object.
+
+This entire expression tree occupies the `__probe_0` Let's
+value position. When the kernel evaluates this Let, it
+evaluates the nested expression — dispatching each external
+effect in sequence, receiving each journaled result — and
+binds the final evaluated Val (the constructed
+`{ build, tests }` object) to the name `__probe_0`. The
+`until` Fn then receives this evaluated Val, not the
+expression tree.
+
+### 17.5 How the Lowering Works
+
+**`__until_0`.** Bound to a Fn compiled from the `until`
+arrow function. The Fn body is pure structural IR (`Eq`,
+`Get`). It is called via the `call` structural operation,
+which passes the evaluated probe result as the argument. No
+journal entry is produced.
+
+**`__poll_0`.** Bound to a recursive Fn with no parameters.
+This is the Case B pattern (Compiler Specification §6.2).
+The Fn body contains external effects (the probe expression
+and the `"sleep"` effect), which cross the execution
+boundary normally when the kernel evaluates the Fn body via
+`eval_call` (Architecture §5.4).
+
+**`Call(Ref("__poll_0"))` (outer).** Starts the first
+iteration. `Ref("__poll_0")` resolves via call-site
+resolution — the caller's environment contains the
+`Let("__poll_0", Fn(...))` binding.
+
+**Each iteration:**
+
+1. **Evaluate probe expression.** The kernel evaluates the
+   `__probe_0` Let's value expression. Each external Eval
+   within the probe expression causes the kernel to suspend,
+   yield a descriptor, receive a journaled result, and
+   resume. A single-effect probe produces one YieldEvent. A
+   multi-step probe produces one YieldEvent per external
+   effect. The final evaluated Val is bound to the name
+   `__probe_0`.
+
+2. **Call until.** `Call(Ref("__until_0"), Ref("__probe_0"))`
+   is structural. The kernel looks up `__probe_0` in the
+   environment (obtaining the evaluated probe result Val),
+   passes it as the argument to the `__until_0` Fn, and
+   evaluates the Fn body synchronously. Returns a
+   boolean-interpretable value. No journal entry.
+
+3. **Branch on the `if` condition.**
+   - Truthy → the `then` branch is `Ref("__probe_0")`,
+     which resolves to the evaluated probe result Val. This
+     value propagates out through the Call chain as the Fn's
+     return value, becoming the timebox body's result.
+   - Falsy → the `else` branch evaluates
+     `Eval("sleep", [500])` (the built-in `"sleep"`
+     external effect, journaled as a YieldEvent), then
+     `Call(Ref("__poll_0"))` recurses.
+
+**Termination:**
+
+- `until` returns truthy → `__poll_0` Fn returns the
+  evaluated probe result → timebox body completes →
+  `{ status: "completed", value: <evaluated probe result> }`.
+- Timebox deadline fires → body task cancelled → recursive
+  call chain halted → `{ status: "timeout" }`.
+- Probe expression throws → error propagates through Call
+  chain → timebox body throws → error propagates through
+  timebox.
+
+### 17.6 Why Fn + Call Is Valid
+
+The compiler-generated `__poll_0` Fn contains effects. The
+Compiler Specification §8.5 restricts user-authored arrow
+function Fn bodies from containing effects, but
+compiler-generated Fn nodes for Case B lowering are
+established precedent — the same mechanism is used for
+`while`-with-`return` (Compiler Specification §6.2) and
+stream iteration. The kernel's `eval_call` handles effects
+in Fn bodies by suspending at external Eval nodes regardless
+of nesting depth.
+
+### 17.7 No New IR Nodes
+
+This lowering uses only existing IR nodes: `Eval`, `Let`,
+`Fn`, `Call`, `If`, `Ref`, `Eq`, `Get`, `Quote`, and
+`timebox` (§6). No `continue`, `break`, `converge`, or
+other new node types are introduced.
+
+---
+
+## 18. Converge Result Semantics
+
+### 18.1 Convergence Success
+
+When the evaluated probe result satisfies `until`,
+`converge` returns:
+
+```json
+{ "status": "completed", "value": "<evaluated probe result>" }
+```
+
+This is a `timebox` `completed` result (§9.1). The `value`
+field contains the Val that the probe expression evaluated
+to on the satisfying iteration — not the probe expression
+tree.
+
+### 18.2 Timeout
+
+When no probe result satisfies `until` within the deadline:
+
+```json
+{ "status": "timeout" }
+```
+
+This is a `timebox` `timeout` result. Same semantics as
+§9.2.
+
+### 18.3 Probe Error
+
+If any external effect within the probe expression throws,
+the error propagates through the Fn call chain, out of the
+timebox body, through `timebox` to the parent as a thrown
+error. Same semantics as §9.3.
+
+Probe errors are NOT retried. A future revision MAY add an
+`onError` handler field.
+
+---
+
+## 19. Converge Replay and Journaling
+
+### 19.1 Per-Attempt Journaling
+
+Because `converge` lowers to a `timebox` body containing
+standard external effects, each external effect in the probe
+expression and each interval `"sleep"` effect is
+individually journaled. This is not a design choice — it is
+a necessary consequence of crossing the effect boundary.
+
+Each external effect in the probe is a standard effect. The
+kernel yields a descriptor for it. The persist-before-resume
+invariant (G3) requires the result to be journaled before
+the kernel resumes. There is no mechanism to suppress this.
+
+### 19.2 Journal Entries Per Iteration
+
+A single polling iteration produces:
+
+- One YieldEvent per external effect in the probe expression
+  (one for a single-effect probe, multiple for a multi-step
+  probe)
+- One YieldEvent for the interval `"sleep"` effect (if the
+  iteration does not converge)
+
+The `until` evaluation is structural and produces no journal
+entry.
+
+The total number of YieldEvents for a converge depends on
+the number of iterations performed and the number of
+external effects in the probe expression. It is NOT a fixed
+formula — it varies with the authored probe.
+
+### 19.3 Journal Trace — Single-Effect Probe, Convergence on 3rd Attempt
+
+> **Non-normative.** This trace illustrates a converge with
+> a single-effect probe that converges on its third attempt.
+
+```
+body-child:    Yield("deployment.status", yi=0)   probe 1
+body-child:    Yield("sleep",             yi=1)   interval
+body-child:    Yield("deployment.status", yi=2)   probe 2
+body-child:    Yield("sleep",             yi=3)   interval
+body-child:    Yield("deployment.status", yi=4)   probe 3
+  → until satisfied, __poll_0 returns evaluated result
+body-child:    Close(ok, value=<status>)
+timeout-child: Close(cancelled)
+```
+
+### 19.4 Journal Trace — Multi-Step Probe (2 Effects), Convergence on 2nd Attempt
+
+> **Non-normative.**
+
+```
+body-child:    Yield("ci.getBuild",       yi=0)   probe 1, effect 1
+body-child:    Yield("ci.getTestResults", yi=1)   probe 1, effect 2
+body-child:    Yield("sleep",             yi=2)   interval
+body-child:    Yield("ci.getBuild",       yi=3)   probe 2, effect 1
+body-child:    Yield("ci.getTestResults", yi=4)   probe 2, effect 2
+  → until satisfied, __poll_0 returns evaluated result
+body-child:    Close(ok, value=<r>)
+timeout-child: Close(cancelled)
+```
+
+### 19.5 Journal Trace — Timeout
+
+> **Non-normative.**
+
+```
+body-child:    Yield("deployment.status", yi=0)   probe 1
+body-child:    Yield("sleep",             yi=1)   interval
+body-child:    Yield("deployment.status", yi=2)   probe 2
+body-child:    Yield("sleep",             yi=3)   interval
+  → timeout fires before next probe
+timeout-child: Yield("sleep",             yi=0)
+timeout-child: Close(ok)
+body-child:    Close(cancelled)
+```
+
+### 19.6 `until` Is Not Journaled
+
+The `until` predicate is evaluated via the `call` structural
+operation. Structural operations produce no journal entries.
+On replay, the same probe results are replayed, the same
+`until` evaluations occur, and the same boolean results are
+produced.
+
+### 19.7 Replay Fidelity
+
+On replay, the timebox body child replays from its journal
+entries. Each probe effect's stored result is fed to the
+kernel. The kernel evaluates the probe expression, receiving
+stored results from the journal for each external effect.
+The probe expression evaluates to the same Val on each
+iteration. The kernel evaluates `until` against each
+evaluated probe result. The same probe result satisfies
+`until` on the same iteration. The same number of `"sleep"`
+effects occur. The timebox resolves identically.
+
+### 19.8 Crash Recovery
+
+If the host crashes mid-polling:
+
+- All completed probe effects and interval sleeps are in the
+  journal (persist-before-resume).
+- On restart, the runtime replays the timebox body child,
+  fast-forwarding through stored effects.
+- Live execution resumes at the first un-journaled effect
+  (the next probe effect or `"sleep"`).
+- No completed work is lost.
+
+If the probe is multi-step and the crash occurs between
+external effects within a single iteration (e.g., after
+`"ci.getBuild"` but before `"ci.getTestResults"`), the first
+probe effect replays from journal and the second executes
+live. This is the standard partial-replay behavior.
+
+---
+
+## 20. Converge Examples
+
+### 20.1 Polling a Deployment
+
+```typescript
+const result = yield* converge({
+  probe: function* () {
+    return yield* Deployment().status(deployId);
+  },
+  until: (status) => status.state === "ready",
+  interval: 500,
+  timeout: 30_000,
+});
+
+if (result.status === "completed") {
+  yield* Notify().alert("Deployment ready");
+} else {
+  yield* Notify().alert("Deployment timed out");
+}
+```
+
+### 20.2 Waiting for Approval
+
+```typescript
+const result = yield* converge({
+  probe: function* () {
+    return yield* ApprovalService().check(requestId);
+  },
+  until: (approval) => approval.decision !== "pending",
+  interval: 2000,
+  timeout: 60_000,
+});
+```
+
+### 20.3 Multi-Step Probe
+
+```typescript
+const result = yield* converge({
+  probe: function* () {
+    const build = yield* CI().getBuild(buildId);
+    const tests = yield* CI().getTestResults(build.testRunId);
+    return { build, tests };
+  },
+  until: (r) => r.build.status === "complete" && r.tests.passed,
+  interval: 5000,
+  timeout: 120_000,
+});
+```
+
+### 20.4 Dynamic Interval and Timeout
+
+```typescript
+const pollInterval = yield* Config().pollInterval();
+const deadline = yield* Config().timeout();
+
+const result = yield* converge({
+  probe: function* () {
+    return yield* Deployment().status(deployId);
+  },
+  until: (status) => status.state === "ready",
+  interval: pollInterval,
+  timeout: deadline,
+});
+```
+
+---
+
+## 21. Converge Deferred / Non-Goals
+
+**Error retry.** Probe errors propagate. A future revision
+MAY add an `onError` handler field to allow retry-on-error
+without changes to the IR model.
+
+**Backoff.** Fixed interval only. Exponential backoff can be
+added later without IR model changes (the `interval`
+expression position already accepts any synchronous
+expression).
+
+**Journal compression.** Explicitly rejected.
+Per-attempt journaling is a necessary consequence of
+crossing the effect boundary. Each probe effect and each
+interval sleep is a standard effect with its own YieldEvent.
+There is no mechanism to suppress or batch these entries.
+
+**`converge` as a compound external.** Explicitly rejected.
+The polling loop is transparent authored/compiler logic, not
+runtime-internal orchestration. The runtime sees only the
+enclosing `timebox` and its children.
+
+**`always`.** The stability-assertion primitive (from
+Effection's test utilities) is excluded from core Tisyn. It
+is a test-only concept with no durable-execution analog.
+
+**`when`.** The testing-style "retry until assertion stops
+failing" pattern is replaced by `converge` with explicit
+`probe`/`until` split. The split makes the observation step
+and the success predicate independently visible in the IR
+and individually testable.

@@ -1,8 +1,6 @@
 # Tisyn Kernel Specification
 
-**Version:** 1.0.0
-**Implements:** Tisyn System Specification 1.0.0
-**Status:** Normative
+**Implements:** Tisyn System Specification
 
 ---
 

@@ -1,8 +1,6 @@
 # Tisyn Scoped Effects Test Plan
 
-**Version:** 0.1.0
-**Validates:** Tisyn Scoped Effects Specification 0.1.0
-**Status:** Draft
+**Validates:** Tisyn Scoped Effects Specification
 
 ---
 

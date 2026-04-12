@@ -1,8 +1,6 @@
 # Tisyn CLI Specification
 
-**Version:** 0.4.0
-**Complements:** Tisyn Compiler Specification 1.2.0, Tisyn Configuration Specification 0.4.1
-**Status:** Draft
+**Complements:** Tisyn Compiler Specification, Tisyn Configuration Specification
 
 ---
 

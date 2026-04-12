@@ -1,11 +1,9 @@
 # Tisyn Stream Iteration Specification
 
-**Version:** 0.1.0  
-**Implements:** Tisyn System Specification 1.0.0  
-**Amends:** Tisyn Compiler Specification 1.2.0  
-**Extends:** Tisyn Spawn Specification 0.1.0 (restricted capability-value pattern)  
-**Depends on:** Tisyn Blocking Scope Specification 0.1.0, Tisyn Runtime Specification for Compound Concurrency 1.3.2, Tisyn Kernel Specification 1.0.0 (replay model only; no kernel changes required)  
-**Status:** Draft
+**Implements:** Tisyn System Specification  
+**Amends:** Tisyn Compiler Specification  
+**Extends:** Tisyn Spawn Specification (restricted capability-value pattern)  
+**Depends on:** Tisyn Blocking Scope Specification, Tisyn Compound Concurrency Specification, Tisyn Kernel Specification (replay model only; no kernel changes required)
 
 ---
 

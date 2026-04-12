@@ -1,10 +1,8 @@
 # Tisyn Browser Contract Specification
 
-**Version:** 0.3.0
-**Implements:** Tisyn System Specification 1.0.0
-**Depends on:** Tisyn Blocking Scope Specification 0.1.0,
-Tisyn Scoped Effects Specification 0.1.0
-**Status:** Draft
+**Implements:** Tisyn System Specification
+**Depends on:** Tisyn Blocking Scope Specification,
+Tisyn Scoped Effects Specification
 
 ---
 
@@ -49,11 +47,11 @@ host level.
 
 ## 2. Normative References
 
-- **Tisyn System Specification 1.0.0** — defines the IR
+- **Tisyn System Specification** — defines the IR
   evaluation model, scope semantics, and durable replay.
-- **Tisyn Blocking Scope Specification 0.1.0** — defines
+- **Tisyn Blocking Scope Specification** — defines
   how `scope` IR nodes bind agent transports.
-- **Tisyn Scoped Effects Specification 0.1.0** — defines
+- **Tisyn Scoped Effects Specification** — defines
   how effects are dispatched and journaled.
 
 ---

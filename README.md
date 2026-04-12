@@ -126,20 +126,19 @@ For the detailed agent model and API examples, see [`@tisyn/agent`](./packages/a
 | [Configuration Test Plan](./specs/tisyn-config-test-plan.md) | Conformance test plan for the configuration specification |
 | [CLI Specification](./specs/tisyn-cli-specification.md) | `tsn generate`, `tsn build`, `tsn run`, and `tsn check` command behavior |
 | [CLI Test Plan](./specs/tisyn-cli-test-plan.md) | Conformance test plan for the CLI specification |
-| [Tisyn Specification 1.0](./specs/tisyn-specification-1.0.md) | Core language: values, expressions, and evaluation rules |
+| [System Specification](./specs/tisyn-system-specification.md) | Core language: values, expressions, and evaluation rules |
 | [Kernel Specification](./specs/tisyn-kernel-specification.md) | Kernel semantics, environments, and effect dispatch |
-| [Agent Specification 1.1.0](./specs/tisyn-agent-specification-1.1.0.md) | Typed agent declarations, implementations, and invocation |
-| [Compiler Specification 1.2.0](./specs/tisyn-compiler-specification-1.1.0.md) | TypeScript-to-IR compilation rules and restrictions |
+| [Agent Specification](./specs/tisyn-agent-specification.md) | Typed agent declarations, implementations, and invocation |
+| [Compiler Specification](./specs/tisyn-compiler-specification.md) | TypeScript-to-IR compilation rules and restrictions |
 | [Compiler Test Plan](./specs/tisyn-compiler-test-plan.md) | Conformance test plan for rooted import-graph compilation and diagnostics |
-| [Compound Concurrency Spec](./specs/tisyn-compound-concurrency-spec.md) | `all`, `race`, `spawn`, and `join` orchestration semantics |
+| [Compound Concurrency Specification](./specs/tisyn-compound-concurrency-specification.md) | `all`, `race`, `spawn`, and `join` orchestration semantics |
 | [Spawn Specification](./specs/tisyn-spawn-specification.md) | Authored `spawn(...)`, task handles, `join`, and structured child-task lifecycle |
 | [Resource Specification](./specs/tisyn-resource-specification.md) | `resource(...)` and `provide(...)` scope-creating primitives for managed initialization and cleanup |
 | [Stream Iteration Specification](./specs/tisyn-stream-iteration-specification.md) | Authored `for (const x of yield* each(expr))`, `stream.subscribe`, `stream.next`, and subscription-handle runtime rules |
 | [Browser Contract Specification](./specs/tisyn-browser-contract-specification.md) | Browser transport boundary with `navigate`, batched in-browser `execute`, and transport-configured local capability composition |
 | [Timebox Specification](./specs/tisyn-timebox-specification.md) | `timebox` compound external: deadline-bounded execution returning completed/timeout result |
-| [Converge Amendment](./specs/tisyn-converge-amendment.md) | `converge` compiler sugar: poll-until-predicate lowered to timebox + recursive Fn + sleep |
-| [Timebox/Converge Conformance Plan](./specs/tisyn-timebox-converge-conformance-plan.md) | Test plan for timebox and converge across compiler, runtime, and journaling layers |
-| [Authoring Layer Spec](./specs/tisyn-authoring-layer-spec.md) | Generator-based authoring format and contract declarations |
+| [Timebox Test Plan](./specs/tisyn-timebox-test-plan.md) | Test plan for timebox and converge across compiler, runtime, and journaling layers |
+| [Authoring Layer Specification](./specs/tisyn-authoring-layer-specification.md) | Generator-based authoring format and contract declarations |
 | [Constructor DSL Specification](./specs/tisyn-constructor-dsl-specification.md) | Grammar, constructor table, and recovery semantics for the DSL parser |
 | [Architecture](./specs/tisyn-architecture.md) | System architecture and package relationships |
 

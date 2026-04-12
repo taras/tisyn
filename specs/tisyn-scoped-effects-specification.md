@@ -1,8 +1,6 @@
 # Tisyn Scoped Effects Specification
 
-**Version:** 0.1.0
-**Implements:** Tisyn System Specification 1.0.0
-**Status:** Draft
+**Implements:** Tisyn System Specification
 
 ---
 

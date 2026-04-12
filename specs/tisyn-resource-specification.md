@@ -1,12 +1,10 @@
 # Tisyn Resource Specification
 
-**Version:** 0.1.0
-**Implements:** Tisyn System Specification 1.0.0
-**Amends:** Tisyn Kernel Specification 1.0.0, Tisyn Compiler
-Specification 1.2.0
-**Depends on:** Tisyn Blocking Scope Specification 0.1.0,
-Tisyn Spawn Specification 0.1.0
-**Status:** Draft
+**Implements:** Tisyn System Specification
+**Amends:** Tisyn Kernel Specification, Tisyn Compiler
+Specification
+**Depends on:** Tisyn Blocking Scope Specification,
+Tisyn Spawn Specification
 
 ---
 

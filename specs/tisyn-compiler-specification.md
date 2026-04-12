@@ -1,8 +1,6 @@
 # Tisyn Compiler Specification
 
-**Version:** 1.2.0
-**Target:** Tisyn System Specification 1.0.0
-**Status:** Normative
+**Target:** Tisyn System Specification
 
 ---
 
@@ -65,10 +63,11 @@ metadata, and provides grouped exports.
 | Object literal  | `{ a: 1, b: x }`                           | `construct`                              |
 | Array literal   | `[a, b, c]`                                | `array`                                  |
 | Arrow function  | `(x) => pureExpr`                          | `fn`                                     |
+| Converge        | `yield* converge({probe, until, interval, timeout})` | Lowered to `timebox` + recursive Fn + Call (Timebox Specification §17) |
 
 ### 2.2 Effects and the Durability Boundary
 
-An **effect** is a `yield*` targeting an Agent method, `all`, `race`, `scoped`, `sleep`, `Config.useConfig(Token)`, `each(...)` in the accepted stream-iteration form, or a sub-workflow containing effects. Each agent method call produces one Yield event.
+An **effect** is a `yield*` targeting an Agent method, `all`, `race`, `scoped`, `sleep`, `converge`, `Config.useConfig(Token)`, `each(...)` in the accepted stream-iteration form, or a sub-workflow containing effects. Each agent method call produces one Yield event.
 
 The accepted stream-iteration form is intentionally narrow: only `for (const x of yield* each(expr)) { ... }` is supported. The compiler lowers that form to a recursive loop using the standard external effect IDs `stream.subscribe` and `stream.next`. All other `for...of` usage remains rejected.
 
@@ -113,7 +112,7 @@ them through the `E-IMPORT-001` boundary check.
 
 The current set of compiler-recognised intrinsics is:
 `resource`, `provide`, `scoped`, `spawn`, `all`, `race`,
-`sleep`.
+`sleep`, `converge`.
 
 ---
 
@@ -1964,12 +1963,22 @@ they would otherwise conflict.
 | `E-NAME-001` | Duplicate reachable exported symbol names across modules |
 | `E-GRAPH-001` | No exported generator workflows found in the graph |
 | `E-GRAPH-002` | Selected export name not found among compiled exported symbols during `compileGraphForRuntime()` |
+| `E-CONV-01` | `probe` is not a generator function expression |
+| `E-CONV-02` | `until` is not an arrow function |
+| `E-CONV-03` | `until` has a block body |
+| `E-CONV-04` | `until` contains `yield*` |
+| `E-CONV-05` | `interval` is missing |
+| `E-CONV-06` | `timeout` is missing |
+| `E-CONV-07` | Config is a variable reference |
+| `E-CONV-08` | `interval` contains `yield*` |
+| `E-CONV-09` | `timeout` contains `yield*` |
 
 ### 24.2 Warning Codes
 
 | Code | Trigger |
 | --- | --- |
 | `W-GRAPH-001` | Exported symbol in a workflow-implementation module is not reachable from any entrypoint |
+| `W-CONV-01` | Probe body contains no effects; convergence is intended for effectful observation |
 
 ### 24.3 Diagnostic Content Requirements
 
@@ -1991,3 +2000,38 @@ classified as external.
 
 DQ6. `E-NAME-001` MUST list both conflicting module paths
 and the source location of each conflicting export.
+
+---
+
+## 25. Converge Validation
+
+### 25.1 Recognition
+
+The compiler recognizes `yield* converge({...})` as a
+special form when:
+
+- The callee is `converge`.
+- The argument is a single object literal.
+- The object literal contains `probe`, `until`, `interval`,
+  and `timeout` fields.
+
+### 25.2 Rejection Cases
+
+| Condition | Code | Severity | Description |
+|---|---|---|---|
+| `probe` is not a generator function | E-CONV-01 | Error | `probe` must be a generator function expression |
+| `until` is not an arrow function | E-CONV-02 | Error | `until` must be an arrow function |
+| `until` has a block body | E-CONV-03 | Error | `until` must be a single expression |
+| `until` contains `yield*` | E-CONV-04 | Error | `until` must not contain effects |
+| `interval` is missing | E-CONV-05 | Error | `interval` is required |
+| `timeout` is missing | E-CONV-06 | Error | `timeout` is required |
+| Config is a variable reference | E-CONV-07 | Error | Config must be an object literal |
+| `interval` contains `yield*` | E-CONV-08 | Error | `yield*` is not allowed in expression position |
+| `timeout` contains `yield*` | E-CONV-09 | Error | `yield*` is not allowed in expression position |
+| `probe` contains no `yield*` | W-CONV-01 | Warning | Probe body contains no effects; convergence is intended for effectful observation |
+
+### 25.3 Free Variable Validation
+
+The compiler MUST verify that all free Refs in the generated
+`__poll_0` and `__until_0` Fn bodies are resolvable at their
+call sites, per existing Fn free-variable rules (§8.3).

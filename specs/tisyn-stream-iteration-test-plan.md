@@ -1,8 +1,6 @@
 # Tisyn Stream Iteration — Conformance Test Plan
 
-**Version:** 0.1.0  
-**Tests:** Tisyn MVP Stream Iteration Specification 0.1.0  
-**Status:** Draft
+**Tests:** Tisyn MVP Stream Iteration Specification
 
 ---
 
@@ -12,7 +10,7 @@
 
 This test plan defines conformance criteria for the MVP
 stream-iteration feature as specified in the Tisyn MVP Stream
-Iteration Specification v0.1.0. It covers:
+Iteration Specification. It covers:
 
 - compiler acceptance and rejection of the constrained
   `for (const x of yield* each(s)) { ... }` form per §4

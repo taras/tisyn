@@ -1,8 +1,6 @@
 # Tisyn Browser Contract — Conformance Test Plan
 
-**Version:** 0.3.0
-**Tests:** Tisyn Browser Contract Specification 0.3.0
-**Status:** Draft
+**Tests:** Tisyn Browser Contract Specification
 
 ---
 
@@ -10,7 +8,7 @@
 
 This test plan defines conformance criteria for the browser
 contract as specified in the Tisyn Browser Contract
-Specification v0.3.0. It covers:
+Specification. It covers:
 
 - capability composition in both in-process and real-browser modes
 - execute envelope semantics and error propagation
