@@ -1,9 +1,7 @@
 # Tisyn Constructor DSL Specification
 
-**Version:** 0.1.0
-**Implements:** Tisyn System Specification 1.0.0
-**Complements:** Tisyn Authoring Layer Specification 0.3.0
-**Status:** Draft
+**Implements:** Tisyn System Specification
+**Complements:** Tisyn Authoring Layer Specification
 
 ---
 
@@ -85,11 +83,11 @@ The following are explicitly out of scope:
 - **Streaming parse.** The current specification defines batch
   parsing. A streaming extension (parse token-by-token as LLM
   output arrives) is a future concern.
-- **Macro constructors.** Shorthand forms that expand into base
-  constructor trees (e.g., `Do` for Let chains, `AllBind` for
-  destructured All results) are a planned extension. See §12
-  for design notes and candidates. The current specification
-  defines only the base constructor vocabulary.
+- **Macro constructors beyond §12.** The macro vocabulary
+  registry (§12.3) defines `Converge` as the first normative
+  macro. Additional candidate macros (`Do`, `AllBind`,
+  `RaceBind`) are described in §12.7 but are not yet
+  normative. See §12.9 for decision criteria.
 
 ### 1.4 Relationship to Other Components
 
@@ -1570,7 +1568,7 @@ implementation handles naturally but that a bug might miss.
 
 ---
 
-## 12. Future Extensions: Macro Constructors
+## 12. Macro Constructors
 
 ### 12.1 Motivation
 
@@ -1587,14 +1585,17 @@ directly, certain IR patterns are both common and verbose:
 - **Destructured All results.** Binding individual results from
   `All` requires a temporary, followed by `Get` calls by index,
   each wrapped in `Let`.
+- **Polling convergence.** The `converge` pattern requires a
+  `Timebox` wrapping a recursive Fn + Call loop with a probe
+  expression, an until predicate, and a sleep interval.
 
 These patterns are structurally simple (no SSA, no recursive
-self-reference, no carried state) and could be collapsed into
+self-reference, no carried state) and are collapsed into
 shorthand forms that the parser expands at parse time.
 
 ### 12.2 Design Constraints
 
-Macro constructors, if implemented, MUST obey these constraints:
+Macro constructors MUST obey these constraints:
 
 **C1 — Expansion is deterministic.** The same macro call with
 the same arguments MUST always expand to the same IR tree.
@@ -1630,14 +1631,111 @@ analysis that no local macro expansion can perform safely. An
 LLM needing these patterns MUST use the TypeScript compiler
 pathway, not the DSL.
 
-### 12.3 Candidate Macros
+### 12.3 Macro Vocabulary Registry
 
-The following macros are candidates for a future revision.
-Their signatures and expansion rules are provisional and
-subject to change after empirical evaluation with LLM
-producers.
+The macro vocabulary registry is a normative extension to the
+base constructor table (§4.3). It is closed and statically
+defined. Entries are added only by formal specification
+amendment. Macro names MUST NOT collide with base constructor
+names (constraint C5). Macros expand at construction time into
+trees of base constructor calls and MUST NOT introduce new IR
+node types (constraint C2). The expanded output MUST be
+indistinguishable from a tree produced by base constructors
+alone (constraint C3).
 
-#### 12.3.1 `Do` — Sequential Bindings
+#### 12.3.1 `Converge`
+
+| Name | `Converge` |
+|---|---|
+| Category | Macro |
+| Arity | 4 (all required) |
+| Parameter: `probe` | Expr — compiled probe expression tree (the authored `probe` generator body, compiled by the standard compiler rules into an Expr that may contain external Eval nodes) |
+| Parameter: `until` | Fn — compiled predicate (the authored `until` arrow, compiled to a Fn with a pure structural body; MUST NOT contain external Eval nodes) |
+| Parameter: `interval` | Expr — numeric synchronous expression for the polling interval in milliseconds; subject to the same constraints as authored `interval` (Authoring Layer Specification §13.5 AC5): MUST NOT contain `yield*`, MUST NOT contain external Eval nodes; becomes raw `"sleep"` effect data in the expansion |
+| Parameter: `timeout` | Expr — numeric synchronous expression for the total deadline in milliseconds; subject to the same constraints as authored `timeout` (Authoring Layer Specification §13.5 AC5): MUST NOT contain `yield*`, MUST NOT contain external Eval nodes; becomes the `Timebox` duration in the expansion |
+| Expands to | `Timebox` node containing recursive Fn + Call polling loop (§12.4) |
+| IR id introduced | None — no `"converge"` id exists in the IR |
+| Constraint compliance | C1–C6 (§12.2) |
+
+### 12.4 `Converge` Macro Expansion
+
+Given parameters `P` (probe), `U` (until), `I` (interval),
+`T` (timeout), `Converge` expands to the following IR tree
+(constructor function notation):
+
+````
+Timebox(T,
+  Let("__until_0", U,
+  Let("__poll_0",
+    Fn([],
+      Let("__probe_0", P,
+      If(
+        Call(Ref("__until_0"), Ref("__probe_0")),
+        Ref("__probe_0"),
+        Let("__discard_0",
+          Eval("sleep", [I]),
+          Call(Ref("__poll_0")))))),
+  Call(Ref("__poll_0")))))
+````
+
+`P` is an Expr — the compiled probe expression tree, not an
+evaluated result. The macro places it in the `__probe_0`
+Let's value position. The kernel evaluates it at runtime
+when evaluating the Let.
+
+`U` is a Fn — the compiled predicate. The macro places it in
+the `__until_0` Let's value position. The kernel calls it
+via the structural `call` operation.
+
+`I` and `T` are Exprs — the interval and timeout duration
+expressions. `T` becomes the `Timebox` duration. `[I]`
+becomes the `"sleep"` effect's data — a raw JSON array
+containing the interval expression (not an `Arr(I)` call).
+
+### 12.5 Equivalence Requirement
+
+The compiler and the constructor DSL macro MUST produce
+identical IR for the same `converge` configuration.
+
+### 12.6 Parser Integration
+
+The parser MUST recognize `Converge(...)` as a macro call
+and dispatch to the expansion function defined in §12.4. The
+parser MUST validate arity (4 parameters required). The
+expansion function receives four parsed Expr values and
+returns a single Expr — the expanded IR tree.
+
+Macro expansion happens inside the parser's constructor
+dispatch (§4.4). The parser recognizes the macro name,
+validates arity, and calls an expansion function that returns
+`TisynExpr` (just as base constructor dispatch does). No
+separate expansion pass is needed.
+
+The constructor table (§4.3) and the macro vocabulary registry
+(§12.3) are conceptually separate tables that share the same
+`IDENT "(" ArgList ")"` syntax. Name collision between
+sections MUST be rejected at compile time of the parser
+module.
+
+Each macro MUST have conformance fixtures that verify the
+expansion output matches the expected base constructor tree.
+These fixtures test the macro's expansion function, not the
+parser's core logic.
+
+When macros are available, the prompt context (§9.2) SHOULD
+include the macro table alongside the base table. Macros
+SHOULD be presented first because they cover the most common
+patterns. The prompt SHOULD explicitly state that loop
+patterns and SSA lowering require the TypeScript compiler.
+
+### 12.7 Candidate Macros
+
+The following macros are candidates for addition to the macro
+vocabulary registry. Their signatures and expansion rules are
+provisional and subject to change after empirical evaluation
+with LLM producers.
+
+#### 12.7.1 `Do` — Sequential Bindings
 
 Flattens a sequence of bindings and a final body expression
 into a nested Let chain.
@@ -1682,7 +1780,7 @@ requires `n` nested `Let(` prefixes and `n` closing `)`. `Do`
 uses one `Do(` and one `)`. Savings grow linearly with chain
 length: roughly `2n - 2` tokens saved for `n` bindings.
 
-#### 12.3.2 `AllBind` — Destructured All Results
+#### 12.7.2 `AllBind` — Destructured All Results
 
 Runs `All` on a list of expressions and binds each result to
 a name, then evaluates a body with those names in scope.
@@ -1716,7 +1814,7 @@ requires `1 + n` `Let` calls, `n` `Get` calls, and `n`
 `Ref("__all_N")` references. `AllBind` replaces all of this
 with a single call. Savings are roughly `5n` tokens.
 
-#### 12.3.3 `RaceBind` — Named Race Result
+#### 12.7.3 `RaceBind` — Named Race Result
 
 Runs `Race` on a list of expressions and binds the winner to
 a name, then evaluates a body.
@@ -1745,7 +1843,7 @@ covers the same use case adequately.
 **Token savings:** Minimal (~4 tokens). Include only if the
 parallel with `AllBind` justifies it.
 
-### 12.4 Patterns Explicitly Excluded from Macros
+### 12.8 Patterns Explicitly Excluded from Macros
 
 The following patterns MUST NOT be implemented as macros (per
 C6). They require whole-program analysis that local expansion
@@ -1778,37 +1876,10 @@ An LLM that needs any of these patterns SHOULD generate
 TypeScript source for the standard compiler rather than DSL
 text for the parser.
 
-### 12.5 Implementation Guidance
+### 12.9 Decision Criteria for Candidate Macros
 
-If macros are implemented in a future revision:
-
-**Where to expand.** Macro expansion SHOULD happen inside the
-parser's constructor dispatch (§4.4). The parser recognizes
-the macro name, validates arity, and calls an expansion
-function that returns `TisynExpr` (just as base constructor
-dispatch does). No separate expansion pass is needed.
-
-**Registry structure.** The constructor table (§4.3) SHOULD
-be split into two sections: a base section (current §4.3,
-unchanged) and a macro section. Both share the same `IDENT "("
-ArgList ")"` syntax. Name collision between sections MUST be
-rejected at compile time of the parser module.
-
-**Conformance.** Each macro MUST have conformance fixtures that
-verify the expansion output matches the expected base
-constructor tree. These fixtures test the macro's expansion
-function, not the parser's core logic.
-
-**LLM prompt guidance.** When macros are available, the prompt
-context (§9.2) SHOULD include the macro table alongside the
-base table. Macros SHOULD be presented first because they cover
-the most common patterns. The prompt SHOULD explicitly state
-that loop patterns and SSA lowering require the TypeScript
-compiler.
-
-### 12.6 Decision Criteria
-
-Macros SHOULD be added to the specification when:
+Candidate macros (§12.7) SHOULD be promoted to the macro
+vocabulary registry (§12.3) when:
 
 1. Empirical testing with LLM producers identifies specific
    patterns where token cost or error rate justifies a
@@ -1817,12 +1888,10 @@ Macros SHOULD be added to the specification when:
    verify it by inspection.
 3. The naming strategy for synthetic bindings (discard names,
    All temporaries) is resolved.
-4. At least three candidate macros pass the C1–C6 constraints.
 
-Macros SHOULD NOT be added speculatively. The base constructor
-vocabulary is sufficient for any program the kernel can
-evaluate. Macros are a usability optimization, not a
-correctness requirement.
+The base constructor vocabulary is sufficient for any program
+the kernel can evaluate. Macros are a usability optimization,
+not a correctness requirement.
 
 ---
 
@@ -1928,22 +1997,3 @@ Let("x", Add(1, 2))
 Re-parse fails: `Let` has 2 arguments (min: 3). Auto-close
 returns `null`. The original parse error is reported.
 
----
-
-## Changelog
-
-### v0.1.0 — Initial draft
-
-- Lexical grammar (§2).
-- Syntactic grammar (§3).
-- Constructor table (§4).
-- Semantic constraints (§5).
-- Error model (§6).
-- Auto-close recovery (§7).
-- Public API (§8).
-- Integration guidance (§9).
-- Conformance criteria (§10).
-- Conformance test suite: 52 fixtures across 11 categories (§11).
-- Future extensions: macro constructor design notes, three
-  candidates (`Do`, `AllBind`, `RaceBind`), explicit exclusion
-  of compiler-internal patterns, decision criteria (§12).

@@ -1,8 +1,6 @@
 # Tisyn Configuration Specification
 
-**Version:** 0.4.1
-**Complements:** Tisyn System Specification 1.0.0
-**Status:** Draft
+**Complements:** Tisyn System Specification
 
 ---
 

@@ -1,8 +1,6 @@
 # Tisyn Spawn — Conformance Test Plan
 
-**Version:** 0.1.0
-**Tests:** Tisyn Spawn Specification 0.1.0
-**Status:** Draft
+**Tests:** Tisyn Spawn Specification
 
 ---
 
@@ -12,7 +10,7 @@
 
 This test plan defines conformance criteria for the
 non-blocking `spawn(...)` MVP as specified in the Tisyn Spawn
-Specification v0.1.0. It covers:
+Specification. It covers:
 
 - compiler acceptance and rejection of authored `spawn(...)`
   and `yield* handle` forms per §3

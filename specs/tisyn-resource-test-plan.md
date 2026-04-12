@@ -1,8 +1,6 @@
 # Tisyn Resource — Conformance Test Plan
 
-**Version:** 0.1.0
-**Tests:** Tisyn Resource Specification 0.1.0
-**Status:** Draft
+**Tests:** Tisyn Resource Specification
 
 ---
 
@@ -12,7 +10,7 @@
 
 This test plan defines conformance criteria for the resource
 scope-creation MVP as specified in the Tisyn Resource
-Specification v0.1.0 (Draft). It covers:
+Specification. It covers:
 
 - compiler acceptance and rejection of authored `resource(...)`
   and `provide(...)` forms per §3
@@ -102,14 +100,8 @@ conformance.
 
 **Draft:** Tests that validate teardown-resumption runtime
 mechanics corresponding to resource specification §11.2.
-Draft tests gate spec advancement: the resource specification
-MUST NOT advance from Draft to "Ready for approval" status
-until all Draft tier tests pass. Draft tests do NOT gate
-implementation conformance — an implementation that passes
-all Core tests is conforming to the current draft spec even
-if Draft tests have not yet been executed. The Draft tier
-exists solely because the spec explicitly marks
-teardown-resumption as draft-stage implementation-validated.
+Draft tests validate teardown-resumption runtime mechanics
+that the spec explicitly marks as implementation-validated.
 
 ---
 
@@ -480,9 +472,8 @@ An implementation passes resource conformance if and only if:
 5. No Core tier fixture produces an unexpected error, hangs,
    or crashes.
 
-Additionally, the resource specification MUST NOT advance from
-Draft to "Ready for approval" status until all Draft tier
-fixtures (RS-DV-001 through RS-DV-003) also pass.
+Additionally, all Draft tier fixtures (RS-DV-001 through
+RS-DV-003) MUST pass.
 
 ---
 
@@ -560,8 +551,3 @@ spawn test plan's approach (spawn test SP-J-006).
 ### A.8 Draft tier execution
 
 Draft tier tests are executed identically to Core tier tests.
-The tier distinction is administrative: Draft tests gate spec
-advancement, not implementation conformance. An implementation
-that passes all Core tests but fails a Draft test is
-conforming to the current draft spec but is insufficient for
-spec promotion.

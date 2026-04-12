@@ -1,7 +1,6 @@
 # Tisyn CLI Test Plan
 
-**Validates:** Tisyn CLI Specification v0.4.0
-**Status:** Final Draft
+**Validates:** Tisyn CLI Specification
 **Style reference:** Blocking Scope Conformance Test Plan
 
 ---

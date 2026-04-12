@@ -1,7 +1,6 @@
 # Tisyn Compiler Test Plan
 
-**Tests:** Tisyn Compiler Specification 1.2.0
-**Status:** Draft
+**Tests:** Tisyn Compiler Specification
 
 ---
 

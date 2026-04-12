@@ -1,8 +1,6 @@
 # Tisyn Agent Implementation Specification
 
-**Version:** 1.1.0
-**Complements:** Tisyn Kernel Specification 1.0.0
-**Status:** Normative
+**Complements:** Tisyn Kernel Specification
 
 ---
 

@@ -1,8 +1,6 @@
 # Tisyn Blocking Scope — Conformance Test Plan
 
-**Version:** 0.1.0
-**Tests:** Tisyn Blocking Scope Specification 0.1.0
-**Status:** Draft
+**Tests:** Tisyn Blocking Scope Specification
 
 ---
 
@@ -12,7 +10,7 @@
 
 This test plan defines conformance criteria for the blocking
 single-child `scoped(...)` MVP as specified in the Tisyn
-Blocking Scope Specification v0.1.0. It covers:
+Blocking Scope Specification. It covers:
 
 - compiler acceptance and rejection of authored `scoped(...)`
   forms per §3

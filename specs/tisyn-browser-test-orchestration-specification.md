@@ -1,7 +1,5 @@
 # Tisyn Browser Test Orchestration Specification
 
-**Version:** 0.3.0
-**Status:** Decision-Complete Draft
 **Audience:** Engineers building browser-facing acceptance tests for the multi-agent-chat example
 
 ---

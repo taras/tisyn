@@ -1,8 +1,6 @@
 # Tisyn Authoring Layer Specification
 
-**Version:** 0.3.0
-**Implements:** Tisyn System Specification 1.0.0
-**Status:** Draft
+**Implements:** Tisyn System Specification
 
 ---
 
@@ -1445,6 +1443,196 @@ export type { YieldEvent, CloseEvent, EventResult, ReplayIndex, Task, TaskState 
 12. `@tisyn/validate` — TypeBox schemas + validation functions
 13. `@tisyn/protocol` — wire protocol and agent types
 14. `@tisyn/runtime` — journal events, replay, task types
+
+---
+
+## 13. Converge Authored Syntax and Constraints
+
+### 13.1 Form
+
+```typescript
+const result = yield* converge({
+  probe: function* () {
+    return yield* Deployment().status(deployId);
+  },
+  until: (status) => status.state === "ready",
+  interval: 500,
+  timeout: 10_000,
+});
+```
+
+### 13.2 Config Fields
+
+| Field | Type | Required | Description |
+|---|---|---|---|
+| `probe` | Generator function | MUST | Effectful observation step. Called once per polling iteration. May contain one or more `yield*` effect calls. |
+| `until` | Arrow function | MUST | Pure predicate. Receives the evaluated probe result. Returns truthy if convergence is achieved. |
+| `interval` | Numeric expression | MUST | Milliseconds between polling iterations. MUST NOT contain `yield*`. |
+| `timeout` | Numeric expression | MUST | Total milliseconds allowed. Passed as `timebox` duration. MUST NOT contain `yield*`. |
+
+### 13.3 Dynamic `interval` and `timeout`
+
+If `interval` or `timeout` must be produced by an effect,
+the author MUST bind them in prior statement-position
+`yield*` calls and pass the bound variables:
+
+```typescript
+const pollInterval = yield* Config().pollInterval();
+const deadline = yield* Config().timeout();
+const result = yield* converge({
+  probe: function* () {
+    return yield* Deployment().status(deployId);
+  },
+  until: (status) => status.state === "ready",
+  interval: pollInterval,
+  timeout: deadline,
+});
+```
+
+The following is NOT valid authored syntax because `yield*`
+appears inside the config object:
+
+```typescript
+// INVALID — yield* is not allowed in expression position
+const result = yield* converge({
+  probe: function* () { ... },
+  until: (status) => status.state === "ready",
+  interval: yield* Config().pollInterval(),   // REJECTED
+  timeout: yield* Config().timeout(),         // REJECTED
+});
+```
+
+### 13.4 Result Type
+
+`converge` returns `TimeboxResult<T>` — the same type
+defined by the Timebox Specification:
+
+```typescript
+type TimeboxResult<T> =
+  | { status: "completed"; value: T }
+  | { status: "timeout" };
+```
+
+When convergence succeeds, `status` is `"completed"` and
+`value` is the evaluated probe result that satisfied `until`.
+
+### 13.5 Authoring Constraints
+
+#### AC1. `probe` Must Be a Generator Function
+
+The `probe` field MUST be a generator function expression
+(`function* () { ... }`).
+
+A `probe` that contains no `yield*` effect calls is
+syntactically valid but semantically suspect. `converge` is
+intended for effectful observation across explicit effect
+boundaries — each probe iteration is expected to cross the
+effect boundary to observe external state. A pure `probe`
+that reads no external state will return the same value on
+every iteration, making convergence either immediate or
+impossible. The compiler SHOULD emit warning W-CONV-01 for
+an effectless probe but MUST NOT reject it.
+
+Arrow functions, non-generator functions, and variable
+references MUST be rejected.
+
+#### AC2. Probe May Contain Multiple Effects
+
+A probe body MAY contain multiple `yield*` effect calls,
+control flow, and Let bindings. Each effect in the probe
+body is an independent external effect that crosses the
+effect boundary and is individually journaled. There is no
+restriction to a single effect per probe iteration.
+
+```typescript
+// VALID — multi-step probe
+probe: function* () {
+  const build = yield* CI().getBuild(buildId);
+  const tests = yield* CI().getTestResults(build.testRunId);
+  return { build, tests };
+}
+```
+
+#### AC3. `until` Must Be an Arrow Function
+
+The `until` field MUST be an arrow function with a single
+expression body:
+
+```typescript
+// VALID
+until: (status) => status.state === "ready"
+until: (v) => v > 0
+until: (result) => result.done === true
+
+// INVALID — block body
+until: (status) => { return status.state === "ready"; }
+
+// INVALID — multiple statements
+until: (status) => { const s = status.state; return s === "ready"; }
+
+// INVALID — contains yield*
+until: function* (status) { return yield* check(status); }
+```
+
+The arrow body MUST NOT contain `yield*` or `await`. It MUST
+be a single expression with no block, no statements, and no
+variable declarations. This ensures the compiler can lower
+`until` to a Fn node with a pure structural body.
+
+#### AC4. `until` Parameter
+
+`until` MUST accept exactly one parameter. It receives the
+evaluated probe result — the Val produced by evaluating the
+probe body to completion. It MUST return a value
+interpretable as boolean by the kernel's `truthy()` function
+(System Specification §5.4).
+
+#### AC5. `interval` and `timeout` Must Be Numeric Value Expressions
+
+Both MUST be numeric expressions. Both are required — there
+are no defaults. Neither field MUST contain `yield*`.
+The existing compiler restriction that `yield*` is only
+valid in statement position applies to all fields of the
+config object. If the author needs effect-produced values
+for `interval` or `timeout`, they MUST bind them in prior
+statements (§13.3).
+
+#### AC6. Config Must Be a Literal Object
+
+The config object MUST be an object literal at the call
+site. It MUST NOT be a variable reference. The compiler
+needs static access to each field for recognition and
+lowering.
+
+```typescript
+// VALID
+yield* converge({ probe: ..., until: ..., interval: 500, timeout: 10000 });
+
+// INVALID — variable reference
+const cfg = { probe: ..., until: ..., interval: 500, timeout: 10000 };
+yield* converge(cfg);
+```
+
+This follows the same pattern as `Effects.around({...})`
+recognition (Scoped Effects Specification §3.5).
+
+#### AC7. Free Variable Capture
+
+Free variables in the `probe` body and the `until` arrow
+resolve via standard Tisyn call-site resolution (System
+Specification §5.5). The compiler-generated recursive Fn
+captures no environment; free Refs in its body resolve in
+the caller's environment at each Call site.
+
+Any binding in scope at the `converge` call site in the
+authored workflow is available to both `probe` and `until`:
+workflow parameters, prior `const` declarations, enclosing
+scope bindings. The compiler MUST verify (per Compiler
+Specification §8.3) that all free Refs in the expanded Fn
+bodies are resolvable at their call sites.
+
+No restrictions beyond the standard call-site resolution
+model apply.
 
 ---
 
