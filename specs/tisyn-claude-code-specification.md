@@ -26,10 +26,10 @@ This specification defines the `@tisyn/claude-code` transport
 adapter layer. The package connects Tisyn workflows to Claude
 Code through two binding implementations:
 
-1. An **ACP stdio adapter** (`createBinding`) that spawns or
-   connects to a Claude Code ACP process, translates between
-   Tisyn protocol messages and ACP JSON-RPC, and manages
-   subprocess lifecycle.
+1. An **ACP stdio adapter** (`createBinding`) that spawns a
+   Claude Code ACP subprocess, translates between Tisyn
+   protocol messages and ACP JSON-RPC, and manages subprocess
+   lifecycle.
 
 2. An **SDK adapter** (`createSdkBinding`) that wraps the
    `@anthropic-ai/claude-agent-sdk` TypeScript API, manages
@@ -478,18 +478,19 @@ handles are removed.
 ### 9.1 ACP Transport
 
 The ACP adapter spawns a subprocess via `exec()` when the
-transport resource is created. The subprocess lifetime is tied
-to the Effection resource scope.
+transport resource is created. The `exec()` resource owns the
+subprocess: when the transport resource scope exits, the
+subprocess is terminated (SIGTERM to the process group).
 
 The transport MUST persist across session open/close cycles
-within the same scope. Closing a session does NOT terminate
-the subprocess or close the transport.
+within the same scope. Closing a session does NOT exit the
+transport scope, so the subprocess continues running.
 
 A background task reads from the subprocess stdout, parsing
 NDJSON lines into ACP messages. When stdout ends (subprocess
-exits), the adapter calls `waitForProcessExit()` and throws
-the resulting diagnostic error. This preempts the generic
-"Transport closed" error that would otherwise surface.
+exits unexpectedly), the adapter calls `waitForProcessExit()`
+and throws the resulting diagnostic error. This preempts the
+generic "Transport closed" error that would otherwise surface.
 
 ### 9.2 SDK Transport
 
