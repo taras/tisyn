@@ -7,8 +7,8 @@
   "include": ["src"],
   "exclude": ["src/**/*.test.ts", "src/**/test-assets/**"],
   "references": [
-    { "path": "../agent" },
     { "path": "../code-agent" },
+    { "path": "../agent" },
     { "path": "../ir" },
     { "path": "../protocol" },
     { "path": "../transport" }

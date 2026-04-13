@@ -200,6 +200,9 @@ importers:
       '@tisyn/agent':
         specifier: workspace:*
         version: link:../agent
+      '@tisyn/code-agent':
+        specifier: workspace:*
+        version: link:../code-agent
       '@tisyn/ir':
         specifier: workspace:*
         version: link:../ir
@@ -271,6 +274,68 @@ importers:
       '@types/ws':
         specifier: ^8.18.0
         version: 8.18.1
+      vitest:
+        specifier: ^4
+        version: 4.1.0(@types/node@25.5.0)(vite@7.3.1(@types/node@25.5.0)(tsx@4.21.0))
+
+  packages/code-agent:
+    dependencies:
+      '@tisyn/agent':
+        specifier: workspace:*
+        version: link:../agent
+      '@tisyn/ir':
+        specifier: workspace:*
+        version: link:../ir
+      '@tisyn/protocol':
+        specifier: workspace:*
+        version: link:../protocol
+      '@tisyn/transport':
+        specifier: workspace:*
+        version: link:../transport
+      effection:
+        specifier: 4.0.2
+        version: 4.0.2
+    devDependencies:
+      '@effectionx/vitest':
+        specifier: ^0.3.1
+        version: 0.3.1(effection@4.0.2)(vitest@4.1.0(@types/node@25.5.0)(vite@7.3.1(@types/node@25.5.0)(tsx@4.21.0)))
+      vitest:
+        specifier: ^4
+        version: 4.1.0(@types/node@25.5.0)(vite@7.3.1(@types/node@25.5.0)(tsx@4.21.0))
+
+  packages/codex:
+    dependencies:
+      '@effectionx/process':
+        specifier: ^0.7.4
+        version: 0.7.4(effection@4.0.2)
+      '@effectionx/stream-helpers':
+        specifier: ^0.8.2
+        version: 0.8.2(effection@4.0.2)
+      '@tisyn/agent':
+        specifier: workspace:*
+        version: link:../agent
+      '@tisyn/code-agent':
+        specifier: workspace:*
+        version: link:../code-agent
+      '@tisyn/ir':
+        specifier: workspace:*
+        version: link:../ir
+      '@tisyn/protocol':
+        specifier: workspace:*
+        version: link:../protocol
+      '@tisyn/transport':
+        specifier: workspace:*
+        version: link:../transport
+      effection:
+        specifier: 4.0.2
+        version: 4.0.2
+      remeda:
+        specifier: ^2.33.6
+        version: 2.33.6
+    devDependencies:
+      '@effectionx/vitest':
+        specifier: ^0.3.1
+        version: 0.3.1(effection@4.0.2)(vitest@4.1.0(@types/node@25.5.0)(vite@7.3.1(@types/node@25.5.0)(tsx@4.21.0)))
       vitest:
         specifier: ^4
         version: 4.1.0(@types/node@25.5.0)(vite@7.3.1(@types/node@25.5.0)(tsx@4.21.0))

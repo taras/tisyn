@@ -1,11 +1,11 @@
 {
-  "name": "@tisyn/claude-code",
-  "version": "0.12.0",
+  "name": "@tisyn/codex",
+  "version": "0.1.0",
   "license": "UNLICENSED",
   "repository": {
     "type": "git",
     "url": "https://github.com/taras/tisyn.git",
-    "directory": "packages/claude-code"
+    "directory": "packages/codex"
   },
   "files": [
     "dist"
@@ -27,14 +27,13 @@
     "test": "vitest run"
   },
   "dependencies": {
-    "@anthropic-ai/claude-agent-sdk": "^0.2",
-    "@effectionx/process": "^0.7.4",
-    "@effectionx/stream-helpers": "^0.8.2",
-    "@tisyn/agent": "workspace:*",
     "@tisyn/code-agent": "workspace:*",
+    "@tisyn/agent": "workspace:*",
     "@tisyn/ir": "workspace:*",
     "@tisyn/protocol": "workspace:*",
     "@tisyn/transport": "workspace:*",
+    "@effectionx/process": "^0.7.4",
+    "@effectionx/stream-helpers": "^0.8.2",
     "effection": "4.0.2",
     "remeda": "^2.33.6"
   },

@@ -65,6 +65,7 @@ const OPERATION_TO_ACP_METHOD: Record<string, string> = {
   newSession: "session/new",
   closeSession: "session/close",
   plan: "session/prompt",
+  prompt: "session/prompt",
   fork: "session/fork",
   openFork: "session/fork",
   cancel: "session/cancel",
@@ -97,6 +98,7 @@ const OPERATION_UNWRAP_KEY: Record<string, string> = {
   newSession: "config",
   closeSession: "handle",
   plan: "args",
+  prompt: "args",
   fork: "session",
   openFork: "data",
 };

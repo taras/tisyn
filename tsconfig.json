@@ -15,6 +15,7 @@
   },
   "files": [],
   "references": [
+    { "path": "packages/code-agent" },
     { "path": "packages/ir" },
     { "path": "packages/dsl" },
     { "path": "packages/kernel" },
@@ -27,6 +28,7 @@
     { "path": "packages/protocol" },
     { "path": "packages/transport" },
     { "path": "packages/claude-code" },
+    { "path": "packages/codex" },
     { "path": "packages/validate" },
     { "path": "packages/config" },
     { "path": "packages/spec" }

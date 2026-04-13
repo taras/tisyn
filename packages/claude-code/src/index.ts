@@ -16,7 +16,7 @@ import { initializeResponse } from "@tisyn/protocol";
 import { createAcpAdapter } from "./acp-adapter.js";
 import type { AcpAdapterConfig } from "./acp-adapter.js";
 
-export type { SessionHandle, PlanResult, ForkData } from "./types.js";
+export type { SessionHandle, PromptResult, PlanResult, ForkData } from "./types.js";
 export type { AcpAdapterConfig } from "./acp-adapter.js";
 export { createSdkBinding } from "./sdk-adapter.js";
 export type { SdkAdapterConfig } from "./sdk-adapter.js";

@@ -15,6 +15,7 @@ const claudeCodeDeclaration = agent("claude-code", {
   newSession: operation<Val, Val>(),
   closeSession: operation<Val, Val>(),
   plan: operation<Val, Val>(),
+  prompt: operation<Val, Val>(),
   fork: operation<Val, Val>(),
   openFork: operation<Val, Val>(),
 });
@@ -77,6 +78,31 @@ describe("Claude Code ACP Integration", () => {
         response: "Here is the implementation plan...",
         toolResults: [{ tool: "read_file", output: "contents" }],
       });
+    });
+  });
+
+  // 2b. Portable prompt alias resolves identically to plan
+  it("prompt resolves identically to plan via mock transport", function* () {
+    const { factory } = createMockClaudeCodeTransport({
+      newSession: { result: { sessionId: "s-123" } },
+      prompt: {
+        result: { response: "prompt result" },
+      },
+      closeSession: { result: null },
+    });
+
+    yield* scoped(function* () {
+      yield* installRemoteAgent(claudeCodeDeclaration, factory);
+
+      yield* dispatch("claude-code.newSession", {
+        config: { model: "opus-4" },
+      } as unknown as Val);
+
+      const result = yield* dispatch("claude-code.prompt", {
+        args: { session: { sessionId: "s-123" }, prompt: "Analyze code" },
+      } as unknown as Val);
+
+      expect(result).toEqual({ response: "prompt result" });
     });
   });
 
@@ -367,6 +393,29 @@ describe("Claude Code ACP Binding Path", () => {
         handle: { sessionId: "test-session-1" },
       } as unknown as Val);
       expect(closeResult).toBeNull();
+    });
+  });
+
+  it("prompt works through real ACP binding path", function* () {
+    const binding = createBinding({
+      command: "npx",
+      arguments: ["tsx", mockAcpServer],
+    });
+
+    yield* scoped(function* () {
+      yield* installRemoteAgent(claudeCodeDeclaration, binding.transport);
+
+      yield* dispatch("claude-code.newSession", {
+        config: { model: "opus-4" },
+      } as unknown as Val);
+
+      const result = yield* dispatch("claude-code.prompt", {
+        args: { session: { sessionId: "test-session-1" }, prompt: "Refactor auth" },
+      } as unknown as Val);
+
+      expect(result).toEqual({
+        response: "mock plan result for: Refactor auth",
+      });
     });
   });
 

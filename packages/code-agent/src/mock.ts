@@ -1,13 +1,14 @@
 /**
- * Mock Claude Code adapter for testing.
+ * Mock CodeAgent transport for testing.
  *
- * Simulates the Claude Code ACP agent at the Tisyn protocol level.
+ * Simulates a conforming CodeAgent adapter at the Tisyn protocol level.
  * The transport factory returns a resource-scoped transport — the
  * message processing loop is a spawned child, so its lifetime is
- * owned by the enclosing resource scope (no manual createScope).
+ * owned by the enclosing resource scope.
  *
- * Supports all five operations: newSession, closeSession, plan, fork, openFork.
- * Each operation can be configured independently with result, error, progress, delay.
+ * Supports all five contract operations: newSession, closeSession,
+ * prompt, fork, openFork. Each operation can be configured
+ * independently with result, error, progress, delay.
  */
 
 import type { Task } from "effection";
@@ -29,17 +30,16 @@ export interface MockOperationConfig {
   neverComplete?: boolean;
 }
 
-export interface MockClaudeCodeConfig {
+export interface MockCodeAgentConfig {
   newSession?: MockOperationConfig;
   closeSession?: MockOperationConfig;
-  plan?: MockOperationConfig;
   prompt?: MockOperationConfig;
   fork?: MockOperationConfig;
   openFork?: MockOperationConfig;
 }
 
 /**
- * Create a mock AgentTransportFactory that simulates Claude Code ACP behavior.
+ * Create a mock AgentTransportFactory that simulates CodeAgent behavior.
  *
  * Routes execute requests by operation name to per-operation configs.
  * Supports progress, delay, error injection, and neverComplete (for cancel tests).
@@ -47,7 +47,7 @@ export interface MockClaudeCodeConfig {
  * Returns a `calls` array that records every execute request received,
  * so tests can assert on what was dispatched.
  */
-export function createMockClaudeCodeTransport(config: MockClaudeCodeConfig): {
+export function createMockCodeAgentTransport(config: MockCodeAgentConfig): {
   factory: AgentTransportFactory;
   calls: Array<{ operation: string; args: Val }>;
 } {
@@ -58,12 +58,8 @@ export function createMockClaudeCodeTransport(config: MockClaudeCodeConfig): {
       const hostToAgent = createChannel<HostMessage, void>();
       const agentToHost = createChannel<AgentMessage, void>();
 
-      // Subscribe BEFORE spawning so the subscription exists when sends arrive
       const hostSub = yield* hostToAgent;
 
-      // Message processing loop — spawned as a child of this resource scope.
-      // Its lifetime is owned by the resource: when the resource scope exits,
-      // this task is automatically halted.
       yield* spawn(function* () {
         const inflight = new Map<string, Task<void>>();
 
@@ -77,7 +73,7 @@ export function createMockClaudeCodeTransport(config: MockClaudeCodeConfig): {
             yield* agentToHost.send(
               initializeResponse(msg.id, {
                 protocolVersion: "1.0",
-                sessionId: `mock-cc-session-${Date.now()}`,
+                sessionId: `mock-ca-session-${Date.now()}`,
               }),
             );
           } else if (msg.method === "execute") {
