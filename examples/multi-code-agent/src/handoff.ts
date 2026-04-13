@@ -73,11 +73,13 @@ export function* handoff(input: { task: string }) {
   });
   yield* Output().log({ label: "Claude", text: claudeResult.response });
 
-  // Phase 2: Codex acts on Claude's analysis
+  // Phase 2: Codex implements the changes Claude described
   const codexSession = yield* useCodexSession({});
   const codexResult = yield* Codex().prompt({
     session: codexSession,
-    prompt: claudeResult.response,
+    prompt:
+      `Implement the changes described in the following analysis.\n\n` +
+      `${claudeResult.response}`,
   });
   yield* Output().log({ label: "Codex", text: codexResult.response });
 }

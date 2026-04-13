@@ -2,7 +2,7 @@
 import { agent, operation } from "@tisyn/agent";
 import type { DeclaredAgent, OperationSpec } from "@tisyn/agent";
 import type { TisynFn } from "@tisyn/ir";
-import { Fn, Ref, Eval, Let, Call, Get, Construct, Concat, Try, Resource, Provide } from "@tisyn/ir";
+import { Fn, Ref, Eval, Let, Call, Get, Add, Construct, Concat, Try, Resource, Provide } from "@tisyn/ir";
 import type { SessionHandle, PromptResult, NewSessionConfig, PromptArgs } from "@tisyn/code-agent";
 
 export function Claude(): DeclaredAgent<{ newSession: OperationSpec<{ config: NewSessionConfig }, SessionHandle>; closeSession: OperationSpec<{ handle: SessionHandle }, null>; prompt: OperationSpec<{ args: PromptArgs }, PromptResult> }> {
@@ -93,9 +93,14 @@ export const handoff: TisynFn<[{ task: string }], unknown> =
                   Construct({
                     args: Construct({
                         session: Ref<any>("codexSession"),
-                        prompt: Get(
-                            Ref<any>("claudeResult"),
-                            "response"
+                        prompt: Add(
+                            "Implement the changes described in the following analysis.\n\n",
+                            Concat(
+                              Get(
+                                Ref<any>("claudeResult"),
+                                "response"
+                              )
+                            )
                           )
                       })
                   })),

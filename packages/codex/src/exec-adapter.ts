@@ -153,6 +153,13 @@ export function createExecBinding(config?: CodexExecConfig): LocalAgentBinding {
         ): Operation<Val> {
           switch (opName) {
             case "newSession": {
+              if (params.model !== undefined) {
+                throw new Error(
+                  "Codex exec adapter cannot honor 'model' in newSession config: " +
+                    "CLI flag mapping for 'codex exec' is unverified. " +
+                    "Omit the model field or use the SDK adapter when available.",
+                );
+              }
               const handle = `cx-${++handleCounter}`;
               handles.add(handle);
               return { sessionId: handle } as unknown as Val;

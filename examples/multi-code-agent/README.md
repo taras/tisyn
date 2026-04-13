@@ -4,8 +4,9 @@ Demonstrates a Tisyn workflow that hands off work between two
 CodeAgent backends — Claude Code and Codex — using the shared
 `@tisyn/code-agent` contract.
 
-The workflow prompts Claude with a user task, then forwards Claude's
-analysis to Codex for implementation.
+The workflow prompts Claude to analyze a user task, then hands off
+Claude's analysis to Codex with an explicit instruction to implement
+the described changes.
 
 ## Conformance
 

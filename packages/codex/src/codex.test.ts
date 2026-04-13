@@ -203,7 +203,7 @@ describe("Codex Exec Adapter", () => {
         yield* installRemoteAgent(CodeAgent, binding.transport);
 
         const handle = yield* dispatch("code-agent.newSession", {
-          config: { model: "test" },
+          config: {},
         } as unknown as Val);
 
         expect((handle as any).sessionId).toMatch(/^cx-\d+$/);
@@ -217,6 +217,30 @@ describe("Codex Exec Adapter", () => {
 
         expect((result as any).response).toContain("mock result for: Analyze the code");
       });
+    });
+
+    it("newSession rejects explicit model (unverified CLI flag)", function* () {
+      const binding = createExecBinding({
+        command: "npx",
+        arguments: ["tsx", mockCodexExec],
+      });
+
+      let caughtError: Error | null = null;
+
+      yield* scoped(function* () {
+        yield* installRemoteAgent(CodeAgent, binding.transport);
+
+        try {
+          yield* dispatch("code-agent.newSession", {
+            config: { model: "o3-mini" },
+          } as unknown as Val);
+        } catch (e) {
+          caughtError = e as Error;
+        }
+      });
+
+      expect(caughtError).not.toBeNull();
+      expect(caughtError!.message).toContain("cannot honor 'model'");
     });
 
     it("closeSession returns null for live handle", function* () {
