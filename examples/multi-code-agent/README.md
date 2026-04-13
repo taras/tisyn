@@ -53,17 +53,34 @@ pnpm exec tsn generate src/handoff.ts -o src/handoff.generated.ts
 pnpm exec tsn run src/handoff.ts --task "Refactor the auth module"
 ```
 
-The output agent prints labeled results to the console:
+The workflow prints milestone messages as it advances, followed by
+each agent's final response when the step completes. Live backend
+token/progress streaming is not part of this example.
 
 ```
 ── Task ──
 Refactor the auth module
 
+── Status ──
+Opening Claude session...
+
+── Status ──
+Requesting Claude analysis...
+
 ── Claude ──
 <Claude's analysis>
 
+── Status ──
+Opening Codex session...
+
+── Status ──
+Handing Claude analysis to Codex...
+
 ── Codex ──
 <Codex's implementation>
+
+── Status ──
+Workflow complete.
 ```
 
 ## Architecture

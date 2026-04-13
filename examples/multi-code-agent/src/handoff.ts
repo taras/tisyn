@@ -66,7 +66,9 @@ export function* handoff(input: { task: string }) {
   yield* Output().log({ label: "Task", text: input.task });
 
   // Phase 1: Claude analyzes the task
+  yield* Output().log({ label: "Status", text: "Opening Claude session..." });
   const claudeSession = yield* useClaudeSession({ model: "claude-sonnet-4-6" });
+  yield* Output().log({ label: "Status", text: "Requesting Claude analysis..." });
   const claudeResult = yield* Claude().prompt({
     session: claudeSession,
     prompt: `Analyze: ${input.task}`,
@@ -74,12 +76,16 @@ export function* handoff(input: { task: string }) {
   yield* Output().log({ label: "Claude", text: claudeResult.response });
 
   // Phase 2: Codex implements the changes Claude described
+  yield* Output().log({ label: "Status", text: "Opening Codex session..." });
   const codexSession = yield* useCodexSession({});
+  yield* Output().log({ label: "Status", text: "Handing Claude analysis to Codex..." });
   const codexResult = yield* Codex().prompt({
     session: codexSession,
     prompt: `Implement the changes described in the following analysis.\n\n${claudeResult.response}`,
   });
   yield* Output().log({ label: "Codex", text: codexResult.response });
+
+  yield* Output().log({ label: "Status", text: "Workflow complete." });
 }
 
 export default workflow({

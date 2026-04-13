@@ -45,73 +45,123 @@ export const handoff: TisynFn<[{ task: string }], unknown> =
             })
         })),
       Let(
-        "claudeSession",
-        Call(
-          Ref<any>("useClaudeSession"),
+        "__discard_1",
+        Eval("output.log",
           Construct({
-            model: "claude-sonnet-4-6"
-          })
-        ),
+            input: Construct({
+                label: "Status",
+                text: "Opening Claude session..."
+              })
+          })),
         Let(
-          "claudeResult",
-          Eval("claude.prompt",
+          "claudeSession",
+          Call(
+            Ref<any>("useClaudeSession"),
             Construct({
-              args: Construct({
-                  session: Ref<any>("claudeSession"),
-                  prompt: Concat(
-                      "Analyze: ",
-                      Get(
-                        Ref<any>("input"),
-                        "task"
-                      )
-                    )
-                })
-            })),
+              model: "claude-sonnet-4-6"
+            })
+          ),
           Let(
-            "__discard_1",
+            "__discard_2",
             Eval("output.log",
               Construct({
                 input: Construct({
-                    label: "Claude",
-                    text: Get(
-                        Ref<any>("claudeResult"),
-                        "response"
-                      )
+                    label: "Status",
+                    text: "Requesting Claude analysis..."
                   })
               })),
             Let(
-              "codexSession",
-              Call(
-                Ref<any>("useCodexSession"),
+              "claudeResult",
+              Eval("claude.prompt",
                 Construct({
-  
-                })
-              ),
-              Let(
-                "codexResult",
-                Eval("codex.prompt",
-                  Construct({
-                    args: Construct({
-                        session: Ref<any>("codexSession"),
-                        prompt: Concat(
-                            "Implement the changes described in the following analysis.\n\n",
-                            Get(
-                              Ref<any>("claudeResult"),
-                              "response"
-                            )
+                  args: Construct({
+                      session: Ref<any>("claudeSession"),
+                      prompt: Concat(
+                          "Analyze: ",
+                          Get(
+                            Ref<any>("input"),
+                            "task"
                           )
-                      })
-                  })),
+                        )
+                    })
+                })),
+              Let(
+                "__discard_3",
                 Eval("output.log",
                   Construct({
                     input: Construct({
-                        label: "Codex",
+                        label: "Claude",
                         text: Get(
-                            Ref<any>("codexResult"),
+                            Ref<any>("claudeResult"),
                             "response"
                           )
                       })
-                  }))
+                  })),
+                Let(
+                  "__discard_4",
+                  Eval("output.log",
+                    Construct({
+                      input: Construct({
+                          label: "Status",
+                          text: "Opening Codex session..."
+                        })
+                    })),
+                  Let(
+                    "codexSession",
+                    Call(
+                      Ref<any>("useCodexSession"),
+                      Construct({
+  
+                      })
+                    ),
+                    Let(
+                      "__discard_5",
+                      Eval("output.log",
+                        Construct({
+                          input: Construct({
+                              label: "Status",
+                              text: "Handing Claude analysis to Codex..."
+                            })
+                        })),
+                      Let(
+                        "codexResult",
+                        Eval("codex.prompt",
+                          Construct({
+                            args: Construct({
+                                session: Ref<any>("codexSession"),
+                                prompt: Concat(
+                                    "Implement the changes described in the following analysis.\n\n",
+                                    Get(
+                                      Ref<any>("claudeResult"),
+                                      "response"
+                                    )
+                                  )
+                              })
+                          })),
+                        Let(
+                          "__discard_6",
+                          Eval("output.log",
+                            Construct({
+                              input: Construct({
+                                  label: "Codex",
+                                  text: Get(
+                                      Ref<any>("codexResult"),
+                                      "response"
+                                    )
+                                })
+                            })),
+                          Eval("output.log",
+                            Construct({
+                              input: Construct({
+                                  label: "Status",
+                                  text: "Workflow complete."
+                                })
+                            }))
+                        )
+                      )
+                    )
+                  )
+                )
               )
             )
           )
