@@ -194,7 +194,9 @@ export function createExecBinding(config?: CodexExecConfig): LocalAgentBinding {
                 const sub = yield* proc.stderr;
                 for (;;) {
                   const { value, done } = yield* sub.next();
-                  if (done) break;
+                  if (done) {
+                    break;
+                  }
                   stderrChunks.push(decoder.decode(value));
                 }
               });

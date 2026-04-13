@@ -12,7 +12,9 @@ const HEADLESS_INCOMPATIBLE = new Set(["untrusted", "on-failure"]);
 const VALID_SANDBOX = new Set(["read-only", "workspace-write", "danger-full-access"]);
 
 export function validateApproval(approval: string | undefined): void {
-  if (approval === undefined) return;
+  if (approval === undefined) {
+    return;
+  }
   if (HEADLESS_INCOMPATIBLE.has(approval)) {
     throw new Error(
       `Approval policy "${approval}" is not compatible with headless execution. ` +
@@ -28,7 +30,9 @@ export function validateApproval(approval: string | undefined): void {
 }
 
 export function validateSandbox(sandbox: string | undefined): void {
-  if (sandbox === undefined) return;
+  if (sandbox === undefined) {
+    return;
+  }
   if (!VALID_SANDBOX.has(sandbox)) {
     throw new Error(
       `Invalid sandbox mode "${sandbox}". ` +
@@ -38,14 +42,18 @@ export function validateSandbox(sandbox: string | undefined): void {
 }
 
 export function validateModel(model: string | undefined): void {
-  if (model === undefined) return;
+  if (model === undefined) {
+    return;
+  }
   if (model === "") {
     throw new Error("Model must be a non-empty string if provided.");
   }
 }
 
 export function validateCommand(command: string | undefined): void {
-  if (command === undefined) return;
+  if (command === undefined) {
+    return;
+  }
   if (command === "") {
     throw new Error("Command must be a non-empty string if provided.");
   }
