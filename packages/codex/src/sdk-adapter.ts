@@ -40,7 +40,6 @@ export function createSdkBinding(config?: CodexSdkConfig): LocalAgentBinding {
       resource(function* (provide) {
         const agentToHost = createChannel<AgentMessage, void>();
 
-        let handleCounter = 0;
         const sessions = new Set<string>();
 
         yield* provide({
