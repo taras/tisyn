@@ -10,7 +10,7 @@
  * It is suitable for CI workflows where each prompt is independent.
  */
 
-import type { Operation } from "effection";
+import type { Operation, Task } from "effection";
 import { resource, createChannel, spawn } from "effection";
 import { exec } from "@effectionx/process";
 import { lines, filter, map } from "@effectionx/stream-helpers";
@@ -24,12 +24,7 @@ import {
 } from "@tisyn/protocol";
 import type { Val } from "@tisyn/ir";
 import type { CodexExecConfig } from "./types.js";
-import {
-  validateApproval,
-  validateSandbox,
-  validateModel,
-  validateCommand,
-} from "./validate-config.js";
+import { validateCommand } from "./validate-config.js";
 
 const UNWRAP: Record<string, string> = {
   newSession: "config",
@@ -55,9 +50,24 @@ export function buildExecArgs(prompt: string): string[] {
 }
 
 export function createExecBinding(config?: CodexExecConfig): LocalAgentBinding {
-  validateApproval(config?.approval);
-  validateSandbox(config?.sandbox);
-  validateModel(config?.model);
+  if (config?.model !== undefined) {
+    throw new Error(
+      "Codex exec adapter cannot honor 'model' config: CLI flag mapping for " +
+        "'codex exec' is unverified. Remove the model field or use the SDK adapter when available.",
+    );
+  }
+  if (config?.sandbox !== undefined) {
+    throw new Error(
+      "Codex exec adapter cannot honor 'sandbox' config: CLI flag mapping for " +
+        "'codex exec' is unverified. Remove the sandbox field or use the SDK adapter when available.",
+    );
+  }
+  if (config?.approval !== undefined) {
+    throw new Error(
+      "Codex exec adapter cannot honor 'approval' config: CLI flag mapping for " +
+        "'codex exec' is unverified. Remove the approval field or use the SDK adapter when available.",
+    );
+  }
   validateCommand(config?.command);
 
   const command = config?.command ?? "codex";
@@ -69,6 +79,7 @@ export function createExecBinding(config?: CodexExecConfig): LocalAgentBinding {
 
         let handleCounter = 0;
         const handles = new Set<string>();
+        const inflight = new Map<string, Task<void>>();
 
         yield* provide({
           *send(message: HostMessage) {
@@ -88,6 +99,11 @@ export function createExecBinding(config?: CodexExecConfig): LocalAgentBinding {
             }
 
             if (message.method === "cancel") {
+              const task = inflight.get(message.params.id);
+              if (task) {
+                inflight.delete(message.params.id);
+                yield* task.halt();
+              }
               return;
             }
 
@@ -107,7 +123,7 @@ export function createExecBinding(config?: CodexExecConfig): LocalAgentBinding {
                 unwrapped = (args as Record<string, unknown>) ?? {};
               }
 
-              yield* spawn(function* () {
+              const task = yield* spawn(function* () {
                 try {
                   const result: Val = yield* handleOperation(opName, unwrapped, token, agentToHost);
                   yield* agentToHost.send(executeSuccess(String(id), result));
@@ -120,7 +136,9 @@ export function createExecBinding(config?: CodexExecConfig): LocalAgentBinding {
                     }),
                   );
                 }
+                inflight.delete(String(id));
               });
+              inflight.set(String(id), task);
               return;
             }
           },

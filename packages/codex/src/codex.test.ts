@@ -1,6 +1,6 @@
 import { describe, it } from "@effectionx/vitest";
 import { expect } from "vitest";
-import { scoped } from "effection";
+import { scoped, spawn, sleep } from "effection";
 import { resolve } from "node:path";
 import type { Val } from "@tisyn/ir";
 import { dispatch } from "@tisyn/agent";
@@ -157,24 +157,30 @@ describe("Codex SDK Adapter", () => {
 
 describe("Codex Exec Adapter", () => {
   describe("config validation", () => {
-    it("rejects approval 'untrusted'", function* () {
+    it("rejects model config (unverified CLI flag)", function* () {
+      expect(() => createExecBinding({ model: "" })).toThrow(/cannot honor 'model'/);
+    });
+
+    it("rejects valid model config (unverified CLI flag)", function* () {
+      expect(() => createExecBinding({ model: "o3-mini" })).toThrow(/cannot honor 'model'/);
+    });
+
+    it("rejects sandbox config (unverified CLI flag)", function* () {
+      expect(() => createExecBinding({ sandbox: "none" as any })).toThrow(/cannot honor 'sandbox'/);
+    });
+
+    it("rejects valid sandbox config (unverified CLI flag)", function* () {
+      expect(() => createExecBinding({ sandbox: "read-only" })).toThrow(/cannot honor 'sandbox'/);
+    });
+
+    it("rejects approval config (unverified CLI flag)", function* () {
       expect(() => createExecBinding({ approval: "untrusted" as any })).toThrow(
-        /not compatible with headless/,
+        /cannot honor 'approval'/,
       );
     });
 
-    it("rejects approval 'on-failure'", function* () {
-      expect(() => createExecBinding({ approval: "on-failure" as any })).toThrow(
-        /not compatible with headless/,
-      );
-    });
-
-    it("rejects invalid sandbox mode", function* () {
-      expect(() => createExecBinding({ sandbox: "none" as any })).toThrow(/Invalid sandbox mode/);
-    });
-
-    it("rejects empty model string", function* () {
-      expect(() => createExecBinding({ model: "" })).toThrow(/non-empty string/);
+    it("rejects valid approval config (unverified CLI flag)", function* () {
+      expect(() => createExecBinding({ approval: "never" })).toThrow(/cannot honor 'approval'/);
     });
 
     it("rejects empty command string", function* () {
@@ -386,6 +392,38 @@ describe("Codex Exec Adapter", () => {
       expect(caughtError).not.toBeNull();
       expect(caughtError!.message).toContain("exited with code 1");
       expect(caughtError!.message).toContain("model not found");
+    });
+  });
+
+  describe("cancellation", () => {
+    it("canceling an in-flight prompt stops the operation", function* () {
+      const binding = createExecBinding({
+        command: "npx",
+        arguments: ["tsx", mockCodexExec],
+      });
+
+      yield* scoped(function* () {
+        yield* installRemoteAgent(CodeAgent, binding.transport);
+
+        const handle = yield* dispatch("code-agent.newSession", {
+          config: {},
+        } as unknown as Val);
+
+        let resultReceived = false;
+        const task = yield* spawn(function* () {
+          yield* dispatch("code-agent.prompt", {
+            args: {
+              session: handle,
+              prompt: "NEVER_COMPLETE",
+            },
+          } as unknown as Val);
+          resultReceived = true;
+        });
+
+        yield* sleep(500);
+        yield* task.halt();
+        expect(resultReceived).toBe(false);
+      });
     });
   });
 });

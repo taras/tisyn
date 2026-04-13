@@ -27,6 +27,11 @@ if (prompt === "EXIT_ERROR") {
   process.stdout.write(JSON.stringify({ type: "progress", content: "Step 2..." }) + "\n");
   process.stdout.write(JSON.stringify({ type: "progress", content: "Step 3..." }) + "\n");
   process.stdout.write(JSON.stringify({ response: "multi-progress result" }) + "\n");
+} else if (prompt === "NEVER_COMPLETE") {
+  // Emit one progress event then block forever (for cancel tests).
+  // The parent kills this process via structured concurrency on cancel.
+  process.stdout.write(JSON.stringify({ type: "progress", content: "Starting..." }) + "\n");
+  setInterval(() => {}, 1 << 30);
 } else {
   // Normal: one progress event, one final result
   process.stdout.write(JSON.stringify({ type: "progress", content: "Working..." }) + "\n");
