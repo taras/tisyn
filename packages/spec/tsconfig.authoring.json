@@ -1,0 +1,13 @@
+{
+  "extends": "../../tsconfig.json",
+  "compilerOptions": {
+    "rootDir": ".",
+    "noEmit": true,
+    "composite": false,
+    "rewriteRelativeImportExtensions": false,
+    "allowImportingTsExtensions": true
+  },
+  "include": ["corpus/**/*.ts", "workflows/**/*.ts", "scripts/**/*.ts"],
+  "exclude": ["corpus/**/*.test.ts", "workflows/**/*.test.ts", "scripts/**/*.test.ts"],
+  "references": [{ "path": "./tsconfig.json" }]
+}
