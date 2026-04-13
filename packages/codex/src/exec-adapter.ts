@@ -221,7 +221,9 @@ export function createExecBinding(config?: CodexExecConfig): LocalAgentBinding {
               const sub = yield* eventStream;
               for (;;) {
                 const { value, done } = yield* sub.next();
-                if (done) break;
+                if (done) {
+                  break;
+                }
 
                 // Forward intermediate events as progress
                 if (lastEvent !== null) {
