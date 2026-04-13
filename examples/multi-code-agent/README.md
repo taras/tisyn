@@ -1,12 +1,13 @@
 # Multi Code Agent Example
 
-Demonstrates a Tisyn workflow that hands off work between two
-CodeAgent backends — Claude Code and Codex — using the shared
+Demonstrates a Tisyn workflow where two CodeAgent backends — Claude
+Code and Codex — have a brief conversational handoff using the shared
 `@tisyn/code-agent` contract.
 
-The workflow prompts Claude to analyze a user task, then hands off
-Claude's analysis to Codex with an explicit instruction to implement
-the described changes.
+Claude receives the user's task, analyzes it, and its message is
+forwarded to Codex. Codex gives a brief reply and suggests a next
+step. The example is a lightweight agent-to-agent handoff demo, not
+an implementation worker.
 
 ## Conformance
 
@@ -50,16 +51,16 @@ pnpm exec tsn generate src/handoff.ts -o src/handoff.generated.ts
 ### Run the workflow
 
 ```sh
-pnpm exec tsn run src/handoff.ts --task "Refactor the auth module"
+pnpm exec tsn run src/handoff.ts --task "Say hello to the other agent"
 ```
 
-The workflow prints milestone messages as it advances, followed by
-each agent's final response when the step completes. Live backend
-token/progress streaming is not part of this example.
+The workflow prints milestone messages as it advances, then each
+agent's response when the step completes. Live backend token streaming
+is not part of this example.
 
 ```
 ── Task ──
-Refactor the auth module
+Say hello to the other agent
 
 ── Status ──
 Opening Claude session...
@@ -68,20 +69,24 @@ Opening Claude session...
 Requesting Claude analysis...
 
 ── Claude ──
-<Claude's analysis>
+<Claude's message>
 
 ── Status ──
 Opening Codex session...
 
 ── Status ──
-Handing Claude analysis to Codex...
+Handing Claude message to Codex for a brief reply...
 
 ── Codex ──
-<Codex's implementation>
+<Codex's brief reply>
 
 ── Status ──
 Workflow complete.
 ```
+
+If Claude returns an unusable response (empty, or containing
+auth/billing failure text), the workflow skips the Codex handoff
+and logs a status message explaining why.
 
 ## Architecture
 

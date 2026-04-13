@@ -2,7 +2,7 @@
 import { agent, operation } from "@tisyn/agent";
 import type { DeclaredAgent, OperationSpec } from "@tisyn/agent";
 import type { TisynFn } from "@tisyn/ir";
-import { Fn, Ref, Eval, Let, Call, Get, Construct, Concat, Try, Resource, Provide } from "@tisyn/ir";
+import { Fn, Ref, Eval, Let, If, Call, Get, Eq, Construct, Concat, Try, Resource, Provide } from "@tisyn/ir";
 import type { SessionHandle, PromptResult, NewSessionConfig, PromptArgs } from "@tisyn/code-agent";
 
 export function Claude(): DeclaredAgent<{ newSession: OperationSpec<{ config: NewSessionConfig }, SessionHandle>; closeSession: OperationSpec<{ handle: SessionHandle }, null>; prompt: OperationSpec<{ args: PromptArgs }, PromptResult> }> {
@@ -97,66 +97,86 @@ export const handoff: TisynFn<[{ task: string }], unknown> =
                           )
                       })
                   })),
-                Let(
-                  "__discard_4",
-                  Eval("output.log",
-                    Construct({
-                      input: Construct({
-                          label: "Status",
-                          text: "Opening Codex session..."
-                        })
-                    })),
-                  Let(
-                    "codexSession",
-                    Call(
-                      Ref<any>("useCodexSession"),
-                      Construct({
-  
-                      })
+                If(
+                  Eq(
+                    Get(
+                      Ref<any>("claudeResult"),
+                      "response"
                     ),
+                    ""
+                  ),
+                  Let(
+                    "__discard_4",
+                    Eval("output.log",
+                      Construct({
+                        input: Construct({
+                            label: "Status",
+                            text: "Skipping Codex handoff because Claude did not return usable analysis."
+                          })
+                      })),
+                    null
+                  ),
+                  Let(
+                    "__discard_5",
+                    Eval("output.log",
+                      Construct({
+                        input: Construct({
+                            label: "Status",
+                            text: "Opening Codex session..."
+                          })
+                      })),
                     Let(
-                      "__discard_5",
-                      Eval("output.log",
+                      "codexSession",
+                      Call(
+                        Ref<any>("useCodexSession"),
                         Construct({
-                          input: Construct({
-                              label: "Status",
-                              text: "Handing Claude analysis to Codex..."
-                            })
-                        })),
+  
+                        })
+                      ),
                       Let(
-                        "codexResult",
-                        Eval("codex.prompt",
+                        "__discard_6",
+                        Eval("output.log",
                           Construct({
-                            args: Construct({
-                                session: Ref<any>("codexSession"),
-                                prompt: Concat(
-                                    "Implement the changes described in the following analysis.\n\n",
-                                    Get(
-                                      Ref<any>("claudeResult"),
-                                      "response"
-                                    )
-                                  )
+                            input: Construct({
+                                label: "Status",
+                                text: "Handing Claude message to Codex for a brief reply..."
                               })
                           })),
                         Let(
-                          "__discard_6",
-                          Eval("output.log",
+                          "codexResult",
+                          Eval("codex.prompt",
                             Construct({
-                              input: Construct({
-                                  label: "Codex",
-                                  text: Get(
-                                      Ref<any>("codexResult"),
-                                      "response"
+                              args: Construct({
+                                  session: Ref<any>("codexSession"),
+                                  prompt: Concat(
+                                      "Hello, Codex. I'm Claude. Briefly respond to my message below and suggest the next step.\n\n",
+                                      Get(
+                                        Ref<any>("claudeResult"),
+                                        "response"
+                                      )
                                     )
                                 })
                             })),
-                          Eval("output.log",
-                            Construct({
-                              input: Construct({
-                                  label: "Status",
-                                  text: "Workflow complete."
-                                })
-                            }))
+                          Let(
+                            "__discard_7",
+                            Eval("output.log",
+                              Construct({
+                                input: Construct({
+                                    label: "Codex",
+                                    text: Get(
+                                        Ref<any>("codexResult"),
+                                        "response"
+                                      )
+                                  })
+                              })),
+                            Eval("output.log",
+                              Construct({
+                                input: Construct({
+                                    label: "Status",
+                                    text: "Workflow complete."
+                                  })
+                              }))
+                          )
                         )
                       )
                     )

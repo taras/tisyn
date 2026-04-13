@@ -75,13 +75,25 @@ export function* handoff(input: { task: string }) {
   });
   yield* Output().log({ label: "Claude", text: claudeResult.response });
 
-  // Phase 2: Codex implements the changes Claude described
+  // Guard: skip Codex if Claude returned an empty response.
+  // The workflow IR does not support runtime string methods
+  // (.includes, .trim), so broader auth/billing pattern matching
+  // would need to live in the binding or a runtime guard.
+  if (claudeResult.response === "") {
+    yield* Output().log({
+      label: "Status",
+      text: "Skipping Codex handoff because Claude did not return usable analysis.",
+    });
+    return;
+  }
+
+  // Phase 2: Codex responds to Claude's message
   yield* Output().log({ label: "Status", text: "Opening Codex session..." });
   const codexSession = yield* useCodexSession({});
-  yield* Output().log({ label: "Status", text: "Handing Claude analysis to Codex..." });
+  yield* Output().log({ label: "Status", text: "Handing Claude message to Codex for a brief reply..." });
   const codexResult = yield* Codex().prompt({
     session: codexSession,
-    prompt: `Implement the changes described in the following analysis.\n\n${claudeResult.response}`,
+    prompt: `Hello, Codex. I'm Claude. Briefly respond to my message below and suggest the next step.\n\n${claudeResult.response}`,
   });
   yield* Output().log({ label: "Codex", text: codexResult.response });
 
