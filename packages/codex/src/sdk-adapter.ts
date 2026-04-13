@@ -13,11 +13,7 @@
 import type { Operation } from "effection";
 import { resource, createChannel, spawn } from "effection";
 import type { AgentMessage, LocalAgentBinding, HostMessage } from "@tisyn/transport";
-import {
-  initializeResponse,
-  executeSuccess,
-  executeApplicationError,
-} from "@tisyn/protocol";
+import { initializeResponse, executeSuccess, executeApplicationError } from "@tisyn/protocol";
 import type { Val } from "@tisyn/ir";
 import type { CodexSdkConfig } from "./types.js";
 import { validateApproval, validateSandbox, validateModel } from "./validate-config.js";
@@ -98,10 +94,7 @@ export function createSdkBinding(config?: CodexSdkConfig): LocalAgentBinding {
           receive: agentToHost,
         });
 
-        function* handleOperation(
-          opName: string,
-          params: Record<string, unknown>,
-        ): Operation<Val> {
+        function* handleOperation(opName: string, params: Record<string, unknown>): Operation<Val> {
           switch (opName) {
             case "newSession": {
               // Blocked: SDK thread creation API not verified (OQ-CX-1).

@@ -36,9 +36,7 @@ describe("Codex SDK Adapter", () => {
     });
 
     it("rejects empty model string", function* () {
-      expect(() => createSdkBinding({ model: "" })).toThrow(
-        /non-empty string/,
-      );
+      expect(() => createSdkBinding({ model: "" })).toThrow(/non-empty string/);
     });
 
     it("accepts approval 'on-request'", function* () {
@@ -172,9 +170,7 @@ describe("Codex Exec Adapter", () => {
     });
 
     it("rejects invalid sandbox mode", function* () {
-      expect(() => createExecBinding({ sandbox: "none" as any })).toThrow(
-        /Invalid sandbox mode/,
-      );
+      expect(() => createExecBinding({ sandbox: "none" as any })).toThrow(/Invalid sandbox mode/);
     });
 
     it("rejects empty model string", function* () {

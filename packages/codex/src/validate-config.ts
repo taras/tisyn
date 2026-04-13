@@ -22,10 +22,7 @@ export function validateApproval(approval: string | undefined): void {
     );
   }
   if (!VALID_APPROVAL.has(approval)) {
-    throw new Error(
-      `Invalid approval policy "${approval}". ` +
-        `Must be "on-request" or "never".`,
-    );
+    throw new Error(`Invalid approval policy "${approval}". ` + `Must be "on-request" or "never".`);
   }
 }
 

@@ -15,9 +15,8 @@
 // Skip "exec" and "--json" args to find the prompt
 const args = process.argv.slice(2);
 const jsonIdx = args.indexOf("--json");
-const prompt = jsonIdx >= 0 && args.length > jsonIdx + 1
-  ? args[jsonIdx + 1]
-  : args[args.length - 1] ?? "";
+const prompt =
+  jsonIdx >= 0 && args.length > jsonIdx + 1 ? args[jsonIdx + 1] : (args[args.length - 1] ?? "");
 
 if (prompt === "EXIT_ERROR") {
   process.stderr.write("codex: model not found\n");

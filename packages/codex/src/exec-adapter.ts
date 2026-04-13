@@ -109,12 +109,7 @@ export function createExecBinding(config?: CodexExecConfig): LocalAgentBinding {
 
               yield* spawn(function* () {
                 try {
-                  const result: Val = yield* handleOperation(
-                    opName,
-                    unwrapped,
-                    token,
-                    agentToHost,
-                  );
+                  const result: Val = yield* handleOperation(opName, unwrapped, token, agentToHost);
                   yield* agentToHost.send(executeSuccess(String(id), result));
                 } catch (e) {
                   const err = e instanceof Error ? e : new Error(String(e));
@@ -162,9 +157,7 @@ export function createExecBinding(config?: CodexExecConfig): LocalAgentBinding {
               const sessionHandle = (params.session as Record<string, unknown>)
                 ?.sessionId as string;
               if (!sessionHandle || !handles.has(sessionHandle)) {
-                const err = new Error(
-                  `Unknown session handle: ${sessionHandle ?? "undefined"}`,
-                );
+                const err = new Error(`Unknown session handle: ${sessionHandle ?? "undefined"}`);
                 err.name = "SessionNotFound";
                 throw err;
               }
@@ -176,10 +169,7 @@ export function createExecBinding(config?: CodexExecConfig): LocalAgentBinding {
 
               // Spawn independent codex exec subprocess (non-conforming:
               // no conversation history carried over).
-              const execArgs = [
-                ...(config?.arguments ?? []),
-                ...buildExecArgs(prompt),
-              ];
+              const execArgs = [...(config?.arguments ?? []), ...buildExecArgs(prompt)];
 
               const proc = yield* exec(command, {
                 arguments: execArgs,
@@ -258,17 +248,13 @@ export function createExecBinding(config?: CodexExecConfig): LocalAgentBinding {
             }
 
             case "fork": {
-              const err = new Error(
-                "fork is not supported by the Codex exec adapter.",
-              );
+              const err = new Error("fork is not supported by the Codex exec adapter.");
               err.name = "NotSupported";
               throw err;
             }
 
             case "openFork": {
-              const err = new Error(
-                "openFork is not supported by the Codex exec adapter.",
-              );
+              const err = new Error("openFork is not supported by the Codex exec adapter.");
               err.name = "NotSupported";
               throw err;
             }
