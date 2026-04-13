@@ -9,6 +9,7 @@ import type { InternalGraphs } from "./registry.ts";
 import type {
   CoverageReport,
   NormalizedSpecModule,
+  NormalizedTestPlanModule,
   SpecRegistry,
   SpecSection,
   ValidationError,
@@ -647,6 +648,20 @@ export function validateV9_ErrorCodes(registry: SpecRegistry): GroupResult {
 
 // ── Public entry point ──
 
+// Companion plans are iterated in registry insertion order, which preserves
+// authored corpus order. SS-RDY-010 depends on this.
+function pickActiveCompanion(
+  registry: SpecRegistry,
+  specId: string,
+): NormalizedTestPlanModule | undefined {
+  for (const plan of registry.testPlans.values()) {
+    if (plan.testsSpec.specId === specId && plan.status === Status.Active) {
+      return plan;
+    }
+  }
+  return undefined;
+}
+
 // ── checkCoverage — D43, §11.3 ──
 
 export function checkCoverage(registry: SpecRegistry, specId: string): CoverageReport {
@@ -660,19 +675,6 @@ export function checkCoverage(registry: SpecRegistry, specId: string): CoverageR
     };
   }
 
-  // Find the companion plan(s) for this spec from internal graphs.
-  const graphs = getInternalGraphs(registry);
-  const companionPlanIds = graphs.specToTestPlans.get(specId) ?? [];
-
-  // Filter V3 findings to those tied to this spec / its companion plan(s).
-  const fullV3 = validateV3_Coverage(registry);
-  const inScope = (e: ValidationError) =>
-    e.specId === specId || (e.testPlanId !== undefined && companionPlanIds.includes(e.testPlanId));
-  const errors = fullV3.errors.filter(inScope);
-  const warnings = fullV3.warnings.filter(inScope);
-
-  // uncoveredRules — rules declared in this spec with zero Core test coverage
-  // across its companion plan(s).
   const ruleIdsInSpec: string[] = [];
   for (const r of spec.rules) {
     ruleIdsInSpec.push(r.id);
@@ -681,25 +683,42 @@ export function checkCoverage(registry: SpecRegistry, specId: string): CoverageR
     ruleIdsInSpec.push(i.id);
   }
 
-  const coreCovered = new Set<string>();
-  for (const planId of companionPlanIds) {
-    const plan = registry.testPlans.get(planId);
-    if (plan === undefined) {
-      continue;
-    }
-    const coreTestIds = new Set<string>();
-    for (const cat of plan.categories) {
-      for (const tc of cat.tests) {
-        if (tc.tier === Tier.Core) {
-          coreTestIds.add(tc.id);
-        }
+  // Pick the single active companion plan (V10-2 pair semantics). If there is
+  // no active companion plan, checkCoverage stays coverage-scoped — it reports
+  // every rule as uncovered with no synthetic readiness finding. isReady owns
+  // the "no active companion" case via its own V10-2 check.
+  const chosenPlan = pickActiveCompanion(registry, specId);
+  if (chosenPlan === undefined) {
+    return {
+      specId,
+      errors: [],
+      warnings: [],
+      uncoveredRules: ruleIdsInSpec,
+    };
+  }
+
+  // Filter V3 findings to the chosen pair.
+  const fullV3 = validateV3_Coverage(registry);
+  const inScope = (e: ValidationError) =>
+    (e.specId === specId && e.testPlanId === undefined) || e.testPlanId === chosenPlan.id;
+  const errors = fullV3.errors.filter(inScope);
+  const warnings = fullV3.warnings.filter(inScope);
+
+  // uncoveredRules — rules declared in this spec with zero Core test coverage
+  // in the chosen companion plan.
+  const coreTestIds = new Set<string>();
+  for (const cat of chosenPlan.categories) {
+    for (const tc of cat.tests) {
+      if (tc.tier === Tier.Core) {
+        coreTestIds.add(tc.id);
       }
     }
-    for (const entry of plan.coverageMatrix) {
-      for (const testId of entry.testIds) {
-        if (coreTestIds.has(testId)) {
-          coreCovered.add(entry.ruleId);
-        }
+  }
+  const coreCovered = new Set<string>();
+  for (const entry of chosenPlan.coverageMatrix) {
+    for (const testId of entry.testIds) {
+      if (coreTestIds.has(testId)) {
+        coreCovered.add(entry.ruleId);
       }
     }
   }
@@ -720,33 +739,25 @@ export function isReady(registry: SpecRegistry, specId: string): boolean {
     return false;
   }
 
-  // V10-2 — at least one companion test plan exists and is active
-  const graphs = getInternalGraphs(registry);
-  const companionIds = graphs.specToTestPlans.get(specId) ?? [];
-  if (companionIds.length === 0) {
-    return false;
-  }
-  const companionPlans = companionIds
-    .map((id) => registry.testPlans.get(id))
-    .filter((p): p is NonNullable<typeof p> => p !== undefined);
-  if (companionPlans.length === 0) {
-    return false;
-  }
-  if (!companionPlans.every((p) => p.status === Status.Active)) {
+  // V10-2 — an active companion test plan exists.
+  const chosenPlan = pickActiveCompanion(registry, specId);
+  if (chosenPlan === undefined) {
     return false;
   }
 
-  // V10-3 — checkCoverage has zero errors
-  if (checkCoverage(registry, specId).errors.length > 0) {
+  // V10-3 — coverage of the chosen pair has zero errors and zero uncovered rules.
+  const coverage = checkCoverage(registry, specId);
+  if (coverage.errors.length > 0) {
+    return false;
+  }
+  if (coverage.uncoveredRules.length > 0) {
     return false;
   }
 
-  // V10-4 — companion plans have zero unresolved ambiguities
-  for (const plan of companionPlans) {
-    for (const amb of plan.ambiguitySurface) {
-      if (amb.resolution === Resolution.Unresolved) {
-        return false;
-      }
+  // V10-4 — chosen plan has zero unresolved ambiguities.
+  for (const amb of chosenPlan.ambiguitySurface) {
+    if (amb.resolution === Resolution.Unresolved) {
+      return false;
     }
   }
 

@@ -19,14 +19,20 @@ function collectSectionIds(
   sections: readonly SpecSection[],
   out: Set<string>,
   duplicates: Set<string>,
+  empties: { path: string }[],
+  pathPrefix: string,
 ): void {
-  for (const section of sections) {
-    if (out.has(section.id)) {
+  for (let i = 0; i < sections.length; i++) {
+    const section = sections[i]!;
+    const path = `${pathPrefix}[${i}]`;
+    if (section.id.length === 0) {
+      empties.push({ path: `${path}.id` });
+    } else if (out.has(section.id)) {
       duplicates.add(section.id);
     } else {
       out.add(section.id);
     }
-    collectSectionIds(section.subsections, out, duplicates);
+    collectSectionIds(section.subsections, out, duplicates, empties, `${path}.subsections`);
   }
 }
 
@@ -52,10 +58,14 @@ export function validateSpecStructural(module: SpecModule): readonly StructuralE
     );
   }
 
-  // D11 — section IDs unique within the module, including across nesting
+  // D10 — section IDs non-empty; D11 — section IDs unique within the module, including across nesting
   const sectionIds = new Set<string>();
   const duplicates = new Set<string>();
-  collectSectionIds(module.sections, sectionIds, duplicates);
+  const empties: { path: string }[] = [];
+  collectSectionIds(module.sections, sectionIds, duplicates, empties, "sections");
+  for (const empty of empties) {
+    errors.push(err("EMPTY_SECTION_ID", empty.path, "SpecSection.id MUST be non-empty"));
+  }
   for (const dup of duplicates) {
     errors.push(
       err(
@@ -92,9 +102,18 @@ export function validateSpecStructural(module: SpecModule): readonly StructuralE
     }
   }
 
-  // Invariants also reference section ids (D23) and use the rule-location index
+  // D22 — invariant id non-empty; D23 — invariants also reference section ids
   for (let i = 0; i < module.invariants.length; i++) {
     const inv = module.invariants[i]!;
+    if (inv.id.length === 0) {
+      errors.push(
+        err(
+          "EMPTY_INVARIANT_ID",
+          `invariants[${i}].id`,
+          "InvariantDeclaration.id MUST be non-empty",
+        ),
+      );
+    }
     if (!sectionIds.has(inv.section)) {
       errors.push(
         err(
@@ -149,9 +168,14 @@ export function validateSpecStructural(module: SpecModule): readonly StructuralE
     }
   }
 
-  // Concepts (D21), terms (D25) — section refs must resolve
+  // D20 — concept name non-empty; D21 — concepts reference section ids
   for (let i = 0; i < module.concepts.length; i++) {
     const concept = module.concepts[i]!;
+    if (concept.name.length === 0) {
+      errors.push(
+        err("EMPTY_CONCEPT_NAME", `concepts[${i}].name`, "ConceptExport.name MUST be non-empty"),
+      );
+    }
     if (!sectionIds.has(concept.section)) {
       errors.push(
         err(
@@ -163,8 +187,12 @@ export function validateSpecStructural(module: SpecModule): readonly StructuralE
       );
     }
   }
+  // D24 — term string non-empty; D25 — terms reference section ids
   for (let i = 0; i < module.terms.length; i++) {
     const term = module.terms[i]!;
+    if (term.term.length === 0) {
+      errors.push(err("EMPTY_TERM", `terms[${i}].term`, "TermDefinition.term MUST be non-empty"));
+    }
     if (!sectionIds.has(term.section)) {
       errors.push(
         err(
@@ -212,11 +240,29 @@ export function validateTestPlanStructural(module: TestPlanModule): readonly Str
     errors.push(err("EMPTY_TESTPLAN_ID", "id", "TestPlanModule.id MUST be non-empty"));
   }
 
+  // D29 — TestCategory id non-empty and unique within this test plan
   // D30, D32 — TestCase identity + non-empty rules
+  const categoryIds = new Set<string>();
   let coreCount = 0;
   let extendedCount = 0;
   for (let ci = 0; ci < module.categories.length; ci++) {
     const category = module.categories[ci]!;
+    if (category.id.length === 0) {
+      errors.push(
+        err("EMPTY_TESTCATEGORY_ID", `categories[${ci}].id`, "TestCategory.id MUST be non-empty"),
+      );
+    } else if (categoryIds.has(category.id)) {
+      errors.push(
+        err(
+          "DUPLICATE_TESTCATEGORY_ID",
+          `categories[${ci}].id`,
+          `TestCategory id "${category.id}" is declared more than once`,
+          { categoryId: category.id },
+        ),
+      );
+    } else {
+      categoryIds.add(category.id);
+    }
     for (let ti = 0; ti < category.tests.length; ti++) {
       const tc = category.tests[ti]!;
       if (tc.id.length === 0) {

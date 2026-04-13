@@ -4,7 +4,16 @@
 // SS-NR-004, 013, 014, 016, 017 land in commit 7 against normalizeTestPlan.
 
 import { describe, expect, test } from "vitest";
-import { DependsOn, ErrorCode, Rule, Section, Spec } from "./constructors.ts";
+import {
+  Concept,
+  DependsOn,
+  ErrorCode,
+  Invariant,
+  Rule,
+  Section,
+  Spec,
+  Term,
+} from "./constructors.ts";
 import { Status, Strength } from "./enums.ts";
 import { normalizeSpec } from "./normalize.ts";
 import type { SpecModule, StructuralError } from "./types.ts";
@@ -223,6 +232,86 @@ describe("SS-NR (spec module)", () => {
         sections: [validSection()],
       }),
       "EMPTY_DEPENDSON_SPEC_ID",
+    );
+  });
+
+  test("SS-NR-018 Empty top-level section id rejected (EMPTY_SECTION_ID)", () => {
+    const errors = expectReject(
+      Spec({
+        id: "sp-x",
+        title: "X",
+        version: "0.1.0",
+        status: Status.Active,
+        sections: [Section({ id: "", title: "T", normative: true, prose: "." })],
+      }),
+      "EMPTY_SECTION_ID",
+    );
+    const empty = errors.find((e) => e.code === "EMPTY_SECTION_ID");
+    expect(empty?.path).toBe("sections[0].id");
+  });
+
+  test("SS-NR-019 Empty nested subsection id rejected (EMPTY_SECTION_ID)", () => {
+    const errors = expectReject(
+      Spec({
+        id: "sp-x",
+        title: "X",
+        version: "0.1.0",
+        status: Status.Active,
+        sections: [
+          Section({
+            id: "top",
+            title: "Top",
+            normative: true,
+            prose: ".",
+            subsections: [Section({ id: "", title: "Sub", normative: true, prose: "." })],
+          }),
+        ],
+      }),
+      "EMPTY_SECTION_ID",
+    );
+    const empty = errors.find((e) => e.code === "EMPTY_SECTION_ID");
+    expect(empty?.path).toBe("sections[0].subsections[0].id");
+  });
+
+  test("SS-NR-020 Empty concept name rejected (EMPTY_CONCEPT_NAME)", () => {
+    expectReject(
+      Spec({
+        id: "sp-x",
+        title: "X",
+        version: "0.1.0",
+        status: Status.Active,
+        sections: [validSection()],
+        concepts: [Concept({ name: "", section: "s1", description: "d" })],
+      }),
+      "EMPTY_CONCEPT_NAME",
+    );
+  });
+
+  test("SS-NR-021 Empty invariant id rejected (EMPTY_INVARIANT_ID)", () => {
+    expectReject(
+      Spec({
+        id: "sp-x",
+        title: "X",
+        version: "0.1.0",
+        status: Status.Active,
+        sections: [validSection()],
+        invariants: [Invariant({ id: "", section: "s1", statement: "inv" })],
+      }),
+      "EMPTY_INVARIANT_ID",
+    );
+  });
+
+  test("SS-NR-022 Empty term string rejected (EMPTY_TERM)", () => {
+    expectReject(
+      Spec({
+        id: "sp-x",
+        title: "X",
+        version: "0.1.0",
+        status: Status.Active,
+        sections: [validSection()],
+        terms: [Term({ term: "", section: "s1", definition: "d" })],
+      }),
+      "EMPTY_TERM",
     );
   });
 });

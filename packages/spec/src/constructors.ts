@@ -21,10 +21,18 @@ import type {
   SpecRef,
   SpecSection,
   TermDefinition,
-  TestCase,
-  TestCategory,
+  TestCase as TestCaseType,
+  TestCategory as TestCategoryType,
   TestPlanModule,
 } from "./types.ts";
+
+// Re-declare TestCase/TestCategory as locally-merged interface+function pairs
+// so the barrel can re-export them once and carry both the value constructor
+// and the interface type through a single `export { TestCase, TestCategory }`.
+// Without this, `import type { TestCase } from "@tisyn/spec"` would resolve to
+// the constructor function's call signature, not the TestCase interface.
+export interface TestCase extends TestCaseType {}
+export interface TestCategory extends TestCategoryType {}
 
 // ── Spec ──
 

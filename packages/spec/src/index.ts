@@ -62,3 +62,11 @@ export type {
   ValidationError,
   ValidationReport,
 } from "./types.ts";
+
+// TestCase and TestCategory public types ship through the constructors module.
+// constructors.ts declares `interface TestCase extends TestCaseType {}` (and
+// similarly for TestCategory) so that the value constructor and the interface
+// are declaration-merged under one name. The single `export { TestCase,
+// TestCategory } from "./constructors.ts"` above therefore carries both the
+// value and the interface type to downstream consumers — a separate `export
+// type` would collide with the already-merged re-export.

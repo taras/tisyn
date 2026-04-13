@@ -129,4 +129,39 @@ describe("SS-NR (test plan)", () => {
       "EMPTY_TESTCASE_ID",
     );
   });
+
+  test("SS-NR-023 Empty category id rejected (EMPTY_TESTCATEGORY_ID)", () => {
+    expectReject(
+      TestPlan({
+        id: "p",
+        title: "P",
+        version: "0.1.0",
+        status: Status.Active,
+        testsSpec: DependsOn("sp-x"),
+        categories: [TestCategory({ id: "", title: "C", tests: [basicCoreTestCase()] })],
+        coreTier: 1,
+        extendedTier: 0,
+      }),
+      "EMPTY_TESTCATEGORY_ID",
+    );
+  });
+
+  test("SS-NR-024 Duplicate category id rejected (DUPLICATE_TESTCATEGORY_ID)", () => {
+    expectReject(
+      TestPlan({
+        id: "p",
+        title: "P",
+        version: "0.1.0",
+        status: Status.Active,
+        testsSpec: DependsOn("sp-x"),
+        categories: [
+          TestCategory({ id: "dup", title: "A", tests: [basicCoreTestCase("X-T1")] }),
+          TestCategory({ id: "dup", title: "B", tests: [basicCoreTestCase("X-T2")] }),
+        ],
+        coreTier: 2,
+        extendedTier: 0,
+      }),
+      "DUPLICATE_TESTCATEGORY_ID",
+    );
+  });
 });

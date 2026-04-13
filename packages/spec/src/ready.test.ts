@@ -219,4 +219,146 @@ describe("SS-RDY", () => {
     const registry = buildRegistry([readySpec()], [plan]);
     expect(isReady(registry, "spec-a")).toBe(false);
   });
+
+  test("SS-RDY-009 isReady ignores a draft companion plan", () => {
+    // Draft plan is broken (unresolved ambiguity, no coverage), but the active
+    // companion plan is clean — readiness evaluates against the active pair.
+    const activePlan = readyPlan();
+    const draftPlan = normPlan(
+      TestPlan({
+        id: "plan-draft",
+        title: "Draft",
+        version: "0.1.0",
+        status: Status.Draft,
+        testsSpec: DependsOn("spec-a", "0.1.0"),
+        categories: [
+          TestCategory({
+            id: "dc",
+            title: "DC",
+            tests: [
+              TestCase({
+                id: "PLAN-DRAFT-T1",
+                tier: Tier.Core,
+                rules: ["A-R1"],
+                description: "d",
+                setup: "s",
+                expected: "e",
+              }),
+            ],
+          }),
+        ],
+        coreTier: 1,
+        extendedTier: 0,
+        ambiguitySurface: [
+          Ambiguity({
+            id: "AMB-D1",
+            specSection: "s1",
+            description: "still open",
+            resolution: Resolution.Unresolved,
+          }),
+        ],
+      }),
+    );
+    const registry = buildRegistry([readySpec()], [activePlan, draftPlan]);
+    expect(isReady(registry, "spec-a")).toBe(true);
+  });
+
+  test("SS-RDY-010 isReady evaluates only the first active companion plan", () => {
+    // Two active plans: first is clean, second has unresolved ambiguity.
+    // pickActiveCompanion returns the first in authored order → isReady true.
+    const firstPlan = readyPlan();
+    const secondPlan = normPlan(
+      TestPlan({
+        id: "plan-second",
+        title: "Second",
+        version: "0.1.0",
+        status: Status.Active,
+        testsSpec: DependsOn("spec-a", "0.1.0"),
+        categories: [
+          TestCategory({
+            id: "sc",
+            title: "SC",
+            tests: [
+              TestCase({
+                id: "PLAN-SECOND-T1",
+                tier: Tier.Core,
+                rules: ["A-R1"],
+                description: "d",
+                setup: "s",
+                expected: "e",
+              }),
+            ],
+          }),
+        ],
+        coreTier: 1,
+        extendedTier: 0,
+        coverageMatrix: [Covers("A-R1", ["PLAN-SECOND-T1"])],
+        ambiguitySurface: [
+          Ambiguity({
+            id: "AMB-S1",
+            specSection: "s1",
+            description: "open",
+            resolution: Resolution.Unresolved,
+          }),
+        ],
+      }),
+    );
+    const registry = buildRegistry([readySpec()], [firstPlan, secondPlan]);
+    expect(isReady(registry, "spec-a")).toBe(true);
+  });
+
+  test("SS-RDY-011 isReady false when only companion plan is superseded", () => {
+    const plan = readyPlan({ id: "plan-sup", status: Status.Superseded });
+    const registry = buildRegistry([readySpec()], [plan]);
+    expect(isReady(registry, "spec-a")).toBe(false);
+  });
+
+  test("SS-RDY-012 checkCoverage scoped to active plan when two plans target spec", () => {
+    // One active plan fully covers A-R1; one superseded plan has empty coverage.
+    // checkCoverage should see uncoveredRules = [] and errors = [] because it
+    // picks the active plan.
+    const activePlan = readyPlan();
+    const supersededPlan = normPlan(
+      TestPlan({
+        id: "plan-sup",
+        title: "Old",
+        version: "0.1.0",
+        status: Status.Superseded,
+        testsSpec: DependsOn("spec-a", "0.1.0"),
+        categories: [
+          TestCategory({
+            id: "oc",
+            title: "OC",
+            tests: [
+              TestCase({
+                id: "PLAN-SUP-T1",
+                tier: Tier.Core,
+                rules: ["A-R1"],
+                description: "d",
+                setup: "s",
+                expected: "e",
+              }),
+            ],
+          }),
+        ],
+        coreTier: 1,
+        extendedTier: 0,
+      }),
+    );
+    const registry = buildRegistry([readySpec()], [activePlan, supersededPlan]);
+    const report = checkCoverage(registry, "spec-a");
+    expect(report.errors).toEqual([]);
+    expect(report.uncoveredRules).toEqual([]);
+  });
+
+  test("SS-RDY-013 checkCoverage stays coverage-scoped when no active companion", () => {
+    // Only a superseded plan exists — checkCoverage must return empty errors
+    // and list every rule as uncovered. isReady owns the V10-2 failure path.
+    const plan = readyPlan({ id: "plan-sup", status: Status.Superseded });
+    const registry = buildRegistry([readySpec()], [plan]);
+    const report = checkCoverage(registry, "spec-a");
+    expect(report.errors).toEqual([]);
+    expect(report.warnings).toEqual([]);
+    expect(report.uncoveredRules).toEqual(["A-R1"]);
+  });
 });
