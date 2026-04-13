@@ -77,9 +77,7 @@ export function* handoff(input: { task: string }) {
   const codexSession = yield* useCodexSession({});
   const codexResult = yield* Codex().prompt({
     session: codexSession,
-    prompt:
-      `Implement the changes described in the following analysis.\n\n` +
-      `${claudeResult.response}`,
+    prompt: `Implement the changes described in the following analysis.\n\n${claudeResult.response}`,
   });
   yield* Output().log({ label: "Codex", text: codexResult.response });
 }
