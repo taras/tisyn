@@ -3,14 +3,7 @@
 // serializable data domain (A5). `undefined` is banned (§3.2), so optional
 // fields are spread conditionally rather than assigned `undefined`.
 
-import type {
-  ChangeType,
-  EvidenceTier,
-  Resolution,
-  Status,
-  Strength,
-  Tier,
-} from "./enums.ts";
+import type { ChangeType, EvidenceTier, Resolution, Status, Strength, Tier } from "./enums.ts";
 import { EvidenceTier as EvidenceTierEnum } from "./enums.ts";
 import type {
   AmbiguityFinding,
@@ -123,9 +116,7 @@ export function ErrorCode(config: {
     code: config.code,
     section: config.section,
     trigger: config.trigger,
-    ...(config.requiredContent != null
-      ? { requiredContent: config.requiredContent }
-      : {}),
+    ...(config.requiredContent != null ? { requiredContent: config.requiredContent } : {}),
   };
 }
 
@@ -305,10 +296,7 @@ export function TestCase(config: {
   };
 }
 
-export function Covers(
-  ruleId: string,
-  testIds: readonly string[],
-): CoverageEntry {
+export function Covers(ruleId: string, testIds: readonly string[]): CoverageEntry {
   return { ruleId, testIds };
 }
 

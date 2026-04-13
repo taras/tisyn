@@ -2,12 +2,7 @@
 // spec-system-test-plan.source.md.
 
 import { describe, expect, test } from "vitest";
-import {
-  DependsOn,
-  TestCase,
-  TestCategory,
-  TestPlan,
-} from "./constructors.ts";
+import { DependsOn, TestCase, TestCategory, TestPlan } from "./constructors.ts";
 import { Status, Tier } from "./enums.ts";
 import { normalizeTestPlan } from "./normalize.ts";
 import type { TestPlanModule } from "./types.ts";
@@ -41,7 +36,9 @@ function validPlan(): TestPlanModule {
 }
 
 function unwrap<T>(result: { ok: true; value: T } | { ok: false }): T {
-  if (!result.ok) {throw new Error("expected ok result");}
+  if (!result.ok) {
+    throw new Error("expected ok result");
+  }
   return result.value;
 }
 
@@ -51,9 +48,7 @@ describe("SS-NTP", () => {
     expect(typeof normalized._hash).toBe("string");
     expect(normalized._hash.startsWith("sha256:")).toBe(true);
     expect(typeof normalized._normalizedAt).toBe("string");
-    expect(new Date(normalized._normalizedAt).toISOString()).toBe(
-      normalized._normalizedAt,
-    );
+    expect(new Date(normalized._normalizedAt).toISOString()).toBe(normalized._normalizedAt);
   });
 
   test("SS-NTP-002 Normalized test plan does NOT have _sectionNumbering", () => {

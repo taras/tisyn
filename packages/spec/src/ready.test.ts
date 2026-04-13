@@ -27,12 +27,16 @@ import { checkCoverage, isReady } from "./validate.ts";
 
 function normSpec(m: SpecModule): NormalizedSpecModule {
   const r = normalizeSpec(m);
-  if (!r.ok) {throw new Error(`expected ok: ${JSON.stringify(r.errors)}`);}
+  if (!r.ok) {
+    throw new Error(`expected ok: ${JSON.stringify(r.errors)}`);
+  }
   return r.value;
 }
 function normPlan(m: TestPlanModule): NormalizedTestPlanModule {
   const r = normalizeTestPlan(m);
-  if (!r.ok) {throw new Error(`expected ok: ${JSON.stringify(r.errors)}`);}
+  if (!r.ok) {
+    throw new Error(`expected ok: ${JSON.stringify(r.errors)}`);
+  }
   return r.value;
 }
 
@@ -112,9 +116,7 @@ describe("SS-RDY", () => {
         title: "A",
         version: "0.1.0",
         status: Status.Active,
-        sections: [
-          Section({ id: "s1", title: "S", normative: true, prose: "." }),
-        ],
+        sections: [Section({ id: "s1", title: "S", normative: true, prose: "." })],
         rules: [
           Rule({
             id: "A-R1",
@@ -149,9 +151,7 @@ describe("SS-RDY", () => {
         title: "A",
         version: "0.1.0",
         status: Status.Draft,
-        sections: [
-          Section({ id: "s1", title: "S", normative: true, prose: "." }),
-        ],
+        sections: [Section({ id: "s1", title: "S", normative: true, prose: "." })],
         rules: [
           Rule({
             id: "A-R1",

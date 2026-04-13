@@ -13,18 +13,10 @@ import type {
   TermDefinition,
 } from "./types.ts";
 
-type SectionVisitor = (
-  section: SpecSection,
-  path: readonly SpecSection[],
-  depth: number,
-) => void;
+type SectionVisitor = (section: SpecSection, path: readonly SpecSection[], depth: number) => void;
 
 export function walkSections(module: SpecModule, visitor: SectionVisitor): void {
-  function visit(
-    section: SpecSection,
-    path: SpecSection[],
-    depth: number,
-  ): void {
+  function visit(section: SpecSection, path: SpecSection[], depth: number): void {
     const nextPath = [...path, section];
     visitor(section, nextPath, depth);
     for (const sub of section.subsections) {
@@ -53,14 +45,14 @@ export function collectRules(module: SpecModule): readonly RuleDeclaration[] {
   const out: RuleDeclaration[] = [];
   for (const sectionId of sectionIdOrder) {
     const list = rulesBySection.get(sectionId);
-    if (list !== undefined) {out.push(...list);}
+    if (list !== undefined) {
+      out.push(...list);
+    }
   }
   return out;
 }
 
-export function collectErrorCodes(
-  module: SpecModule,
-): readonly ErrorCodeDeclaration[] {
+export function collectErrorCodes(module: SpecModule): readonly ErrorCodeDeclaration[] {
   const sectionIdOrder: string[] = [];
   walkSections(module, (s) => {
     sectionIdOrder.push(s.id);
@@ -74,7 +66,9 @@ export function collectErrorCodes(
   const out: ErrorCodeDeclaration[] = [];
   for (const sectionId of sectionIdOrder) {
     const list = codesBySection.get(sectionId);
-    if (list !== undefined) {out.push(...list);}
+    if (list !== undefined) {
+      out.push(...list);
+    }
   }
   return out;
 }
@@ -93,7 +87,9 @@ export function collectTerms(module: SpecModule): readonly TermDefinition[] {
   const out: TermDefinition[] = [];
   for (const sectionId of sectionIdOrder) {
     const list = termsBySection.get(sectionId);
-    if (list !== undefined) {out.push(...list);}
+    if (list !== undefined) {
+      out.push(...list);
+    }
   }
   return out;
 }

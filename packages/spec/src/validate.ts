@@ -29,10 +29,7 @@ function err(
   return { group, check, message, ...extras };
 }
 
-function collectAllSectionIds(
-  sections: readonly SpecSection[],
-  out: Set<string>,
-): void {
+function collectAllSectionIds(sections: readonly SpecSection[], out: Set<string>): void {
   for (const s of sections) {
     out.add(s.id);
     collectAllSectionIds(s.subsections, out);
@@ -47,37 +44,26 @@ function collectSectionIdsOf(spec: NormalizedSpecModule): Set<string> {
 
 // ── V1 — Identity and Uniqueness ──
 
-export function validateV1_Identity(
-  registry: SpecRegistry,
-  graphs: InternalGraphs,
-): GroupResult {
+export function validateV1_Identity(registry: SpecRegistry, graphs: InternalGraphs): GroupResult {
   const errors: ValidationError[] = [];
 
   for (const [id, spec] of registry.specs) {
     if (id.length === 0 || spec.id.length === 0) {
-      errors.push(
-        err("V1", "V1-1", "Spec id MUST be non-empty", { specId: id }),
-      );
+      errors.push(err("V1", "V1-1", "Spec id MUST be non-empty", { specId: id }));
     }
   }
 
   for (const [id, plan] of registry.testPlans) {
     if (id.length === 0 || plan.id.length === 0) {
-      errors.push(
-        err("V1", "V1-2", "Test plan id MUST be non-empty", { testPlanId: id }),
-      );
+      errors.push(err("V1", "V1-2", "Test plan id MUST be non-empty", { testPlanId: id }));
     }
   }
 
   for (const dup of graphs.duplicateSpecIds) {
-    errors.push(
-      err("V1", "V1-3", `Duplicate spec id "${dup}"`, { specId: dup }),
-    );
+    errors.push(err("V1", "V1-3", `Duplicate spec id "${dup}"`, { specId: dup }));
   }
   for (const dup of graphs.duplicateTestPlanIds) {
-    errors.push(
-      err("V1", "V1-4", `Duplicate test plan id "${dup}"`, { testPlanId: dup }),
-    );
+    errors.push(err("V1", "V1-4", `Duplicate test plan id "${dup}"`, { testPlanId: dup }));
   }
   for (const dup of graphs.duplicateRuleIds) {
     errors.push(
@@ -87,9 +73,7 @@ export function validateV1_Identity(
     );
   }
   for (const dup of graphs.duplicateErrorCodes) {
-    errors.push(
-      err("V1", "V1-6", `Duplicate error code "${dup}" across corpus`),
-    );
+    errors.push(err("V1", "V1-6", `Duplicate error code "${dup}" across corpus`));
   }
 
   return { errors, warnings: [] };
@@ -109,19 +93,14 @@ export function validateV2_Linkage(registry: SpecRegistry): GroupResult {
     const target = registry.specs.get(targetId);
     if (target === undefined) {
       errors.push(
-        err(
-          "V2",
-          "V2-1",
-          `Test plan "${planId}" references nonexistent spec "${targetId}"`,
-          { testPlanId: planId, specId: targetId },
-        ),
+        err("V2", "V2-1", `Test plan "${planId}" references nonexistent spec "${targetId}"`, {
+          testPlanId: planId,
+          specId: targetId,
+        }),
       );
       continue;
     }
-    if (
-      plan.testsSpec.version !== undefined &&
-      plan.testsSpec.version !== target.version
-    ) {
+    if (plan.testsSpec.version !== undefined && plan.testsSpec.version !== target.version) {
       warnings.push(
         err(
           "V2",
@@ -137,15 +116,12 @@ export function validateV2_Linkage(registry: SpecRegistry): GroupResult {
   }
 
   for (const [specId, spec] of registry.specs) {
-    if (spec.status !== Status.Active) {continue;}
+    if (spec.status !== Status.Active) {
+      continue;
+    }
     if ((plansPerSpec.get(specId) ?? []).length === 0) {
       warnings.push(
-        err(
-          "V2",
-          "V2-3",
-          `Active spec "${specId}" has no companion test plan`,
-          { specId },
-        ),
+        err("V2", "V2-3", `Active spec "${specId}" has no companion test plan`, { specId }),
       );
     }
   }
@@ -161,11 +137,17 @@ export function validateV3_Coverage(registry: SpecRegistry): GroupResult {
 
   for (const [planId, plan] of registry.testPlans) {
     const target = registry.specs.get(plan.testsSpec.specId);
-    if (target === undefined) {continue;} // V2 already flagged
+    if (target === undefined) {
+      continue;
+    } // V2 already flagged
 
     const ruleIdsInTarget = new Set<string>();
-    for (const r of target.rules) {ruleIdsInTarget.add(r.id);}
-    for (const i of target.invariants) {ruleIdsInTarget.add(i.id);}
+    for (const r of target.rules) {
+      ruleIdsInTarget.add(r.id);
+    }
+    for (const i of target.invariants) {
+      ruleIdsInTarget.add(i.id);
+    }
 
     const testIdsInPlan = new Set<string>();
     let actualCore = 0;
@@ -173,8 +155,11 @@ export function validateV3_Coverage(registry: SpecRegistry): GroupResult {
     for (const cat of plan.categories) {
       for (const tc of cat.tests) {
         testIdsInPlan.add(tc.id);
-        if (tc.tier === Tier.Core) {actualCore++;}
-        else if (tc.tier === Tier.Extended) {actualExtended++;}
+        if (tc.tier === Tier.Core) {
+          actualCore++;
+        } else if (tc.tier === Tier.Extended) {
+          actualExtended++;
+        }
         // V3-3 — every rule id in a TestCase.rules must exist in the corpus ruleIndex
         for (const ruleId of tc.rules) {
           if (!registry.ruleIndex.has(ruleId)) {
@@ -247,12 +232,11 @@ export function validateV3_Coverage(registry: SpecRegistry): GroupResult {
     for (const rid of ruleIdsInTarget) {
       if (!coredCovered.has(rid)) {
         warnings.push(
-          err(
-            "V3",
-            "V3-5",
-            `Rule "${rid}" in spec "${target.id}" has no Tier.Core test coverage`,
-            { testPlanId: planId, specId: target.id, ruleId: rid },
-          ),
+          err("V3", "V3-5", `Rule "${rid}" in spec "${target.id}" has no Tier.Core test coverage`, {
+            testPlanId: planId,
+            specId: target.id,
+            ruleId: rid,
+          }),
         );
       }
     }
@@ -294,12 +278,7 @@ export function validateV4_Amendments(registry: SpecRegistry): GroupResult {
       const target = registry.specs.get(ref.specId);
       if (target === undefined) {
         errors.push(
-          err(
-            "V4",
-            "V4-1",
-            `Spec "${specId}" amends nonexistent spec "${ref.specId}"`,
-            { specId },
-          ),
+          err("V4", "V4-1", `Spec "${specId}" amends nonexistent spec "${ref.specId}"`, { specId }),
         );
         continue;
       }
@@ -321,12 +300,7 @@ export function validateV4_Amendments(registry: SpecRegistry): GroupResult {
     }
     if (spec.amends.length > 0 && spec.amendment === undefined) {
       warnings.push(
-        err(
-          "V4",
-          "V4-3",
-          `Spec "${specId}" has amends but no amendment detail`,
-          { specId },
-        ),
+        err("V4", "V4-3", `Spec "${specId}" has amends but no amendment detail`, { specId }),
       );
     }
   }
@@ -336,24 +310,23 @@ export function validateV4_Amendments(registry: SpecRegistry): GroupResult {
 
 // ── V5 — Changed/Unchanged Section Integrity ──
 
-export function validateV5_ChangedUnchanged(
-  registry: SpecRegistry,
-): GroupResult {
+export function validateV5_ChangedUnchanged(registry: SpecRegistry): GroupResult {
   const errors: ValidationError[] = [];
   const warnings: ValidationError[] = [];
 
   for (const [specId, spec] of registry.specs) {
     const detail = spec.amendment;
-    if (detail === undefined) {continue;}
+    if (detail === undefined) {
+      continue;
+    }
 
     // Group changes by target spec for V5-4 inventory completeness
-    const sectionsByTarget = new Map<
-      string,
-      { changed: Set<string>; unchanged: Set<string> }
-    >();
+    const sectionsByTarget = new Map<string, { changed: Set<string>; unchanged: Set<string> }>();
     function bucket(target: string) {
       const existing = sectionsByTarget.get(target);
-      if (existing !== undefined) {return existing;}
+      if (existing !== undefined) {
+        return existing;
+      }
       const fresh = { changed: new Set<string>(), unchanged: new Set<string>() };
       sectionsByTarget.set(target, fresh);
       return fresh;
@@ -414,7 +387,9 @@ export function validateV5_ChangedUnchanged(
     // V5-4 — union should cover all sections of target
     for (const [targetId, lists] of sectionsByTarget) {
       const target = registry.specs.get(targetId);
-      if (target === undefined) {continue;}
+      if (target === undefined) {
+        continue;
+      }
       const allSections = collectSectionIdsOf(target);
       for (const sid of allSections) {
         if (!lists.changed.has(sid) && !lists.unchanged.has(sid)) {
@@ -440,26 +415,31 @@ function hasCycle(graph: ReadonlyMap<string, readonly string[]>): boolean {
   const visited = new Set<string>();
   const stack = new Set<string>();
   function dfs(node: string): boolean {
-    if (stack.has(node)) {return true;}
-    if (visited.has(node)) {return false;}
+    if (stack.has(node)) {
+      return true;
+    }
+    if (visited.has(node)) {
+      return false;
+    }
     visited.add(node);
     stack.add(node);
     for (const next of graph.get(node) ?? []) {
-      if (dfs(next)) {return true;}
+      if (dfs(next)) {
+        return true;
+      }
     }
     stack.delete(node);
     return false;
   }
   for (const node of graph.keys()) {
-    if (dfs(node)) {return true;}
+    if (dfs(node)) {
+      return true;
+    }
   }
   return false;
 }
 
-export function validateV6_Graphs(
-  registry: SpecRegistry,
-  graphs: InternalGraphs,
-): GroupResult {
+export function validateV6_Graphs(registry: SpecRegistry, graphs: InternalGraphs): GroupResult {
   const errors: ValidationError[] = [];
   const warnings: ValidationError[] = [];
 
@@ -467,33 +447,24 @@ export function validateV6_Graphs(
     for (const dep of spec.dependsOn) {
       if (!registry.specs.has(dep.specId)) {
         errors.push(
-          err(
-            "V6",
-            "V6-1",
-            `Spec "${specId}" depends on nonexistent spec "${dep.specId}"`,
-            { specId },
-          ),
+          err("V6", "V6-1", `Spec "${specId}" depends on nonexistent spec "${dep.specId}"`, {
+            specId,
+          }),
         );
       } else if (registry.specs.get(dep.specId)!.status === Status.Superseded) {
         warnings.push(
-          err(
-            "V6",
-            "V6-5",
-            `Spec "${specId}" depends on superseded spec "${dep.specId}"`,
-            { specId },
-          ),
+          err("V6", "V6-5", `Spec "${specId}" depends on superseded spec "${dep.specId}"`, {
+            specId,
+          }),
         );
       }
     }
     for (const comp of spec.complements) {
       if (!registry.specs.has(comp.specId)) {
         errors.push(
-          err(
-            "V6",
-            "V6-2",
-            `Spec "${specId}" complements nonexistent spec "${comp.specId}"`,
-            { specId },
-          ),
+          err("V6", "V6-2", `Spec "${specId}" complements nonexistent spec "${comp.specId}"`, {
+            specId,
+          }),
         );
       }
     }
@@ -537,10 +508,7 @@ export function validateV7_Terms(registry: SpecRegistry): GroupResult {
   }
 
   // V7-2 — conflicting concept exports (same name, different description)
-  const conceptByName = new Map<
-    string,
-    { specId: string; description: string }
-  >();
+  const conceptByName = new Map<string, { specId: string; description: string }>();
   for (const [specId, spec] of registry.specs) {
     for (const concept of spec.concepts) {
       const prior = conceptByName.get(concept.name);
@@ -636,19 +604,20 @@ export function validateV9_ErrorCodes(registry: SpecRegistry): GroupResult {
 
   for (const [specId, spec] of registry.specs) {
     const ruleIdsInSpec = new Set<string>();
-    for (const r of spec.rules) {ruleIdsInSpec.add(r.id);}
-    for (const i of spec.invariants) {ruleIdsInSpec.add(i.id);}
+    for (const r of spec.rules) {
+      ruleIdsInSpec.add(r.id);
+    }
+    for (const i of spec.invariants) {
+      ruleIdsInSpec.add(i.id);
+    }
 
     for (const ec of spec.errorCodes) {
       // V9-1 — defensive re-check; structural validation already blocks this
       if (ec.trigger.length === 0) {
         warnings.push(
-          err(
-            "V9",
-            "V9-1",
-            `Error code "${ec.code}" in spec "${specId}" has empty trigger`,
-            { specId },
-          ),
+          err("V9", "V9-1", `Error code "${ec.code}" in spec "${specId}" has empty trigger`, {
+            specId,
+          }),
         );
       }
       // V9-2 — defensive re-check
@@ -665,12 +634,9 @@ export function validateV9_ErrorCodes(registry: SpecRegistry): GroupResult {
       // V9-3 — error code must not collide with a rule id in same spec
       if (ruleIdsInSpec.has(ec.code)) {
         errors.push(
-          err(
-            "V9",
-            "V9-3",
-            `Error code "${ec.code}" collides with a rule id in spec "${specId}"`,
-            { specId },
-          ),
+          err("V9", "V9-3", `Error code "${ec.code}" collides with a rule id in spec "${specId}"`, {
+            specId,
+          }),
         );
       }
     }
@@ -683,17 +649,12 @@ export function validateV9_ErrorCodes(registry: SpecRegistry): GroupResult {
 
 // ── checkCoverage — D43, §11.3 ──
 
-export function checkCoverage(
-  registry: SpecRegistry,
-  specId: string,
-): CoverageReport {
+export function checkCoverage(registry: SpecRegistry, specId: string): CoverageReport {
   const spec = registry.specs.get(specId);
   if (spec === undefined) {
     return {
       specId,
-      errors: [
-        err("V3", "V3-0", `Spec "${specId}" not found in registry`, { specId }),
-      ],
+      errors: [err("V3", "V3-0", `Spec "${specId}" not found in registry`, { specId })],
       warnings: [],
       uncoveredRules: [],
     };
@@ -706,30 +667,39 @@ export function checkCoverage(
   // Filter V3 findings to those tied to this spec / its companion plan(s).
   const fullV3 = validateV3_Coverage(registry);
   const inScope = (e: ValidationError) =>
-    e.specId === specId ||
-    (e.testPlanId !== undefined && companionPlanIds.includes(e.testPlanId));
+    e.specId === specId || (e.testPlanId !== undefined && companionPlanIds.includes(e.testPlanId));
   const errors = fullV3.errors.filter(inScope);
   const warnings = fullV3.warnings.filter(inScope);
 
   // uncoveredRules — rules declared in this spec with zero Core test coverage
   // across its companion plan(s).
   const ruleIdsInSpec: string[] = [];
-  for (const r of spec.rules) {ruleIdsInSpec.push(r.id);}
-  for (const i of spec.invariants) {ruleIdsInSpec.push(i.id);}
+  for (const r of spec.rules) {
+    ruleIdsInSpec.push(r.id);
+  }
+  for (const i of spec.invariants) {
+    ruleIdsInSpec.push(i.id);
+  }
 
   const coreCovered = new Set<string>();
   for (const planId of companionPlanIds) {
     const plan = registry.testPlans.get(planId);
-    if (plan === undefined) {continue;}
+    if (plan === undefined) {
+      continue;
+    }
     const coreTestIds = new Set<string>();
     for (const cat of plan.categories) {
       for (const tc of cat.tests) {
-        if (tc.tier === Tier.Core) {coreTestIds.add(tc.id);}
+        if (tc.tier === Tier.Core) {
+          coreTestIds.add(tc.id);
+        }
       }
     }
     for (const entry of plan.coverageMatrix) {
       for (const testId of entry.testIds) {
-        if (coreTestIds.has(testId)) {coreCovered.add(entry.ruleId);}
+        if (coreTestIds.has(testId)) {
+          coreCovered.add(entry.ruleId);
+        }
       }
     }
   }
@@ -742,27 +712,41 @@ export function checkCoverage(
 
 export function isReady(registry: SpecRegistry, specId: string): boolean {
   const spec = registry.specs.get(specId);
-  if (spec === undefined) {return false;}
+  if (spec === undefined) {
+    return false;
+  }
   // V10-1 — spec must be active
-  if (spec.status !== Status.Active) {return false;}
+  if (spec.status !== Status.Active) {
+    return false;
+  }
 
   // V10-2 — at least one companion test plan exists and is active
   const graphs = getInternalGraphs(registry);
   const companionIds = graphs.specToTestPlans.get(specId) ?? [];
-  if (companionIds.length === 0) {return false;}
+  if (companionIds.length === 0) {
+    return false;
+  }
   const companionPlans = companionIds
     .map((id) => registry.testPlans.get(id))
     .filter((p): p is NonNullable<typeof p> => p !== undefined);
-  if (companionPlans.length === 0) {return false;}
-  if (!companionPlans.every((p) => p.status === Status.Active)) {return false;}
+  if (companionPlans.length === 0) {
+    return false;
+  }
+  if (!companionPlans.every((p) => p.status === Status.Active)) {
+    return false;
+  }
 
   // V10-3 — checkCoverage has zero errors
-  if (checkCoverage(registry, specId).errors.length > 0) {return false;}
+  if (checkCoverage(registry, specId).errors.length > 0) {
+    return false;
+  }
 
   // V10-4 — companion plans have zero unresolved ambiguities
   for (const plan of companionPlans) {
     for (const amb of plan.ambiguitySurface) {
-      if (amb.resolution === Resolution.Unresolved) {return false;}
+      if (amb.resolution === Resolution.Unresolved) {
+        return false;
+      }
     }
   }
 

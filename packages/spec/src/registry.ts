@@ -51,15 +51,21 @@ export function buildRegistry(
   const specMap = new Map<string, NormalizedSpecModule>();
   const duplicateSpecIds: string[] = [];
   for (const spec of specs) {
-    if (specMap.has(spec.id)) {duplicateSpecIds.push(spec.id);}
-    else {specMap.set(spec.id, spec);}
+    if (specMap.has(spec.id)) {
+      duplicateSpecIds.push(spec.id);
+    } else {
+      specMap.set(spec.id, spec);
+    }
   }
 
   const testPlanMap = new Map<string, NormalizedTestPlanModule>();
   const duplicateTestPlanIds: string[] = [];
   for (const plan of testPlans) {
-    if (testPlanMap.has(plan.id)) {duplicateTestPlanIds.push(plan.id);}
-    else {testPlanMap.set(plan.id, plan);}
+    if (testPlanMap.has(plan.id)) {
+      duplicateTestPlanIds.push(plan.id);
+    } else {
+      testPlanMap.set(plan.id, plan);
+    }
   }
 
   // R5 — rule index covers both rules and invariants (SS-REG-006).
@@ -69,22 +75,26 @@ export function buildRegistry(
   const duplicateRuleIds: string[] = [];
   for (const spec of specs) {
     for (const rule of spec.rules) {
-      if (ruleIndex.has(rule.id)) {duplicateRuleIds.push(rule.id);}
-      else
-        {ruleIndex.set(rule.id, {
+      if (ruleIndex.has(rule.id)) {
+        duplicateRuleIds.push(rule.id);
+      } else {
+        ruleIndex.set(rule.id, {
           specId: spec.id,
           section: rule.section,
           strength: rule.strength,
-        });}
+        });
+      }
     }
     for (const inv of spec.invariants) {
-      if (ruleIndex.has(inv.id)) {duplicateRuleIds.push(inv.id);}
-      else
-        {ruleIndex.set(inv.id, {
+      if (ruleIndex.has(inv.id)) {
+        duplicateRuleIds.push(inv.id);
+      } else {
+        ruleIndex.set(inv.id, {
           specId: spec.id,
           section: inv.section,
           strength: Strength.MUST,
-        });}
+        });
+      }
     }
   }
 
@@ -93,13 +103,15 @@ export function buildRegistry(
   const duplicateErrorCodes: string[] = [];
   for (const spec of specs) {
     for (const ec of spec.errorCodes) {
-      if (errorCodeIndex.has(ec.code)) {duplicateErrorCodes.push(ec.code);}
-      else
-        {errorCodeIndex.set(ec.code, {
+      if (errorCodeIndex.has(ec.code)) {
+        duplicateErrorCodes.push(ec.code);
+      } else {
+        errorCodeIndex.set(ec.code, {
           specId: spec.id,
           section: ec.section,
           trigger: ec.trigger,
-        });}
+        });
+      }
     }
   }
 
@@ -160,9 +172,7 @@ export function buildRegistry(
     list.push(plan.id);
     specToTestPlansMut.set(plan.testsSpec.specId, list);
   }
-  const specToTestPlans = new Map<string, readonly string[]>(
-    specToTestPlansMut,
-  );
+  const specToTestPlans = new Map<string, readonly string[]>(specToTestPlansMut);
 
   const registry: SpecRegistry = {
     specs: specMap,

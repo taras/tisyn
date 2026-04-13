@@ -2,23 +2,17 @@
 // spec-system-test-plan.source.md. Covers SS-NR-004, 013, 014, 016, 017.
 
 import { describe, expect, test } from "vitest";
-import {
-  DependsOn,
-  TestCase,
-  TestCategory,
-  TestPlan,
-} from "./constructors.ts";
+import { DependsOn, TestCase, TestCategory, TestPlan } from "./constructors.ts";
 import { Status, Tier } from "./enums.ts";
 import { normalizeTestPlan } from "./normalize.ts";
 import type { StructuralError, TestPlanModule } from "./types.ts";
 
-function expectReject(
-  module: TestPlanModule,
-  code: string,
-): readonly StructuralError[] {
+function expectReject(module: TestPlanModule, code: string): readonly StructuralError[] {
   const result = normalizeTestPlan(module);
   expect(result.ok).toBe(false);
-  if (result.ok) {throw new Error("unreachable");}
+  if (result.ok) {
+    throw new Error("unreachable");
+  }
   expect(result.errors.some((e) => e.code === code)).toBe(true);
   return result.errors;
 }
@@ -43,9 +37,7 @@ describe("SS-NR (test plan)", () => {
         version: "0.1.0",
         status: Status.Active,
         testsSpec: DependsOn("sp-x"),
-        categories: [
-          TestCategory({ id: "c", title: "C", tests: [basicCoreTestCase()] }),
-        ],
+        categories: [TestCategory({ id: "c", title: "C", tests: [basicCoreTestCase()] })],
         coreTier: 1,
         extendedTier: 0,
       }),
@@ -61,9 +53,7 @@ describe("SS-NR (test plan)", () => {
         version: "0.1.0",
         status: Status.Active,
         testsSpec: DependsOn("sp-x"),
-        categories: [
-          TestCategory({ id: "c", title: "C", tests: [basicCoreTestCase()] }),
-        ],
+        categories: [TestCategory({ id: "c", title: "C", tests: [basicCoreTestCase()] })],
         coreTier: 5, // actual = 1
         extendedTier: 0,
       }),
@@ -79,9 +69,7 @@ describe("SS-NR (test plan)", () => {
         version: "0.1.0",
         status: Status.Active,
         testsSpec: DependsOn("sp-x"),
-        categories: [
-          TestCategory({ id: "c", title: "C", tests: [basicCoreTestCase()] }),
-        ],
+        categories: [TestCategory({ id: "c", title: "C", tests: [basicCoreTestCase()] })],
         coreTier: 1,
         extendedTier: 2, // actual = 0
       }),

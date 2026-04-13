@@ -18,13 +18,12 @@ import {
 import { Status, Strength, Tier } from "./enums.ts";
 import { normalizeSpec, normalizeTestPlan } from "./normalize.ts";
 import { buildRegistry } from "./registry.ts";
-import type {
-  NormalizedSpecModule,
-  NormalizedTestPlanModule,
-} from "./types.ts";
+import type { NormalizedSpecModule, NormalizedTestPlanModule } from "./types.ts";
 
 function unwrap<T>(r: { ok: true; value: T } | { ok: false }): T {
-  if (!r.ok) {throw new Error("expected ok");}
+  if (!r.ok) {
+    throw new Error("expected ok");
+  }
   return r.value;
 }
 
@@ -36,9 +35,7 @@ function specA(): NormalizedSpecModule {
         title: "A",
         version: "0.1.0",
         status: Status.Active,
-        sections: [
-          Section({ id: "s1", title: "S1", normative: true, prose: "." }),
-        ],
+        sections: [Section({ id: "s1", title: "S1", normative: true, prose: "." })],
         rules: [
           Rule({
             id: "X-R1",
@@ -53,12 +50,8 @@ function specA(): NormalizedSpecModule {
             statement: "b",
           }),
         ],
-        invariants: [
-          Invariant({ id: "X-I1", section: "s1", statement: "inv" }),
-        ],
-        errorCodes: [
-          ErrorCode({ code: "E-TEST-001", section: "s1", trigger: "t" }),
-        ],
+        invariants: [Invariant({ id: "X-I1", section: "s1", statement: "inv" })],
+        errorCodes: [ErrorCode({ code: "E-TEST-001", section: "s1", trigger: "t" })],
         concepts: [
           Concept({
             name: "spawn-handle",
@@ -87,9 +80,7 @@ function specB(): NormalizedSpecModule {
         version: "0.1.0",
         status: Status.Active,
         dependsOn: [DependsOn("spec-a", "0.1.0")],
-        sections: [
-          Section({ id: "sb", title: "SB", normative: true, prose: "." }),
-        ],
+        sections: [Section({ id: "sb", title: "SB", normative: true, prose: "." })],
       }),
     ),
   );
@@ -174,9 +165,7 @@ describe("SS-REG", () => {
       [JSON.parse(JSON.stringify(planForA())) as NormalizedTestPlanModule],
     );
     expect(fromJson.specs.get("spec-a")).toEqual(fromSource.specs.get("spec-a"));
-    expect(fromJson.ruleIndex.get("X-R1")).toEqual(
-      fromSource.ruleIndex.get("X-R1"),
-    );
+    expect(fromJson.ruleIndex.get("X-R1")).toEqual(fromSource.ruleIndex.get("X-R1"));
   });
 
   test("SS-REG-003 specs map indexes by id (R3)", () => {

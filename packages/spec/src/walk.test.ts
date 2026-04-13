@@ -1,21 +1,10 @@
 // SS-TRV — Traversal helpers per §5.9 of spec-system-test-plan.source.md.
 
 import { describe, expect, test } from "vitest";
-import {
-  ErrorCode,
-  Rule,
-  Section,
-  Spec,
-  Term,
-} from "./constructors.ts";
+import { ErrorCode, Rule, Section, Spec, Term } from "./constructors.ts";
 import { Status, Strength } from "./enums.ts";
 import type { SpecModule, SpecSection } from "./types.ts";
-import {
-  collectErrorCodes,
-  collectRules,
-  collectTerms,
-  walkSections,
-} from "./walk.ts";
+import { collectErrorCodes, collectRules, collectTerms, walkSections } from "./walk.ts";
 
 function tree(): SpecModule {
   return Spec({

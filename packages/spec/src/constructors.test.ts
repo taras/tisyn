@@ -23,14 +23,7 @@ import {
   TestPlan,
   UnchangedSection,
 } from "./constructors.ts";
-import {
-  ChangeType,
-  EvidenceTier,
-  Resolution,
-  Status,
-  Strength,
-  Tier,
-} from "./enums.ts";
+import { ChangeType, EvidenceTier, Resolution, Status, Strength, Tier } from "./enums.ts";
 
 function roundTrip<T>(value: T): T {
   return JSON.parse(JSON.stringify(value)) as T;
@@ -219,9 +212,7 @@ describe("SS-CON", () => {
             changeType: ChangeType.Modified,
           }),
         ],
-        unchangedSections: [
-          UnchangedSection({ targetSpec: "sp-y", section: "s2" }),
-        ],
+        unchangedSections: [UnchangedSection({ targetSpec: "sp-y", section: "s2" })],
         preservedBehavior: ["p"],
         newBehavior: ["n"],
       }),

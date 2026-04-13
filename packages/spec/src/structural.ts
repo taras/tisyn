@@ -4,12 +4,7 @@
 // normalization must return an { ok: false } result and not emit an artifact.
 
 import { Tier } from "./enums.ts";
-import type {
-  SpecModule,
-  SpecSection,
-  StructuralError,
-  TestPlanModule,
-} from "./types.ts";
+import type { SpecModule, SpecSection, StructuralError, TestPlanModule } from "./types.ts";
 
 function err(
   code: string,
@@ -17,9 +12,7 @@ function err(
   message: string,
   detail?: Readonly<Record<string, string | number>>,
 ): StructuralError {
-  return detail != null
-    ? { code, path, message, detail }
-    : { code, path, message };
+  return detail != null ? { code, path, message, detail } : { code, path, message };
 }
 
 function collectSectionIds(
@@ -28,15 +21,16 @@ function collectSectionIds(
   duplicates: Set<string>,
 ): void {
   for (const section of sections) {
-    if (out.has(section.id)) {duplicates.add(section.id);}
-    else {out.add(section.id);}
+    if (out.has(section.id)) {
+      duplicates.add(section.id);
+    } else {
+      out.add(section.id);
+    }
     collectSectionIds(section.subsections, out, duplicates);
   }
 }
 
-export function validateSpecStructural(
-  module: SpecModule,
-): readonly StructuralError[] {
+export function validateSpecStructural(module: SpecModule): readonly StructuralError[] {
   const errors: StructuralError[] = [];
 
   // D1
@@ -45,13 +39,7 @@ export function validateSpecStructural(
   }
   // D2
   if (module.version.length === 0) {
-    errors.push(
-      err(
-        "EMPTY_SPEC_VERSION",
-        "version",
-        "SpecModule.version MUST be non-empty",
-      ),
-    );
+    errors.push(err("EMPTY_SPEC_VERSION", "version", "SpecModule.version MUST be non-empty"));
   }
   // D4
   if (module.sections.length === 0) {
@@ -216,16 +204,12 @@ export function validateSpecStructural(
   return errors;
 }
 
-export function validateTestPlanStructural(
-  module: TestPlanModule,
-): readonly StructuralError[] {
+export function validateTestPlanStructural(module: TestPlanModule): readonly StructuralError[] {
   const errors: StructuralError[] = [];
 
   // D6
   if (module.id.length === 0) {
-    errors.push(
-      err("EMPTY_TESTPLAN_ID", "id", "TestPlanModule.id MUST be non-empty"),
-    );
+    errors.push(err("EMPTY_TESTPLAN_ID", "id", "TestPlanModule.id MUST be non-empty"));
   }
 
   // D30, D32 — TestCase identity + non-empty rules
@@ -254,8 +238,11 @@ export function validateTestPlanStructural(
           ),
         );
       }
-      if (tc.tier === Tier.Core) {coreCount++;}
-      else if (tc.tier === Tier.Extended) {extendedCount++;}
+      if (tc.tier === Tier.Core) {
+        coreCount++;
+      } else if (tc.tier === Tier.Extended) {
+        extendedCount++;
+      }
     }
   }
 

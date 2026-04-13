@@ -4,10 +4,7 @@
 // §13.2), so callers discriminate on `result.ok` without a try/catch.
 
 import { computeHash } from "./hash.ts";
-import {
-  validateSpecStructural,
-  validateTestPlanStructural,
-} from "./structural.ts";
+import { validateSpecStructural, validateTestPlanStructural } from "./structural.ts";
 import type {
   NormalizeResult,
   NormalizedSpecModule,
@@ -20,9 +17,7 @@ import type {
 
 // N4 — depth-first section numbering. Top-level sections are §1, §2, ...;
 // subsections inherit the parent prefix and a child index.
-function computeSectionNumbering(
-  sections: readonly SpecSection[],
-): Record<string, string> {
+function computeSectionNumbering(sections: readonly SpecSection[]): Record<string, string> {
   const out: Record<string, string> = {};
   function walk(nodes: readonly SpecSection[], prefix: string): void {
     for (let i = 0; i < nodes.length; i++) {
@@ -46,18 +41,20 @@ function computeRuleLocations(
   const out: Record<string, string> = {};
   for (const rule of module.rules) {
     const number = sectionNumbering[rule.section];
-    if (number != null) {out[rule.id] = number;}
+    if (number != null) {
+      out[rule.id] = number;
+    }
   }
   for (const inv of module.invariants) {
     const number = sectionNumbering[inv.section];
-    if (number != null) {out[inv.id] = number;}
+    if (number != null) {
+      out[inv.id] = number;
+    }
   }
   return out;
 }
 
-export function normalizeSpec(
-  module: SpecModule,
-): NormalizeResult<NormalizedSpecModule> {
+export function normalizeSpec(module: SpecModule): NormalizeResult<NormalizedSpecModule> {
   const structural: readonly StructuralError[] = validateSpecStructural(module);
   if (structural.length > 0) {
     return { ok: false, errors: structural };
@@ -89,9 +86,7 @@ export function normalizeSpec(
 export function normalizeTestPlan(
   module: TestPlanModule,
 ): NormalizeResult<NormalizedTestPlanModule> {
-  const structural: readonly StructuralError[] = validateTestPlanStructural(
-    module,
-  );
+  const structural: readonly StructuralError[] = validateTestPlanStructural(module);
   if (structural.length > 0) {
     return { ok: false, errors: structural };
   }

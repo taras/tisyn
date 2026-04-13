@@ -23,14 +23,7 @@ export {
   UnchangedSection,
 } from "./constructors.ts";
 
-export {
-  ChangeType,
-  EvidenceTier,
-  Resolution,
-  Status,
-  Strength,
-  Tier,
-} from "./enums.ts";
+export { ChangeType, EvidenceTier, Resolution, Status, Strength, Tier } from "./enums.ts";
 
 export { normalizeSpec, normalizeTestPlan } from "./normalize.ts";
 
@@ -38,12 +31,7 @@ export { buildRegistry } from "./registry.ts";
 
 export { checkCoverage, isReady, validateCorpus } from "./validate.ts";
 
-export {
-  collectErrorCodes,
-  collectRules,
-  collectTerms,
-  walkSections,
-} from "./walk.ts";
+export { collectErrorCodes, collectRules, collectTerms, walkSections } from "./walk.ts";
 
 export type {
   AmbiguityFinding,

@@ -23,13 +23,7 @@ import {
   TestPlan,
   UnchangedSection,
 } from "./constructors.ts";
-import {
-  ChangeType,
-  Resolution,
-  Status,
-  Strength,
-  Tier,
-} from "./enums.ts";
+import { ChangeType, Resolution, Status, Strength, Tier } from "./enums.ts";
 import { normalizeSpec, normalizeTestPlan } from "./normalize.ts";
 import { buildRegistry, getInternalGraphs } from "./registry.ts";
 import type {
@@ -53,13 +47,17 @@ import {
 
 function normSpec(module: SpecModule): NormalizedSpecModule {
   const r = normalizeSpec(module);
-  if (!r.ok) {throw new Error(`expected ok spec: ${JSON.stringify(r.errors)}`);}
+  if (!r.ok) {
+    throw new Error(`expected ok spec: ${JSON.stringify(r.errors)}`);
+  }
   return r.value;
 }
 
 function normPlan(module: TestPlanModule): NormalizedTestPlanModule {
   const r = normalizeTestPlan(module);
-  if (!r.ok) {throw new Error(`expected ok plan: ${JSON.stringify(r.errors)}`);}
+  if (!r.ok) {
+    throw new Error(`expected ok plan: ${JSON.stringify(r.errors)}`);
+  }
   return r.value;
 }
 
@@ -69,9 +67,7 @@ function minimalSpec(id: string, overrides: Partial<Parameters<typeof Spec>[0]> 
     title: id,
     version: "0.1.0",
     status: Status.Active,
-    sections: [
-      Section({ id: "s1", title: "S1", normative: true, prose: "." }),
-    ],
+    sections: [Section({ id: "s1", title: "S1", normative: true, prose: "." })],
     rules: [
       Rule({
         id: `${id.toUpperCase()}-R1`,
@@ -125,10 +121,7 @@ describe("SS-V1 validateV1_Identity", () => {
   test("SS-V1-001 clean corpus emits no V1 findings", () => {
     const spec = normSpec(minimalSpec("spec-a"));
     const registry = buildRegistry([spec], []);
-    const { errors, warnings } = validateV1_Identity(
-      registry,
-      getInternalGraphs(registry),
-    );
+    const { errors, warnings } = validateV1_Identity(registry, getInternalGraphs(registry));
     expect(errors).toHaveLength(0);
     expect(warnings).toHaveLength(0);
   });
@@ -140,10 +133,7 @@ describe("SS-V1 validateV1_Identity", () => {
     const good = normSpec(minimalSpec("spec-a"));
     const bad = { ...good, id: "" } as NormalizedSpecModule;
     const registry = buildRegistry([bad], []);
-    const { errors } = validateV1_Identity(
-      registry,
-      getInternalGraphs(registry),
-    );
+    const { errors } = validateV1_Identity(registry, getInternalGraphs(registry));
     expect(errors.some((e) => e.check === "V1-1")).toBe(true);
   });
 
@@ -152,10 +142,7 @@ describe("SS-V1 validateV1_Identity", () => {
     const plan = normPlan(minimalPlan("plan-a", "spec-a"));
     const badPlan = { ...plan, id: "" } as NormalizedTestPlanModule;
     const registry = buildRegistry([spec], [badPlan]);
-    const { errors } = validateV1_Identity(
-      registry,
-      getInternalGraphs(registry),
-    );
+    const { errors } = validateV1_Identity(registry, getInternalGraphs(registry));
     expect(errors.some((e) => e.check === "V1-2")).toBe(true);
   });
 
@@ -193,10 +180,7 @@ describe("SS-V1 validateV1_Identity", () => {
       }),
     );
     const registry = buildRegistry([spec], [p1, p2]);
-    const { errors } = validateV1_Identity(
-      registry,
-      getInternalGraphs(registry),
-    );
+    const { errors } = validateV1_Identity(registry, getInternalGraphs(registry));
     expect(errors.some((e) => e.check === "V1-4")).toBe(true);
   });
 
@@ -215,33 +199,23 @@ describe("SS-V1 validateV1_Identity", () => {
       }),
     );
     const registry = buildRegistry([a, b], []);
-    const { errors } = validateV1_Identity(
-      registry,
-      getInternalGraphs(registry),
-    );
+    const { errors } = validateV1_Identity(registry, getInternalGraphs(registry));
     expect(errors.some((e) => e.check === "V1-5")).toBe(true);
   });
 
   test("SS-V1-007 V1-6 duplicate error codes across specs are flagged", () => {
     const a = normSpec(
       minimalSpec("spec-a", {
-        errorCodes: [
-          ErrorCode({ code: "E-DUP", section: "s1", trigger: "t" }),
-        ],
+        errorCodes: [ErrorCode({ code: "E-DUP", section: "s1", trigger: "t" })],
       }),
     );
     const b = normSpec(
       minimalSpec("spec-b", {
-        errorCodes: [
-          ErrorCode({ code: "E-DUP", section: "s1", trigger: "t" }),
-        ],
+        errorCodes: [ErrorCode({ code: "E-DUP", section: "s1", trigger: "t" })],
       }),
     );
     const registry = buildRegistry([a, b], []);
-    const { errors } = validateV1_Identity(
-      registry,
-      getInternalGraphs(registry),
-    );
+    const { errors } = validateV1_Identity(registry, getInternalGraphs(registry));
     expect(errors.some((e) => e.check === "V1-6")).toBe(true);
   });
 });
@@ -353,9 +327,7 @@ describe("SS-V3 validateV3_Coverage", () => {
     const plan = normPlan(minimalPlan("plan-a", "spec-a"));
     const registry = buildRegistry([spec], [plan]);
     const { warnings } = validateV3_Coverage(registry);
-    expect(
-      warnings.some((w) => w.check === "V3-4" && w.ruleId === "SPEC-A-R2"),
-    ).toBe(true);
+    expect(warnings.some((w) => w.check === "V3-4" && w.ruleId === "SPEC-A-R2")).toBe(true);
   });
 
   test("SS-V3-005 V3-5 rule with only Extended coverage → warning", () => {
@@ -455,9 +427,7 @@ describe("SS-V5 validateV5_ChangedUnchanged", () => {
               changeType: ChangeType.Modified,
             }),
           ],
-          unchangedSections: [
-            UnchangedSection({ targetSpec: "spec-base", section: "s1" }),
-          ],
+          unchangedSections: [UnchangedSection({ targetSpec: "spec-base", section: "s1" })],
           preservedBehavior: [],
           newBehavior: [],
         }),
@@ -504,9 +474,7 @@ describe("SS-V5 validateV5_ChangedUnchanged", () => {
               changeType: ChangeType.Modified,
             }),
           ],
-          unchangedSections: [
-            UnchangedSection({ targetSpec: "spec-base", section: "s1" }),
-          ],
+          unchangedSections: [UnchangedSection({ targetSpec: "spec-base", section: "s1" })],
           preservedBehavior: [],
           newBehavior: [],
         }),
@@ -545,9 +513,7 @@ describe("SS-V5 validateV5_ChangedUnchanged", () => {
     );
     const registry = buildRegistry([base, amender], []);
     const { warnings } = validateV5_ChangedUnchanged(registry);
-    expect(
-      warnings.some((w) => w.check === "V5-4" && w.sectionId === "s2"),
-    ).toBe(true);
+    expect(warnings.some((w) => w.check === "V5-4" && w.sectionId === "s2")).toBe(true);
   });
 });
 
@@ -555,80 +521,54 @@ describe("SS-V5 validateV5_ChangedUnchanged", () => {
 
 describe("SS-V6 validateV6_Graphs", () => {
   test("SS-V6-001 V6-1 dependsOn references nonexistent spec → error", () => {
-    const spec = normSpec(
-      minimalSpec("spec-a", { dependsOn: [DependsOn("spec-ghost")] }),
-    );
+    const spec = normSpec(minimalSpec("spec-a", { dependsOn: [DependsOn("spec-ghost")] }));
     const registry = buildRegistry([spec], []);
     const { errors } = validateV6_Graphs(registry, getInternalGraphs(registry));
     expect(errors.some((e) => e.check === "V6-1")).toBe(true);
   });
 
   test("SS-V6-002 V6-2 complements references nonexistent spec → error", () => {
-    const spec = normSpec(
-      minimalSpec("spec-a", { complements: [Complements("spec-ghost")] }),
-    );
+    const spec = normSpec(minimalSpec("spec-a", { complements: [Complements("spec-ghost")] }));
     const registry = buildRegistry([spec], []);
     const { errors } = validateV6_Graphs(registry, getInternalGraphs(registry));
     expect(errors.some((e) => e.check === "V6-2")).toBe(true);
   });
 
   test("SS-V6-003 V6-3 dependency cycle detected", () => {
-    const a = normSpec(
-      minimalSpec("spec-a", { dependsOn: [DependsOn("spec-b")] }),
-    );
-    const b = normSpec(
-      minimalSpec("spec-b", { dependsOn: [DependsOn("spec-a")] }),
-    );
+    const a = normSpec(minimalSpec("spec-a", { dependsOn: [DependsOn("spec-b")] }));
+    const b = normSpec(minimalSpec("spec-b", { dependsOn: [DependsOn("spec-a")] }));
     const registry = buildRegistry([a, b], []);
     const { errors } = validateV6_Graphs(registry, getInternalGraphs(registry));
     expect(errors.some((e) => e.check === "V6-3")).toBe(true);
   });
 
   test("SS-V6-004 V6-4 amendment cycle detected", () => {
-    const a = normSpec(
-      minimalSpec("spec-a", { amends: [Amends("spec-b")] }),
-    );
-    const b = normSpec(
-      minimalSpec("spec-b", { amends: [Amends("spec-a")] }),
-    );
+    const a = normSpec(minimalSpec("spec-a", { amends: [Amends("spec-b")] }));
+    const b = normSpec(minimalSpec("spec-b", { amends: [Amends("spec-a")] }));
     const registry = buildRegistry([a, b], []);
     const { errors } = validateV6_Graphs(registry, getInternalGraphs(registry));
     expect(errors.some((e) => e.check === "V6-4")).toBe(true);
   });
 
   test("SS-V6-005 V6-5 dependsOn on superseded spec → warning", () => {
-    const old = normSpec(
-      minimalSpec("spec-old", { status: Status.Superseded }),
-    );
-    const a = normSpec(
-      minimalSpec("spec-a", { dependsOn: [DependsOn("spec-old")] }),
-    );
+    const old = normSpec(minimalSpec("spec-old", { status: Status.Superseded }));
+    const a = normSpec(minimalSpec("spec-a", { dependsOn: [DependsOn("spec-old")] }));
     const registry = buildRegistry([old, a], []);
-    const { warnings } = validateV6_Graphs(
-      registry,
-      getInternalGraphs(registry),
-    );
+    const { warnings } = validateV6_Graphs(registry, getInternalGraphs(registry));
     expect(warnings.some((w) => w.check === "V6-5")).toBe(true);
   });
 
   test("SS-V6-006 clean DAG emits no V6 findings", () => {
     const base = normSpec(minimalSpec("spec-base"));
-    const dep = normSpec(
-      minimalSpec("spec-dep", { dependsOn: [DependsOn("spec-base")] }),
-    );
+    const dep = normSpec(minimalSpec("spec-dep", { dependsOn: [DependsOn("spec-base")] }));
     const registry = buildRegistry([base, dep], []);
-    const { errors, warnings } = validateV6_Graphs(
-      registry,
-      getInternalGraphs(registry),
-    );
+    const { errors, warnings } = validateV6_Graphs(registry, getInternalGraphs(registry));
     expect(errors).toHaveLength(0);
     expect(warnings).toHaveLength(0);
   });
 
   test("SS-V6-007 self-loop in dependency graph counted as cycle", () => {
-    const a = normSpec(
-      minimalSpec("spec-a", { dependsOn: [DependsOn("spec-a")] }),
-    );
+    const a = normSpec(minimalSpec("spec-a", { dependsOn: [DependsOn("spec-a")] }));
     const registry = buildRegistry([a], []);
     const { errors } = validateV6_Graphs(registry, getInternalGraphs(registry));
     expect(errors.some((e) => e.check === "V6-3")).toBe(true);
@@ -657,16 +597,12 @@ describe("SS-V7 validateV7_Terms", () => {
   test("SS-V7-002 V7-2 conflicting concept descriptions → warning", () => {
     const a = normSpec(
       minimalSpec("spec-a", {
-        concepts: [
-          Concept({ name: "c", section: "s1", description: "first" }),
-        ],
+        concepts: [Concept({ name: "c", section: "s1", description: "first" })],
       }),
     );
     const b = normSpec(
       minimalSpec("spec-b", {
-        concepts: [
-          Concept({ name: "c", section: "s1", description: "second" }),
-        ],
+        concepts: [Concept({ name: "c", section: "s1", description: "second" })],
       }),
     );
     const registry = buildRegistry([a, b], []);
@@ -759,9 +695,7 @@ describe("SS-V9 validateV9_ErrorCodes", () => {
     );
     const bad = {
       ...good,
-      errorCodes: [
-        { ...good.errorCodes[0]!, trigger: "" },
-      ],
+      errorCodes: [{ ...good.errorCodes[0]!, trigger: "" }],
     } as NormalizedSpecModule;
     const registry = buildRegistry([bad], []);
     const { warnings } = validateV9_ErrorCodes(registry);
@@ -783,9 +717,7 @@ describe("SS-V9 validateV9_ErrorCodes", () => {
     );
     const bad = {
       ...good,
-      errorCodes: [
-        { ...good.errorCodes[0]!, requiredContent: [] },
-      ],
+      errorCodes: [{ ...good.errorCodes[0]!, requiredContent: [] }],
     } as NormalizedSpecModule;
     const registry = buildRegistry([bad], []);
     const { warnings } = validateV9_ErrorCodes(registry);
@@ -803,9 +735,7 @@ describe("SS-V9 validateV9_ErrorCodes", () => {
             statement: "r1",
           }),
         ],
-        errorCodes: [
-          ErrorCode({ code: "SPEC-A-R1", section: "s1", trigger: "t" }),
-        ],
+        errorCodes: [ErrorCode({ code: "SPEC-A-R1", section: "s1", trigger: "t" })],
       }),
     );
     const registry = buildRegistry([spec], []);

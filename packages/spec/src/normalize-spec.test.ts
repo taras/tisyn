@@ -3,17 +3,9 @@
 // test for the internal artifact helpers.
 
 import { describe, expect, test } from "vitest";
-import {
-  Rule,
-  Section,
-  Spec,
-} from "./constructors.ts";
+import { Rule, Section, Spec } from "./constructors.ts";
 import { Status, Strength } from "./enums.ts";
-import {
-  artifactPath,
-  normalizeSpec,
-  serializeArtifact,
-} from "./normalize.ts";
+import { artifactPath, normalizeSpec, serializeArtifact } from "./normalize.ts";
 import type { SpecModule } from "./types.ts";
 
 function nested(): SpecModule {
@@ -57,7 +49,9 @@ function nested(): SpecModule {
 }
 
 function unwrap<T>(result: { ok: true; value: T } | { ok: false }): T {
-  if (!result.ok) {throw new Error("expected ok result");}
+  if (!result.ok) {
+    throw new Error("expected ok result");
+  }
   return result.value;
 }
 
@@ -101,9 +95,7 @@ describe("SS-NS", () => {
     const normalized = unwrap(normalizeSpec(nested()));
     expect(typeof normalized._normalizedAt).toBe("string");
     // ISO 8601 parses back to the same instant
-    expect(new Date(normalized._normalizedAt).toISOString()).toBe(
-      normalized._normalizedAt,
-    );
+    expect(new Date(normalized._normalizedAt).toISOString()).toBe(normalized._normalizedAt);
   });
 
   test("SS-NS-006 Section numbering depth-first: [A,[A1,A2],B]", () => {
@@ -183,9 +175,7 @@ describe("SS-NS", () => {
       title: "Bad",
       version: "0.1.0",
       status: Status.Active,
-      sections: [
-        Section({ id: "s1", title: "S", normative: true, prose: "." }),
-      ],
+      sections: [Section({ id: "s1", title: "S", normative: true, prose: "." })],
       rules: [
         Rule({
           id: "X-R1",
@@ -198,9 +188,7 @@ describe("SS-NS", () => {
     const result = normalizeSpec(authored);
     expect(result.ok).toBe(false);
     if (!result.ok) {
-      expect(result.errors.some((e) => e.code === "MISSING_SECTION_REF")).toBe(
-        true,
-      );
+      expect(result.errors.some((e) => e.code === "MISSING_SECTION_REF")).toBe(true);
     }
   });
 
@@ -234,9 +222,7 @@ describe("SS-NS", () => {
 
   test("N10 artifactPath derivation", () => {
     expect(artifactPath("specs", "sp-core")).toBe("specs/.tisyn-spec/sp-core.json");
-    expect(artifactPath("/abs/dir", "tisyn-kernel")).toBe(
-      "/abs/dir/.tisyn-spec/tisyn-kernel.json",
-    );
+    expect(artifactPath("/abs/dir", "tisyn-kernel")).toBe("/abs/dir/.tisyn-spec/tisyn-kernel.json");
   });
 
   test("SS-NS-014 Normalization is deterministic excluding _normalizedAt", () => {

@@ -4,14 +4,7 @@
 // cycles. The sole exceptions are SpecRegistry's ReadonlyMap indices (§7.3),
 // which are typed maps by design and not required to be serializable (R13).
 
-import type {
-  ChangeType,
-  EvidenceTier,
-  Resolution,
-  Status,
-  Strength,
-  Tier,
-} from "./enums.ts";
+import type { ChangeType, EvidenceTier, Resolution, Status, Strength, Tier } from "./enums.ts";
 
 // §5.1 SpecModule
 export interface SpecModule {

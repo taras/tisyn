@@ -4,13 +4,7 @@
 // SS-NR-004, 013, 014, 016, 017 land in commit 7 against normalizeTestPlan.
 
 import { describe, expect, test } from "vitest";
-import {
-  DependsOn,
-  ErrorCode,
-  Rule,
-  Section,
-  Spec,
-} from "./constructors.ts";
+import { DependsOn, ErrorCode, Rule, Section, Spec } from "./constructors.ts";
 import { Status, Strength } from "./enums.ts";
 import { normalizeSpec } from "./normalize.ts";
 import type { SpecModule, StructuralError } from "./types.ts";
@@ -18,7 +12,9 @@ import type { SpecModule, StructuralError } from "./types.ts";
 function expectReject(module: SpecModule, code: string): StructuralError[] {
   const result = normalizeSpec(module);
   expect(result.ok).toBe(false);
-  if (result.ok) {throw new Error("unreachable");}
+  if (result.ok) {
+    throw new Error("unreachable");
+  }
   expect(result.errors.some((e) => e.code === code)).toBe(true);
   return [...result.errors];
 }
@@ -175,9 +171,7 @@ describe("SS-NR (spec module)", () => {
         version: "0.1.0",
         status: Status.Active,
         sections: [validSection()],
-        errorCodes: [
-          ErrorCode({ code: "X-E1", section: "nope", trigger: "t" }),
-        ],
+        errorCodes: [ErrorCode({ code: "X-E1", section: "nope", trigger: "t" })],
       }),
       "MISSING_SECTION_REF",
     );

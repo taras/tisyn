@@ -29,34 +29,46 @@ import {
   TestPlan,
   UnchangedSection,
 } from "./constructors.ts";
-import {
-  ChangeType,
-  Resolution,
-  Status,
-  Strength,
-  Tier,
-} from "./enums.ts";
+import { ChangeType, Resolution, Status, Strength, Tier } from "./enums.ts";
 
 // Detects any value outside the portable serializable data domain (§3).
 function containsBanned(value: unknown, seen: Set<object> = new Set()): boolean {
-  if (value === undefined) {return true;}
-  if (value === null) {return false;}
+  if (value === undefined) {
+    return true;
+  }
+  if (value === null) {
+    return false;
+  }
   const t = typeof value;
-  if (t === "function" || t === "symbol" || t === "bigint") {return true;}
-  if (t === "number") {return !Number.isFinite(value as number);}
-  if (t === "string" || t === "boolean") {return false;}
-  if (t !== "object") {return true;}
+  if (t === "function" || t === "symbol" || t === "bigint") {
+    return true;
+  }
+  if (t === "number") {
+    return !Number.isFinite(value as number);
+  }
+  if (t === "string" || t === "boolean") {
+    return false;
+  }
+  if (t !== "object") {
+    return true;
+  }
   const obj = value as object;
-  if (seen.has(obj)) {return true;} // cycle
+  if (seen.has(obj)) {
+    return true;
+  } // cycle
   seen.add(obj);
   if (Array.isArray(obj)) {
     return obj.some((v) => containsBanned(v, seen));
   }
   // plain object only — prototype chain must be Object.prototype or null
   const proto = Object.getPrototypeOf(obj);
-  if (proto !== Object.prototype && proto !== null) {return true;}
+  if (proto !== Object.prototype && proto !== null) {
+    return true;
+  }
   for (const key of Object.keys(obj)) {
-    if (containsBanned((obj as Record<string, unknown>)[key], seen)) {return true;}
+    if (containsBanned((obj as Record<string, unknown>)[key], seen)) {
+      return true;
+    }
   }
   return false;
 }
@@ -126,9 +138,7 @@ function allConstructorOutputs(): unknown[] {
           changeType: ChangeType.Added,
         }),
       ],
-      unchangedSections: [
-        UnchangedSection({ targetSpec: "sp-y", section: "s2" }),
-      ],
+      unchangedSections: [UnchangedSection({ targetSpec: "sp-y", section: "s2" })],
       preservedBehavior: [],
       newBehavior: [],
     }),
