@@ -57,7 +57,7 @@ function nested(): SpecModule {
 }
 
 function unwrap<T>(result: { ok: true; value: T } | { ok: false }): T {
-  if (!result.ok) throw new Error("expected ok result");
+  if (!result.ok) {throw new Error("expected ok result");}
   return result.value;
 }
 

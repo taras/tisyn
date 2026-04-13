@@ -28,8 +28,8 @@ function collectSectionIds(
   duplicates: Set<string>,
 ): void {
   for (const section of sections) {
-    if (out.has(section.id)) duplicates.add(section.id);
-    else out.add(section.id);
+    if (out.has(section.id)) {duplicates.add(section.id);}
+    else {out.add(section.id);}
     collectSectionIds(section.subsections, out, duplicates);
   }
 }
@@ -254,8 +254,8 @@ export function validateTestPlanStructural(
           ),
         );
       }
-      if (tc.tier === Tier.Core) coreCount++;
-      else if (tc.tier === Tier.Extended) extendedCount++;
+      if (tc.tier === Tier.Core) {coreCount++;}
+      else if (tc.tier === Tier.Extended) {extendedCount++;}
     }
   }
 

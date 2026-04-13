@@ -15,10 +15,10 @@
 import { createHash } from "node:crypto";
 
 function canonicalize(value: unknown): string {
-  if (value === null) return "null";
+  if (value === null) {return "null";}
   const t = typeof value;
-  if (t === "boolean" || t === "number") return JSON.stringify(value);
-  if (t === "string") return JSON.stringify(value);
+  if (t === "boolean" || t === "number") {return JSON.stringify(value);}
+  if (t === "string") {return JSON.stringify(value);}
   if (Array.isArray(value)) {
     return `[${value.map(canonicalize).join(",")}]`;
   }
@@ -39,7 +39,7 @@ function canonicalize(value: unknown): string {
 export function computeHash(authored: Record<string, unknown>): string {
   const stripped: Record<string, unknown> = {};
   for (const key of Object.keys(authored)) {
-    if (key === "_hash" || key === "_normalizedAt") continue;
+    if (key === "_hash" || key === "_normalizedAt") {continue;}
     stripped[key] = authored[key];
   }
   const canonical = canonicalize(stripped);

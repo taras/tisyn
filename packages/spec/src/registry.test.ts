@@ -24,7 +24,7 @@ import type {
 } from "./types.ts";
 
 function unwrap<T>(r: { ok: true; value: T } | { ok: false }): T {
-  if (!r.ok) throw new Error("expected ok");
+  if (!r.ok) {throw new Error("expected ok");}
   return r.value;
 }
 

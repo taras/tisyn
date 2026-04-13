@@ -18,7 +18,7 @@ function expectReject(
 ): readonly StructuralError[] {
   const result = normalizeTestPlan(module);
   expect(result.ok).toBe(false);
-  if (result.ok) throw new Error("unreachable");
+  if (result.ok) {throw new Error("unreachable");}
   expect(result.errors.some((e) => e.code === code)).toBe(true);
   return result.errors;
 }

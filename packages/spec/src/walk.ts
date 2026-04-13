@@ -53,7 +53,7 @@ export function collectRules(module: SpecModule): readonly RuleDeclaration[] {
   const out: RuleDeclaration[] = [];
   for (const sectionId of sectionIdOrder) {
     const list = rulesBySection.get(sectionId);
-    if (list !== undefined) out.push(...list);
+    if (list !== undefined) {out.push(...list);}
   }
   return out;
 }
@@ -74,7 +74,7 @@ export function collectErrorCodes(
   const out: ErrorCodeDeclaration[] = [];
   for (const sectionId of sectionIdOrder) {
     const list = codesBySection.get(sectionId);
-    if (list !== undefined) out.push(...list);
+    if (list !== undefined) {out.push(...list);}
   }
   return out;
 }
@@ -93,7 +93,7 @@ export function collectTerms(module: SpecModule): readonly TermDefinition[] {
   const out: TermDefinition[] = [];
   for (const sectionId of sectionIdOrder) {
     const list = termsBySection.get(sectionId);
-    if (list !== undefined) out.push(...list);
+    if (list !== undefined) {out.push(...list);}
   }
   return out;
 }

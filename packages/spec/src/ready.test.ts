@@ -27,12 +27,12 @@ import { checkCoverage, isReady } from "./validate.ts";
 
 function normSpec(m: SpecModule): NormalizedSpecModule {
   const r = normalizeSpec(m);
-  if (!r.ok) throw new Error(`expected ok: ${JSON.stringify(r.errors)}`);
+  if (!r.ok) {throw new Error(`expected ok: ${JSON.stringify(r.errors)}`);}
   return r.value;
 }
 function normPlan(m: TestPlanModule): NormalizedTestPlanModule {
   const r = normalizeTestPlan(m);
-  if (!r.ok) throw new Error(`expected ok: ${JSON.stringify(r.errors)}`);
+  if (!r.ok) {throw new Error(`expected ok: ${JSON.stringify(r.errors)}`);}
   return r.value;
 }
 

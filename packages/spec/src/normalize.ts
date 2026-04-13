@@ -46,11 +46,11 @@ function computeRuleLocations(
   const out: Record<string, string> = {};
   for (const rule of module.rules) {
     const number = sectionNumbering[rule.section];
-    if (number != null) out[rule.id] = number;
+    if (number != null) {out[rule.id] = number;}
   }
   for (const inv of module.invariants) {
     const number = sectionNumbering[inv.section];
-    if (number != null) out[inv.id] = number;
+    if (number != null) {out[inv.id] = number;}
   }
   return out;
 }

@@ -53,13 +53,13 @@ import {
 
 function normSpec(module: SpecModule): NormalizedSpecModule {
   const r = normalizeSpec(module);
-  if (!r.ok) throw new Error(`expected ok spec: ${JSON.stringify(r.errors)}`);
+  if (!r.ok) {throw new Error(`expected ok spec: ${JSON.stringify(r.errors)}`);}
   return r.value;
 }
 
 function normPlan(module: TestPlanModule): NormalizedTestPlanModule {
   const r = normalizeTestPlan(module);
-  if (!r.ok) throw new Error(`expected ok plan: ${JSON.stringify(r.errors)}`);
+  if (!r.ok) {throw new Error(`expected ok plan: ${JSON.stringify(r.errors)}`);}
   return r.value;
 }
 
