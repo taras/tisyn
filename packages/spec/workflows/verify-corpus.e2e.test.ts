@@ -38,6 +38,9 @@ describe("verify-corpus e2e", () => {
       [cliPath, "run", descriptorPath, "--target", "tisyn-cli", "--skip-claude"],
       { cwd: repoRoot, encoding: "utf8" },
     );
+    expect(stdout).toContain("── journal ──");
+    expect(stdout).toContain("In-memory journal");
+    expect(stdout).toContain("Replay is DISABLED");
     expect(stdout).toContain("── skip-claude ──");
     expect(stdout).toContain("── compare:spec ──");
     expect(stdout).toContain("── compare:plan ──");
@@ -52,6 +55,10 @@ describe("verify-corpus e2e", () => {
         [cliPath, "run", descriptorPath, "-e", "debug", "--target", "tisyn-cli", "--skip-claude"],
         { cwd: repoRoot, encoding: "utf8" },
       );
+      expect(stdout).toContain("── journal ──");
+      expect(stdout).toContain("File-backed journal at ");
+      expect(stdout).toContain(debugJournalPath);
+      expect(stdout).toContain("Replay is ENABLED");
       expect(stdout).toContain("── skip-claude ──");
 
       expect(existsSync(debugJournalPath)).toBe(true);

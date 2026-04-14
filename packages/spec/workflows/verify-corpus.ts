@@ -75,9 +75,30 @@
 // the debug journal goes; `-e debug` is the activation handle. The
 // `env(name, default)` form is the optional-env constructor
 // exported by `@tisyn/config` — there is no `env.optional(...)`.
+//
+// Replay warning. The debug entrypoint uses a file-backed journal,
+// which means prior persisted events at the configured path MAY be
+// replayed on the next run. Remove the file (or change the path
+// via `TISYN_VERIFY_CORPUS_JOURNAL`) before spawning the workflow
+// if you want a fresh run. The e2e tests already do this via
+// `rmSync(debugJournalPath, { force: true })` before every spawn
+// (see `verify-corpus.e2e.test.ts`). At runtime, the workflow's
+// Step 0 reads the resolved journal from the runtime's
+// ConfigContext via `yield* Config.useConfig(JournalToken)` and
+// prints a `── journal ──` block on stdout announcing the active
+// mode and (for the file backend) the resolved path, so operators
+// see the live state instead of having to infer it from `-e debug`.
 
 import type { Workflow } from "@tisyn/agent";
-import { agent, entrypoint, env, journal, transport, workflow } from "@tisyn/config";
+import {
+  type ConfigToken,
+  agent,
+  entrypoint,
+  env,
+  journal,
+  transport,
+  workflow,
+} from "@tisyn/config";
 
 declare function Filesystem(): {
   readOriginal(input: { target: string; kind: "spec" | "plan" }): Workflow<{ content: string }>;
@@ -104,7 +125,50 @@ declare function ClaudeCode(): {
   plan(args: { session: { sessionId: string }; prompt: string }): Workflow<{ response: string }>;
 };
 
+// `Config.useConfig(JournalToken)` is the compiler-recognized
+// intrinsic that reads the post-overlay / post-rebase /
+// post-env-resolution ResolvedConfig from the runtime's
+// ConfigContext. See `packages/compiler/src/emit.ts:3362-3387`
+// for the lowering site and `packages/runtime/src/execute.ts:591-592`
+// for the runtime dispatch. Both `Config` and `JournalToken` are
+// ambient `declare const`s — they have no runtime emission and
+// never become reachable bare-specifier value imports.
+declare const Config: {
+  useConfig<T>(token: ConfigToken<T>): Generator<unknown, T, unknown>;
+};
+
+// Discriminated union on `journal.kind` so TS narrows `path` to
+// `string` after a `kind === "file"` check. The runtime guarantees
+// `path` is set whenever `kind === "file"` — `createJournalStream`
+// in `packages/cli/src/startup.ts` throws a CliError if a file
+// journal is wired up without a resolved path — so the narrowing
+// matches production behavior and the body needs no fallback.
+declare const JournalToken: ConfigToken<{
+  journal: { kind: "memory" } | { kind: "file"; path: string };
+}>;
+
 export function* verifyCorpus(input: { target: string; skipClaude?: boolean }) {
+  // Step 0 — announce the resolved journal mode so the operator
+  // knows whether replay is active and where events are landing.
+  // The read flows through `Config.useConfig` (compiler intrinsic)
+  // rather than guessing based on `input.skipClaude` or `-e debug`.
+  const cfg = yield* Config.useConfig(JournalToken);
+  if (cfg.journal.kind === "file") {
+    yield* Output().log({
+      label: "journal",
+      text: `File-backed journal at ${cfg.journal.path}.
+Replay is ENABLED — if events already exist at this path from a
+prior run, they MAY be reused. Remove the file (or change the
+path via TISYN_VERIFY_CORPUS_JOURNAL) to force a fresh run.`,
+    });
+  } else {
+    yield* Output().log({
+      label: "journal",
+      text: `In-memory journal. Replay is DISABLED — no persisted
+events will be reused, and each run starts from a clean slate.`,
+    });
+  }
+
   // Step 1 — read frozen originals via the filesystem agent.
   const originalSpec = yield* Filesystem().readOriginal({
     target: input.target,
