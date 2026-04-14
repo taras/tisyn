@@ -77,7 +77,7 @@ export const handoff: TisynFn<[{ task: string }], unknown> =
                   args: Construct({
                       session: Ref<any>("claudeSession"),
                       prompt: Concat(
-                          "Analyze: ",
+                          "Reply to the other agent in one short message. Do not run tools or commands.\n\nUser request: ",
                           Get(
                             Ref<any>("input"),
                             "task"

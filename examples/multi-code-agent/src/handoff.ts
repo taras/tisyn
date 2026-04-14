@@ -71,7 +71,7 @@ export function* handoff(input: { task: string }) {
   yield* Output().log({ label: "Status", text: "Requesting Claude analysis..." });
   const claudeResult = yield* Claude().prompt({
     session: claudeSession,
-    prompt: `Analyze: ${input.task}`,
+    prompt: `Reply to the other agent in one short message. Do not run tools or commands.\n\nUser request: ${input.task}`,
   });
   yield* Output().log({ label: "Claude", text: claudeResult.response });
 
