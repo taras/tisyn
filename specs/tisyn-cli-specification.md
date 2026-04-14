@@ -2,7 +2,7 @@
 
 # Tisyn CLI Specification
 
-**Complements:** tisyn-compiler, tisyn-config
+**Complements:** Tisyn Compiler Specification, Tisyn Configuration Specification
 
 ---
 
@@ -66,7 +66,7 @@ Validate a workflow descriptor's readiness without executing. Validates descript
 
 ## 3. Process Lifecycle
 
-Process lifecycle and exit code semantics for all commands.
+Process lifecycle and exit code semantics for all commands (§3).
 
 ### 3.1. Effection Entrypoint
 
@@ -82,7 +82,7 @@ For `tsn run`, the process remains alive after startup completes. It exits when 
 
 ### 3.4. Exit Codes
 
-Exit code 0 is success. Code 1 is a compilation error (generate/build). Code 2 is a structural descriptor, schema, or configuration error. Code 3 is an I/O error (module not found, file unreadable). Code 4 is an invocation input error (missing required input, type mismatch, unknown flag) for `run`. Code 5 is an environment validation error (missing required or secret env vars). Code 6 is a runtime execution error.
+Exit code 0 is success. Code 1 is a compilation error (generate/build). Code 2 is a structural descriptor, schema, or configuration error. Code 3 is an I/O error (module not found, file unreadable). Code 4 is an invocation input error (missing required input, type mismatch, unknown flag) for `run`. Code 5 is an environment validation error (missing required or secret env vars). Code 6 is a runtime execution error. This is the §3.4 exit code table.
 
 - **MUST** — The CLI exits with the appropriate exit code and does not exit with code 0 when an error occurred.
 - **MUST** — Unrecognized built-in CLI flags for `generate`, `build`, or `check` fail with exit code 2.
@@ -104,7 +104,7 @@ Exit code 0 is success. Code 1 is a compilation error (generate/build). Code 2 i
 
 ## 4. Build Configuration
 
-Build config file format and schema for `tsn build`.
+Build config file format and schema for `tsn build` (§4).
 
 ### 4.1. Build Config File
 
@@ -116,14 +116,14 @@ TypeScript format uses `defineConfig()` (a passthrough identity). JSON format us
 
 ### 4.3. Config Schema
 
-A `TsynConfig` has a `generates` array of `GeneratePass` entries with `name`, `roots`, `output`, optional `format`, `noValidate`, `dependsOn`.
+A `TsynConfig` has a `generates` array of `GeneratePass` entries with `name`, `roots`, `output`, optional `format`, `noValidate`, `dependsOn`. The CLI validates the config against this schema (§4.3).
 
 - **MUST** — Build config validation: `generates` contains at least one entry; each `name` is unique and matches `[a-z][a-z0-9-]*`; each `roots` is non-empty; each root resolves to an existing file; each `output` is writable; `dependsOn` references name passes in `generates`.
 - **MUST** — Legacy fields (e.g. `input`) on the build config are rejected as unknown with exit code 2.
 
 ## 5. Multi-Pass Ordering
 
-Ordering and cross-pass-boundary handling for multi-pass builds.
+Ordering and cross-pass-boundary handling for multi-pass builds (§5 pass dependency graph).
 
 ### 5.1. Import-Graph Inference
 
@@ -174,11 +174,11 @@ On success without `--verbose`, compilation commands print a single confirmation
 
 ## 8. Workflow Invocation Input Model
 
-Schema contract and supported shapes for workflow invocation inputs.
+Schema contract and supported shapes for the workflow invocation input schema (§8).
 
 ### 8.1. Input Schema Contract
 
-`tsn run` has access to a workflow invocation input schema (IS1). Unsupported shapes in the schema fail with exit code 2 (IS2). Zero-parameter workflows produce no derived flags and are not a failure (IS3).
+`tsn run` has access to a workflow invocation input schema (IS1, §8.1). Unsupported shapes in the schema fail with exit code 2 (IS2). Zero-parameter workflows produce no derived flags and are not a failure (IS3).
 
 - **MUST** — IS1: The CLI must obtain a conforming workflow invocation input schema before parsing invocation flags; if no schema is available, it fails with exit code 2.
 - **MUST** — IS2: If the obtained schema contains unsupported shapes, the CLI fails with exit code 2 and a diagnostic identifying the unsupported construct.
@@ -192,7 +192,7 @@ S1: no inputs. S2: a single flat object parameter whose fields become derived in
 
 ### 8.3. Boolean Semantics (v1 Design Choice)
 
-Boolean fields follow a presence-flag model. `boolean` and `boolean?` are equivalent in CLI mapping (B1). Presence sets `true`, absence sets `false` — never `undefined` (B2). `--no-flag` is unsupported in v1 (B3). These are owned design choices for v1 (B4).
+Boolean fields follow a presence-flag model (§8.3). `boolean` and `boolean?` are equivalent in CLI mapping (B1). Presence sets `true`, absence sets `false` — never `undefined` (B2). `--no-flag` is unsupported in v1 (B3). These are owned design choices for v1 (B4).
 
 - **MUST** — B1: `boolean` and `boolean?` are equivalent in CLI mapping — both produce an optional presence flag.
 - **MUST** — B2: Supplying `--flag` sets the value to `true`; omitting it sets the value to `false`. The CLI always provides a concrete `boolean`, never `undefined`.
@@ -200,7 +200,7 @@ Boolean fields follow a presence-flag model. `boolean` and `boolean?` are equiva
 
 ### 8.4. Unsupported Shapes
 
-Rejected shapes include multiple parameters, non-object parameters, array-typed fields, nested object fields, union-typed fields other than `T | undefined`, enums, tuples, mapped types, and `EnvDescriptor` or config-node-typed fields.
+Rejected shapes (§8.4) include multiple parameters, non-object parameters, array-typed fields, nested object fields, union-typed fields other than `T | undefined`, enums, tuples, mapped types, and `EnvDescriptor` or config-node-typed fields.
 
 - **MUST** — Schema derivation rejects multiple parameters, non-object parameter types, array-typed fields, nested object fields, union-typed fields (other than `T | undefined`), enum/tuple/mapped types, and fields typed as `EnvDescriptor` or any config-node type.
 
@@ -212,11 +212,11 @@ If a field has a JSDoc comment or `@param` annotation, the description should be
 
 ## 9. CLI Flag Mapping and Help
 
-Flag derivation, mapping, coercion, and help generation for `tsn run`.
+Flag derivation, mapping, coercion, and help generation for `tsn run` (§9).
 
 ### 9.1. Name Conversion
 
-Field names are converted from `camelCase` to `--kebab-case` by splitting on uppercase boundaries.
+Field names are converted from `camelCase` to `--kebab-case` (§9.1) by splitting on uppercase boundaries.
 
 - **MUST** — Field names are converted from `camelCase` to `--kebab-case` by splitting on uppercase boundaries, lowercasing, and joining with hyphens.
 
@@ -235,7 +235,7 @@ Non-boolean non-optional fields must be supplied via their CLI flag. Missing req
 
 ### 9.4. Unknown Flags
 
-During `tsn run` input parsing, any CLI token in the workflow-input remainder that does not match a derived invocation input causes exit code 4. This includes unknown long flags, short flags, and bare positional arguments.
+During `tsn run` input parsing (§9.4), any CLI token in the workflow-input remainder that does not match a derived invocation input causes exit code 4. This includes unknown long flags, short flags, and bare positional arguments.
 
 - **MUST** — During `tsn run` input parsing, any CLI token in the workflow-input remainder that does not match a derived input (including unknown long flags, short flags, and bare positionals) causes exit code 4.
 
@@ -248,7 +248,7 @@ Collision is checked on the derived kebab-case flag names. If a derived flag col
 
 ### 9.6. Help Generation
 
-Static help (`tsn run --help` with no module) shows built-in options. Dynamic help (`tsn run <module> --help`) loads the descriptor and shows usage, built-in options, workflow-derived flags, and entrypoints. On help-path failure, the CLI shows built-in options and a diagnostic explaining why workflow-derived flags cannot be shown, then exits with the appropriate error code.
+Static help (`tsn run --help` with no module) shows built-in options. Dynamic help (`tsn run <module> --help`) loads the descriptor and shows usage, built-in options, workflow-derived flags, and entrypoints. On help-path failure, the CLI shows built-in options and a diagnostic explaining why workflow-derived flags cannot be shown, then exits with the appropriate error code (§9.6).
 
 - **MUST** — Dynamic help for `tsn run <module> --help` produces a usage line, built-in options, workflow-derived flags with type and required/optional status and descriptions, and named entrypoints from the descriptor.
 - **MUST** — Help describes invocation inputs only and must not describe resolved workflow config or `Config.useConfig()` internals.
@@ -256,9 +256,9 @@ Static help (`tsn run --help` with no module) shows built-in options. Dynamic he
 - **MUST NOT** — Help silently omits the workflow inputs section without explanation.
 - **MUST** — Static help (`tsn run --help` with no module argument) displays the command's built-in options and usage and exits 0 without loading any descriptor or workflow metadata.
 
-## 10. Startup Lifecycle (tsn run)
+## 10. Startup Lifecycle (`tsn run`)
 
-Lifecycle orchestration for `tsn run`.
+Lifecycle orchestration for `tsn run` (§10).
 
 ### 10.1. End-to-End Sequence
 
@@ -270,7 +270,7 @@ Phase A (load/validate descriptor) precedes Phase B (derive/validate inputs) pre
 
 ### 10.2. Module Contracts
 
-M1: the descriptor module must have a `default` export that is a valid `WorkflowDescriptor`. M2: the workflow function module must export the entrypoint under the `run.export` name. M3: `run.module`, if specified, is resolved relative to the descriptor module.
+Module contracts (§10.2). M1: the descriptor module must have a `default` export that is a valid `WorkflowDescriptor`. M2: the workflow function module must export the entrypoint under the `run.export` name. M3: `run.module`, if specified, is resolved relative to the descriptor module.
 
 - **MUST** — M1: The descriptor module has a `default` export that is a valid `WorkflowDescriptor`.
 - **MUST** — M2: The workflow function module exports the workflow entrypoint under the name specified by `run.export`.
@@ -291,7 +291,7 @@ When both invocation input errors and environment errors exist, the CLI should r
 
 ### 10.5. Module Loading
 
-Module loading for descriptor, workflow, and transport binding modules.
+Module loading for descriptor, workflow, and transport binding modules (§10.5).
 
 #### 10.5.1. Supported Module Inputs
 
@@ -302,11 +302,11 @@ Module loading for descriptor, workflow, and transport binding modules.
 
 #### 10.5.2. Bootstrap Loading
 
-Module loading for `tsn run` and `tsn check` occurs before any Effection scope exists. The CLI uses a bootstrap loading path — a plain async function — for all pre-scope module loading.
+Module loading for `tsn run` and `tsn check` occurs before any Effection scope exists. The CLI uses a bootstrap loading path (§10.5.2) — a plain async function — for all pre-scope module loading.
 
 #### 10.5.3. Shared Default Implementation
 
-The default module-loading logic is owned by `@tisyn/runtime` and exported as `loadModule()`.
+The default module-loading logic is owned by `@tisyn/runtime` and exported as `loadModule()` (§10.5.3).
 
 #### 10.5.4. Module Loading vs. Workflow Source Compilation
 
@@ -320,7 +320,7 @@ Module-loading errors (unsupported extension, module not found, syntax error, lo
 
 #### 10.5.6. Runtime Context API
 
-`Runtime` is a context API exported from `@tisyn/runtime` via `createApi()`. It exposes `loadModule` as a middleware-interceptable capability via `Runtime.around()`.
+`Runtime` is a context API exported from `@tisyn/runtime` via `createApi()` (§10.5.6). It exposes `loadModule` as a middleware-interceptable capability via `Runtime.around()`.
 
 ## 11. Validation Summary
 
@@ -364,7 +364,7 @@ Migration from legacy build scripts to `tsn` commands.
 
 ### 13.4. Remove Legacy Compiler Binary
 
-`tisyn-compile` is removed once `tsn` is established.
+`tisyn-compile` is removed once `tsn` is established (§13.4).
 
 ## 14. Explicit Non-Goals
 
@@ -396,7 +396,7 @@ The CLI may use Configliere or any other parsing library. No normative concept d
 
 ### 16.2. Two-Phase Parsing Model for tsn run
 
-Phase 1 parses built-in command options into a consumed set, leaving the remainder. Phase 2 loads the descriptor and parses the remainder against derived flags. The remainder is the sole source of workflow invocation flags — built-in options like `--verbose` and `--entrypoint` must not leak into workflow flag parsing.
+Phase 1 parses built-in command options into a consumed set, leaving the remainder. Phase 2 loads the descriptor and parses the remainder against derived flags. The remainder is the sole source of workflow invocation flags — built-in options like `--verbose` and `--entrypoint` must not leak into workflow flag parsing. This two-phase model (§16.2) is an implementation concern, not a normative requirement.
 
 - **MUST** — The CLI must not derive workflow flags from raw `process.argv`; built-in options such as `--verbose` and `--entrypoint` are consumed in Phase 1 and must not leak into workflow-derived flag parsing.
 
@@ -407,3 +407,37 @@ How the schema is obtained is an implementation choice. Options include extracti
 ### 16.4. Provenance
 
 When `--verbose` is active, the CLI should display the resolved value and origin of each flag and environment variable.
+
+## Final Consistency Changes
+
+1. **Exit code 2 vs 3 boundary.** Code 2 and code 3 had
+   overlapping coverage ("module not found" appeared
+   under code 2; "file not found" under code 3). The
+   boundary is now unambiguous: code 3 applies when the
+   CLI cannot locate or read a file at the filesystem
+   level; code 2 applies when a file was loaded but its
+   contents are structurally invalid. §10.1 step 1 now
+   specifies both failure modes explicitly.
+
+2. **M2 softened.** "Compiled workflow function" replaced
+   with "workflow entrypoint function" plus "the CLI does
+   not prescribe how this function was produced." The
+   module contract is now stable regardless of compiler
+   or runtime internals.
+
+3. **`tsn check` example qualified.** The output example
+   now labels the invocation inputs section as
+   "(advisory)" and adds prose clarifying that the
+   section is omitted when schema derivation fails or
+   is not attempted.
+
+4. **Document ending consolidated.** The previous
+   "Remaining Open Questions" and "Final Cleanup Changes"
+   sections merged into this single section.
+
+**Open question.** One question remains genuinely
+unresolved: whether flag collisions (§9.5) should be
+handled by built-in-wins precedence (current rule) or
+by namespacing workflow inputs (e.g., `--input.max-turns`).
+The current rule is simpler. This may be revisited if
+collision surprises users in practice.

@@ -15,6 +15,17 @@ import { normalizeSpec, normalizeTestPlan } from "../src/index.ts";
 import { renderSpecMarkdown, renderTestPlanMarkdown } from "../src/markdown/index.ts";
 import { tisynCliSpec, tisynCliTestPlan } from "../corpus/tisyn-cli/index.ts";
 
+// Prose titles for the two specs the tisyn-cli corpus references via
+// DependsOn / Complements — the renderer defaults to the raw spec id
+// when no resolver is supplied, so this map restores the full titles
+// on `Depends on:` / `Complements:` lines. The same two-entry map
+// lives in `workflows/corpus-agent.ts`; intentionally not extracted
+// into a shared helper per feedback_no_trivial_wrappers.
+const RELATIONSHIP_TITLES = new Map<string, string>([
+  ["tisyn-compiler", "Tisyn Compiler Specification"],
+  ["tisyn-config", "Tisyn Configuration Specification"],
+]);
+
 export interface EmitTargets {
   readonly specPath: string;
   readonly testPlanPath: string;
@@ -44,7 +55,9 @@ export function renderCliMarkdown(): EmitResult {
     ruleSections.set(rule.id, rule.section);
   }
   return {
-    spec: renderSpecMarkdown(specResult.value),
+    spec: renderSpecMarkdown(specResult.value, {
+      relationshipTitle: (id) => RELATIONSHIP_TITLES.get(id),
+    }),
     testPlan: renderTestPlanMarkdown(planResult.value, {
       ruleSection: (id) => ruleSections.get(id),
       validatesLabel: specResult.value.title,
