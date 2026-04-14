@@ -1,5 +1,5 @@
 // Pure helpers for the Claude semantic-equivalence gate used by
-// verify-cli-corpus. Kept free of Effection/dispatch so they can be
+// verify-corpus. Kept free of Effection/dispatch so they can be
 // unit-tested with plain function calls. Intentionally free of
 // `@tisyn/spec` imports so the workflow body (which consumes these
 // helpers) stays within the `tsn run` compile-on-the-fly budget —

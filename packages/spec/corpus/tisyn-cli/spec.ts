@@ -8,7 +8,7 @@
 // Frozen migration fixtures at
 // `packages/spec/corpus/tisyn-cli/__fixtures__/original-*.md` are
 // byte-for-byte snapshots of the pre-migration handwritten documents;
-// they are the permanent comparison baseline for `verify-cli-corpus`.
+// they are the permanent comparison baseline for `verify-corpus`.
 
 import { Complements, ErrorCode, Rule, Section, Spec } from "../../src/index.ts";
 import { Status, Strength } from "../../src/enums.ts";

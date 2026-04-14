@@ -32,7 +32,7 @@ describe("corpus-agent", () => {
     yield* scoped(function* () {
       yield* installRemoteAgent(corpusDeclaration, createBinding().transport);
       const result = (yield* dispatch("corpus.compile", {
-        input: { originalSpec, originalPlan },
+        input: { target: "tisyn-cli", originalSpec, originalPlan },
       } as unknown as Val)) as {
         ok: boolean;
         summary: string;
@@ -57,10 +57,26 @@ describe("corpus-agent", () => {
         "# Totally Different Title",
       );
       const result = (yield* dispatch("corpus.compile", {
-        input: { originalSpec: mutatedSpec, originalPlan },
+        input: { target: "tisyn-cli", originalSpec: mutatedSpec, originalPlan },
       } as unknown as Val)) as { ok: boolean; summary: string };
       expect(result.ok).toBe(false);
       expect(result.summary.length).toBeGreaterThan(2);
+    });
+  });
+
+  it("rejects an unknown target", function* () {
+    yield* scoped(function* () {
+      yield* installRemoteAgent(corpusDeclaration, createBinding().transport);
+      let thrown: unknown;
+      try {
+        yield* dispatch("corpus.compile", {
+          input: { target: "missing", originalSpec, originalPlan },
+        } as unknown as Val);
+      } catch (err) {
+        thrown = err;
+      }
+      expect(thrown).toBeInstanceOf(Error);
+      expect(String(thrown)).toContain('unknown target "missing"');
     });
   });
 

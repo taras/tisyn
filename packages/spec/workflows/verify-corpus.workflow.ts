@@ -1,9 +1,8 @@
-// Authored workflow body for the tisyn-cli corpus verification
-// pipeline. Pure dispatch — every library call (normalize, render,
-// compare, buildReviewPrompt, parseVerdict) is owned by the `corpus`
-// agent's binding, every file read is owned by the `filesystem`
-// agent, and every user-visible log line is owned by the `output`
-// agent.
+// Authored workflow body for the corpus verification pipeline. Pure
+// dispatch — every library call (normalize, render, compare,
+// buildReviewPrompt, parseVerdict) is owned by the `corpus` agent's
+// binding, every file read is owned by the `filesystem` agent, and
+// every user-visible log line is owned by the `output` agent.
 //
 // The body uses inline `declare function` ambient contracts — the
 // canonical workflow-body shape the `tsn run` compile-on-the-fly path
@@ -11,6 +10,13 @@
 // IDs are derived by `toAgentId` in `packages/compiler/src/agent-id.ts`
 // (PascalCase → kebab-case): `Filesystem → "filesystem"`,
 // `Output → "output"`, `Corpus → "corpus"`, `ClaudeCode → "claude-code"`.
+//
+// The body is target-driven: `input.target` is threaded through every
+// binding call so the pipeline can be retargeted by supplying a
+// different `--target` flag on `tsn run`. The target name is resolved
+// against per-binding registries (`TARGET_FIXTURES` in
+// `filesystem-agent.ts`, `TARGETS` in `corpus-agent.ts`); adding a new
+// target later is one row in each registry, nothing in this file.
 //
 // Parameter names in the ambient contracts matter: the compiler wraps
 // each single argument as `{ <paramName>: <value> }` before emitting
@@ -30,7 +36,7 @@
 import type { Workflow } from "@tisyn/agent";
 
 declare function Filesystem(): {
-  readFile(input: { path: string }): Workflow<{ content: string }>;
+  readOriginal(input: { target: string; kind: "spec" | "plan" }): Workflow<{ content: string }>;
 };
 
 declare function Output(): {
@@ -38,7 +44,7 @@ declare function Output(): {
 };
 
 declare function Corpus(): {
-  compile(input: { originalSpec: string; originalPlan: string }): Workflow<{
+  compile(input: { target: string; originalSpec: string; originalPlan: string }): Workflow<{
     ok: boolean;
     summary: string;
     generatedSpec: string;
@@ -54,13 +60,15 @@ declare function ClaudeCode(): {
   plan(args: { session: { sessionId: string }; prompt: string }): Workflow<{ response: string }>;
 };
 
-export function* verifyCliCorpus(input: { skipClaude?: boolean }) {
+export function* verifyCorpus(input: { target: string; skipClaude?: boolean }) {
   // Step 1 — read frozen originals via the filesystem agent.
-  const originalSpec = yield* Filesystem().readFile({
-    path: "original-spec.md",
+  const originalSpec = yield* Filesystem().readOriginal({
+    target: input.target,
+    kind: "spec",
   });
-  const originalPlan = yield* Filesystem().readFile({
-    path: "original-test-plan.md",
+  const originalPlan = yield* Filesystem().readOriginal({
+    target: input.target,
+    kind: "plan",
   });
 
   // Step 2 — normalize + render + compare (spec only) + build Claude
@@ -71,6 +79,7 @@ export function* verifyCliCorpus(input: { skipClaude?: boolean }) {
   // express, so test-plan equivalence is verified exclusively by the
   // Claude semantic gate.
   const compiled = yield* Corpus().compile({
+    target: input.target,
     originalSpec: originalSpec.content,
     originalPlan: originalPlan.content,
   });
@@ -84,7 +93,7 @@ equivalence is verified by the Claude semantic gate instead.`,
   });
 
   if (!compiled.ok) {
-    throw new Error(`verify-cli-corpus failed at compare: ${compiled.summary}`);
+    throw new Error(`verify-corpus failed at compare: ${compiled.summary}`);
   }
 
   // Step 3 — Claude semantic gate (optional).
@@ -107,7 +116,7 @@ equivalence is verified by the Claude semantic gate instead.`,
     if (verdict.pass) {
       return { ok: true, stage: "claude" };
     }
-    throw new Error("verify-cli-corpus failed at claude: verdict FAIL");
+    throw new Error("verify-corpus failed at claude: verdict FAIL");
   } finally {
     yield* ClaudeCode().closeSession(session);
   }

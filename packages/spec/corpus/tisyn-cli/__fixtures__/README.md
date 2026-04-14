@@ -8,13 +8,13 @@ handwritten Markdown. Do not regenerate, rename, or edit them.
 - `original-spec.md`       — snapshot of `specs/tisyn-cli-specification.md`
 - `original-test-plan.md`  — snapshot of `specs/tisyn-cli-test-plan.md`
 
-`verify-cli-corpus` compares generator output against these fixtures on
+`verify-corpus` compares generator output against these fixtures on
 every run. If you need to update the corpus, author new `Spec(...)` /
 `TestPlan(...)` values; never touch these files.
 
 ## Test-plan asymmetry — deterministic gate is spec-only
 
-The deterministic `compareMarkdown` gate in `verify-cli-corpus` runs
+The deterministic `compareMarkdown` gate in `verify-corpus` runs
 **only on the spec side**. The test plan is verified exclusively by the
 Claude semantic gate. This is a data-model limitation, not a
 testing-discipline gap:
@@ -28,7 +28,7 @@ prose. Any rendered test plan would therefore mismatch the frozen
 original on these nine sections, producing a compare verdict that is
 structurally unavoidable rather than informative.
 
-The `compare:plan` log line in `verify-cli-corpus` emits a `SKIPPED`
+The `compare:plan` log line in `verify-corpus` emits a `SKIPPED`
 notice explaining this, and the Claude review prompt carries both
 sides plus the literal text "SKIPPED — TestPlanModule cannot express
 the handwritten outer prose sections." so the semantic gate can judge

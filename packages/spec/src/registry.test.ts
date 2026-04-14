@@ -159,10 +159,12 @@ describe("SS-REG", () => {
   });
 
   test("SS-REG-002 Registry requires only normalized artifacts (R2, LB3)", () => {
-    const fromSource = buildRegistry([specA()], [planForA()]);
+    const source = specA();
+    const plan = planForA();
+    const fromSource = buildRegistry([source], [plan]);
     const fromJson = buildRegistry(
-      [JSON.parse(JSON.stringify(specA())) as NormalizedSpecModule],
-      [JSON.parse(JSON.stringify(planForA())) as NormalizedTestPlanModule],
+      [JSON.parse(JSON.stringify(source)) as NormalizedSpecModule],
+      [JSON.parse(JSON.stringify(plan)) as NormalizedTestPlanModule],
     );
     expect(fromJson.specs.get("spec-a")).toEqual(fromSource.specs.get("spec-a"));
     expect(fromJson.ruleIndex.get("X-R1")).toEqual(fromSource.ruleIndex.get("X-R1"));
@@ -227,8 +229,10 @@ describe("SS-REG", () => {
   });
 
   test("SS-REG-010 Registry is not persisted (R13)", () => {
-    const first = buildRegistry([specA()], [planForA()]);
-    const second = buildRegistry([specA()], [planForA()]);
+    const source = specA();
+    const plan = planForA();
+    const first = buildRegistry([source], [plan]);
+    const second = buildRegistry([source], [plan]);
     expect(first).not.toBe(second);
     expect(first.specs).not.toBe(second.specs);
     expect(first.specs.get("spec-a")).toEqual(second.specs.get("spec-a"));

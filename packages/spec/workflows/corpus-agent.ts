@@ -1,7 +1,12 @@
-// Pilot-local corpus binding. Owns the full tisyn-cli structured-spec
-// pipeline — normalize, build registry, check readiness, render,
-// compare against the frozen Markdown fixture, and build the Claude
-// review prompt. The workflow body calls `Corpus().compile(...)` and
+// Pilot-local corpus binding. Owns the full structured-spec pipeline
+// for every target the pipeline knows about — normalize, build
+// registry, check readiness, render, compare against the frozen
+// Markdown fixture, and build the Claude review prompt. Target-
+// specific data (structured spec + test-plan modules +
+// relationship-title map) lives in the `TARGETS` registry below;
+// adding a second target later is one row, nothing more.
+//
+// The workflow body calls `Corpus().compile({ target, ... })` and
 // `Corpus().checkVerdict(...)` through ambient contracts, and the
 // compiler wraps each single argument as `{ input: <value> }` using
 // the ambient param name — so the handlers destructure `{ input }`.
@@ -31,12 +36,28 @@ import { tisynCliSpec, tisynCliTestPlan } from "../corpus/tisyn-cli/index.ts";
 import { corpusDeclaration } from "./agents.ts";
 import { buildReviewPrompt, parseVerdict } from "./claude-reviewer.ts";
 
-const RELATIONSHIP_TITLES = new Map<string, string>([
-  ["tisyn-compiler", "Tisyn Compiler Specification"],
-  ["tisyn-config", "Tisyn Configuration Specification"],
+interface TargetEntry {
+  readonly spec: typeof tisynCliSpec;
+  readonly plan: typeof tisynCliTestPlan;
+  readonly relationshipTitles: ReadonlyMap<string, string>;
+}
+
+const TARGETS = new Map<string, TargetEntry>([
+  [
+    "tisyn-cli",
+    {
+      spec: tisynCliSpec,
+      plan: tisynCliTestPlan,
+      relationshipTitles: new Map<string, string>([
+        ["tisyn-compiler", "Tisyn Compiler Specification"],
+        ["tisyn-config", "Tisyn Configuration Specification"],
+      ]),
+    },
+  ],
 ]);
 
 export interface CompileInput {
+  readonly target: string;
   readonly originalSpec: string;
   readonly originalPlan: string;
 }
@@ -62,15 +83,23 @@ export function createBinding(): LocalAgentBinding {
     transport: inprocessTransport(corpusDeclaration, {
       *compile(payload) {
         const { input } = payload as unknown as { input: CompileInput };
-        const { originalSpec, originalPlan } = input;
+        const { target, originalSpec, originalPlan } = input;
 
-        const specResult = normalizeSpec(tisynCliSpec);
+        const entry = TARGETS.get(target);
+        if (entry == null) {
+          throw new Error(
+            `corpus-agent: unknown target "${target}". ` +
+              `Known targets: ${[...TARGETS.keys()].join(", ")}`,
+          );
+        }
+
+        const specResult = normalizeSpec(entry.spec);
         if (!specResult.ok) {
           throw new Error(
             `corpus.compile: normalizeSpec failed: ${JSON.stringify(specResult.errors)}`,
           );
         }
-        const planResult = normalizeTestPlan(tisynCliTestPlan);
+        const planResult = normalizeTestPlan(entry.plan);
         if (!planResult.ok) {
           throw new Error(
             `corpus.compile: normalizeTestPlan failed: ${JSON.stringify(planResult.errors)}`,
@@ -78,9 +107,10 @@ export function createBinding(): LocalAgentBinding {
         }
 
         const registry = buildRegistry([specResult.value], [planResult.value]);
-        if (!isReady(registry, "tisyn-cli")) {
-          const coverage = checkCoverage(registry, "tisyn-cli");
-          throw new Error(`corpus.compile: tisyn-cli not ready: ${JSON.stringify(coverage)}`);
+        const specId = specResult.value.id;
+        if (!isReady(registry, specId)) {
+          const coverage = checkCoverage(registry, specId);
+          throw new Error(`corpus.compile: ${specId} not ready: ${JSON.stringify(coverage)}`);
         }
 
         const ruleSections = new Map<string, string>();
@@ -89,7 +119,7 @@ export function createBinding(): LocalAgentBinding {
         }
 
         const generatedSpec = renderSpecMarkdown(specResult.value, {
-          relationshipTitle: (id) => RELATIONSHIP_TITLES.get(id),
+          relationshipTitle: (id) => entry.relationshipTitles.get(id),
         });
         const generatedPlan = renderTestPlanMarkdown(planResult.value, {
           ruleSection: (id) => ruleSections.get(id),
