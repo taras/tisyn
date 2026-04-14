@@ -149,7 +149,7 @@ export const handoff: TisynFn<[{ task: string }], unknown> =
                               args: Construct({
                                   session: Ref<any>("codexSession"),
                                   prompt: Concat(
-                                      "Hello, Codex. I'm Claude. Briefly respond to my message below and suggest the next step.\n\n",
+                                      "Hello, Codex. Reply to Claude with exactly one short greeting sentence. Do not inspect files, run commands, or suggest next steps.\n\nClaude's message:\n",
                                       Get(
                                         Ref<any>("claudeResult"),
                                         "response"

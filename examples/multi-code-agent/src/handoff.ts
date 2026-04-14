@@ -93,7 +93,7 @@ export function* handoff(input: { task: string }) {
   yield* Output().log({ label: "Status", text: "Handing Claude message to Codex for a brief reply..." });
   const codexResult = yield* Codex().prompt({
     session: codexSession,
-    prompt: `Hello, Codex. I'm Claude. Briefly respond to my message below and suggest the next step.\n\n${claudeResult.response}`,
+    prompt: `Hello, Codex. Reply to Claude with exactly one short greeting sentence. Do not inspect files, run commands, or suggest next steps.\n\nClaude's message:\n${claudeResult.response}`,
   });
   yield* Output().log({ label: "Codex", text: codexResult.response });
 
