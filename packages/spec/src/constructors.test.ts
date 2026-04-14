@@ -21,6 +21,7 @@ import {
   TestCase,
   TestCategory,
   TestPlan,
+  TestPlanSection,
   UnchangedSection,
 } from "./constructors.ts";
 import { ChangeType, EvidenceTier, Resolution, Status, Strength, Tier } from "./enums.ts";
@@ -63,6 +64,8 @@ function testPlanX() {
     version: "0.1.0",
     status: Status.Active,
     testsSpec: DependsOn("sp-x", "0.1.0"),
+    sections: [TestPlanSection({ id: "matrix", title: "Test Matrix", prose: "" })],
+    categoriesSectionId: "matrix",
     categories: [
       TestCategory({
         id: "cat1",

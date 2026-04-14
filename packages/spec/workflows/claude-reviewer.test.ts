@@ -22,18 +22,21 @@ describe("buildReviewPrompt", () => {
     expect(prompt).toContain("STRUCTURAL COMPARISON SUMMARY (test plan)");
   });
 
-  test("omitted planCompareSummary emits the SKIPPED notice", () => {
+  test("emits both comparison summary sections with their JSON bodies", () => {
+    const specSummary = '{ "missingSections": ["spec-extra"] }';
+    const planSummary = '{ "missingSections": ["plan-extra"] }';
     const prompt = buildReviewPrompt({
       originalSpec: "ORIG SPEC",
       originalPlan: "ORIG PLAN",
       generatedSpec: "GEN SPEC",
       generatedPlan: "GEN PLAN",
-      specCompareSummary: emptySummary,
+      specCompareSummary: specSummary,
+      planCompareSummary: planSummary,
     });
-    expect(prompt).toContain("STRUCTURAL COMPARISON SUMMARY (test plan)");
-    expect(prompt).toContain(
-      "SKIPPED — TestPlanModule cannot express the handwritten outer prose sections.",
-    );
+    expect(prompt).toContain("=== STRUCTURAL COMPARISON SUMMARY (spec) ===");
+    expect(prompt).toContain(specSummary);
+    expect(prompt).toContain("=== STRUCTURAL COMPARISON SUMMARY (test plan) ===");
+    expect(prompt).toContain(planSummary);
   });
 });
 

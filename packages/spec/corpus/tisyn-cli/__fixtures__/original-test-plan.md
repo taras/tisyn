@@ -154,8 +154,8 @@ instrumentation:
 | --- | --- | --- | --- | --- |
 | CLI-CMD-001 | P0 | E2E | §2.1 | `tsn generate --help` exits 0 and shows usage |
 | CLI-CMD-002 | P0 | E2E | §2.2 | `tsn build --help` exits 0 and shows usage |
-| CLI-CMD-003 | P0 | E2E | §2.3, §9.6 | `tsn run <valid-module> --help` loads module and shows workflow-derived help. See CLI-HLP-008/009 for failure path. |
-| CLI-CMD-003a | P0 | E2E | §2.3 | `tsn run --help` (no module) shows static command help and exits 0. |
+| CLI-CMD-003 | P0 | E2E | §9.6 | `tsn run <valid-module> --help` loads module and shows workflow-derived help. See CLI-HLP-008/009 for failure path. |
+| CLI-CMD-003a | P0 | E2E | §9.6 | `tsn run --help` (no module) shows static command help and exits 0. |
 | CLI-CMD-004 | P0 | E2E | §2.4 | `tsn check --help` exits 0 and shows usage |
 | CLI-CMD-005 | P0 | E2E | §1.1 | `tsn --version` prints version and exits 0 |
 | CLI-CMD-006 | P0 | E2E | §3.4 | Unknown command `tsn foo` exits with code 2 |
@@ -201,8 +201,8 @@ internals remain out of scope.
 | CLI-LOAD-006 | P0 | E2E | §10.2/M3 | `run.module` relative path resolves correctly. Observable: workflow loads without code 3. |
 | CLI-LOAD-007 | P0 | E2E | §10.1/2 | `run.module` path does not exist → exit code 3 |
 | CLI-LOAD-008 | P0 | E2E | §10.1/2 | `run.module` omitted → workflow function resolved from descriptor module. Observable: successful execution. |
-| CLI-LOAD-009 | P0 | E2E | §10.5.1, §10.5.2 | TypeScript descriptor module (`.ts`/`.mts`/`.cts`) loads successfully. Observable: reaches a later phase, not a load-phase error. |
-| CLI-LOAD-010 | P0 | E2E | §10.5.5 | Unsupported extension (for example `.tsx`) → exit code 3 with unsupported-extension diagnostic. |
+| CLI-LOAD-009 | P0 | E2E | §10.5.1 | TypeScript descriptor module (`.ts`/`.mts`/`.cts`) loads successfully. Observable: reaches a later phase, not a load-phase error. |
+| CLI-LOAD-010 | P0 | E2E | §10.5.1 | Unsupported extension (for example `.tsx`) → exit code 3 with unsupported-extension diagnostic. |
 | CLI-LOAD-011 | P0 | E2E | §10.5.4 | Explicit TypeScript `run.module` target that is authored workflow source uses compiler-based rooted compilation, not module loading. Observable: `tsn check` succeeds for a TS workflow source fixture. |
 | CLI-LOAD-012 | P0 | E2E | §10.1/2, §10.5.4 | Same-module workflow export in a TypeScript descriptor resolves from the descriptor module instead of the compiler path. Observable: successful execution or check. |
 | CLI-LOAD-013 | P0 | E2E | §10.1/2 | `run.module` pointing to a generated workflow module is runtime-loaded; compiler is not invoked |
@@ -221,10 +221,10 @@ internals remain out of scope.
 
 | ID | P | Type | Spec | Assertion |
 | --- | --- | --- | --- | --- |
-| CLI-IS-001 | P0 | E2E | IS1 | Schema unavailable → exit code 2 |
-| CLI-IS-002 | P0 | E2E | IS2 | Schema contains unsupported shape → exit code 2 with diagnostic naming the unsupported construct |
-| CLI-IS-003 | P0 | E2E | IS3 | Zero-parameter workflow → no derived flags, no failure |
-| CLI-IS-004 | P0 | E2E | §8.2/S2 | Flat object parameter → one flag per field |
+| CLI-IS-001 | P0 | E2E | §8.1 | Schema unavailable → exit code 2 |
+| CLI-IS-002 | P0 | E2E | §8.1 | Schema contains unsupported shape → exit code 2 with diagnostic naming the unsupported construct |
+| CLI-IS-003 | P0 | E2E | §8.1 | Zero-parameter workflow → no derived flags, no failure |
+| CLI-IS-004 | P0 | E2E | §8.2 | Flat object parameter → one flag per field |
 | CLI-IS-005 | P0 | E2E | §8.4 | Multiple parameters → rejected with exit code 2 |
 | CLI-IS-006 | P0 | E2E | §8.4 | Non-object parameter → rejected |
 | CLI-IS-007 | P0 | E2E | §8.4 | Array-typed field → rejected |
@@ -267,13 +267,13 @@ unsupported shapes.
 
 | ID | P | Type | Spec | Assertion |
 | --- | --- | --- | --- | --- |
-| CLI-BOOL-001 | P0 | E2E | B1 | `boolean` field: `--flag` present → `true` |
-| CLI-BOOL-002 | P0 | E2E | B2 | `boolean` field: flag absent → `false` |
-| CLI-BOOL-003 | P0 | E2E | B1 | `boolean?` field: `--flag` present → `true` |
-| CLI-BOOL-004 | P0 | E2E | B2 | `boolean?` field: flag absent → `false` (not `undefined`) |
-| CLI-BOOL-005 | P0 | E2E | B1 | Non-optional `boolean` is NOT treated as required CLI flag — absent → `false` |
-| CLI-BOOL-006 | P0 | E2E | B3 | `--no-flag` syntax → exit code 4 (rejected as unknown flag) |
-| CLI-BOOL-007 | P0 | Unit | B1 | `boolean` and `boolean?` map to identical CLI surface |
+| CLI-BOOL-001 | P0 | E2E | §8.3 | `boolean` field: `--flag` present → `true` |
+| CLI-BOOL-002 | P0 | E2E | §8.3 | `boolean` field: flag absent → `false` |
+| CLI-BOOL-003 | P0 | E2E | §8.3 | `boolean?` field: `--flag` present → `true` |
+| CLI-BOOL-004 | P0 | E2E | §8.3 | `boolean?` field: flag absent → `false` (not `undefined`) |
+| CLI-BOOL-005 | P0 | E2E | §8.3 | Non-optional `boolean` is NOT treated as required CLI flag — absent → `false` |
+| CLI-BOOL-006 | P0 | E2E | §8.3 | `--no-flag` syntax → exit code 4 (rejected as unknown flag) |
+| CLI-BOOL-007 | P0 | Unit | §8.3 | `boolean` and `boolean?` map to identical CLI surface |
 
 ### I. Flag Collision
 

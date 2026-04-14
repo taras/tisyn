@@ -20,6 +20,7 @@ export {
   TestCase,
   TestCategory,
   TestPlan,
+  TestPlanSection,
   UnchangedSection,
 } from "./constructors.ts";
 

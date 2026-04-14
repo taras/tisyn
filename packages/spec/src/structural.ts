@@ -4,7 +4,13 @@
 // normalization must return an { ok: false } result and not emit an artifact.
 
 import { Tier } from "./enums.ts";
-import type { SpecModule, SpecSection, StructuralError, TestPlanModule } from "./types.ts";
+import type {
+  SpecModule,
+  SpecSection,
+  StructuralError,
+  TestPlanModule,
+  TestPlanSection,
+} from "./types.ts";
 
 function err(
   code: string,
@@ -232,12 +238,92 @@ export function validateSpecStructural(module: SpecModule): readonly StructuralE
   return errors;
 }
 
+// Recursive walk collecting section-level structural errors for TestPlanModule.
+// Enforces non-empty ids, globally-unique ids across every nesting level,
+// non-empty titles, and (when present) a `number` matching `^\d+(?:\.\d+)*$`.
+// Numbered-heading validation catches typos like `"1."` or `"§1"` at normalize
+// time rather than letting them leak into the rendered Markdown.
+function walkTestPlanSections(
+  sections: readonly TestPlanSection[],
+  seenIds: Set<string>,
+  errors: StructuralError[],
+  pathPrefix: string,
+): void {
+  const numberShape = /^\d+(?:\.\d+)*$/;
+  for (let i = 0; i < sections.length; i++) {
+    const section = sections[i]!;
+    const path = `${pathPrefix}[${i}]`;
+    if (section.id.length === 0) {
+      errors.push(
+        err("EMPTY_TESTPLANSECTION_ID", `${path}.id`, "TestPlanSection.id MUST be non-empty"),
+      );
+    } else if (seenIds.has(section.id)) {
+      errors.push(
+        err(
+          "DUPLICATE_TESTPLANSECTION_ID",
+          `${path}.id`,
+          `TestPlanSection id "${section.id}" is declared more than once`,
+          { sectionId: section.id },
+        ),
+      );
+    } else {
+      seenIds.add(section.id);
+    }
+    if (section.title.length === 0) {
+      errors.push(
+        err(
+          "EMPTY_TESTPLANSECTION_TITLE",
+          `${path}.title`,
+          "TestPlanSection.title MUST be non-empty",
+        ),
+      );
+    }
+    if (section.number !== undefined) {
+      if (section.number.length === 0 || !numberShape.test(section.number)) {
+        errors.push(
+          err(
+            "INVALID_TESTPLANSECTION_NUMBER",
+            `${path}.number`,
+            `TestPlanSection.number "${section.number}" MUST match /^\\d+(?:\\.\\d+)*$/`,
+            { number: section.number },
+          ),
+        );
+      }
+    }
+    walkTestPlanSections(section.subsections, seenIds, errors, `${path}.subsections`);
+  }
+}
+
 export function validateTestPlanStructural(module: TestPlanModule): readonly StructuralError[] {
   const errors: StructuralError[] = [];
 
   // D6
   if (module.id.length === 0) {
     errors.push(err("EMPTY_TESTPLAN_ID", "id", "TestPlanModule.id MUST be non-empty"));
+  }
+
+  // Prose-section tree: recursive id / title / number shape checks.
+  // `categoriesSectionId` must resolve to a section somewhere in this tree
+  // so the renderer can locate the slot where category blocks get rendered.
+  const sectionIds = new Set<string>();
+  walkTestPlanSections(module.sections, sectionIds, errors, "sections");
+  if (module.categoriesSectionId.length === 0) {
+    errors.push(
+      err(
+        "EMPTY_CATEGORIES_SECTION_ID",
+        "categoriesSectionId",
+        "TestPlanModule.categoriesSectionId MUST be non-empty",
+      ),
+    );
+  } else if (!sectionIds.has(module.categoriesSectionId)) {
+    errors.push(
+      err(
+        "MISSING_CATEGORIES_SECTION",
+        "categoriesSectionId",
+        `TestPlanModule.categoriesSectionId "${module.categoriesSectionId}" does not resolve to any section in sections`,
+        { sectionId: module.categoriesSectionId },
+      ),
+    );
   }
 
   // D29 — TestCategory id non-empty and unique within this test plan

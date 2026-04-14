@@ -2,7 +2,7 @@
 // spec-system-test-plan.source.md. Covers SS-NR-004, 013, 014, 016, 017.
 
 import { describe, expect, test } from "vitest";
-import { DependsOn, TestCase, TestCategory, TestPlan } from "./constructors.ts";
+import { DependsOn, TestCase, TestCategory, TestPlan, TestPlanSection } from "./constructors.ts";
 import { Status, Tier } from "./enums.ts";
 import { normalizeTestPlan } from "./normalize.ts";
 import type { StructuralError, TestPlanModule } from "./types.ts";
@@ -28,6 +28,9 @@ function basicCoreTestCase(id: string = "X-T1") {
   });
 }
 
+const BASIC_SECTIONS = [TestPlanSection({ id: "matrix", title: "Test Matrix", prose: "" })];
+const BASIC_CATEGORIES_SECTION_ID = "matrix";
+
 describe("SS-NR (test plan)", () => {
   test("SS-NR-004 Empty test-plan id rejected (EMPTY_TESTPLAN_ID)", () => {
     expectReject(
@@ -37,6 +40,8 @@ describe("SS-NR (test plan)", () => {
         version: "0.1.0",
         status: Status.Active,
         testsSpec: DependsOn("sp-x"),
+        sections: BASIC_SECTIONS,
+        categoriesSectionId: BASIC_CATEGORIES_SECTION_ID,
         categories: [TestCategory({ id: "c", title: "C", tests: [basicCoreTestCase()] })],
         coreTier: 1,
         extendedTier: 0,
@@ -53,6 +58,8 @@ describe("SS-NR (test plan)", () => {
         version: "0.1.0",
         status: Status.Active,
         testsSpec: DependsOn("sp-x"),
+        sections: BASIC_SECTIONS,
+        categoriesSectionId: BASIC_CATEGORIES_SECTION_ID,
         categories: [TestCategory({ id: "c", title: "C", tests: [basicCoreTestCase()] })],
         coreTier: 5, // actual = 1
         extendedTier: 0,
@@ -69,6 +76,8 @@ describe("SS-NR (test plan)", () => {
         version: "0.1.0",
         status: Status.Active,
         testsSpec: DependsOn("sp-x"),
+        sections: BASIC_SECTIONS,
+        categoriesSectionId: BASIC_CATEGORIES_SECTION_ID,
         categories: [TestCategory({ id: "c", title: "C", tests: [basicCoreTestCase()] })],
         coreTier: 1,
         extendedTier: 2, // actual = 0
@@ -85,6 +94,8 @@ describe("SS-NR (test plan)", () => {
         version: "0.1.0",
         status: Status.Active,
         testsSpec: DependsOn("sp-x"),
+        sections: BASIC_SECTIONS,
+        categoriesSectionId: BASIC_CATEGORIES_SECTION_ID,
         categories: [
           TestCategory({
             id: "c",
@@ -116,6 +127,8 @@ describe("SS-NR (test plan)", () => {
         version: "0.1.0",
         status: Status.Active,
         testsSpec: DependsOn("sp-x"),
+        sections: BASIC_SECTIONS,
+        categoriesSectionId: BASIC_CATEGORIES_SECTION_ID,
         categories: [
           TestCategory({
             id: "c",
@@ -138,6 +151,8 @@ describe("SS-NR (test plan)", () => {
         version: "0.1.0",
         status: Status.Active,
         testsSpec: DependsOn("sp-x"),
+        sections: BASIC_SECTIONS,
+        categoriesSectionId: BASIC_CATEGORIES_SECTION_ID,
         categories: [TestCategory({ id: "", title: "C", tests: [basicCoreTestCase()] })],
         coreTier: 1,
         extendedTier: 0,
@@ -154,6 +169,8 @@ describe("SS-NR (test plan)", () => {
         version: "0.1.0",
         status: Status.Active,
         testsSpec: DependsOn("sp-x"),
+        sections: BASIC_SECTIONS,
+        categoriesSectionId: BASIC_CATEGORIES_SECTION_ID,
         categories: [
           TestCategory({ id: "dup", title: "A", tests: [basicCoreTestCase("X-T1")] }),
           TestCategory({ id: "dup", title: "B", tests: [basicCoreTestCase("X-T2")] }),
@@ -163,5 +180,131 @@ describe("SS-NR (test plan)", () => {
       }),
       "DUPLICATE_TESTCATEGORY_ID",
     );
+  });
+
+  // ── TestPlanSection structural validation ──
+
+  test("SS-NR-030 Empty section id rejected (EMPTY_TESTPLANSECTION_ID)", () => {
+    expectReject(
+      TestPlan({
+        id: "p",
+        title: "P",
+        version: "0.1.0",
+        status: Status.Active,
+        testsSpec: DependsOn("sp-x"),
+        sections: [TestPlanSection({ id: "", title: "Bad", prose: "" })],
+        categoriesSectionId: "matrix",
+        categories: [TestCategory({ id: "c", title: "C", tests: [basicCoreTestCase()] })],
+        coreTier: 1,
+        extendedTier: 0,
+      }),
+      "EMPTY_TESTPLANSECTION_ID",
+    );
+  });
+
+  test("SS-NR-031 Empty section title rejected (EMPTY_TESTPLANSECTION_TITLE)", () => {
+    expectReject(
+      TestPlan({
+        id: "p",
+        title: "P",
+        version: "0.1.0",
+        status: Status.Active,
+        testsSpec: DependsOn("sp-x"),
+        sections: [TestPlanSection({ id: "matrix", title: "", prose: "" })],
+        categoriesSectionId: "matrix",
+        categories: [TestCategory({ id: "c", title: "C", tests: [basicCoreTestCase()] })],
+        coreTier: 1,
+        extendedTier: 0,
+      }),
+      "EMPTY_TESTPLANSECTION_TITLE",
+    );
+  });
+
+  test("SS-NR-032 Invalid section number rejected (INVALID_TESTPLANSECTION_NUMBER)", () => {
+    expectReject(
+      TestPlan({
+        id: "p",
+        title: "P",
+        version: "0.1.0",
+        status: Status.Active,
+        testsSpec: DependsOn("sp-x"),
+        sections: [TestPlanSection({ id: "matrix", number: "1.", title: "Bad", prose: "" })],
+        categoriesSectionId: "matrix",
+        categories: [TestCategory({ id: "c", title: "C", tests: [basicCoreTestCase()] })],
+        coreTier: 1,
+        extendedTier: 0,
+      }),
+      "INVALID_TESTPLANSECTION_NUMBER",
+    );
+  });
+
+  test("SS-NR-033 Duplicate section id across nesting rejected (DUPLICATE_TESTPLANSECTION_ID)", () => {
+    expectReject(
+      TestPlan({
+        id: "p",
+        title: "P",
+        version: "0.1.0",
+        status: Status.Active,
+        testsSpec: DependsOn("sp-x"),
+        sections: [
+          TestPlanSection({
+            id: "dup",
+            title: "Parent",
+            prose: "",
+            subsections: [TestPlanSection({ id: "dup", title: "Child", prose: "" })],
+          }),
+          TestPlanSection({ id: "matrix", title: "Matrix", prose: "" }),
+        ],
+        categoriesSectionId: "matrix",
+        categories: [TestCategory({ id: "c", title: "C", tests: [basicCoreTestCase()] })],
+        coreTier: 1,
+        extendedTier: 0,
+      }),
+      "DUPLICATE_TESTPLANSECTION_ID",
+    );
+  });
+
+  test("SS-NR-034 Unresolved categoriesSectionId rejected (MISSING_CATEGORIES_SECTION)", () => {
+    expectReject(
+      TestPlan({
+        id: "p",
+        title: "P",
+        version: "0.1.0",
+        status: Status.Active,
+        testsSpec: DependsOn("sp-x"),
+        sections: [TestPlanSection({ id: "matrix", title: "Matrix", prose: "" })],
+        categoriesSectionId: "nope",
+        categories: [TestCategory({ id: "c", title: "C", tests: [basicCoreTestCase()] })],
+        coreTier: 1,
+        extendedTier: 0,
+      }),
+      "MISSING_CATEGORIES_SECTION",
+    );
+  });
+
+  test("SS-NR-035 categoriesSectionId resolves to nested section (accepts)", () => {
+    // Nested resolution — the matrix slot can live under a parent section.
+    const result = normalizeTestPlan(
+      TestPlan({
+        id: "p",
+        title: "P",
+        version: "0.1.0",
+        status: Status.Active,
+        testsSpec: DependsOn("sp-x"),
+        sections: [
+          TestPlanSection({
+            id: "outer",
+            title: "Outer",
+            prose: "",
+            subsections: [TestPlanSection({ id: "matrix", title: "Matrix", prose: "" })],
+          }),
+        ],
+        categoriesSectionId: "matrix",
+        categories: [TestCategory({ id: "c", title: "C", tests: [basicCoreTestCase()] })],
+        coreTier: 1,
+        extendedTier: 0,
+      }),
+    );
+    expect(result.ok).toBe(true);
   });
 });

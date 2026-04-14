@@ -44,6 +44,13 @@ describe("verify-corpus e2e", () => {
     expect(stdout).toContain("── skip-claude ──");
     expect(stdout).toContain("── compare:spec ──");
     expect(stdout).toContain("── compare:plan ──");
+    // Both gates must be truly green — no skipped-literal breadcrumb
+    // and zero structural diffs in either compare summary.
+    expect(stdout).not.toContain("SKIPPED");
+    expect(stdout).toMatch(/"missingSections":\s*\[\]/);
+    expect(stdout).toMatch(/"extraSections":\s*\[\]/);
+    expect(stdout).toMatch(/"missingTestIds":\s*\[\]/);
+    expect(stdout).toMatch(/"extraTestIds":\s*\[\]/);
     expect(existsSync(debugJournalPath)).toBe(false);
   });
 
@@ -60,6 +67,13 @@ describe("verify-corpus e2e", () => {
       expect(stdout).toContain(debugJournalPath);
       expect(stdout).toContain("Replay is ENABLED");
       expect(stdout).toContain("── skip-claude ──");
+      expect(stdout).toContain("── compare:spec ──");
+      expect(stdout).toContain("── compare:plan ──");
+      expect(stdout).not.toContain("SKIPPED");
+      expect(stdout).toMatch(/"missingSections":\s*\[\]/);
+      expect(stdout).toMatch(/"extraSections":\s*\[\]/);
+      expect(stdout).toMatch(/"missingTestIds":\s*\[\]/);
+      expect(stdout).toMatch(/"extraTestIds":\s*\[\]/);
 
       expect(existsSync(debugJournalPath)).toBe(true);
       const content = readFileSync(debugJournalPath, "utf8");

@@ -13,6 +13,7 @@ import {
   TestCase,
   TestCategory,
   TestPlan,
+  TestPlanSection,
 } from "./constructors.ts";
 import { Resolution, Status, Strength, Tier } from "./enums.ts";
 import { normalizeSpec, normalizeTestPlan } from "./normalize.ts";
@@ -70,6 +71,8 @@ function readyPlan(
       version: "0.1.0",
       status: Status.Active,
       testsSpec: DependsOn("spec-a", "0.1.0"),
+      sections: [TestPlanSection({ id: "matrix", title: "Test Matrix", prose: "" })],
+      categoriesSectionId: "matrix",
       categories: [
         TestCategory({
           id: "c",
@@ -181,6 +184,8 @@ describe("SS-RDY", () => {
         version: "0.1.0",
         status: Status.Active,
         testsSpec: DependsOn("spec-a", "0.1.0"),
+        sections: [TestPlanSection({ id: "matrix", title: "Test Matrix", prose: "" })],
+        categoriesSectionId: "matrix",
         categories: [
           TestCategory({
             id: "c",
@@ -231,6 +236,8 @@ describe("SS-RDY", () => {
         version: "0.1.0",
         status: Status.Draft,
         testsSpec: DependsOn("spec-a", "0.1.0"),
+        sections: [TestPlanSection({ id: "matrix", title: "Test Matrix", prose: "" })],
+        categoriesSectionId: "matrix",
         categories: [
           TestCategory({
             id: "dc",
@@ -274,6 +281,8 @@ describe("SS-RDY", () => {
         version: "0.1.0",
         status: Status.Active,
         testsSpec: DependsOn("spec-a", "0.1.0"),
+        sections: [TestPlanSection({ id: "matrix", title: "Test Matrix", prose: "" })],
+        categoriesSectionId: "matrix",
         categories: [
           TestCategory({
             id: "sc",
@@ -325,6 +334,8 @@ describe("SS-RDY", () => {
         version: "0.1.0",
         status: Status.Superseded,
         testsSpec: DependsOn("spec-a", "0.1.0"),
+        sections: [TestPlanSection({ id: "matrix", title: "Test Matrix", prose: "" })],
+        categoriesSectionId: "matrix",
         categories: [
           TestCategory({
             id: "oc",

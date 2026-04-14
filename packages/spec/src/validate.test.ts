@@ -21,6 +21,7 @@ import {
   TestCase,
   TestCategory,
   TestPlan,
+  TestPlanSection,
   UnchangedSection,
 } from "./constructors.ts";
 import { ChangeType, Resolution, Status, Strength, Tier } from "./enums.ts";
@@ -92,6 +93,8 @@ function minimalPlan(
     version: "0.1.0",
     status: Status.Active,
     testsSpec: DependsOn(targetId, "0.1.0"),
+    sections: [TestPlanSection({ id: "matrix", title: "Test Matrix", prose: "" })],
+    categoriesSectionId: "matrix",
     categories: [
       TestCategory({
         id: "c1",

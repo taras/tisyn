@@ -12,12 +12,374 @@
 // `TestCase.rules` arrays so `checkCoverage` can bind rules to tests via
 // the authoring-only rule ID scheme declared in `spec.ts`.
 
-import { Covers, DependsOn, TestCase, TestCategory, TestPlan } from "../../src/index.ts";
+import {
+  Covers,
+  DependsOn,
+  TestCase,
+  TestCategory,
+  TestPlan,
+  TestPlanSection,
+} from "../../src/index.ts";
 import { Status, Tier } from "../../src/enums.ts";
 import type { TestPlanModule } from "../../src/index.ts";
 
 const core = Tier.Core;
 const ext = Tier.Extended;
+
+// Prose bodies for the outer test-plan sections. Lifted verbatim from
+// `__fixtures__/original-test-plan.md` so that
+// `renderTestPlanMarkdown(normalizeTestPlan(tisynCliTestPlan))` round-
+// trips through the frozen fixture's coarse-structural surface (H2
+// headings, test IDs, coverage refs) observed by `compareMarkdown`.
+// Prose is stored without a trailing newline; the renderer supplies
+// the blank-line separator.
+
+const PURPOSE_PROSE = `This document defines the conformance test plan for the
+Tisyn CLI Specification. An implementation of \`@tisyn/cli\`
+proves conformance by passing all tests marked **P0**
+(blocking). Tests marked **P1** are recommended but not
+blocking for initial conformance. Tests marked **GOLDEN**
+lock down output format through snapshot comparison.`;
+
+const SCOPE_PROSE = `This test plan covers:
+
+- Command dispatch and surface
+- Rooted \`tsn generate\` and graph-aware \`tsn build\`
+- Descriptor loading and workflow function loading
+- \`tsn run\` dispatch between authored source and generated modules
+- TypeScript-family module loading for descriptors and transport bindings
+- Invocation input schema contract (IS1–IS3)
+- CLI flag derivation and mapping
+- Boolean v1 semantics (B1–B4)
+- Help generation and help-path failure behavior
+- Validation and coercion
+- Startup lifecycle ordering
+- \`tsn check\` readiness validation
+- Exit code behavior
+- Golden/snapshot tests for outputs
+
+This test plan does NOT cover:
+
+- Descriptor data model or constructor behavior
+  (config test plan)
+- \`Config.useConfig()\` semantics (config test plan)
+- Environment resolution rules (config test plan)
+- Rooted compiler graph semantics, helper compilation,
+  contract visibility, or generated-module compiler
+  boundaries (compiler test plan)`;
+
+const CONFORMANCE_TARGETS_PROSE = `| Target | Package | Description |
+| --- | --- | --- |
+| **CLI-CMD** | \`@tisyn/cli\` | Command dispatch and flag parsing |
+| **CLI-LOAD** | \`@tisyn/cli\` | Module loading and descriptor extraction |
+| **CLI-SCHEMA** | \`@tisyn/cli\` | Input schema contract |
+| **CLI-FLAG** | \`@tisyn/cli\` | Flag derivation, mapping, coercion |
+| **CLI-HELP** | \`@tisyn/cli\` | Help text generation |
+| **CLI-LIFE** | \`@tisyn/cli\` | Startup lifecycle and ordering |
+| **CLI-CHECK** | \`@tisyn/cli\` | Readiness validation |
+| **CLI-EXIT** | \`@tisyn/cli\` | Exit code correctness |`;
+
+const PRIORITY_MODEL_PROSE = `- **P0** tests correspond to **MUST** behavior in the CLI
+  specification. Blocking conformance.
+- **P1** tests correspond to **SHOULD**, **MAY**, or
+  advisory behavior. Recommended, not blocking.
+- **GOLDEN** tests are an orthogonal test type, not a
+  priority class. Golden tests lock down output format
+  through snapshot comparison. They are **not required for
+  conformance** — an implementation may produce different
+  formatting and still conform. Golden tests are required
+  for **output stability** once adopted.`;
+
+const BLACK_BOX_PROSE = `P0 conformance tests SHOULD prefer **black-box observable
+CLI behavior**: exit codes, stdout/stderr content, file
+outputs, and process lifecycle outcomes.
+
+Integration or structural assertions are used only when the
+CLI spec explicitly defines a structural contract (e.g.,
+module contracts M1–M3) and the behavior cannot be observed
+through CLI output alone.`;
+
+const SCHEMA_TESTS_PROSE = `Schema rejection tests validate that the CLI rejects
+schemas containing unsupported constructs — not that the CLI
+inspects any particular source-language representation. This
+keeps tests stable regardless of the schema derivation
+mechanism used.`;
+
+const LIFECYCLE_OBS_PROSE = `Lifecycle ordering tests (category L) verify phase ordering
+through **observable consequences**, not internal
+instrumentation:
+
+- Phase A before B: a descriptor error (code 2) exits
+  before input parsing is attempted — confirmed by the
+  absence of input-related diagnostics in stderr.
+- Phase B before C: an input error (code 4) exits before
+  env validation runs — confirmed by the absence of
+  env-related diagnostics in stderr.
+- Phases A–C before D: a validation failure exits before
+  any side effects from transport startup or workflow
+  execution are observable.`;
+
+const REQUIRED_FIXTURES_PROSE = `| Fixture | Purpose | Used by |
+| --- | --- | --- |
+| \`fixtures/minimal.ts\` | Minimal valid descriptor, zero-parameter workflow | CMD, LOAD, CHK, SNAP |
+| \`fixtures/generate-root.ts\` | Minimal authored workflow root for \`tsn generate\` | GEN |
+| \`fixtures/generate-multi/\` | Two-root authored workflow project | GEN |
+| \`fixtures/build-roots/\` | Multi-pass rooted build config and source graph | BLD |
+| \`fixtures/generated-run.ts\` | Descriptor whose \`run.module\` points to a generated workflow module | LOAD |
+| \`fixtures/source-run.ts\` | Descriptor whose \`run.module\` points to authored workflow source | LOAD, LIFE |
+| \`fixtures/multi-agent.ts\` | Multi-agent descriptor with journal and entrypoint | ENT, CHK, SNAP |
+| \`fixtures/with-inputs.ts\` | Workflow with \`{ maxTurns: number; model?: string; verbose: boolean }\` | FLG, BOOL, HLP, SNAP |
+| \`fixtures/separate-module.ts\` | Descriptor with \`run.module\` pointing to separate file | LOAD |
+| \`fixtures/bad-descriptor.ts\` | Module whose default export is not a \`WorkflowDescriptor\` | LOAD, EXIT |
+| \`fixtures/no-default.ts\` | Module with no default export | LOAD |
+| \`fixtures/ts-descriptor.ts\` | TypeScript descriptor module fixture (\`.ts\`, \`.mts\`, or \`.cts\`) | LOAD, HELP, CHK |
+| \`fixtures/same-module-ts-descriptor.ts\` | TypeScript descriptor whose workflow export lives in the same module | LOAD |
+| \`fixtures/unsupported-extension.tsx\` | Unsupported JSX-bearing descriptor module fixture | LOAD, EXIT |
+| \`fixtures/local-binding.ts\` | TypeScript local/inprocess transport binding module | LIFE |
+| \`fixtures/unsupported-schema.ts\` | Workflow whose input schema contains an unsupported shape | IS |
+| \`fixtures/env-heavy.ts\` | Descriptor with required, optional, and secret env nodes | CHK, EXIT, SNAP |
+| \`fixtures/collision.ts\` | Workflow with \`verbose\` parameter (collides with built-in) | COL |
+| \`fixtures/jsDoc.ts\` | Workflow with JSDoc-annotated parameters | HLP |
+| \`fixtures/side-effect.ts\` | Minimal workflow that writes a sentinel file on execution | LIFE |
+
+**Harness requirements:**
+
+- E2E tests invoke \`tsn\` as a child process and capture
+  stdout, stderr, and exit code.
+- Golden tests compare output against checked-in snapshot
+  files. Snapshot updates MUST be reviewed and approved
+  explicitly; automated snapshot acceptance is prohibited.
+- Environment manipulation tests MUST restore \`process.env\`
+  after each test, regardless of pass/fail.
+- Fixture modules that produce specific schema shapes are
+  the primary mechanism for schema-related tests. The test
+  plan does not prescribe how fixtures produce schemas.`;
+
+const SUMMARY_PROSE = `| Category | P0 | P1 | GOLDEN | Total |
+| --- | --- | --- | --- | --- |
+| A. Command surface | 7 | 0 | 0 | 7 |
+| B. \`tsn generate\` | 6 | 0 | 0 | 6 |
+| C. \`tsn build\` | 8 | 1 | 0 | 9 |
+| D. Descriptor loading | 14 | 0 | 0 | 14 |
+| E. Entrypoint selection | 4 | 0 | 0 | 4 |
+| F. Input schema contract | 11 | 0 | 0 | 11 |
+| G. Flag derivation | 20 | 0 | 0 | 20 |
+| H. Boolean v1 | 7 | 0 | 0 | 7 |
+| I. Flag collision | 2 | 1 | 0 | 3 |
+| J. Help generation | 9 | 2 | 1 | 12 |
+| K. \`tsn check\` | 9 | 1 | 1 | 11 |
+| L. Startup lifecycle | 7 | 0 | 0 | 7 |
+| M. Exit codes | 13 | 1 | 0 | 14 |
+| N. Combined reporting | 0 | 1 | 0 | 1 |
+| O. Golden/snapshot | 0 | 0 | 7 | 7 |
+| P. Authored source execution | 3 | 0 | 0 | 3 |
+| **Total** | **120** | **7** | **9** | **136** |
+
+GOLDEN counts are **orthogonal output-stability coverage**,
+not a third priority bucket parallel to P0/P1. An
+implementation conforms by passing all P0 tests regardless
+of GOLDEN results. GOLDEN tests are included in the total
+count for planning purposes only.`;
+
+const ASSUMPTIONS_PROSE = `- E2E tests invoke \`tsn\` as a child process and capture
+  stdout, stderr, and exit code.
+- Golden tests compare output against checked-in snapshot
+  files. Snapshot updates MUST be explicitly reviewed and
+  approved. Automated acceptance is prohibited.
+- Schema-related tests depend on fixture modules that
+  produce the relevant schema shapes. The test plan does
+  not prescribe the derivation mechanism.
+- Lifecycle tests use the \`side-effect\` fixture, which
+  writes a sentinel file on workflow execution. Tests
+  check for presence/absence of this file.
+- Environment manipulation tests MUST restore \`process.env\`
+  after each test, regardless of pass/fail outcome.`;
+
+const READINESS_PROSE = `- Categories A, B, C, M are **immediately implementable**.
+- Categories D, E, F, G, H, I, J require descriptor
+  fixtures and schema derivation infrastructure.
+- Categories K, L require \`@tisyn/runtime\` or equivalent.
+- Category N requires both input and env validation in the
+  same test run.
+- Category O requires golden file infrastructure.`;
+
+const RISKS_PROSE = `1. **Exit code 2 vs 3 boundary.** CLI-EXIT-011 and
+   CLI-EXIT-012 enforce the filesystem vs structural
+   error distinction.
+
+2. **Boolean v1 collapse.** CLI-BOOL-004 and CLI-BOOL-005
+   prevent treating non-optional \`boolean\` as required.
+
+3. **Help-path failure behavior.** CLI-HLP-008 through
+   CLI-HLP-010 enforce the \`--help\` failure contract.
+
+4. **Invocation vs \`Config.useConfig()\` separation.**
+   CLI-LIFE-005 and CLI-LIFE-007 prevent channel collapse.
+
+5. **\`tsn check\` scope boundary.** CLI-CHK-009 prevents
+   scope creep into input-value validation.`;
+
+const NOTES_PROSE = `1. **CLI-IS-009 completed.** The table pipe character in
+   the union-type assertion was breaking markdown table
+   rendering. Rephrased to "Union-typed field other than
+   optionality unions → rejected" — semantically
+   equivalent, table-safe.
+
+2. **CLI-LIFE-002 reconciled with combined reporting.**
+   Previously asserted "input error exits before any
+   env-related diagnostic appears" — which conflicted
+   with the spec's SHOULD-level combined reporting rule.
+   Revised fixture design: env vars are set (Phase C
+   would pass), so the test verifies ordering without
+   forbidding combined diagnostics. The assertion is now
+   "Phase B failures are detected even when Phase C would
+   pass."
+
+3. **CLI-COL-001 grounding clarified.** The distinction
+   between the current normative rule (MUST-level, P0)
+   and the future-open resolution strategy question is
+   now explicit. The test validates the current spec; the
+   open question is about whether a future revision might
+   change the strategy.
+
+4. **GOLDEN summary accounting.** A note after the summary
+   table clarifies that GOLDEN counts are orthogonal
+   output-stability coverage, not a conformance priority
+   bucket.
+
+5. **Lifecycle/load observability tightened.**
+   CLI-LOAD-001 now names the fixture (\`minimal.ts\`) and
+   explains why absence of load errors is meaningful.
+   CLI-LIFE-001 now names the fixture (\`bad-descriptor.ts\`)
+   and explains that Phase B would produce distinct
+   diagnostics if reached. CLI-LIFE-002 now explicitly
+   specifies that env vars are satisfied in the fixture,
+   making the ordering assertion independent of combined
+   reporting.`;
+
+const CATEGORY_C_NOTES = `**Note on CLI-BLD-007.** The CLI's normative contribution is
+generated-module path handoff and pass ordering. Compiler
+internals remain out of scope.`;
+
+const CATEGORY_F_NOTES = `**Note.** CLI-IS-005 through CLI-IS-011 validate the schema
+contract (§8.4), not any specific derivation mechanism.
+Implemented using fixture modules that produce the
+unsupported shapes.`;
+
+const CATEGORY_I_NOTES = `**Note on CLI-COL-001.** The CLI spec §9.5 normatively
+states "the built-in takes precedence" and "The workflow
+parameter MUST be renamed to avoid the conflict." This is
+a MUST-level rule in the current spec, so CLI-COL-001 is
+P0. The spec's final section notes that this *resolution
+strategy* (precedence vs. namespacing) is an open question
+for potential future revision — but the current rule is
+settled and testable. If a future spec revision adopts
+namespacing, this test must be updated.`;
+
+const CATEGORY_N_NOTES = `§10.4 uses SHOULD for combined reporting and MAY for
+continued diagnostic collection. P1.`;
+
+// Outer section tree. §6 "Test Matrix" is the slot the renderer fills
+// with category blocks (categoriesSectionId === "6"). §7/§10/§11 carry
+// `precedingDivider: true` to reproduce the frozen fixture's HR-
+// separated group boundaries. §10/§11 are unnumbered H2 headings, so
+// their `number` is omitted and the id uses a slug (`"risks"`, `"notes"`).
+const CLI_SECTIONS = [
+  TestPlanSection({
+    id: "1",
+    number: "1",
+    title: "Purpose",
+    prose: PURPOSE_PROSE,
+  }),
+  TestPlanSection({
+    id: "2",
+    number: "2",
+    title: "Scope",
+    prose: SCOPE_PROSE,
+  }),
+  TestPlanSection({
+    id: "3",
+    number: "3",
+    title: "Conformance Targets",
+    prose: CONFORMANCE_TARGETS_PROSE,
+  }),
+  TestPlanSection({
+    id: "4",
+    number: "4",
+    title: "Test Strategy",
+    prose: "",
+    subsections: [
+      TestPlanSection({
+        id: "4.1",
+        number: "4.1",
+        title: "Priority Model",
+        prose: PRIORITY_MODEL_PROSE,
+      }),
+      TestPlanSection({
+        id: "4.2",
+        number: "4.2",
+        title: "Black-Box vs. White-Box",
+        prose: BLACK_BOX_PROSE,
+      }),
+      TestPlanSection({
+        id: "4.3",
+        number: "4.3",
+        title: "Schema-Related Tests",
+        prose: SCHEMA_TESTS_PROSE,
+      }),
+      TestPlanSection({
+        id: "4.4",
+        number: "4.4",
+        title: "Lifecycle Observability",
+        prose: LIFECYCLE_OBS_PROSE,
+      }),
+    ],
+  }),
+  TestPlanSection({
+    id: "5",
+    number: "5",
+    title: "Required Test Fixtures",
+    prose: REQUIRED_FIXTURES_PROSE,
+  }),
+  TestPlanSection({
+    id: "6",
+    number: "6",
+    title: "Test Matrix",
+    prose: "",
+    precedingDivider: true,
+  }),
+  TestPlanSection({
+    id: "7",
+    number: "7",
+    title: "Summary",
+    prose: SUMMARY_PROSE,
+    precedingDivider: true,
+  }),
+  TestPlanSection({
+    id: "8",
+    number: "8",
+    title: "Assumptions",
+    prose: ASSUMPTIONS_PROSE,
+  }),
+  TestPlanSection({
+    id: "9",
+    number: "9",
+    title: "Implementation Readiness",
+    prose: READINESS_PROSE,
+  }),
+  TestPlanSection({
+    id: "risks",
+    title: "Highest-Risk Drift Areas",
+    prose: RISKS_PROSE,
+    precedingDivider: true,
+  }),
+  TestPlanSection({
+    id: "notes",
+    title: "Final Conformance Notes",
+    prose: NOTES_PROSE,
+    precedingDivider: true,
+  }),
+];
 
 export const tisynCliTestPlan: TestPlanModule = TestPlan({
   id: "tisyn-cli-test-plan",
@@ -25,6 +387,9 @@ export const tisynCliTestPlan: TestPlanModule = TestPlan({
   version: "0.1.0",
   status: Status.Active,
   testsSpec: DependsOn("tisyn-cli", "0.1.0"),
+  styleReference: "Blocking Scope Conformance Test Plan",
+  sections: CLI_SECTIONS,
+  categoriesSectionId: "6",
   coreTier: 136,
   extendedTier: 1,
   categories: [
@@ -149,6 +514,7 @@ export const tisynCliTestPlan: TestPlanModule = TestPlan({
     TestCategory({
       id: "CLI-TC-C",
       title: "`tsn build`",
+      notes: CATEGORY_C_NOTES,
       tests: [
         TestCase({
           id: "CLI-BLD-001",
@@ -395,6 +761,7 @@ export const tisynCliTestPlan: TestPlanModule = TestPlan({
     TestCategory({
       id: "CLI-TC-F",
       title: "Invocation Input Schema Contract",
+      notes: CATEGORY_F_NOTES,
       tests: [
         TestCase({
           id: "CLI-IS-001",
@@ -722,6 +1089,7 @@ export const tisynCliTestPlan: TestPlanModule = TestPlan({
     TestCategory({
       id: "CLI-TC-I",
       title: "Flag Collision",
+      notes: CATEGORY_I_NOTES,
       tests: [
         TestCase({
           id: "CLI-COL-001",
@@ -1150,6 +1518,7 @@ export const tisynCliTestPlan: TestPlanModule = TestPlan({
     TestCategory({
       id: "CLI-TC-N",
       title: "Combined Error Reporting",
+      notes: CATEGORY_N_NOTES,
       tests: [
         TestCase({
           id: "CLI-CER-001",

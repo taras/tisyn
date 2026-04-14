@@ -12,13 +12,13 @@ export interface ReviewPromptInput {
   readonly generatedSpec: string;
   readonly generatedPlan: string;
   readonly specCompareSummary: string;
-  readonly planCompareSummary?: string;
+  readonly planCompareSummary: string;
 }
 
 const PREAMBLE = `You are a spec reviewer. Confirm that the generated Markdown preserves the full normative meaning of the original for both files. A MUST/SHOULD/MAY rule in the original must appear as an equivalent rule in the generated output, and no new normative claims may be introduced. Ignore purely cosmetic differences (whitespace, heading punctuation, rule ID presence). Return on the first line \`VERDICT: PASS\` or \`VERDICT: FAIL\`, then up to 20 lines of justification.`;
 
 export function buildReviewPrompt(input: ReviewPromptInput): string {
-  const lines = [
+  return [
     PREAMBLE,
     "",
     "=== ORIGINAL SPEC ===",
@@ -31,16 +31,9 @@ export function buildReviewPrompt(input: ReviewPromptInput): string {
     input.generatedPlan,
     "=== STRUCTURAL COMPARISON SUMMARY (spec) ===",
     input.specCompareSummary,
-  ];
-  if (input.planCompareSummary != null) {
-    lines.push("=== STRUCTURAL COMPARISON SUMMARY (test plan) ===", input.planCompareSummary);
-  } else {
-    lines.push(
-      "=== STRUCTURAL COMPARISON SUMMARY (test plan) ===",
-      "SKIPPED — TestPlanModule cannot express the handwritten outer prose sections.",
-    );
-  }
-  return lines.join("\n");
+    "=== STRUCTURAL COMPARISON SUMMARY (test plan) ===",
+    input.planCompareSummary,
+  ].join("\n");
 }
 
 export function parseVerdict(response: string): boolean {

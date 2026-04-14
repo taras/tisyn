@@ -64,7 +64,8 @@ export interface CompileInput {
 
 export interface CompileOutput {
   readonly ok: boolean;
-  readonly summary: string;
+  readonly specCompareSummary: string;
+  readonly planCompareSummary: string;
   readonly generatedSpec: string;
   readonly generatedPlan: string;
   readonly prompt: string;
@@ -126,19 +127,27 @@ export function createBinding(): LocalAgentBinding {
           validatesLabel: specResult.value.title,
         });
 
-        const report = compareMarkdown(originalSpec, generatedSpec);
-        const summary = JSON.stringify(report.summary, null, 2);
+        // Spec and test plan travel through the same compareMarkdown gate.
+        // The gate observes a coarse structural surface (H2 headings, test
+        // IDs, coverage refs, relationship lines); Claude remains the
+        // secondary semantic gate for prose wording and table content.
+        const specReport = compareMarkdown(originalSpec, generatedSpec);
+        const planReport = compareMarkdown(originalPlan, generatedPlan);
+        const specCompareSummary = JSON.stringify(specReport.summary, null, 2);
+        const planCompareSummary = JSON.stringify(planReport.summary, null, 2);
         const prompt = buildReviewPrompt({
           originalSpec,
           originalPlan,
           generatedSpec,
           generatedPlan,
-          specCompareSummary: summary,
+          specCompareSummary,
+          planCompareSummary,
         });
 
         const result: CompileOutput = {
-          ok: report.ok,
-          summary,
+          ok: specReport.ok && planReport.ok,
+          specCompareSummary,
+          planCompareSummary,
           generatedSpec,
           generatedPlan,
           prompt,

@@ -35,7 +35,8 @@ describe("corpus-agent", () => {
         input: { target: "tisyn-cli", originalSpec, originalPlan },
       } as unknown as Val)) as {
         ok: boolean;
-        summary: string;
+        specCompareSummary: string;
+        planCompareSummary: string;
         generatedSpec: string;
         generatedPlan: string;
         prompt: string;
@@ -43,9 +44,12 @@ describe("corpus-agent", () => {
       expect(result.ok).toBe(true);
       expect(result.generatedSpec).toContain("# Tisyn CLI Specification");
       expect(result.generatedPlan.length).toBeGreaterThan(0);
+      expect(result.specCompareSummary.length).toBeGreaterThan(2);
+      expect(result.planCompareSummary.length).toBeGreaterThan(2);
       expect(result.prompt).toContain("=== ORIGINAL SPEC ===");
       expect(result.prompt).toContain("=== GENERATED SPEC ===");
       expect(result.prompt).toContain("STRUCTURAL COMPARISON SUMMARY (spec)");
+      expect(result.prompt).toContain("STRUCTURAL COMPARISON SUMMARY (test plan)");
     });
   });
 
@@ -58,9 +62,14 @@ describe("corpus-agent", () => {
       );
       const result = (yield* dispatch("corpus.compile", {
         input: { target: "tisyn-cli", originalSpec: mutatedSpec, originalPlan },
-      } as unknown as Val)) as { ok: boolean; summary: string };
+      } as unknown as Val)) as {
+        ok: boolean;
+        specCompareSummary: string;
+        planCompareSummary: string;
+      };
       expect(result.ok).toBe(false);
-      expect(result.summary.length).toBeGreaterThan(2);
+      expect(result.specCompareSummary.length).toBeGreaterThan(2);
+      expect(result.planCompareSummary.length).toBeGreaterThan(2);
     });
   });
 

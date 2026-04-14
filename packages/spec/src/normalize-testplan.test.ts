@@ -2,7 +2,7 @@
 // spec-system-test-plan.source.md.
 
 import { describe, expect, test } from "vitest";
-import { DependsOn, TestCase, TestCategory, TestPlan } from "./constructors.ts";
+import { DependsOn, TestCase, TestCategory, TestPlan, TestPlanSection } from "./constructors.ts";
 import { Status, Tier } from "./enums.ts";
 import { normalizeTestPlan } from "./normalize.ts";
 import type { TestPlanModule } from "./types.ts";
@@ -14,6 +14,8 @@ function validPlan(): TestPlanModule {
     version: "0.1.0",
     status: Status.Active,
     testsSpec: DependsOn("sp-x", "0.1.0"),
+    sections: [TestPlanSection({ id: "matrix", title: "Test Matrix", prose: "" })],
+    categoriesSectionId: "matrix",
     categories: [
       TestCategory({
         id: "cat1",

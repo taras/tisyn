@@ -14,6 +14,7 @@ import {
   TestCase,
   TestCategory,
   TestPlan,
+  TestPlanSection,
 } from "./constructors.ts";
 import { Status, Strength, Tier } from "./enums.ts";
 import { normalizeSpec, normalizeTestPlan } from "./normalize.ts";
@@ -95,6 +96,8 @@ function planForA(): NormalizedTestPlanModule {
         version: "0.1.0",
         status: Status.Active,
         testsSpec: DependsOn("spec-a", "0.1.0"),
+        sections: [TestPlanSection({ id: "matrix", title: "Test Matrix", prose: "" })],
+        categoriesSectionId: "matrix",
         categories: [
           TestCategory({
             id: "c",
@@ -127,6 +130,8 @@ function planForB(): NormalizedTestPlanModule {
         version: "0.1.0",
         status: Status.Active,
         testsSpec: DependsOn("spec-b", "0.1.0"),
+        sections: [TestPlanSection({ id: "matrix", title: "Test Matrix", prose: "" })],
+        categoriesSectionId: "matrix",
         categories: [
           TestCategory({
             id: "c",

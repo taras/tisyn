@@ -111,7 +111,8 @@ declare function Output(): {
 declare function Corpus(): {
   compile(input: { target: string; originalSpec: string; originalPlan: string }): Workflow<{
     ok: boolean;
-    summary: string;
+    specCompareSummary: string;
+    planCompareSummary: string;
     generatedSpec: string;
     generatedPlan: string;
     prompt: string;
@@ -179,29 +180,26 @@ events will be reused, and each run starts from a clean slate.`,
     kind: "plan",
   });
 
-  // Step 2 — normalize + render + compare (spec only) + build Claude
-  // prompt. The corpus binding owns every call into `@tisyn/spec`
-  // and throws on any structural-gate failure so the workflow only
-  // sees a compare verdict on this path. The handwritten test plan
-  // carries ~9 top-level prose sections that `TestPlanModule` cannot
-  // express, so test-plan equivalence is verified exclusively by the
-  // Claude semantic gate.
+  // Step 2 — normalize + render + compare spec and test plan through
+  // the same gate. The corpus binding owns every call into `@tisyn/spec`
+  // and throws on any structural-gate failure, so the workflow only
+  // sees compare verdicts here. `compareMarkdown` is a coarse structural
+  // diff (H2 headings, test IDs, coverage refs, relationship lines);
+  // Claude remains as a secondary semantic gate for prose wording and
+  // table content.
   const compiled = yield* Corpus().compile({
     target: input.target,
     originalSpec: originalSpec.content,
     originalPlan: originalPlan.content,
   });
 
-  yield* Output().log({ label: "compare:spec", text: compiled.summary });
-  yield* Output().log({
-    label: "compare:plan",
-    text: `SKIPPED — TestPlanModule cannot express the handwritten outer prose
-sections (Purpose, Scope, ..., Implementation Readiness). Test-plan
-equivalence is verified by the Claude semantic gate instead.`,
-  });
+  yield* Output().log({ label: "compare:spec", text: compiled.specCompareSummary });
+  yield* Output().log({ label: "compare:plan", text: compiled.planCompareSummary });
 
   if (!compiled.ok) {
-    throw new Error(`verify-corpus failed at compare: ${compiled.summary}`);
+    throw new Error(
+      `verify-corpus failed at compare: spec=${compiled.specCompareSummary} plan=${compiled.planCompareSummary}`,
+    );
   }
 
   // Step 3 — Claude semantic gate (optional).

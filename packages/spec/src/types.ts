@@ -40,6 +40,19 @@ export interface TestPlanModule {
 
   readonly testsSpec: SpecRef;
 
+  // Optional `**Style reference:** …` metadata line emitted after `**Version:**`.
+  readonly styleReference?: string;
+
+  // Ordered outer prose sections (e.g. §1 Purpose, §2 Scope, …). One of them
+  // is designated by `categoriesSectionId` as the wrapper for the test matrix,
+  // which the renderer fills with category blocks at `depth + 1`.
+  readonly sections: readonly TestPlanSection[];
+
+  // Logical id of the section that wraps the test matrix. Must resolve to a
+  // section somewhere in `sections` (structural validation rejects the module
+  // if it does not).
+  readonly categoriesSectionId: string;
+
   readonly categories: readonly TestCategory[];
   readonly coverageMatrix: readonly CoverageEntry[];
   readonly nonTests: readonly NonTestEntry[];
@@ -47,6 +60,21 @@ export interface TestPlanModule {
 
   readonly coreTier: number;
   readonly extendedTier: number;
+}
+
+// Recursive prose-section type used by TestPlanModule. Section identity
+// (`id`), heading number (`number`), and heading title (`title`) are three
+// independent fields: every section has `id` + `title`, only numbered sections
+// carry `number`, and any section may request a preceding horizontal-rule
+// divider via `precedingDivider`.
+export interface TestPlanSection {
+  readonly tisyn_spec: "test-plan-section";
+  readonly id: string;
+  readonly number?: string;
+  readonly title: string;
+  readonly prose: string;
+  readonly subsections: readonly TestPlanSection[];
+  readonly precedingDivider?: boolean;
 }
 
 // §5.3 SpecSection
@@ -139,6 +167,9 @@ export interface TestCategory {
   readonly id: string;
   readonly title: string;
   readonly tests: readonly TestCase[];
+  // Optional trailing markdown prose emitted after the test table — mirrors
+  // `**Note on …**` paragraphs in handwritten test plans.
+  readonly notes?: string;
 }
 
 export interface TestCase {

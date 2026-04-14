@@ -12,30 +12,21 @@ handwritten Markdown. Do not regenerate, rename, or edit them.
 every run. If you need to update the corpus, author new `Spec(...)` /
 `TestPlan(...)` values; never touch these files.
 
-## Test-plan asymmetry — deterministic gate is spec-only
+## Symmetric structural gate
 
-The deterministic `compareMarkdown` gate in `verify-corpus` runs
-**only on the spec side**. The test plan is verified exclusively by the
-Claude semantic gate. This is a data-model limitation, not a
-testing-discipline gap:
+Both the spec and the test plan travel through the same
+`compareMarkdown` gate in `verify-corpus`. `compareMarkdown` is a
+coarse structural diff: it observes the document title, H2 headings,
+test IDs, coverage refs, and relationship lines. It does not observe
+H3+ heading text, prose wording, table-cell content, or horizontal-rule
+dividers — those remain the Claude semantic gate's responsibility.
 
-`original-test-plan.md` carries roughly nine top-level prose sections
-(Purpose, Scope, Testing Methodology, Coverage Goals, Test Environment,
-Test Data, Risks, Success Criteria, Implementation Readiness) that
-`TestPlanModule` cannot express. The structured model only supports
-categories, rules, and test cases — it has no concept of freeform outer
-prose. Any rendered test plan would therefore mismatch the frozen
-original on these nine sections, producing a compare verdict that is
-structurally unavoidable rather than informative.
-
-The `compare:plan` log line in `verify-corpus` emits a `SKIPPED`
-notice explaining this, and the Claude review prompt carries both
-sides plus the literal text "SKIPPED — TestPlanModule cannot express
-the handwritten outer prose sections." so the semantic gate can judge
-equivalence without being misled.
-
-**Do not tighten the deterministic gate to cover the test plan** until
-`TestPlanModule` gains first-class support for outer prose sections.
-Doing so would require the gate to either lie (mutate the original
-before comparing) or always fail — neither is useful, and both would
-mask real regressions the Claude gate is designed to catch.
+`TestPlanModule` carries a hierarchical `sections` tree
+(`TestPlanSection`) so the authored plan can express the frozen
+fixture's full outer-section layout: numbered sections with a period
+prefix at H2 (`## 1. Purpose`) and without one at H3+
+(`### 4.1 Priority Model`), unnumbered trailing sections
+(`## Highest-Risk Drift Areas`, `## Final Conformance Notes`),
+horizontal-rule dividers before group boundaries, and optional
+category-level notes. The renderer walks that tree depth-aware and
+emits the matrix categories at `depth + 1` under their host section.

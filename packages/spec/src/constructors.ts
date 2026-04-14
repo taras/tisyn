@@ -24,6 +24,7 @@ import type {
   TestCase as TestCaseType,
   TestCategory as TestCategoryType,
   TestPlanModule,
+  TestPlanSection as TestPlanSectionType,
 } from "./types.ts";
 
 // Re-declare TestCase/TestCategory as locally-merged interface+function pairs
@@ -33,6 +34,7 @@ import type {
 // the constructor function's call signature, not the TestCase interface.
 export interface TestCase extends TestCaseType {}
 export interface TestCategory extends TestCategoryType {}
+export interface TestPlanSection extends TestPlanSectionType {}
 
 // ── Spec ──
 
@@ -242,6 +244,9 @@ export function TestPlan(config: {
   readonly version: string;
   readonly status: Status;
   readonly testsSpec: SpecRef;
+  readonly styleReference?: string;
+  readonly sections: readonly TestPlanSectionType[];
+  readonly categoriesSectionId: string;
   readonly categories: readonly TestCategory[];
   readonly coverageMatrix?: readonly CoverageEntry[];
   readonly nonTests?: readonly NonTestEntry[];
@@ -256,6 +261,9 @@ export function TestPlan(config: {
     version: config.version,
     status: config.status,
     testsSpec: config.testsSpec,
+    ...(config.styleReference != null ? { styleReference: config.styleReference } : {}),
+    sections: config.sections,
+    categoriesSectionId: config.categoriesSectionId,
     categories: config.categories,
     coverageMatrix: config.coverageMatrix ?? [],
     nonTests: config.nonTests ?? [],
@@ -265,16 +273,37 @@ export function TestPlan(config: {
   };
 }
 
+export function TestPlanSection(config: {
+  readonly id: string;
+  readonly number?: string;
+  readonly title: string;
+  readonly prose: string;
+  readonly subsections?: readonly TestPlanSectionType[];
+  readonly precedingDivider?: boolean;
+}): TestPlanSectionType {
+  return {
+    tisyn_spec: "test-plan-section",
+    id: config.id,
+    ...(config.number != null ? { number: config.number } : {}),
+    title: config.title,
+    prose: config.prose,
+    subsections: config.subsections ?? [],
+    ...(config.precedingDivider === true ? { precedingDivider: true } : {}),
+  };
+}
+
 export function TestCategory(config: {
   readonly id: string;
   readonly title: string;
   readonly tests: readonly TestCase[];
+  readonly notes?: string;
 }): TestCategory {
   return {
     tisyn_spec: "test-category",
     id: config.id,
     title: config.title,
     tests: config.tests,
+    ...(config.notes != null ? { notes: config.notes } : {}),
   };
 }
 
