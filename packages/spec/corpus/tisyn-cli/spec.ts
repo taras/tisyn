@@ -97,7 +97,7 @@ export const tisynCliSpec: SpecModule = Spec({
       id: "3",
       title: "Process Lifecycle",
       normative: true,
-      prose: "Process lifecycle and exit code semantics for all commands.",
+      prose: "Process lifecycle and exit code semantics for all commands (§3).",
       subsections: [
         Section({
           id: "3.1",
@@ -125,7 +125,7 @@ export const tisynCliSpec: SpecModule = Spec({
           title: "Exit Codes",
           normative: true,
           prose:
-            "Exit code 0 is success. Code 1 is a compilation error (generate/build). Code 2 is a structural descriptor, schema, or configuration error. Code 3 is an I/O error (module not found, file unreadable). Code 4 is an invocation input error (missing required input, type mismatch, unknown flag) for `run`. Code 5 is an environment validation error (missing required or secret env vars). Code 6 is a runtime execution error.",
+            "Exit code 0 is success. Code 1 is a compilation error (generate/build). Code 2 is a structural descriptor, schema, or configuration error. Code 3 is an I/O error (module not found, file unreadable). Code 4 is an invocation input error (missing required input, type mismatch, unknown flag) for `run`. Code 5 is an environment validation error (missing required or secret env vars). Code 6 is a runtime execution error. This is the §3.4 exit code table.",
         }),
       ],
     }),
@@ -133,7 +133,7 @@ export const tisynCliSpec: SpecModule = Spec({
       id: "4",
       title: "Build Configuration",
       normative: true,
-      prose: "Build config file format and schema for `tsn build`.",
+      prose: "Build config file format and schema for `tsn build` (§4).",
       subsections: [
         Section({
           id: "4.1",
@@ -154,7 +154,7 @@ export const tisynCliSpec: SpecModule = Spec({
           title: "Config Schema",
           normative: true,
           prose:
-            "A `TsynConfig` has a `generates` array of `GeneratePass` entries with `name`, `roots`, `output`, optional `format`, `noValidate`, `dependsOn`.",
+            "A `TsynConfig` has a `generates` array of `GeneratePass` entries with `name`, `roots`, `output`, optional `format`, `noValidate`, `dependsOn`. The CLI validates the config against this schema (§4.3).",
         }),
       ],
     }),
@@ -162,7 +162,8 @@ export const tisynCliSpec: SpecModule = Spec({
       id: "5",
       title: "Multi-Pass Ordering",
       normative: true,
-      prose: "Ordering and cross-pass-boundary handling for multi-pass builds.",
+      prose:
+        "Ordering and cross-pass-boundary handling for multi-pass builds (§5 pass dependency graph).",
       subsections: [
         Section({
           id: "5.1",
@@ -241,14 +242,14 @@ export const tisynCliSpec: SpecModule = Spec({
       id: "8",
       title: "Workflow Invocation Input Model",
       normative: true,
-      prose: "Schema contract and supported shapes for workflow invocation inputs.",
+      prose: "Schema contract and supported shapes for the workflow invocation input schema (§8).",
       subsections: [
         Section({
           id: "8.1",
           title: "Input Schema Contract",
           normative: true,
           prose:
-            "`tsn run` has access to a workflow invocation input schema (IS1). Unsupported shapes in the schema fail with exit code 2 (IS2). Zero-parameter workflows produce no derived flags and are not a failure (IS3).",
+            "`tsn run` has access to a workflow invocation input schema (IS1, §8.1). Unsupported shapes in the schema fail with exit code 2 (IS2). Zero-parameter workflows produce no derived flags and are not a failure (IS3).",
         }),
         Section({
           id: "8.2",
@@ -262,14 +263,14 @@ export const tisynCliSpec: SpecModule = Spec({
           title: "Boolean Semantics (v1 Design Choice)",
           normative: true,
           prose:
-            "Boolean fields follow a presence-flag model. `boolean` and `boolean?` are equivalent in CLI mapping (B1). Presence sets `true`, absence sets `false` — never `undefined` (B2). `--no-flag` is unsupported in v1 (B3). These are owned design choices for v1 (B4).",
+            "Boolean fields follow a presence-flag model (§8.3). `boolean` and `boolean?` are equivalent in CLI mapping (B1). Presence sets `true`, absence sets `false` — never `undefined` (B2). `--no-flag` is unsupported in v1 (B3). These are owned design choices for v1 (B4).",
         }),
         Section({
           id: "8.4",
           title: "Unsupported Shapes",
           normative: true,
           prose:
-            "Rejected shapes include multiple parameters, non-object parameters, array-typed fields, nested object fields, union-typed fields other than `T | undefined`, enums, tuples, mapped types, and `EnvDescriptor` or config-node-typed fields.",
+            "Rejected shapes (§8.4) include multiple parameters, non-object parameters, array-typed fields, nested object fields, union-typed fields other than `T | undefined`, enums, tuples, mapped types, and `EnvDescriptor` or config-node-typed fields.",
         }),
         Section({
           id: "8.5",
@@ -284,14 +285,14 @@ export const tisynCliSpec: SpecModule = Spec({
       id: "9",
       title: "CLI Flag Mapping and Help",
       normative: true,
-      prose: "Flag derivation, mapping, coercion, and help generation for `tsn run`.",
+      prose: "Flag derivation, mapping, coercion, and help generation for `tsn run` (§9).",
       subsections: [
         Section({
           id: "9.1",
           title: "Name Conversion",
           normative: true,
           prose:
-            "Field names are converted from `camelCase` to `--kebab-case` by splitting on uppercase boundaries.",
+            "Field names are converted from `camelCase` to `--kebab-case` (§9.1) by splitting on uppercase boundaries.",
         }),
         Section({
           id: "9.2",
@@ -312,7 +313,7 @@ export const tisynCliSpec: SpecModule = Spec({
           title: "Unknown Flags",
           normative: true,
           prose:
-            "During `tsn run` input parsing, any CLI token in the workflow-input remainder that does not match a derived invocation input causes exit code 4. This includes unknown long flags, short flags, and bare positional arguments.",
+            "During `tsn run` input parsing (§9.4), any CLI token in the workflow-input remainder that does not match a derived invocation input causes exit code 4. This includes unknown long flags, short flags, and bare positional arguments.",
         }),
         Section({
           id: "9.5",
@@ -326,15 +327,15 @@ export const tisynCliSpec: SpecModule = Spec({
           title: "Help Generation",
           normative: true,
           prose:
-            "Static help (`tsn run --help` with no module) shows built-in options. Dynamic help (`tsn run <module> --help`) loads the descriptor and shows usage, built-in options, workflow-derived flags, and entrypoints. On help-path failure, the CLI shows built-in options and a diagnostic explaining why workflow-derived flags cannot be shown, then exits with the appropriate error code.",
+            "Static help (`tsn run --help` with no module) shows built-in options. Dynamic help (`tsn run <module> --help`) loads the descriptor and shows usage, built-in options, workflow-derived flags, and entrypoints. On help-path failure, the CLI shows built-in options and a diagnostic explaining why workflow-derived flags cannot be shown, then exits with the appropriate error code (§9.6).",
         }),
       ],
     }),
     Section({
       id: "10",
-      title: "Startup Lifecycle (tsn run)",
+      title: "Startup Lifecycle (`tsn run`)",
       normative: true,
-      prose: "Lifecycle orchestration for `tsn run`.",
+      prose: "Lifecycle orchestration for `tsn run` (§10).",
       subsections: [
         Section({
           id: "10.1",
@@ -348,7 +349,7 @@ export const tisynCliSpec: SpecModule = Spec({
           title: "Module Contracts",
           normative: true,
           prose:
-            "M1: the descriptor module must have a `default` export that is a valid `WorkflowDescriptor`. M2: the workflow function module must export the entrypoint under the `run.export` name. M3: `run.module`, if specified, is resolved relative to the descriptor module.",
+            "Module contracts (§10.2). M1: the descriptor module must have a `default` export that is a valid `WorkflowDescriptor`. M2: the workflow function module must export the entrypoint under the `run.export` name. M3: `run.module`, if specified, is resolved relative to the descriptor module.",
         }),
         Section({
           id: "10.3",
@@ -367,7 +368,7 @@ export const tisynCliSpec: SpecModule = Spec({
           id: "10.5",
           title: "Module Loading",
           normative: true,
-          prose: "Module loading for descriptor, workflow, and transport binding modules.",
+          prose: "Module loading for descriptor, workflow, and transport binding modules (§10.5).",
           subsections: [
             Section({
               id: "10.5.1",
@@ -381,14 +382,14 @@ export const tisynCliSpec: SpecModule = Spec({
               title: "Bootstrap Loading",
               normative: true,
               prose:
-                "Module loading for `tsn run` and `tsn check` occurs before any Effection scope exists. The CLI uses a bootstrap loading path — a plain async function — for all pre-scope module loading.",
+                "Module loading for `tsn run` and `tsn check` occurs before any Effection scope exists. The CLI uses a bootstrap loading path (§10.5.2) — a plain async function — for all pre-scope module loading.",
             }),
             Section({
               id: "10.5.3",
               title: "Shared Default Implementation",
               normative: true,
               prose:
-                "The default module-loading logic is owned by `@tisyn/runtime` and exported as `loadModule()`.",
+                "The default module-loading logic is owned by `@tisyn/runtime` and exported as `loadModule()` (§10.5.3).",
             }),
             Section({
               id: "10.5.4",
@@ -409,7 +410,7 @@ export const tisynCliSpec: SpecModule = Spec({
               title: "Runtime Context API",
               normative: true,
               prose:
-                "`Runtime` is a context API exported from `@tisyn/runtime` via `createApi()`. It exposes `loadModule` as a middleware-interceptable capability via `Runtime.around()`.",
+                "`Runtime` is a context API exported from `@tisyn/runtime` via `createApi()` (§10.5.6). It exposes `loadModule` as a middleware-interceptable capability via `Runtime.around()`.",
             }),
           ],
         }),
@@ -487,7 +488,7 @@ export const tisynCliSpec: SpecModule = Spec({
           id: "13.4",
           title: "Remove Legacy Compiler Binary",
           normative: true,
-          prose: "`tisyn-compile` is removed once `tsn` is established.",
+          prose: "`tisyn-compile` is removed once `tsn` is established (§13.4).",
         }),
       ],
     }),
@@ -545,7 +546,7 @@ export const tisynCliSpec: SpecModule = Spec({
           title: "Two-Phase Parsing Model for tsn run",
           normative: true,
           prose:
-            "Phase 1 parses built-in command options into a consumed set, leaving the remainder. Phase 2 loads the descriptor and parses the remainder against derived flags. The remainder is the sole source of workflow invocation flags — built-in options like `--verbose` and `--entrypoint` must not leak into workflow flag parsing.",
+            "Phase 1 parses built-in command options into a consumed set, leaving the remainder. Phase 2 loads the descriptor and parses the remainder against derived flags. The remainder is the sole source of workflow invocation flags — built-in options like `--verbose` and `--entrypoint` must not leak into workflow flag parsing. This two-phase model (§16.2) is an implementation concern, not a normative requirement.",
         }),
         Section({
           id: "16.3",
@@ -562,6 +563,44 @@ export const tisynCliSpec: SpecModule = Spec({
             "When `--verbose` is active, the CLI should display the resolved value and origin of each flag and environment variable.",
         }),
       ],
+    }),
+    Section({
+      id: "final-consistency-changes",
+      title: "Final Consistency Changes",
+      normative: false,
+      prose: [
+        "1. **Exit code 2 vs 3 boundary.** Code 2 and code 3 had",
+        '   overlapping coverage ("module not found" appeared',
+        '   under code 2; "file not found" under code 3). The',
+        "   boundary is now unambiguous: code 3 applies when the",
+        "   CLI cannot locate or read a file at the filesystem",
+        "   level; code 2 applies when a file was loaded but its",
+        "   contents are structurally invalid. §10.1 step 1 now",
+        "   specifies both failure modes explicitly.",
+        "",
+        '2. **M2 softened.** "Compiled workflow function" replaced',
+        '   with "workflow entrypoint function" plus "the CLI does',
+        '   not prescribe how this function was produced." The',
+        "   module contract is now stable regardless of compiler",
+        "   or runtime internals.",
+        "",
+        "3. **`tsn check` example qualified.** The output example",
+        "   now labels the invocation inputs section as",
+        '   "(advisory)" and adds prose clarifying that the',
+        "   section is omitted when schema derivation fails or",
+        "   is not attempted.",
+        "",
+        "4. **Document ending consolidated.** The previous",
+        '   "Remaining Open Questions" and "Final Cleanup Changes"',
+        "   sections merged into this single section.",
+        "",
+        "**Open question.** One question remains genuinely",
+        "unresolved: whether flag collisions (§9.5) should be",
+        "handled by built-in-wins precedence (current rule) or",
+        "by namespacing workflow inputs (e.g., `--input.max-turns`).",
+        "The current rule is simpler. This may be revisited if",
+        "collision surprises users in practice.",
+      ].join("\n"),
     }),
   ],
   rules: [
