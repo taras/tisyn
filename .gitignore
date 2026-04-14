@@ -6,3 +6,4 @@ examples/multi-agent-chat/test/browser/dist-executor/
 /.agent-shell/
 /.claude/
 /worktrees/
+packages/spec/workflows/.debug/
