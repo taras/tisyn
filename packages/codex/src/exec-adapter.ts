@@ -264,10 +264,25 @@ export function createExecBinding(config?: CodexExecConfig): LocalAgentBinding {
                 throw new Error("codex exec produced no output events");
               }
 
-              const response =
-                (lastEvent.response as string) ??
-                (lastEvent.message as string) ??
-                JSON.stringify(lastEvent);
+              // Extract assistant text from the Codex NDJSON output.
+              // Real codex exec --json emits completed items with shape:
+              //   { type: "item.completed", item: { type: "message", text: "..." } }
+              // The mock and older formats may use { response: "..." } directly.
+              const completed = lastEvent as Record<string, unknown>;
+              let response: string;
+              if (
+                completed.type === "item.completed" &&
+                completed.item != null &&
+                typeof (completed.item as Record<string, unknown>).text === "string"
+              ) {
+                response = (completed.item as Record<string, unknown>).text as string;
+              } else if (typeof completed.response === "string") {
+                response = completed.response;
+              } else if (typeof completed.message === "string") {
+                response = completed.message;
+              } else {
+                response = JSON.stringify(lastEvent);
+              }
 
               return { response } as unknown as Val;
             }
