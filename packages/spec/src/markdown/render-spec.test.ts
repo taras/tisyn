@@ -207,6 +207,68 @@ describe("renderSpecMarkdown", () => {
     expect(md).toContain("- **gadget** — a different thing");
   });
 
+  test("non-numeric Section id renders heading without id prefix", () => {
+    const spec = norm(
+      Spec({
+        id: "sp-x",
+        title: "X",
+        version: "0.1.0",
+        status: Status.Active,
+        sections: [
+          Section({ id: "1", title: "Numbered", normative: true, prose: "" }),
+          Section({
+            id: "appendix-consistency",
+            title: "Appendix Consistency",
+            normative: false,
+            prose: "appendix prose.",
+          }),
+        ],
+      }),
+    );
+    const md = renderSpecMarkdown(spec);
+    expect(md).toContain("## 1. Numbered");
+    expect(md).toContain("## Appendix Consistency");
+    expect(md).not.toContain("appendix-consistency.");
+  });
+
+  test("relationshipTitle resolver is applied to Complements list", () => {
+    const spec = norm(
+      Spec({
+        id: "sp-x",
+        title: "X",
+        version: "0.1.0",
+        status: Status.Active,
+        complements: [Complements("other-a"), Complements("other-b")],
+        sections: [Section({ id: "1", title: "S", normative: true, prose: "" })],
+      }),
+    );
+    const titles = new Map<string, string>([
+      ["other-a", "Other A Spec"],
+      ["other-b", "Other B Spec"],
+    ]);
+    const md = renderSpecMarkdown(spec, {
+      relationshipTitle: (id) => titles.get(id),
+    });
+    expect(md).toContain("**Complements:** Other A Spec, Other B Spec");
+  });
+
+  test("relationshipTitle returning undefined falls back to specId per entry", () => {
+    const spec = norm(
+      Spec({
+        id: "sp-x",
+        title: "X",
+        version: "0.1.0",
+        status: Status.Active,
+        complements: [Complements("known"), Complements("unknown")],
+        sections: [Section({ id: "1", title: "S", normative: true, prose: "" })],
+      }),
+    );
+    const md = renderSpecMarkdown(spec, {
+      relationshipTitle: (id) => (id === "known" ? "Known Spec" : undefined),
+    });
+    expect(md).toContain("**Complements:** Known Spec, unknown");
+  });
+
   test("error code with requiredContent renders nested bullets", () => {
     const spec = norm(
       Spec({

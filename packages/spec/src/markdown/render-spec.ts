@@ -29,14 +29,21 @@ import type {
 export const GENERATED_BANNER =
   "<!-- Generated from packages/spec/corpus — do not edit by hand. -->";
 
-export function renderSpecMarkdown(spec: NormalizedSpecModule): string {
+export interface RenderSpecOptions {
+  readonly relationshipTitle?: (specId: string) => string | undefined;
+}
+
+export function renderSpecMarkdown(
+  spec: NormalizedSpecModule,
+  options?: RenderSpecOptions,
+): string {
   const lines: string[] = [];
   lines.push(GENERATED_BANNER);
   lines.push("");
   lines.push(`# ${spec.title}`);
   lines.push("");
 
-  const relLines = renderRelationshipLines(spec);
+  const relLines = renderRelationshipLines(spec, options);
   if (relLines.length > 0) {
     for (const line of relLines) {
       lines.push(line);
@@ -70,19 +77,23 @@ export function renderSpecMarkdown(spec: NormalizedSpecModule): string {
   return `${collapsed.join("\n")}\n`;
 }
 
-function renderRelationshipLines(spec: NormalizedSpecModule): string[] {
+function renderRelationshipLines(
+  spec: NormalizedSpecModule,
+  options?: RenderSpecOptions,
+): string[] {
+  const label = (specId: string): string => options?.relationshipTitle?.(specId) ?? specId;
   const out: string[] = [];
   if (spec.dependsOn.length > 0) {
-    out.push(`**Depends on:** ${spec.dependsOn.map((r) => r.specId).join(", ")}`);
+    out.push(`**Depends on:** ${spec.dependsOn.map((r) => label(r.specId)).join(", ")}`);
   }
   if (spec.complements.length > 0) {
-    out.push(`**Complements:** ${spec.complements.map((r) => r.specId).join(", ")}`);
+    out.push(`**Complements:** ${spec.complements.map((r) => label(r.specId)).join(", ")}`);
   }
   if (spec.implements.length > 0) {
-    out.push(`**Implements:** ${spec.implements.map((r) => r.specId).join(", ")}`);
+    out.push(`**Implements:** ${spec.implements.map((r) => label(r.specId)).join(", ")}`);
   }
   if (spec.amends.length > 0) {
-    out.push(`**Amends:** ${spec.amends.map((r) => r.specId).join(", ")}`);
+    out.push(`**Amends:** ${spec.amends.map((r) => label(r.specId)).join(", ")}`);
   }
   return out;
 }
@@ -95,7 +106,8 @@ function renderSection(
 ): void {
   const headingLevel = Math.min(6, depth + 2);
   const hashes = "#".repeat(headingLevel);
-  lines.push(`${hashes} ${section.id}. ${section.title}`);
+  const numbered = /^\d/.test(section.id);
+  lines.push(numbered ? `${hashes} ${section.id}. ${section.title}` : `${hashes} ${section.title}`);
   lines.push("");
   if (section.prose.length > 0) {
     lines.push(section.prose);
