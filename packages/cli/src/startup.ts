@@ -21,7 +21,7 @@ import type {
   LocalAgentBinding,
   LocalServerBinding,
 } from "@tisyn/transport";
-import { InMemoryStream } from "@tisyn/durable-streams";
+import { FileStream, InMemoryStream } from "@tisyn/durable-streams";
 import type { DurableStream } from "@tisyn/durable-streams";
 import type {
   ResolvedConfig,
@@ -121,11 +121,15 @@ export function createJournalStream(journal: ResolvedJournal): DurableStream {
     case "memory":
       return new InMemoryStream();
 
-    case "file":
-      throw new CliError(
-        2,
-        `File-backed journaling is not yet implemented (configured path: '${journal.path}'). Use journal.memory() or omit the journal field.`,
-      );
+    case "file": {
+      if (!journal.path) {
+        throw new CliError(
+          2,
+          `journal.file requires a non-empty path (received: ${JSON.stringify(journal.path)})`,
+        );
+      }
+      return new FileStream(journal.path);
+    }
 
     default:
       throw new CliError(2, `Unknown journal kind '${journal.kind}'`);
