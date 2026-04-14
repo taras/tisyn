@@ -20,3 +20,7 @@ jobs:
       - run: pnpm run format:check
       - run: pnpm run build
       - run: pnpm run test
+      - name: tisyn-cli corpus drift check
+        run: |
+          pnpm --filter @tisyn/spec run emit:cli
+          git diff --exit-code specs/tisyn-cli-specification.md specs/tisyn-cli-test-plan.md
