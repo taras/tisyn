@@ -458,6 +458,9 @@ importers:
       '@tisyn/claude-code':
         specifier: workspace:*
         version: link:../claude-code
+      '@tisyn/cli':
+        specifier: workspace:*
+        version: link:../cli
       '@tisyn/config':
         specifier: workspace:*
         version: link:../config

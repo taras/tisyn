@@ -38,6 +38,7 @@
     "@tisyn/config": "workspace:*",
     "@tisyn/ir": "workspace:*",
     "@tisyn/transport": "workspace:*",
+    "@tisyn/cli": "workspace:*",
     "effection": "4.0.2",
     "tsx": "^4.21.0",
     "vitest": "^4"
