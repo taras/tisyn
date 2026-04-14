@@ -8,8 +8,10 @@
 //
 // The binding is wired into the workflow descriptor via
 // `transport.inprocess("./filesystem-agent.ts")` from `@tisyn/config`;
-// the same `createBinding()` is also imported directly by the
-// filesystem-agent unit test and by the workflow test.
+// the workflow body calls `Filesystem().readFile({ path })` through an
+// ambient contract, and the compiler wraps the single argument as
+// `{ input: { path } }` using the ambient param name — so the handler
+// destructures `{ input }` and then pulls `path` out of it.
 
 import { readFile as nodeReadFile } from "node:fs/promises";
 import { resolve } from "node:path";
@@ -29,8 +31,9 @@ const ALLOWED = new Map<string, string>([
 export function createBinding(): LocalAgentBinding {
   return {
     transport: inprocessTransport(filesystemDeclaration, {
-      *readFile(input) {
-        const { path } = input as unknown as { path: string };
+      *readFile(payload) {
+        const { input } = payload as unknown as { input: { path: string } };
+        const { path } = input;
         const resolved = ALLOWED.get(path);
         if (resolved == null) {
           throw new Error(

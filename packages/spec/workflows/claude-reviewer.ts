@@ -1,22 +1,24 @@
 // Pure helpers for the Claude semantic-equivalence gate used by
 // verify-cli-corpus. Kept free of Effection/dispatch so they can be
-// unit-tested with plain function calls.
-
-import type { ComparisonReport } from "../src/markdown/index.ts";
+// unit-tested with plain function calls. Intentionally free of
+// `@tisyn/spec` imports so the workflow body (which consumes these
+// helpers) stays within the `tsn run` compile-on-the-fly budget —
+// callers pass pre-serialized summary strings, not ComparisonReport
+// instances.
 
 export interface ReviewPromptInput {
   readonly originalSpec: string;
   readonly originalPlan: string;
   readonly generatedSpec: string;
   readonly generatedPlan: string;
-  readonly specCompare: ComparisonReport;
-  readonly planCompare: ComparisonReport;
+  readonly specCompareSummary: string;
+  readonly planCompareSummary?: string;
 }
 
 const PREAMBLE = `You are a spec reviewer. Confirm that the generated Markdown preserves the full normative meaning of the original for both files. A MUST/SHOULD/MAY rule in the original must appear as an equivalent rule in the generated output, and no new normative claims may be introduced. Ignore purely cosmetic differences (whitespace, heading punctuation, rule ID presence). Return on the first line \`VERDICT: PASS\` or \`VERDICT: FAIL\`, then up to 20 lines of justification.`;
 
 export function buildReviewPrompt(input: ReviewPromptInput): string {
-  return [
+  const lines = [
     PREAMBLE,
     "",
     "=== ORIGINAL SPEC ===",
@@ -28,10 +30,17 @@ export function buildReviewPrompt(input: ReviewPromptInput): string {
     "=== GENERATED TEST PLAN ===",
     input.generatedPlan,
     "=== STRUCTURAL COMPARISON SUMMARY (spec) ===",
-    JSON.stringify(input.specCompare.summary, null, 2),
-    "=== STRUCTURAL COMPARISON SUMMARY (test plan) ===",
-    JSON.stringify(input.planCompare.summary, null, 2),
-  ].join("\n");
+    input.specCompareSummary,
+  ];
+  if (input.planCompareSummary != null) {
+    lines.push("=== STRUCTURAL COMPARISON SUMMARY (test plan) ===", input.planCompareSummary);
+  } else {
+    lines.push(
+      "=== STRUCTURAL COMPARISON SUMMARY (test plan) ===",
+      "SKIPPED — TestPlanModule cannot express the handwritten outer prose sections.",
+    );
+  }
+  return lines.join("\n");
 }
 
 export function parseVerdict(response: string): boolean {

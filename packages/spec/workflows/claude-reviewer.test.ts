@@ -1,21 +1,7 @@
 import { describe, expect, test } from "vitest";
-import type { ComparisonReport } from "../src/markdown/index.ts";
 import { buildReviewPrompt, parseVerdict } from "./claude-reviewer.ts";
 
-const emptyReport: ComparisonReport = {
-  ok: true,
-  differences: [],
-  summary: {
-    missingSections: [],
-    extraSections: [],
-    missingTestIds: [],
-    extraTestIds: [],
-    missingRelationships: [],
-    extraRelationships: [],
-    missingCoverageRefs: [],
-    extraCoverageRefs: [],
-  },
-};
+const emptySummary = '{ "missingSections": [] }';
 
 describe("buildReviewPrompt", () => {
   test("includes both sides, summaries, and preamble", () => {
@@ -24,8 +10,8 @@ describe("buildReviewPrompt", () => {
       originalPlan: "ORIG PLAN",
       generatedSpec: "GEN SPEC",
       generatedPlan: "GEN PLAN",
-      specCompare: emptyReport,
-      planCompare: emptyReport,
+      specCompareSummary: emptySummary,
+      planCompareSummary: emptySummary,
     });
     expect(prompt).toContain("VERDICT: PASS");
     expect(prompt).toContain("ORIG SPEC");
@@ -34,6 +20,20 @@ describe("buildReviewPrompt", () => {
     expect(prompt).toContain("GEN PLAN");
     expect(prompt).toContain("STRUCTURAL COMPARISON SUMMARY (spec)");
     expect(prompt).toContain("STRUCTURAL COMPARISON SUMMARY (test plan)");
+  });
+
+  test("omitted planCompareSummary emits the SKIPPED notice", () => {
+    const prompt = buildReviewPrompt({
+      originalSpec: "ORIG SPEC",
+      originalPlan: "ORIG PLAN",
+      generatedSpec: "GEN SPEC",
+      generatedPlan: "GEN PLAN",
+      specCompareSummary: emptySummary,
+    });
+    expect(prompt).toContain("STRUCTURAL COMPARISON SUMMARY (test plan)");
+    expect(prompt).toContain(
+      "SKIPPED — TestPlanModule cannot express the handwritten outer prose sections.",
+    );
   });
 });
 

@@ -2,6 +2,11 @@
 // real install path (`installRemoteAgent` on a real
 // `inprocessTransport` factory) and verifies both the allowlisted
 // read and the deny-by-default behavior.
+//
+// The binding handler expects `{ input: { path } }` because the
+// compiler wraps ambient-contract arguments under the declared
+// parameter name. The dispatch-based tests below mirror that shape so
+// they exercise the exact payload the compiled workflow sends.
 
 import { describe, it } from "@effectionx/vitest";
 import { expect } from "vitest";
@@ -17,7 +22,7 @@ describe("filesystem-agent", () => {
     yield* scoped(function* () {
       yield* installRemoteAgent(filesystemDeclaration, createBinding().transport);
       const result = (yield* dispatch("filesystem.readFile", {
-        path: "original-spec.md",
+        input: { path: "original-spec.md" },
       } as unknown as Val)) as { content: string };
       expect(result.content).toContain("# Tisyn CLI Specification");
     });
@@ -28,7 +33,9 @@ describe("filesystem-agent", () => {
       yield* installRemoteAgent(filesystemDeclaration, createBinding().transport);
       let thrown: unknown;
       try {
-        yield* dispatch("filesystem.readFile", { path: "/etc/passwd" } as unknown as Val);
+        yield* dispatch("filesystem.readFile", {
+          input: { path: "/etc/passwd" },
+        } as unknown as Val);
       } catch (err) {
         thrown = err;
       }
