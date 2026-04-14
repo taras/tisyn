@@ -28,9 +28,18 @@
   },
   "scripts": {
     "build": "tsc --build && tsc --build tsconfig.authoring.json",
-    "test": "vitest run"
+    "test": "vitest run",
+    "verify:cli": "node --import tsx scripts/verify-cli.ts",
+    "verify:cli:no-claude": "node --import tsx scripts/verify-cli.ts --skip-claude"
   },
   "devDependencies": {
+    "@effectionx/vitest": "^0.3.1",
+    "@tisyn/agent": "workspace:*",
+    "@tisyn/claude-code": "workspace:*",
+    "@tisyn/ir": "workspace:*",
+    "@tisyn/transport": "workspace:*",
+    "effection": "4.0.2",
+    "tsx": "^4.21.0",
     "vitest": "^4"
   }
 }

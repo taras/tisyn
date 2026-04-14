@@ -42,6 +42,13 @@ export interface RenderTestPlanOptions {
    * useful for unit tests that don't thread a spec through.
    */
   readonly ruleSection?: (ruleId: string) => string | undefined;
+  /**
+   * Override the value emitted after `**Validates:**`. When omitted,
+   * the renderer emits `plan.testsSpec.specId`. Use this when the
+   * source document references a spec by its human title rather than
+   * its id (e.g. `Validates: Tisyn CLI Specification`).
+   */
+  readonly validatesLabel?: string;
 }
 
 export function renderTestPlanMarkdown(
@@ -53,7 +60,7 @@ export function renderTestPlanMarkdown(
   lines.push("");
   lines.push(`# ${plan.title}`);
   lines.push("");
-  lines.push(`**Validates:** ${plan.testsSpec.specId}`);
+  lines.push(`**Validates:** ${options.validatesLabel ?? plan.testsSpec.specId}`);
   lines.push(`**Version:** ${plan.version}`);
   lines.push("");
   lines.push("---");
