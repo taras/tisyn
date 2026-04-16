@@ -1,10 +1,7 @@
-<!-- Generated from packages/spec/corpus — do not edit by hand. -->
-
 # Tisyn CLI Test Plan
 
 **Validates:** Tisyn CLI Specification
 **Style reference:** Blocking Scope Conformance Test Plan
-**Version:** 0.1.0
 
 ---
 
@@ -157,8 +154,8 @@ instrumentation:
 | --- | --- | --- | --- | --- |
 | CLI-CMD-001 | P0 | E2E | §2.1 | `tsn generate --help` exits 0 and shows usage |
 | CLI-CMD-002 | P0 | E2E | §2.2 | `tsn build --help` exits 0 and shows usage |
-| CLI-CMD-003 | P0 | E2E | §9.6 | `tsn run <valid-module> --help` loads the module and shows workflow-derived help (see CLI-HLP-008/009 for the failure path) |
-| CLI-CMD-003a | P0 | E2E | §9.6 | `tsn run --help` (no module argument) shows static command help and exits 0 |
+| CLI-CMD-003 | P0 | E2E | §9.6 | `tsn run <valid-module> --help` loads module and shows workflow-derived help. See CLI-HLP-008/009 for failure path. |
+| CLI-CMD-003a | P0 | E2E | §9.6 | `tsn run --help` (no module) shows static command help and exits 0. |
 | CLI-CMD-004 | P0 | E2E | §2.4 | `tsn check --help` exits 0 and shows usage |
 | CLI-CMD-005 | P0 | E2E | §1.1 | `tsn --version` prints version and exits 0 |
 | CLI-CMD-006 | P0 | E2E | §3.4 | Unknown command `tsn foo` exits with code 2 |
@@ -179,14 +176,14 @@ instrumentation:
 | ID | P | Type | Spec | Assertion |
 | --- | --- | --- | --- | --- |
 | CLI-BLD-001 | P0 | E2E | §2.2 | Valid rooted config → exits 0, output files written |
-| CLI-BLD-002 | P0 | E2E | §2.2 | No config file found → exit code 2 |
+| CLI-BLD-002 | P0 | E2E | §3.4 | No config file found → exit code 2 |
 | CLI-BLD-003 | P0 | E2E | §4.3 | Empty `generates` array → exit code 2 |
 | CLI-BLD-004 | P0 | E2E | §5.1 | Dependency cycle → exit code 2 with diagnostic |
 | CLI-BLD-005 | P0 | E2E | §2.2 | `--filter` runs named pass and its dependencies |
 | CLI-BLD-006 | P0 | E2E | §2.2 | `--filter` unknown name → exit code 2 |
 | CLI-BLD-007 | P0 | E2E | §5.3 | Multi-pass rooted build passes prior outputs as generated-module boundaries; no stub injection or import stripping required |
 | CLI-BLD-008 | P0 | E2E | §4.3 | Legacy `input` field in build config is rejected |
-| CLI-BLD-009 | P0 | E2E | §5.1 | Inferred import-graph dependency ordering matches declared output paths in a two-pass build |
+| CLI-BLD-009 | P1 | E2E | §5.1 | Inferred import-graph dependency ordering matches declared output paths in a two-pass build |
 
 **Note on CLI-BLD-007.** The CLI's normative contribution is
 generated-module path handoff and pass ordering. Compiler
@@ -196,29 +193,29 @@ internals remain out of scope.
 
 | ID | P | Type | Spec | Assertion |
 | --- | --- | --- | --- | --- |
-| CLI-LOAD-001 | P0 | E2E | §10.1 | `tsn run <valid-module>` proceeds past loading (fixture `minimal.ts`); observable as reaching a later phase, not a load-phase error |
-| CLI-LOAD-002 | P0 | E2E | §3.4 | Nonexistent module path → exit code 3 |
-| CLI-LOAD-003 | P0 | E2E | §10.2 | Module with no default export → exit code 2 |
-| CLI-LOAD-004 | P0 | E2E | §10.2 | Default export is not a `WorkflowDescriptor` → exit code 2 |
-| CLI-LOAD-005 | P0 | E2E | §10.2 | `run.export` names a non-existent export → exit code 2 |
-| CLI-LOAD-006 | P0 | E2E | §10.2 | `run.module` relative path resolves correctly; observable as workflow loading without code 3 |
-| CLI-LOAD-007 | P0 | E2E | §10.2 | `run.module` path does not exist → exit code 3 |
-| CLI-LOAD-008 | P0 | E2E | §10.1 | `run.module` omitted → workflow function resolved from descriptor module; successful execution |
-| CLI-LOAD-009 | P0 | E2E | §10.5.1 | TypeScript descriptor module (`.ts`/`.mts`/`.cts`) loads successfully; reaches a later phase, not a load-phase error |
-| CLI-LOAD-010 | P0 | E2E | §10.5.1 | Unsupported extension (for example `.tsx`) → exit code 3 with unsupported-extension diagnostic |
-| CLI-LOAD-011 | P0 | E2E | §10.5.4 | Explicit TypeScript `run.module` target that is authored workflow source uses compiler-based rooted compilation, not module loading; observable via successful `tsn check` |
-| CLI-LOAD-012 | P0 | E2E | §10.5.4 | Same-module workflow export in a TypeScript descriptor resolves from the descriptor module instead of the compiler path |
-| CLI-LOAD-013 | P0 | E2E | §10.2 | `run.module` pointing to a generated workflow module is runtime-loaded; compiler is not invoked |
-| CLI-LOAD-014 | P0 | E2E | §10.2 | Descriptor module itself is runtime-loaded and not treated as a workflow compilation root |
+| CLI-LOAD-001 | P0 | E2E | §10.1/1 | `tsn run <valid-module>` proceeds past loading. Fixture: `minimal.ts` is valid for all subsequent phases. Observable: exits 0 or reaches a later-phase error, not a load-phase error (code 2/3). |
+| CLI-LOAD-002 | P0 | E2E | §10.1/1 | Nonexistent module path → exit code 3 |
+| CLI-LOAD-003 | P0 | E2E | §10.1/1 | Module with no default export → exit code 2 |
+| CLI-LOAD-004 | P0 | E2E | §10.1/1 | Default export is not a `WorkflowDescriptor` → exit code 2 |
+| CLI-LOAD-005 | P0 | E2E | §10.2/M2 | `run.export` names a non-existent export → exit code 2 |
+| CLI-LOAD-006 | P0 | E2E | §10.2/M3 | `run.module` relative path resolves correctly. Observable: workflow loads without code 3. |
+| CLI-LOAD-007 | P0 | E2E | §10.1/2 | `run.module` path does not exist → exit code 3 |
+| CLI-LOAD-008 | P0 | E2E | §10.1/2 | `run.module` omitted → workflow function resolved from descriptor module. Observable: successful execution. |
+| CLI-LOAD-009 | P0 | E2E | §10.5.1 | TypeScript descriptor module (`.ts`/`.mts`/`.cts`) loads successfully. Observable: reaches a later phase, not a load-phase error. |
+| CLI-LOAD-010 | P0 | E2E | §10.5.1 | Unsupported extension (for example `.tsx`) → exit code 3 with unsupported-extension diagnostic. |
+| CLI-LOAD-011 | P0 | E2E | §10.5.4 | Explicit TypeScript `run.module` target that is authored workflow source uses compiler-based rooted compilation, not module loading. Observable: `tsn check` succeeds for a TS workflow source fixture. |
+| CLI-LOAD-012 | P0 | E2E | §10.1/2, §10.5.4 | Same-module workflow export in a TypeScript descriptor resolves from the descriptor module instead of the compiler path. Observable: successful execution or check. |
+| CLI-LOAD-013 | P0 | E2E | §10.1/2 | `run.module` pointing to a generated workflow module is runtime-loaded; compiler is not invoked |
+| CLI-LOAD-014 | P0 | E2E | §10.1/2 | Descriptor module itself is runtime-loaded and not treated as a workflow compilation root |
 
 ### E. Entrypoint Selection (`tsn run`)
 
 | ID | P | Type | Spec | Assertion |
 | --- | --- | --- | --- | --- |
-| CLI-ENT-001 | P0 | E2E | §10.1 | `--entrypoint dev` with an existing entrypoint → overlay applied; entrypoint-specific behavior differs from base |
-| CLI-ENT-002 | P0 | E2E | §10.1 | `--entrypoint unknown` → exit code 2 |
-| CLI-ENT-003 | P0 | E2E | §10.1 | No `--entrypoint` → base descriptor used |
-| CLI-ENT-004 | P0 | E2E | §10.1 | Overlay that introduces a validation error → exit code 2 |
+| CLI-ENT-001 | P0 | E2E | §10.1/3 | `--entrypoint dev` with existing entrypoint → overlay applied. Observable: entrypoint-specific behavior differs from base. |
+| CLI-ENT-002 | P0 | E2E | §10.1/3 | `--entrypoint unknown` → exit code 2 |
+| CLI-ENT-003 | P0 | E2E | §10.1/3 | No `--entrypoint` → base descriptor used |
+| CLI-ENT-004 | P0 | E2E | §10.1/4 | Overlay that introduces a validation error → exit code 2 |
 
 ### F. Invocation Input Schema Contract
 
@@ -274,7 +271,7 @@ unsupported shapes.
 | CLI-BOOL-002 | P0 | E2E | §8.3 | `boolean` field: flag absent → `false` |
 | CLI-BOOL-003 | P0 | E2E | §8.3 | `boolean?` field: `--flag` present → `true` |
 | CLI-BOOL-004 | P0 | E2E | §8.3 | `boolean?` field: flag absent → `false` (not `undefined`) |
-| CLI-BOOL-005 | P0 | E2E | §8.3 | Non-optional `boolean` is NOT treated as a required CLI flag — absent → `false` |
+| CLI-BOOL-005 | P0 | E2E | §8.3 | Non-optional `boolean` is NOT treated as required CLI flag — absent → `false` |
 | CLI-BOOL-006 | P0 | E2E | §8.3 | `--no-flag` syntax → exit code 4 (rejected as unknown flag) |
 | CLI-BOOL-007 | P0 | Unit | §8.3 | `boolean` and `boolean?` map to identical CLI surface |
 
@@ -284,7 +281,7 @@ unsupported shapes.
 | --- | --- | --- | --- | --- |
 | CLI-COL-001 | P0 | E2E | §9.5 | Derived `--verbose` (from `verbose` parameter) collides with built-in → built-in wins, workflow parameter not addressable via `--verbose` |
 | CLI-COL-002 | P0 | Unit | §9.5 | Collision check operates on derived kebab-case names |
-| CLI-COL-003 | P0 | E2E | §9.5 | Collision produces advisory diagnostic (SHOULD) |
+| CLI-COL-003 | P1 | E2E | §9.5 | Collision produces advisory diagnostic (SHOULD) |
 
 **Note on CLI-COL-001.** The CLI spec §9.5 normatively
 states "the built-in takes precedence" and "The workflow
@@ -304,43 +301,43 @@ namespacing, this test must be updated.
 | CLI-HLP-002 | P0 | E2E | §9.6 | Help includes built-in options |
 | CLI-HLP-003 | P0 | E2E | §9.6 | Help includes workflow-derived flags with type indicators |
 | CLI-HLP-004 | P0 | E2E | §9.6 | Help marks required vs optional for each derived flag |
-| CLI-HLP-005 | P0 | E2E | §8.5 | JSDoc descriptions appear in help (SHOULD) |
+| CLI-HLP-005 | P1 | E2E | §8.5 | JSDoc descriptions appear in help (SHOULD) |
 | CLI-HLP-006 | P0 | E2E | §9.6 | Help does NOT describe `Config.useConfig()` internals |
 | CLI-HLP-007 | P1 | E2E | §9.6 | Help lists available entrypoints |
 | CLI-HLP-008 | P0 | E2E | §9.6 | Module load failure → help shows built-in options + diagnostic, exits with error code |
 | CLI-HLP-009 | P0 | E2E | §9.6 | Schema derivation failure → help shows built-in options + diagnostic, exits with error code |
 | CLI-HLP-010 | P0 | E2E | §9.6 | Help MUST NOT silently omit workflow inputs section without explanation |
-| CLI-HLP-011 | P0 | Golden | §9.6 | Snapshot: help output for `with-inputs` fixture |
-| CLI-HLP-012 | P0 | E2E | §10.5.1 | `tsn run <ts-descriptor> --help` loads a TypeScript descriptor module and shows workflow-derived help |
+| CLI-HLP-011 | GOLDEN | Golden | §9.6 | Snapshot: help output for `with-inputs` fixture |
+| CLI-HLP-012 | P0 | E2E | §10.5.1 | `tsn run <ts-descriptor> --help` loads a TypeScript descriptor module and shows workflow-derived help. |
 
 ### K. `tsn check`
 
 | ID | P | Type | Spec | Assertion |
 | --- | --- | --- | --- | --- |
-| CLI-CHK-001 | P0 | E2E | §10.2 | Valid descriptor + env vars set → exit 0 |
-| CLI-CHK-002 | P0 | E2E | §10.2 | Invalid descriptor → exit code 2 |
-| CLI-CHK-003 | P0 | E2E | §3.4 | Missing required env var → exit code 5 |
-| CLI-CHK-004 | P0 | E2E | §2.4 | `tsn check` does not start transports; observable as process exiting promptly after checks |
-| CLI-CHK-005 | P0 | E2E | §2.4 | `tsn check` does not execute the workflow; `side-effect` fixture sentinel file NOT created |
+| CLI-CHK-001 | P0 | E2E | §2.4 | Valid descriptor + env vars set → exit 0 |
+| CLI-CHK-002 | P0 | E2E | §2.4 | Invalid descriptor → exit code 2 |
+| CLI-CHK-003 | P0 | E2E | §2.4 | Missing required env var → exit code 5 |
+| CLI-CHK-004 | P0 | E2E | §2.4 | Does not start transports. Observable: process exits promptly after checks. |
+| CLI-CHK-005 | P0 | E2E | §2.4 | Does not execute workflow. Observable: `side-effect` fixture sentinel file NOT created. |
 | CLI-CHK-006 | P0 | E2E | §2.4 | `--entrypoint dev` applies overlay before checking |
-| CLI-CHK-007 | P0 | E2E | §2.4 | Reports invocation input schema if derivation succeeds (MAY) |
+| CLI-CHK-007 | P1 | E2E | §2.4 | Reports invocation input schema if derivation succeeds (MAY) |
 | CLI-CHK-008 | P0 | E2E | §2.4 | Schema derivation failure does NOT cause `tsn check` to fail |
-| CLI-CHK-009 | P0 | E2E | §2.4 | `tsn check` does NOT validate specific invocation input values |
-| CLI-CHK-010 | P0 | E2E | §2.4 | `--env-example` prints environment variable template to stdout and exits 0 |
-| CLI-CHK-011 | P0 | Golden | §2.4 | Snapshot: `tsn check` output for `multi-agent` fixture |
-| CLI-CHK-012 | P0 | E2E | §10.5.1 | `tsn check` accepts a TypeScript descriptor module and respects explicit TS workflow-source compilation behavior |
+| CLI-CHK-009 | P0 | E2E | §2.4 | Does NOT validate specific invocation input values |
+| CLI-CHK-010 | P0 | E2E | §2.4 | `--env-example` prints environment variable template to stdout and exits 0. Spec grounding: §2.4 options table. |
+| CLI-CHK-011 | GOLDEN | Golden | §2.4 | Snapshot: `tsn check` output for `multi-agent` fixture |
+| CLI-CHK-012 | P0 | E2E | §10.5.1, §10.5.4 | `tsn check` accepts a TypeScript descriptor module and respects explicit TS workflow-source compilation behavior. |
 
 ### L. Startup Lifecycle Ordering
 
 | ID | P | Type | Spec | Assertion |
 | --- | --- | --- | --- | --- |
-| CLI-LIFE-001 | P0 | E2E | §10.3 | Phase A before B. Fixture: `bad-descriptor.ts`. Observable: exit 2 with only descriptor-related diagnostics, no input-parsing diagnostics |
-| CLI-LIFE-002 | P0 | E2E | §10.3 | Phase B before C. Fixture: `with-inputs.ts` with a required input omitted and all env vars set. Observable: exit 4 for missing input |
-| CLI-LIFE-003 | P0 | E2E | §10.3 | Phases A–C before transport startup: validation failure exits and `side-effect` fixture transport side effect is not observable |
-| CLI-LIFE-004 | P0 | E2E | §10.3 | Phases A–C before workflow execution: validation failure exits and `side-effect` fixture sentinel file NOT created |
-| CLI-LIFE-005 | P0 | E2E | §10.1 | Workflow receives validated invocation args. Observable: workflow produces output derived from args |
-| CLI-LIFE-006 | P0 | E2E | §10.1 | Resolved config available via `yield* Config.useConfig(Token)` only after pre-execution validation/resolution complete |
-| CLI-LIFE-007 | P0 | E2E | §10.1 | Invocation args and `Config.useConfig(Token)` return value are separate. Observable: workflow asserts the two are distinct |
+| CLI-LIFE-001 | P0 | E2E | §10.1 | Phase A before B. Fixture: `bad-descriptor.ts` (fails Phase A). Observable: exits with code 2 and stderr contains only descriptor-related diagnostics, no input-parsing diagnostics. Fixture is designed so Phase B would produce distinct diagnostics if reached. |
+| CLI-LIFE-002 | P0 | E2E | §10.1 | Phase B before C. Fixture: `with-inputs.ts` with a required input omitted and all env vars set. Observable: exits with code 4 for the missing input. Because env vars are satisfied, the test does not conflict with combined reporting — it verifies ordering by ensuring Phase B failures are detected even when Phase C would pass. |
+| CLI-LIFE-003 | P0 | E2E | §10.3 | Phases A–C before transport startup. Tested by: validation failure exits and `side-effect` fixture transport side effect is not observable. |
+| CLI-LIFE-004 | P0 | E2E | §10.3 | Phases A–C before workflow execution. Tested by: validation failure exits and `side-effect` fixture sentinel file NOT created. |
+| CLI-LIFE-005 | P0 | E2E | §10.1/11 | Workflow receives validated invocation args. Observable: workflow produces output derived from args. |
+| CLI-LIFE-006 | P0 | E2E | §10.1/11 | Resolved config available via `yield* Config.useConfig(Token)` only after pre-execution validation and resolution complete. Observable: workflow accesses `Config.useConfig(Token)` and receives post-overlay, post-resolution config. |
+| CLI-LIFE-007 | P0 | E2E | §10.1/11 | Invocation args and `Config.useConfig(Token)` return value are separate. Observable: workflow asserts the two are distinct. |
 
 ### M. Exit Code Behavior
 
@@ -359,13 +356,13 @@ namespacing, this test must be updated.
 | CLI-EXIT-011 | P0 | E2E | §3.4 | Code 2 vs 3: loaded but invalid → exit 2 |
 | CLI-EXIT-012 | P0 | E2E | §3.4 | Code 2 vs 3: path does not exist → exit 3 |
 | CLI-EXIT-013 | P0 | E2E | §3.4 | Successful `tsn run` → exit 0 |
-| CLI-EXIT-014 | P0 | E2E | §3.4 | Runtime error → exit 6 |
+| CLI-EXIT-014 | P1 | E2E | §3.4 | Runtime error → exit 6 |
 
 ### N. Combined Error Reporting
 
 | ID | P | Type | Spec | Assertion |
 | --- | --- | --- | --- | --- |
-| CLI-CER-001 | P0 | E2E | §10.4 | Both missing input and missing env var → both reported before exit (SHOULD) |
+| CLI-CER-001 | P1 | E2E | §10.4 | Both missing input and missing env var → both reported before exit (SHOULD) |
 
 §10.4 uses SHOULD for combined reporting and MAY for
 continued diagnostic collection. P1.
@@ -374,21 +371,21 @@ continued diagnostic collection. P1.
 
 | ID | P | Type | Spec | Assertion |
 | --- | --- | --- | --- | --- |
-| CLI-SNAP-001 | P0 | Golden | §9.6 | Help output: zero-parameter workflow |
-| CLI-SNAP-002 | P0 | Golden | §9.6 | Help output: multi-field workflow |
-| CLI-SNAP-003 | P0 | Golden | §2.4 | `tsn check` output: passing descriptor |
-| CLI-SNAP-004 | P0 | Golden | §2.4 | `tsn check` output: failing descriptor |
-| CLI-SNAP-005 | P0 | Golden | §7.1 | Compilation error diagnostic |
-| CLI-SNAP-006 | P0 | Golden | §3.4 | Missing required invocation input diagnostic |
-| CLI-SNAP-007 | P0 | Golden | §3.4 | Unknown flag diagnostic |
+| CLI-SNAP-001 | GOLDEN | Golden | §9.6 | Help output: zero-parameter workflow |
+| CLI-SNAP-002 | GOLDEN | Golden | §9.6 | Help output: multi-field workflow |
+| CLI-SNAP-003 | GOLDEN | Golden | §2.4 | `tsn check` output: passing descriptor |
+| CLI-SNAP-004 | GOLDEN | Golden | §2.4 | `tsn check` output: failing descriptor |
+| CLI-SNAP-005 | GOLDEN | Golden | §7.1 | Compilation error diagnostic |
+| CLI-SNAP-006 | GOLDEN | Golden | §3.4 | Missing required invocation input diagnostic |
+| CLI-SNAP-007 | GOLDEN | Golden | §3.4 | Unknown flag diagnostic |
 
 ### P. Authored Source Execution (`tsn run`)
 
 | ID | P | Type | Spec | Assertion |
 | --- | --- | --- | --- | --- |
-| RUN-SRC-001 | P0 | E2E | §10.5.4 | Authored `.ts` with same-file helper executes without `UnboundVariable` |
-| RUN-SRC-002 | P0 | E2E | §10.5.4 | Authored `.ts` with cross-module helper executes without `UnboundVariable` |
-| RUN-SRC-003 | P0 | E2E | §10.5.4 | Authored `.ts` with aliased import executes without `UnboundVariable` |
+| RUN-SRC-001 | P0 | E2E | §10.1 | Authored `.ts` with same-file helper executes without `UnboundVariable` |
+| RUN-SRC-002 | P0 | E2E | §10.1 | Authored `.ts` with cross-module helper executes without `UnboundVariable` |
+| RUN-SRC-003 | P0 | E2E | §10.1 | Authored `.ts` with aliased import executes without `UnboundVariable` |
 
 ---
 

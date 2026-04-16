@@ -23,13 +23,16 @@
     "access": "public"
   },
   "scripts": {
-    "build": "tsc --build"
+    "build": "tsc --build",
+    "test": "vitest run"
   },
   "dependencies": {
     "@tisyn/kernel": "workspace:*"
   },
   "devDependencies": {
-    "effection": "4.0.2"
+    "@effectionx/vitest": "^0.3.0",
+    "effection": "4.0.2",
+    "vitest": "^4"
   },
   "peerDependencies": {
     "effection": "^3 || ^4"

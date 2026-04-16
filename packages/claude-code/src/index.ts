@@ -20,6 +20,8 @@ export type { SessionHandle, PlanResult, ForkData } from "./types.js";
 export type { AcpAdapterConfig } from "./acp-adapter.js";
 export { createSdkBinding } from "./sdk-adapter.js";
 export type { SdkAdapterConfig } from "./sdk-adapter.js";
+export { createMockClaudeCodeTransport } from "./mock.js";
+export type { MockClaudeCodeConfig, MockOperationConfig } from "./mock.js";
 
 /**
  * Create a LocalAgentBinding for the Claude Code ACP transport.
