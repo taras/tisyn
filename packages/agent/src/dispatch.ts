@@ -51,17 +51,10 @@ export interface InvokeOpts {
 /** Runtime-controlled dispatch-boundary context exposed to middleware. */
 export interface DispatchCtx {
   readonly coroutineId: string;
-  invoke<T = Val>(
-    fn: FnNode,
-    args: readonly Val[],
-    opts?: InvokeOpts,
-  ): Operation<T>;
+  invoke<T = Val>(fn: FnNode, args: readonly Val[], opts?: InvokeOpts): Operation<T>;
 }
 
-export const DispatchContext = createContext<DispatchCtx | null>(
-  "$tisyn-dispatch-context",
-  null,
-);
+export const DispatchContext = createContext<DispatchCtx | null>("$tisyn-dispatch-context", null);
 
 /** Thrown when ctx.invoke is called outside its owning active dispatch-boundary middleware. */
 export class InvalidInvokeCallSiteError extends Error {

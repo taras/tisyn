@@ -75,11 +75,7 @@ describe("nested invocation", () => {
     let dispatchedByMiddleware = false;
 
     yield* Effects.around({
-      *dispatch(
-        [effectId, data]: [string, Val],
-        next,
-        ctx?: DispatchCtx | null,
-      ) {
+      *dispatch([effectId, data]: [string, Val], next, ctx?: DispatchCtx | null) {
         if (effectId === "parent.trigger") {
           if (!ctx) {
             throw new Error("expected active DispatchContext");
@@ -158,11 +154,7 @@ describe("nested invocation", () => {
 
     const run = function* (stream: InMemoryStream, childCounter: { n: number }) {
       yield* Effects.around({
-        *dispatch(
-          [effectId, data]: [string, Val],
-          next,
-          ctx?: DispatchCtx | null,
-        ) {
+        *dispatch([effectId, data]: [string, Val], next, ctx?: DispatchCtx | null) {
           if (effectId === "parent.trigger") {
             if (!ctx) {
               throw new Error("no ctx");
@@ -229,11 +221,7 @@ describe("nested invocation", () => {
     let results: number[] = [];
 
     yield* Effects.around({
-      *dispatch(
-        [effectId, data]: [string, Val],
-        next,
-        ctx?: DispatchCtx | null,
-      ) {
+      *dispatch([effectId, data]: [string, Val], next, ctx?: DispatchCtx | null) {
         if (effectId === "parent.trigger") {
           if (!ctx) {
             throw new Error("no ctx");
@@ -291,11 +279,7 @@ describe("nested invocation", () => {
     let returned: Val = null;
 
     yield* Effects.around({
-      *dispatch(
-        [effectId, data]: [string, Val],
-        next,
-        ctx?: DispatchCtx | null,
-      ) {
+      *dispatch([effectId, data]: [string, Val], next, ctx?: DispatchCtx | null) {
         if (effectId === "parent.trigger") {
           if (!ctx) {
             throw new Error("no ctx");
@@ -321,11 +305,7 @@ describe("nested invocation", () => {
     const bodyFn = Fn<[], string>([], Q("done"));
 
     yield* Effects.around({
-      *dispatch(
-        [effectId, data]: [string, Val],
-        next,
-        ctx?: DispatchCtx | null,
-      ) {
+      *dispatch([effectId, data]: [string, Val], next, ctx?: DispatchCtx | null) {
         if (effectId === "parent.trigger") {
           if (!ctx) {
             throw new Error("no ctx");
@@ -349,19 +329,12 @@ describe("nested invocation", () => {
 
   it("T04: child error propagates as thrown EffectError at invoke site", function* () {
     // Body yields child.fail which the core handler makes throw.
-    const bodyFn = Fn<[], Val>(
-      [],
-      Eval("child.fail", Q([])),
-    );
+    const bodyFn = Fn<[], Val>([], Eval("child.fail", Q([])));
 
     let caughtMessage: string | null = null;
 
     yield* Effects.around({
-      *dispatch(
-        [effectId, data]: [string, Val],
-        next,
-        ctx?: DispatchCtx | null,
-      ) {
+      *dispatch([effectId, data]: [string, Val], next, ctx?: DispatchCtx | null) {
         if (effectId === "parent.trigger") {
           if (!ctx) {
             throw new Error("no ctx");
@@ -406,20 +379,13 @@ describe("nested invocation", () => {
   it("T12: overlay is visible in child subtree, absent in parent after return", function* () {
     // Probe via a custom "probe.frames" effect — the core handler reads
     // currentScopedEffectFrames() and returns them.
-    const bodyFn = Fn<[], Val>(
-      [],
-      Eval("probe.frames", Q([])),
-    );
+    const bodyFn = Fn<[], Val>([], Eval("probe.frames", Q([])));
 
     let childFrames: unknown = null;
     let parentFramesAfter: unknown = null;
 
     yield* Effects.around({
-      *dispatch(
-        [effectId, data]: [string, Val],
-        next,
-        ctx?: DispatchCtx | null,
-      ) {
+      *dispatch([effectId, data]: [string, Val], next, ctx?: DispatchCtx | null) {
         if (effectId === "parent.trigger") {
           if (!ctx) {
             throw new Error("no ctx");
@@ -455,10 +421,7 @@ describe("nested invocation", () => {
       ir: Eval(
         "seq",
         Q({
-          exprs: [
-            effectIR("parent", "trigger"),
-            effectIR("parent", "probeAfter"),
-          ],
+          exprs: [effectIR("parent", "trigger"), effectIR("parent", "probeAfter")],
         }),
       ) as never,
     });
@@ -481,11 +444,7 @@ describe("nested invocation", () => {
 
     const counter = { n: 0 };
     yield* Effects.around({
-      *dispatch(
-        [effectId, _data]: [string, Val],
-        next,
-        ctx?: DispatchCtx | null,
-      ) {
+      *dispatch([effectId, _data]: [string, Val], next, ctx?: DispatchCtx | null) {
         if (effectId === "parent.trigger") {
           if (!ctx) {
             throw new Error("no ctx");
@@ -533,11 +492,7 @@ describe("nested invocation", () => {
     let sawSecondChild = false;
 
     yield* Effects.around({
-      *dispatch(
-        [effectId, data]: [string, Val],
-        next,
-        ctx?: DispatchCtx | null,
-      ) {
+      *dispatch([effectId, data]: [string, Val], next, ctx?: DispatchCtx | null) {
         if (effectId === "parent.capture") {
           capturedCtx = ctx ?? null;
           return yield* next(effectId, data);
@@ -573,10 +528,7 @@ describe("nested invocation", () => {
       ir: Eval(
         "seq",
         Q({
-          exprs: [
-            effectIR("parent", "capture"),
-            effectIR("parent", "reuse"),
-          ],
+          exprs: [effectIR("parent", "capture"), effectIR("parent", "reuse")],
         }),
       ) as never,
     });
@@ -598,11 +550,7 @@ describe("nested invocation", () => {
       let caught: Error | null = null;
 
       yield* Effects.around({
-        *dispatch(
-          [effectId, data]: [string, Val],
-          next,
-          ctx?: DispatchCtx | null,
-        ) {
+        *dispatch([effectId, data]: [string, Val], next, ctx?: DispatchCtx | null) {
           if (effectId === "parent.trigger") {
             if (!ctx) {
               throw new Error("no ctx");
@@ -656,11 +604,7 @@ describe("nested invocation", () => {
     it("rejects non-Fn fn argument", function* () {
       let caught: Error | null = null;
       yield* Effects.around({
-        *dispatch(
-          [effectId, data]: [string, Val],
-          next,
-          ctx?: DispatchCtx | null,
-        ) {
+        *dispatch([effectId, data]: [string, Val], next, ctx?: DispatchCtx | null) {
           if (effectId === "parent.trigger") {
             if (!ctx) {
               throw new Error("no ctx");
