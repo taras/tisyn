@@ -75,3 +75,27 @@ pnpm --filter @tisyn/spec test
 
 Every test name carries its `SS-*` identifier from
 `spec-system-test-plan.source.md` so conformance is visible in test output.
+
+## Deviation from §7.7 — auxiliary acquisition operations
+
+`@tisyn/spec` aligns with the v2 source spec with one scoped deviation in
+§7.7. The auxiliary acquisition operations `acquireFixture(id, kind)` and
+`acquireEmittedMarkdown(id, kind)` are **not** exposed as default-bound
+module-level exports. Their §7.7 operation shapes are preserved on the
+`AcquireAPI` returned by `createAcquire({ manifest, readFixture, readEmitted })`,
+and callers supply their own readers.
+
+Why: the default readers that §7.7 implies would resolve to
+`<packageRoot>/corpus/<id>/__fixtures__/*.md` (round-trip baselines) and
+`<repoRoot>/specs/*.md` (the canonical human-authored markdown). Neither
+tree ships in the published tarball — `@tisyn/spec` publishes `dist/`
+only, and there is no repo root in a consumer install. A default binding
+would guarantee `ENOENT` off-monorepo, so the honest surface is to
+require each consumer to supply readers that know their own deployment
+layout. The in-tree consumer (`@tisyn/spec-workflows`) does this against
+known monorepo paths.
+
+Path to literal §7.7 compliance: ship the canonical `specs/` tree (or a
+build-time copy) under the package's published `files` list and restore
+default readers anchored on `import.meta.url`. That is a follow-up, not
+part of the current release.

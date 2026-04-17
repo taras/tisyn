@@ -13,6 +13,7 @@ import {
   buildRegistry,
   coverageEntry,
   createAcquire,
+  manifest,
   normalizeSpec,
   normalizeTestPlan,
   rule,
@@ -28,6 +29,9 @@ import {
   type SpecModule,
   type TestPlanModule,
 } from "@tisyn/spec";
+import type { Val } from "@tisyn/ir";
+import { acquireFixture } from "./acquire.ts";
+import { compile, type CompileOutput } from "./corpus-agent.ts";
 
 const fixtureSpec: SpecModule = spec({
   id: "wf-fixture",
@@ -122,6 +126,36 @@ describe("SS-WF workflow composition", () => {
     expect(review.task).toBe("review");
     expect(tp.task).toBe("test-plan");
     expect(cc.task).toBe("consistency");
+  });
+
+  it("verify-corpus compile reaches the compare stage for a spec with open questions", function* (): Operation<void> {
+    // Regression: verify-corpus must NOT gate on isReady(). `tisyn-cli`
+    // currently carries at least one open question
+    // (CLI-OQ-flag-collision-strategy), which previously caused
+    // corpus-agent.compile to throw before rendering. The test asserts two
+    // things:
+    //   1. The acquired registry has open questions (preamble sanity).
+    //   2. compile() still returns a CompileOutput with compare summaries
+    //      and a built review prompt — i.e. it reached the compare stage.
+    // If tisyn-cli's open question is ever resolved, assertion (1) fails
+    // loudly; swap in a synthetic fixture at that point.
+    const sanityApi = createAcquire({ manifest });
+    const sanityRegistry = yield* sanityApi.acquireCorpusRegistry({
+      specIds: ["tisyn-cli"],
+    });
+    expect(sanityRegistry.openQuestionIndex.size).toBeGreaterThan(0);
+
+    const originalSpec = yield* acquireFixture("tisyn-cli", "spec");
+    const originalPlan = yield* acquireFixture("tisyn-cli", "plan");
+    const payload = {
+      input: { target: "tisyn-cli", originalSpec, originalPlan },
+    } as unknown as Val;
+    const result = yield* compile(payload);
+    const output = result as unknown as CompileOutput;
+    expect(typeof output.specCompareSummary).toBe("string");
+    expect(typeof output.planCompareSummary).toBe("string");
+    expect(typeof output.prompt).toBe("string");
+    expect(output.prompt.length).toBeGreaterThan(0);
   });
 
   it("normalizes the shipped corpus cleanly", function* (): Operation<void> {

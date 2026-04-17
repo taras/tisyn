@@ -47,7 +47,11 @@ function* readFixture(id: string, kind: "spec" | "plan"): Operation<string> {
 }
 
 function* readEmitted(id: string, kind: "spec" | "plan"): Operation<string> {
-  const suffix = kind === "spec" ? "spec.md" : "test-plan.md";
+  // Emitted-markdown filenames under `<repoRoot>/specs/` follow the
+  // pattern `{id}-specification.md` and `{id}-test-plan.md` — matching
+  // the human-authored tree this package's round-trip gate compares
+  // against.
+  const suffix = kind === "spec" ? "specification.md" : "test-plan.md";
   const path = resolve(REPO_ROOT, "specs", `${id}-${suffix}`);
   return (yield* call(() => readFile(path, "utf8"))) as string;
 }

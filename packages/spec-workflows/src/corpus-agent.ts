@@ -26,7 +26,6 @@ import type { Val } from "@tisyn/ir";
 import {
   acquireCorpusRegistry,
   compareMarkdown,
-  isReady,
   renderSpecMarkdown,
   renderTestPlanMarkdown,
 } from "@tisyn/spec";
@@ -58,7 +57,7 @@ export interface CheckVerdictOutput {
   readonly pass: boolean;
 }
 
-function* compile(payload: Val): Operation<Val> {
+export function* compile(payload: Val): Operation<Val> {
   const { input } = payload as unknown as { input: CompileInput };
   const { target, originalSpec, originalPlan } = input;
 
@@ -82,17 +81,12 @@ function* compile(payload: Val): Operation<Val> {
     );
   }
 
-  // Readiness gate (§8.6). `isReady` returns a structured result
-  // with the specific blocking codes so the error message is
-  // actionable.
-  const readiness = isReady(registry, target);
-  if (!readiness.ready) {
-    throw new Error(
-      `corpus.compile: ${target} not ready: blocking=${JSON.stringify(
-        readiness.blocking,
-      )}`,
-    );
-  }
+  // Readiness (§8.6) is a separate analysis surface (`isReady` on
+  // @tisyn/spec) and is deliberately NOT a prerequisite for verify-corpus:
+  // the round-trip workflow must acquire, render, and compare regardless of
+  // whether a spec has open questions, uncovered MUST rules, or a pending
+  // status. Those are publishing/authoring concerns, not compare-gate
+  // concerns.
 
   // Find the companion test plan that validates this spec.
   let plan: NormalizedTestPlanModule | undefined;
