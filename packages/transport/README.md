@@ -103,7 +103,7 @@ On the remote side, adapters such as `createProtocolServer()` and `createStdioAg
 ## Example
 
 ```ts
-import { agent, operation, invoke } from "@tisyn/agent";
+import { agent, operation, dispatch } from "@tisyn/agent";
 import { installRemoteAgent } from "@tisyn/transport";
 import { websocketTransport } from "@tisyn/transport/websocket";
 
@@ -116,7 +116,7 @@ yield* installRemoteAgent(
   websocketTransport({ url: "ws://localhost:8080" }),
 );
 
-const result = yield* invoke(math.double({ input: { value: 21 } }));
+const result = yield* dispatch(math.double({ input: { value: 21 } }));
 ```
 
 ## Choosing a Transport
@@ -230,7 +230,7 @@ yield* scoped(function* () {
 
 `@tisyn/transport/browser` exports:
 
-- `Browser` — a `DeclaredAgent` for use with `installRemoteAgent(Browser, factory)` and `invoke(Browser.navigate(...))` / `invoke(Browser.execute(...))`
+- `Browser` — a `DeclaredAgent` for use with `installRemoteAgent(Browser, factory)` and `dispatch(Browser.navigate(...))` / `dispatch(Browser.execute(...))`
 - `browserTransport` — transport factory
 - `LocalCapability` — composition primitive type
 - `localCapability` — capability constructor

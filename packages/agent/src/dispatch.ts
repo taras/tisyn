@@ -53,11 +53,26 @@ export const Effects = Object.assign(EffectsApi, {
 /**
  * Dispatch an effect through the Effects middleware chain.
  *
- * Cross-boundary constraints are installed as ordinary Effects.around()
- * middleware in the execution scope — no separate enforcement context.
+ * Accepts either an explicit (effectId, data) pair or a call descriptor
+ * object with the same shape returned by agent().op(args).
  */
-export const dispatch: (effectId: string, data: Val) => Operation<Val> =
-  EffectsApi.operations.dispatch;
+export function dispatch<T = Val>(effectId: string, data: Val): Operation<T>;
+export function dispatch<T = Val>(request: {
+  readonly effectId: string;
+  readonly data: unknown;
+}): Operation<T>;
+export function dispatch<T = Val>(
+  effectIdOrRequest: string | { readonly effectId: string; readonly data: unknown },
+  maybeData?: Val,
+): Operation<T> {
+  if (typeof effectIdOrRequest === "string") {
+    return EffectsApi.operations.dispatch(effectIdOrRequest, maybeData as Val) as Operation<T>;
+  }
+  return EffectsApi.operations.dispatch(
+    effectIdOrRequest.effectId,
+    effectIdOrRequest.data as Val,
+  ) as Operation<T>;
+}
 
 /**
  * Query the Effects middleware chain to check if an agent is bound.

@@ -4,7 +4,7 @@ import { expect } from "vitest";
 import { resource, useScope, createQueue, createChannel, spawn } from "effection";
 import type { HostMessage } from "@tisyn/protocol";
 import { parseHostMessage, parseAgentMessage } from "@tisyn/protocol";
-import { agent, operation, invoke, implementAgent } from "@tisyn/agent";
+import { agent, operation, dispatch, implementAgent } from "@tisyn/agent";
 import { installRemoteAgent } from "../install-remote.js";
 import { createProtocolServer } from "../protocol-server.js";
 import { transportComplianceSuite } from "../transport-compliance.js";
@@ -94,7 +94,7 @@ describe("worker transport (real worker)", () => {
 
     yield* installRemoteAgent(math, factory);
 
-    const result = yield* invoke(math.double({ value: 21 }));
+    const result = yield* dispatch(math.double({ value: 21 }));
     expect(result).toBe(42);
   });
 
@@ -113,7 +113,7 @@ describe("worker transport (real worker)", () => {
     for (let i = 1; i <= 5; i++) {
       tasks.push(
         yield* spawn(function* () {
-          return yield* invoke(math.double({ value: i }));
+          return yield* dispatch(math.double({ value: i }));
         }),
       );
     }
@@ -138,7 +138,7 @@ describe("worker transport (real worker)", () => {
     yield* installRemoteAgent(failing, factory);
 
     try {
-      yield* invoke(failing.boom());
+      yield* dispatch(failing.boom());
       expect.unreachable("should have thrown");
     } catch (error) {
       expect(error).toBeInstanceOf(Error);

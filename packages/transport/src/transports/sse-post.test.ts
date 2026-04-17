@@ -3,7 +3,7 @@ import type { AddressInfo } from "node:net";
 import { describe, it } from "@effectionx/vitest";
 import { expect } from "vitest";
 import { resource, useScope, withResolvers, scoped, spawn } from "effection";
-import { agent, operation, invoke, implementAgent } from "@tisyn/agent";
+import { agent, operation, dispatch, implementAgent } from "@tisyn/agent";
 import { installRemoteAgent } from "../install-remote.js";
 import { createProtocolServer } from "../protocol-server.js";
 import { transportComplianceSuite } from "../transport-compliance.js";
@@ -91,7 +91,7 @@ describe("sse-post transport specific", () => {
       for (let i = 1; i <= 5; i++) {
         tasks.push(
           yield* spawn(function* () {
-            return yield* invoke(math.double({ value: i }));
+            return yield* dispatch(math.double({ value: i }));
           }),
         );
       }
@@ -161,7 +161,7 @@ describe("sse-post transport specific", () => {
 
       try {
         yield* installRemoteAgent(slow, factory);
-        yield* invoke(slow.work());
+        yield* dispatch(slow.work());
         expect.unreachable("should have thrown");
       } catch (error) {
         expect(error).toBeInstanceOf(Error);

@@ -18,7 +18,6 @@ import { Fn, Throw } from "@tisyn/ir";
 import {
   agent,
   operation,
-  invoke,
   Effects,
   installCrossBoundaryMiddleware,
   dispatch,
@@ -73,7 +72,7 @@ describe("inprocessTransport scope isolation", () => {
 
       yield* installRemoteAgent(calc, factory);
 
-      const result = yield* invoke(calc.add({ a: 1, b: 2 }));
+      const result = yield* dispatch(calc.add({ a: 1, b: 2 }));
       expect(result).toBe(3);
     });
   });
@@ -108,7 +107,7 @@ describe("inprocessTransport scope isolation", () => {
       yield* installCrossBoundaryMiddleware(alwaysDeny);
 
       try {
-        yield* invoke(calc.add({ a: 1, b: 2 }));
+        yield* dispatch(calc.add({ a: 1, b: 2 }));
         expect.unreachable("should have thrown");
       } catch (error) {
         expect(error).toBeInstanceOf(Error);
@@ -152,7 +151,7 @@ describe("inprocessTransport scope isolation", () => {
       yield* installRemoteAgent(helper, helperFactory);
 
       try {
-        yield* invoke(helper.run({ a: 1, b: 2 }));
+        yield* dispatch(helper.run({ a: 1, b: 2 }));
         expect.unreachable("should have thrown");
       } catch (error) {
         expect(error).toBeInstanceOf(Error);
@@ -199,7 +198,7 @@ describe("inprocessTransport scope isolation", () => {
 
       yield* installRemoteAgent(calc, factory);
 
-      const result = yield* invoke(calc.add({ a: 1, b: 2 }));
+      const result = yield* dispatch(calc.add({ a: 1, b: 2 }));
       expect(result).toBe(3);
     });
   });
