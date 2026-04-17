@@ -111,10 +111,16 @@ function compareRelationship(
   a: SpecModule["relationships"][number],
   b: SpecModule["relationships"][number],
 ): number {
-  if (a.type !== b.type) return a.type < b.type ? -1 : 1;
-  if (a.target !== b.target) return a.target < b.target ? -1 : 1;
+  if (a.type !== b.type) {
+    return a.type < b.type ? -1 : 1;
+  }
+  if (a.target !== b.target) {
+    return a.target < b.target ? -1 : 1;
+  }
   const aq = a.qualifier ?? "";
   const bq = b.qualifier ?? "";
-  if (aq !== bq) return aq < bq ? -1 : 1;
+  if (aq !== bq) {
+    return aq < bq ? -1 : 1;
+  }
   return 0;
 }

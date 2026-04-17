@@ -7,9 +7,7 @@ import {
   type ReviewContext,
 } from "@tisyn/spec";
 
-export function* reviewSpec(input: {
-  readonly targetSpec: string;
-}): Operation<ReviewContext> {
+export function* reviewSpec(input: { readonly targetSpec: string }): Operation<ReviewContext> {
   const registry = yield* acquireCorpusRegistry();
   return assembleReviewContext(registry, { targetSpec: input.targetSpec });
 }

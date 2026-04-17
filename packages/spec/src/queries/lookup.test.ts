@@ -11,16 +11,9 @@ import {
   findTestCase,
 } from "./lookup.ts";
 import { buildTestRegistry } from "../__fixtures__/registry.ts";
-import {
-  fixtureAlpha,
-  fixtureAlphaPlan,
-  fixtureDelta,
-} from "../__fixtures__/index.ts";
+import { fixtureAlpha, fixtureAlphaPlan, fixtureDelta } from "../__fixtures__/index.ts";
 
-const r = buildTestRegistry(
-  [fixtureAlpha, fixtureDelta],
-  [fixtureAlphaPlan],
-);
+const r = buildTestRegistry([fixtureAlpha, fixtureDelta], [fixtureAlphaPlan]);
 
 describe("SS-QL lookup", () => {
   it("findSpec returns the spec by id", () => {

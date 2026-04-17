@@ -14,7 +14,9 @@ describe("SS-DM V1 — tisyn_spec discriminant on root module", () => {
     const bad = { ...fixtureAlpha, tisyn_spec: undefined } as unknown as SpecModule;
     const r = normalizeSpec(bad);
     expect(r.status).toBe("error");
-    if (r.status !== "error") return;
+    if (r.status !== "error") {
+      return;
+    }
     expect(constraints(r.errors)).toContain("V1");
   });
 
@@ -22,7 +24,9 @@ describe("SS-DM V1 — tisyn_spec discriminant on root module", () => {
     const bad = { ...fixtureAlphaPlan, tisyn_spec: undefined } as unknown as TestPlanModule;
     const r = normalizeTestPlan(bad);
     expect(r.status).toBe("error");
-    if (r.status !== "error") return;
+    if (r.status !== "error") {
+      return;
+    }
     expect(constraints(r.errors)).toContain("V1");
   });
 });
@@ -32,7 +36,9 @@ describe("SS-DM V2 — id non-emptiness", () => {
     const bad: SpecModule = { ...fixtureAlpha, id: "" };
     const r = normalizeSpec(bad);
     expect(r.status).toBe("error");
-    if (r.status !== "error") return;
+    if (r.status !== "error") {
+      return;
+    }
     expect(constraints(r.errors)).toContain("V2");
   });
 
@@ -48,7 +54,9 @@ describe("SS-DM V2 — id non-emptiness", () => {
     };
     const r = normalizeSpec(bad);
     expect(r.status).toBe("error");
-    if (r.status !== "error") return;
+    if (r.status !== "error") {
+      return;
+    }
     expect(constraints(r.errors)).toContain("V2");
   });
 });
@@ -57,14 +65,13 @@ describe("SS-DM V3 — uniqueness for D-rules V3 names", () => {
   it("rejects duplicate section ids within a spec (D5)", () => {
     const bad: SpecModule = {
       ...fixtureAlpha,
-      sections: [
-        fixtureAlpha.sections[0],
-        { id: 1, title: "Dup", prose: "" },
-      ],
+      sections: [fixtureAlpha.sections[0], { id: 1, title: "Dup", prose: "" }],
     };
     const r = normalizeSpec(bad);
     expect(r.status).toBe("error");
-    if (r.status !== "error") return;
+    if (r.status !== "error") {
+      return;
+    }
     expect(constraints(r.errors)).toContain("V3");
   });
 
@@ -85,7 +92,9 @@ describe("SS-DM V3 — uniqueness for D-rules V3 names", () => {
     };
     const r = normalizeSpec(bad);
     expect(r.status).toBe("error");
-    if (r.status !== "error") return;
+    if (r.status !== "error") {
+      return;
+    }
     expect(constraints(r.errors)).toContain("V3");
   });
 });
@@ -98,7 +107,9 @@ describe("SS-DM V4/D27 — coverage status consistency", () => {
     };
     const r = normalizeTestPlan(bad);
     expect(r.status).toBe("error");
-    if (r.status !== "error") return;
+    if (r.status !== "error") {
+      return;
+    }
     expect(constraints(r.errors)).toContain("D27");
   });
 
@@ -109,7 +120,9 @@ describe("SS-DM V4/D27 — coverage status consistency", () => {
     };
     const r = normalizeTestPlan(bad);
     expect(r.status).toBe("error");
-    if (r.status !== "error") return;
+    if (r.status !== "error") {
+      return;
+    }
     expect(constraints(r.errors)).toContain("D27");
   });
 });
@@ -122,7 +135,9 @@ describe("SS-DM V5 — categoriesSectionId resolves", () => {
     };
     const r = normalizeTestPlan(bad);
     expect(r.status).toBe("error");
-    if (r.status !== "error") return;
+    if (r.status !== "error") {
+      return;
+    }
     expect(constraints(r.errors)).toContain("V5");
   });
 });
@@ -140,7 +155,9 @@ describe("SS-DM V9 — enum membership", () => {
     };
     const r = normalizeSpec(bad);
     expect(r.status).toBe("error");
-    if (r.status !== "error") return;
+    if (r.status !== "error") {
+      return;
+    }
     expect(constraints(r.errors)).toContain("V9");
   });
 
@@ -148,7 +165,9 @@ describe("SS-DM V9 — enum membership", () => {
     const bad: SpecModule = { ...fixtureAlpha, status: "whenever" as never };
     const r = normalizeSpec(bad);
     expect(r.status).toBe("error");
-    if (r.status !== "error") return;
+    if (r.status !== "error") {
+      return;
+    }
     expect(constraints(r.errors)).toContain("V9");
   });
 });
@@ -158,7 +177,9 @@ describe("SS-DM I8 — root cannot carry both tisyn_spec and tisyn", () => {
     const bad = { ...fixtureAlpha, tisyn: "other" } as unknown as SpecModule;
     const r = normalizeSpec(bad);
     expect(r.status).toBe("error");
-    if (r.status !== "error") return;
+    if (r.status !== "error") {
+      return;
+    }
     expect(constraints(r.errors)).toContain("I8");
   });
 });

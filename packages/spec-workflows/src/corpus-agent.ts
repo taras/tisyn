@@ -75,17 +75,12 @@ export function* compile(payload: Val): Operation<Val> {
   // @tisyn/spec's local `Operation<T>` alias; wrap through `call` so
   // the handler body uses effection's `Operation<T>` consistently.
   const registry = yield* call(
-    () =>
-      acquireCorpusRegistry({ specIds: [target] }) as unknown as Operation<
-        CorpusRegistry
-      >,
+    () => acquireCorpusRegistry({ specIds: [target] }) as unknown as Operation<CorpusRegistry>,
   );
 
   const spec = registry.specs.get(target);
   if (spec === undefined) {
-    throw new Error(
-      `corpus.compile: target "${target}" not present in acquired registry.`,
-    );
+    throw new Error(`corpus.compile: target "${target}" not present in acquired registry.`);
   }
 
   // Readiness (§8.6) is a separate analysis surface (`isReady` on
@@ -104,9 +99,7 @@ export function* compile(payload: Val): Operation<Val> {
     }
   }
   if (plan === undefined) {
-    throw new Error(
-      `corpus.compile: no companion test plan found for spec "${target}".`,
-    );
+    throw new Error(`corpus.compile: no companion test plan found for spec "${target}".`);
   }
 
   // Acquire emitted markdown under `specs/` as a real compare target,
@@ -120,14 +113,7 @@ export function* compile(payload: Val): Operation<Val> {
     () => acquireEmittedMarkdown(target, "plan") as unknown as Operation<string>,
   );
 
-  const result = evaluateCompile(
-    spec,
-    plan,
-    originalSpec,
-    originalPlan,
-    emittedSpec,
-    emittedPlan,
-  );
+  const result = evaluateCompile(spec, plan, originalSpec, originalPlan, emittedSpec, emittedPlan);
   return result as unknown as Val;
 }
 
@@ -171,11 +157,7 @@ export function evaluateCompile(
   });
 
   return {
-    ok:
-      specReport.match &&
-      planReport.match &&
-      emittedSpecReport.match &&
-      emittedPlanReport.match,
+    ok: specReport.match && planReport.match && emittedSpecReport.match && emittedPlanReport.match,
     specCompareSummary,
     planCompareSummary,
     emittedSpecCompareSummary,

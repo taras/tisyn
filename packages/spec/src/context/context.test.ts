@@ -17,10 +17,7 @@ import {
   fixtureDelta,
 } from "../__fixtures__/index.ts";
 
-const r = buildTestRegistry(
-  [fixtureAlpha, fixtureBeta, fixtureDelta],
-  [fixtureAlphaPlan],
-);
+const r = buildTestRegistry([fixtureAlpha, fixtureBeta, fixtureDelta], [fixtureAlphaPlan]);
 
 describe("SS-CA authoring", () => {
   it("sets scopeKind and carries relevantSpecs", () => {
@@ -61,7 +58,9 @@ describe("SS-CA test-plan", () => {
     const ctx = assembleTestPlanContext(r, { targetSpec: "fixture-alpha" });
     expect(ctx.mustRules.map((l) => l.rule.id)).toEqual(["A1"]);
     expect(ctx.shouldRules.map((l) => l.rule.id)).toEqual(["A2"]);
-    expect(ctx.totalRuleCount).toBe(ctx.mustRules.length + ctx.shouldRules.length + ctx.mayRules.length);
+    expect(ctx.totalRuleCount).toBe(
+      ctx.mustRules.length + ctx.shouldRules.length + ctx.mayRules.length,
+    );
   });
 });
 

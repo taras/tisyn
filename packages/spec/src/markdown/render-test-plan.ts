@@ -75,9 +75,7 @@ function renderPlanSection(
         out.push("");
       }
       for (const tc of cat.cases) {
-        out.push(
-          `- [${tc.id}] [${tc.priority}] [${tc.type}] (${tc.specRef}) ${tc.assertion}`,
-        );
+        out.push(`- [${tc.id}] [${tc.priority}] [${tc.type}] (${tc.specRef}) ${tc.assertion}`);
       }
       out.push("");
     }

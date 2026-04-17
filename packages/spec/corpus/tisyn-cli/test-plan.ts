@@ -398,8 +398,7 @@ export const tisynCliTestPlan: TestPlanModule = testPlan({
           priority: "p0",
           type: "e2e",
           specRef: "CLI-9.6-R5",
-          assertion:
-            "`tsn run --help` (no module argument) shows static command help and exits 0",
+          assertion: "`tsn run --help` (no module argument) shows static command help and exits 0",
         }),
         testCase({
           id: "CLI-CMD-004",
@@ -814,7 +813,7 @@ export const tisynCliTestPlan: TestPlanModule = testPlan({
           priority: "p0",
           type: "e2e",
           specRef: "CLI-9.2-R1",
-          assertion: "Required string: `--model foo` → `\"foo\"`",
+          assertion: 'Required string: `--model foo` → `"foo"`',
         }),
         testCase({
           id: "CLI-FLG-006",
@@ -828,7 +827,7 @@ export const tisynCliTestPlan: TestPlanModule = testPlan({
           priority: "p0",
           type: "e2e",
           specRef: "CLI-9.2-R1",
-          assertion: "Optional string: `--model foo` → `\"foo\"`",
+          assertion: 'Optional string: `--model foo` → `"foo"`',
         }),
         testCase({
           id: "CLI-FLG-008",
@@ -885,8 +884,7 @@ export const tisynCliTestPlan: TestPlanModule = testPlan({
           priority: "p0",
           type: "e2e",
           specRef: "CLI-16.2-R1",
-          assertion:
-            "`--entrypoint <name>` after module does not leak into workflow flag parsing",
+          assertion: "`--entrypoint <name>` after module does not leak into workflow flag parsing",
         }),
         testCase({
           id: "CLI-FLG-016",
@@ -1178,8 +1176,7 @@ export const tisynCliTestPlan: TestPlanModule = testPlan({
           priority: "p0",
           type: "e2e",
           specRef: "CLI-2.4-R3",
-          assertion:
-            "`--env-example` prints environment variable template to stdout and exits 0",
+          assertion: "`--env-example` prints environment variable template to stdout and exits 0",
         }),
         testCase({
           id: "CLI-CHK-011",
@@ -1374,8 +1371,7 @@ export const tisynCliTestPlan: TestPlanModule = testPlan({
           priority: "p0",
           type: "e2e",
           specRef: "CLI-10.4-R1",
-          assertion:
-            "Both missing input and missing env var → both reported before exit (SHOULD)",
+          assertion: "Both missing input and missing env var → both reported before exit (SHOULD)",
         }),
       ],
     }),
@@ -1450,8 +1446,7 @@ export const tisynCliTestPlan: TestPlanModule = testPlan({
           priority: "p0",
           type: "e2e",
           specRef: "CLI-10.5.4-R1",
-          assertion:
-            "Authored `.ts` with cross-module helper executes without `UnboundVariable`",
+          assertion: "Authored `.ts` with cross-module helper executes without `UnboundVariable`",
         }),
         testCase({
           id: "RUN-SRC-003",
@@ -1492,13 +1487,7 @@ export const tisynCliTestPlan: TestPlanModule = testPlan({
     }),
     coverageEntry({
       rule: "CLI-2.4-R3",
-      testIds: [
-        "CLI-CMD-004",
-        "CLI-CHK-010",
-        "CLI-CHK-011",
-        "CLI-SNAP-003",
-        "CLI-SNAP-004",
-      ],
+      testIds: ["CLI-CMD-004", "CLI-CHK-010", "CLI-CHK-011", "CLI-SNAP-003", "CLI-SNAP-004"],
       status: "covered",
     }),
     coverageEntry({ rule: "CLI-2.4-R4", testIds: ["CLI-CHK-006"], status: "covered" }),
@@ -1529,13 +1518,7 @@ export const tisynCliTestPlan: TestPlanModule = testPlan({
     }),
     coverageEntry({
       rule: "CLI-3.4-R5",
-      testIds: [
-        "CLI-EXIT-006",
-        "CLI-EXIT-007",
-        "CLI-EXIT-008",
-        "CLI-SNAP-006",
-        "CLI-SNAP-007",
-      ],
+      testIds: ["CLI-EXIT-006", "CLI-EXIT-007", "CLI-EXIT-008", "CLI-SNAP-006", "CLI-SNAP-007"],
       status: "covered",
     }),
     coverageEntry({
@@ -1606,13 +1589,7 @@ export const tisynCliTestPlan: TestPlanModule = testPlan({
     coverageEntry({ rule: "CLI-9.3-R1", testIds: ["CLI-FLG-011"], status: "covered" }),
     coverageEntry({
       rule: "CLI-9.4-R1",
-      testIds: [
-        "CLI-FLG-012",
-        "CLI-FLG-017",
-        "CLI-FLG-018",
-        "CLI-FLG-019",
-        "CLI-FLG-020",
-      ],
+      testIds: ["CLI-FLG-012", "CLI-FLG-017", "CLI-FLG-018", "CLI-FLG-019", "CLI-FLG-020"],
       status: "covered",
     }),
     coverageEntry({
@@ -1689,13 +1666,7 @@ export const tisynCliTestPlan: TestPlanModule = testPlan({
     coverageEntry({ rule: "CLI-10.5.1-R2", testIds: ["CLI-LOAD-010"], status: "covered" }),
     coverageEntry({
       rule: "CLI-10.5.4-R1",
-      testIds: [
-        "CLI-LOAD-011",
-        "CLI-LOAD-012",
-        "RUN-SRC-001",
-        "RUN-SRC-002",
-        "RUN-SRC-003",
-      ],
+      testIds: ["CLI-LOAD-011", "CLI-LOAD-012", "RUN-SRC-001", "RUN-SRC-002", "RUN-SRC-003"],
       status: "covered",
     }),
     coverageEntry({

@@ -39,8 +39,12 @@ function extract(text: string): Tokens {
       const qualifier = r[3] !== undefined ? ` — ${r[3]}` : "";
       relationships.push(`${r[1]}: ${r[2]}${qualifier}`);
     }
-    for (const m of line.matchAll(TEST_ID_RE)) testIds.add(m[1]);
-    for (const m of line.matchAll(SECTION_REF_RE)) coverageRefs.add(`§${m[1]}`);
+    for (const m of line.matchAll(TEST_ID_RE)) {
+      testIds.add(m[1]);
+    }
+    for (const m of line.matchAll(SECTION_REF_RE)) {
+      coverageRefs.add(`§${m[1]}`);
+    }
   }
 
   return {
@@ -59,13 +63,19 @@ function diff(
   const out: MarkdownDifference[] = [];
   const g = new Map<string, number>();
   const r = new Map<string, number>();
-  for (const v of generated) g.set(v, (g.get(v) ?? 0) + 1);
-  for (const v of reference) r.set(v, (r.get(v) ?? 0) + 1);
+  for (const v of generated) {
+    g.set(v, (g.get(v) ?? 0) + 1);
+  }
+  for (const v of reference) {
+    r.set(v, (r.get(v) ?? 0) + 1);
+  }
   const keys = new Set<string>([...g.keys(), ...r.keys()]);
   for (const key of [...keys].sort()) {
     const gc = g.get(key) ?? 0;
     const rc = r.get(key) ?? 0;
-    if (gc === rc) continue;
+    if (gc === rc) {
+      continue;
+    }
     out.push({
       kind,
       expected: rc > 0 ? key : "",

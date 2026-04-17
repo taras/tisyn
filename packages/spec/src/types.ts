@@ -339,11 +339,7 @@ export interface ImpactEntry {
   readonly specId: string;
   readonly relationship: Relationship;
   readonly referencedSection?: string | number;
-  readonly impactType:
-    | "depends-on"
-    | "amends"
-    | "test-references"
-    | "prose-references";
+  readonly impactType: "depends-on" | "amends" | "test-references" | "prose-references";
 }
 
 // §8.7 Projection types.

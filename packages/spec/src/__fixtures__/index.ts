@@ -39,9 +39,7 @@ export const fixtureAlphaPlan: TestPlanModule = testPlan({
   id: "fixture-alpha-plan",
   title: "Fixture Alpha Plan",
   validatesSpec: "fixture-alpha",
-  sections: [
-    testPlanSection({ id: 1, title: "Cases", prose: "Case prose." }),
-  ],
+  sections: [testPlanSection({ id: 1, title: "Cases", prose: "Case prose." })],
   categoriesSectionId: 1,
   categories: [
     testCategory({

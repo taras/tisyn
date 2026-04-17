@@ -61,10 +61,7 @@ export {
   compareMarkdown,
   renderDiscoveryPackText,
 } from "./markdown/index.ts";
-export type {
-  RenderSpecOptions,
-  RenderTestPlanOptions,
-} from "./markdown/index.ts";
+export type { RenderSpecOptions, RenderTestPlanOptions } from "./markdown/index.ts";
 
 export { AcquisitionError } from "./types.ts";
 

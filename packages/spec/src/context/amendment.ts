@@ -31,7 +31,5 @@ export function assembleAmendmentContext(
     currentCoverage,
     blockingQuestions,
   };
-  return opts.targetSection !== undefined
-    ? { ...base, targetSection: opts.targetSection }
-    : base;
+  return opts.targetSection !== undefined ? { ...base, targetSection: opts.targetSection } : base;
 }

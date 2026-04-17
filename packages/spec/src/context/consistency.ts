@@ -33,9 +33,7 @@ export function assembleConsistencyContext(registry: CorpusRegistry): Consistenc
   }
 
   const scope =
-    registry.scope.kind === "full"
-      ? "full"
-      : `filtered:${[...registry.scope.specIds].join(",")}`;
+    registry.scope.kind === "full" ? "full" : `filtered:${[...registry.scope.specIds].join(",")}`;
 
   return {
     task: "consistency",

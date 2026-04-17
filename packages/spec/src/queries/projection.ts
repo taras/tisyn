@@ -44,7 +44,9 @@ export function generateDiscoveryPack(
   const specs: DiscoveryPackSpec[] = [];
   for (const specId of registry.dependencyOrder) {
     const spec = registry.specs.get(specId);
-    if (spec === undefined) continue;
+    if (spec === undefined) {
+      continue;
+    }
     const cov = checkCoverage(registry, spec.id);
     const ready = isReady(registry, spec.id).ready;
     const base = {
@@ -120,12 +122,18 @@ export function generateConstraintDocument(
     const walk = (sections: readonly SectionLike[]): void => {
       for (const s of sections) {
         if (s.termDefinitions !== undefined) {
-          for (const t of s.termDefinitions) definedTerms.push(t);
+          for (const t of s.termDefinitions) {
+            definedTerms.push(t);
+          }
         }
         if (s.conceptExports !== undefined) {
-          for (const c of s.conceptExports) exportedConcepts.push(c);
+          for (const c of s.conceptExports) {
+            exportedConcepts.push(c);
+          }
         }
-        if (s.subsections !== undefined) walk(s.subsections);
+        if (s.subsections !== undefined) {
+          walk(s.subsections);
+        }
       }
     };
     walk(target.sections);
@@ -181,13 +189,21 @@ export function generateTaskContext(
   // Relevant specs: named + those contributing to matchingRules/Terms + when
   // includeRelated, specs reached via relationship edges from named specs.
   const relevantIds = new Set<string>(namedSpecs);
-  for (const r of matchingRules) relevantIds.add(r.specId);
-  for (const t of matchingTerms) relevantIds.add(t.specId);
+  for (const r of matchingRules) {
+    relevantIds.add(r.specId);
+  }
+  for (const t of matchingTerms) {
+    relevantIds.add(t.specId);
+  }
   if (query.includeRelated === true) {
-    for (const id of [...namedSpecs]) {
+    for (const id of namedSpecs) {
       for (const edge of registry.edges) {
-        if (edge.source === id && registry.specs.has(edge.target)) relevantIds.add(edge.target);
-        if (edge.target === id && registry.specs.has(edge.source)) relevantIds.add(edge.source);
+        if (edge.source === id && registry.specs.has(edge.target)) {
+          relevantIds.add(edge.target);
+        }
+        if (edge.target === id && registry.specs.has(edge.source)) {
+          relevantIds.add(edge.source);
+        }
       }
     }
   }
@@ -197,7 +213,9 @@ export function generateTaskContext(
 
   const relatedOpenQuestions: OpenQuestionLocation[] = [];
   for (const loc of listOpenQuestions(registry)) {
-    if (relevantIds.has(loc.specId)) relatedOpenQuestions.push(loc);
+    if (relevantIds.has(loc.specId)) {
+      relatedOpenQuestions.push(loc);
+    }
   }
 
   const bundle = {

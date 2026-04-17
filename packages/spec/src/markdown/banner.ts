@@ -19,7 +19,9 @@ export function stripBanner(text: string): string {
       continue;
     }
     if (inBanner) {
-      if (trimmed.endsWith("-->")) inBanner = false;
+      if (trimmed.endsWith("-->")) {
+        inBanner = false;
+      }
       continue;
     }
     cleaned.push(line);

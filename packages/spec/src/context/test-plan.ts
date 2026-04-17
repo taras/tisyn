@@ -14,19 +14,23 @@ export function assembleTestPlanContext(
   const mayRules: RuleLocation[] = [];
   for (const loc of rules) {
     const level = loc.rule.level;
-    if (level === "must" || level === "must-not") mustRules.push(loc);
-    else if (level === "should" || level === "should-not") shouldRules.push(loc);
-    else mayRules.push(loc);
+    if (level === "must" || level === "must-not") {
+      mustRules.push(loc);
+    } else if (level === "should" || level === "should-not") {
+      shouldRules.push(loc);
+    } else {
+      mayRules.push(loc);
+    }
   }
 
   const siblingPlanIds: string[] = [];
   for (const plan of registry.plans.values()) {
-    if (plan.validatesSpec === opts.targetSpec) siblingPlanIds.push(plan.id);
+    if (plan.validatesSpec === opts.targetSpec) {
+      siblingPlanIds.push(plan.id);
+    }
   }
 
-  const openQuestions = listOpenQuestions(registry).filter(
-    (loc) => loc.specId === opts.targetSpec,
-  );
+  const openQuestions = listOpenQuestions(registry).filter((loc) => loc.specId === opts.targetSpec);
 
   return {
     task: "test-plan",

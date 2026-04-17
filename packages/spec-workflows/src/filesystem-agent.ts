@@ -43,9 +43,7 @@ function* readOriginal(payload: Val): Operation<Val> {
         `Expected "spec" or "plan".`,
     );
   }
-  const content = yield* call(
-    () => acquireFixture(target, kind) as unknown as Operation<string>,
-  );
+  const content = yield* call(() => acquireFixture(target, kind) as unknown as Operation<string>);
   return { content } as unknown as Val;
 }
 

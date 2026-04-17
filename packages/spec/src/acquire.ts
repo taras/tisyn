@@ -79,16 +79,12 @@ export function createAcquire(opts: AcquireOptions): AcquireAPI {
   const readFixture = opts.readFixture;
   const readEmitted = opts.readEmitted;
 
-  function* acquireCorpusRegistryImpl(
-    scope?: AcquisitionScope,
-  ): Operation<CorpusRegistry> {
+  function* acquireCorpusRegistryImpl(scope?: AcquisitionScope): Operation<CorpusRegistry> {
     // Decide which manifest entries to load. Unknown requested ids are
     // ignored — unresolved targets are not an acquisition failure (§7.4 A6).
     const filtered = scope?.specIds !== undefined;
     const requestedIds = filtered ? new Set(scope!.specIds) : undefined;
-    const chosen = filtered
-      ? entries.filter((e) => requestedIds!.has(e.id))
-      : entries;
+    const chosen = filtered ? entries.filter((e) => requestedIds!.has(e.id)) : entries;
 
     // F2 — load phase. Collect every Promise rejection into one aggregate.
     type Loaded = { id: string; spec: SpecModule; plan?: TestPlanModule };
@@ -202,10 +198,7 @@ export function createAcquire(opts: AcquireOptions): AcquireAPI {
     // Hand off to buildRegistry. F3 is already decided above; buildRegistry's
     // own duplicate-id guard is defense-in-depth for direct callers and
     // should never fire on this path.
-    const all = [
-      ...normalizedSpecs.map((e) => e.module),
-      ...normalizedPlans.map((e) => e.module),
-    ];
+    const all = [...normalizedSpecs.map((e) => e.module), ...normalizedPlans.map((e) => e.module)];
     const buildScope: Scope = filtered
       ? { kind: "filtered", specIds: [...scope!.specIds!] }
       : { kind: "full" };
@@ -222,10 +215,7 @@ export function createAcquire(opts: AcquireOptions): AcquireAPI {
     return (yield* readFixture(id, kind)) as string;
   }
 
-  function* acquireEmittedMarkdownImpl(
-    id: string,
-    kind: "spec" | "plan",
-  ): Operation<string> {
+  function* acquireEmittedMarkdownImpl(id: string, kind: "spec" | "plan"): Operation<string> {
     if (readEmitted === undefined) {
       throw new TypeError(
         "createAcquire: acquireEmittedMarkdown called without a readEmitted reader — " +
@@ -243,8 +233,12 @@ export function createAcquire(opts: AcquireOptions): AcquireAPI {
 }
 
 function errorMessage(err: unknown): string {
-  if (err instanceof Error) return err.message;
-  if (typeof err === "string") return err;
+  if (err instanceof Error) {
+    return err.message;
+  }
+  if (typeof err === "string") {
+    return err;
+  }
   try {
     return JSON.stringify(err);
   } catch {

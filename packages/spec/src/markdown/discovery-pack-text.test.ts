@@ -5,11 +5,7 @@ import { describe, expect, it } from "vitest";
 import { renderDiscoveryPackText } from "./discovery-pack-text.ts";
 import { generateDiscoveryPack } from "../queries/projection.ts";
 import { buildTestRegistry } from "../__fixtures__/registry.ts";
-import {
-  fixtureAlpha,
-  fixtureAlphaPlan,
-  fixtureBeta,
-} from "../__fixtures__/index.ts";
+import { fixtureAlpha, fixtureAlphaPlan, fixtureBeta } from "../__fixtures__/index.ts";
 
 describe("SS-RN discovery-pack-text", () => {
   it("projects the pack into a readable summary", () => {

@@ -24,12 +24,7 @@ import { createRequire } from "node:module";
 import { readFile } from "node:fs/promises";
 import { dirname, resolve } from "node:path";
 import { call } from "effection";
-import {
-  createAcquire,
-  manifest,
-  type AcquireAPI,
-  type Operation,
-} from "@tisyn/spec";
+import { createAcquire, manifest, type AcquireAPI, type Operation } from "@tisyn/spec";
 
 const require_ = createRequire(import.meta.url);
 

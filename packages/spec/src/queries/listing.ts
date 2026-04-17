@@ -14,11 +14,7 @@ import type {
 } from "../types.ts";
 import { getInternalExtras } from "../registry.ts";
 
-function walkRulesInOrder(
-  specId: string,
-  sections: readonly Section[],
-  out: RuleLocation[],
-): void {
+function walkRulesInOrder(specId: string, sections: readonly Section[], out: RuleLocation[]): void {
   for (const section of sections) {
     if (section.rules !== undefined) {
       for (const rule of section.rules) {
@@ -33,12 +29,11 @@ function walkRulesInOrder(
 
 // §8.4 listRules — returns all rules in the named spec, in section order.
 // Empty array if the spec is not found or has no rules.
-export function listRules(
-  registry: CorpusRegistry,
-  specId: string,
-): readonly RuleLocation[] {
+export function listRules(registry: CorpusRegistry, specId: string): readonly RuleLocation[] {
   const spec = registry.specs.get(specId);
-  if (spec === undefined) return [];
+  if (spec === undefined) {
+    return [];
+  }
   const out: RuleLocation[] = [];
   walkRulesInOrder(specId, spec.sections, out);
   return out;
@@ -52,7 +47,9 @@ export function listRulesByLevel(
   const out: RuleLocation[] = [];
   for (const specId of registry.dependencyOrder) {
     for (const loc of listRules(registry, specId)) {
-      if (loc.rule.level === level) out.push(loc);
+      if (loc.rule.level === level) {
+        out.push(loc);
+      }
     }
   }
   return out;
@@ -64,7 +61,9 @@ export function listDependencies(
   specId: string,
 ): readonly DependencyEntry[] {
   const spec = registry.specs.get(specId);
-  if (spec === undefined) return [];
+  if (spec === undefined) {
+    return [];
+  }
   const out: DependencyEntry[] = [];
   for (const rel of spec.relationships) {
     if (rel.type === "depends-on" || rel.type === "amends" || rel.type === "complements") {
@@ -98,10 +97,16 @@ export function listOpenQuestions(
   const out: OpenQuestionLocation[] = [];
   for (const specId of registry.dependencyOrder) {
     const spec = registry.specs.get(specId);
-    if (spec === undefined || spec.openQuestions === undefined) continue;
+    if (spec === undefined || spec.openQuestions === undefined) {
+      continue;
+    }
     for (const oq of spec.openQuestions) {
-      if (filter?.status !== undefined && oq.status !== filter.status) continue;
-      if (filter?.blocksTarget !== undefined && oq.blocksTarget !== filter.blocksTarget) continue;
+      if (filter?.status !== undefined && oq.status !== filter.status) {
+        continue;
+      }
+      if (filter?.blocksTarget !== undefined && oq.blocksTarget !== filter.blocksTarget) {
+        continue;
+      }
       out.push({ specId: spec.id, openQuestion: oq });
     }
   }
@@ -110,12 +115,16 @@ export function listOpenQuestions(
 
 export function listTerms(registry: CorpusRegistry): readonly TermLocation[] {
   const extras = getInternalExtras(registry);
-  if (extras !== undefined) return extras.allTermLocations;
+  if (extras !== undefined) {
+    return extras.allTermLocations;
+  }
   return [...registry.termIndex.values()];
 }
 
 export function listErrorCodes(registry: CorpusRegistry): readonly ErrorCodeLocation[] {
   const extras = getInternalExtras(registry);
-  if (extras !== undefined) return extras.allErrorCodeLocations;
+  if (extras !== undefined) {
+    return extras.allErrorCodeLocations;
+  }
   return [...registry.errorCodeIndex.values()];
 }

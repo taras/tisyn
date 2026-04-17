@@ -7,13 +7,7 @@ export const SPEC_STATUS = ["draft", "active", "superseded"] as const;
 export type SpecStatus = (typeof SPEC_STATUS)[number];
 
 // §4.5 Rule.level — the five RFC 2119 levels.
-export const RULE_LEVELS = [
-  "must",
-  "must-not",
-  "should",
-  "should-not",
-  "may",
-] as const;
+export const RULE_LEVELS = ["must", "must-not", "should", "should-not", "may"] as const;
 export type RuleLevel = (typeof RULE_LEVELS)[number];
 
 // §4.7 Relationship.type

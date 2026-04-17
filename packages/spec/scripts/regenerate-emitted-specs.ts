@@ -10,10 +10,7 @@
 import { writeFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
-import {
-  renderSpecMarkdown,
-  renderTestPlanMarkdown,
-} from "../src/markdown/index.ts";
+import { renderSpecMarkdown, renderTestPlanMarkdown } from "../src/markdown/index.ts";
 import { tisynCliSpec, tisynCliTestPlan } from "../corpus/tisyn-cli/index.ts";
 
 const HERE = dirname(fileURLToPath(import.meta.url));

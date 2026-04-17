@@ -10,9 +10,7 @@ export interface FixtureEntry {
   readonly plan?: TestPlanModule;
 }
 
-export function buildTestManifest(
-  entries: readonly FixtureEntry[],
-): readonly ManifestEntry[] {
+export function buildTestManifest(entries: readonly FixtureEntry[]): readonly ManifestEntry[] {
   return entries.map((e) => ({
     id: e.id,
     loadSpec: () => Promise.resolve(e.spec),

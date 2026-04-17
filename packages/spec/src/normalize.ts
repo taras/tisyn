@@ -20,12 +20,20 @@ import type {
 } from "./types.ts";
 
 function deepFreeze<T>(value: T): T {
-  if (value === null) return value;
-  if (typeof value !== "object") return value;
-  if (Object.isFrozen(value)) return value;
+  if (value === null) {
+    return value;
+  }
+  if (typeof value !== "object") {
+    return value;
+  }
+  if (Object.isFrozen(value)) {
+    return value;
+  }
   Object.freeze(value);
   if (Array.isArray(value)) {
-    for (const element of value) deepFreeze(element);
+    for (const element of value) {
+      deepFreeze(element);
+    }
   } else {
     for (const key of Object.keys(value as object)) {
       deepFreeze((value as Record<string, unknown>)[key]);

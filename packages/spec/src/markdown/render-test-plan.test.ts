@@ -18,8 +18,6 @@ describe("SS-RN render-test-plan", () => {
   });
 
   it("is deterministic", () => {
-    expect(renderTestPlanMarkdown(fixtureAlphaPlan)).toBe(
-      renderTestPlanMarkdown(fixtureAlphaPlan),
-    );
+    expect(renderTestPlanMarkdown(fixtureAlphaPlan)).toBe(renderTestPlanMarkdown(fixtureAlphaPlan));
   });
 });

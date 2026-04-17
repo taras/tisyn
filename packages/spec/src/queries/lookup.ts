@@ -17,18 +17,12 @@ export function findSpec(
   return registry.specs.get(specId);
 }
 
-export function findRule(
-  registry: CorpusRegistry,
-  ruleId: string,
-): RuleLocation | undefined {
+export function findRule(registry: CorpusRegistry, ruleId: string): RuleLocation | undefined {
   return registry.ruleIndex.get(ruleId);
 }
 
 // Exact match, case-sensitive (SS-QL-023 / §8.3).
-export function findTerm(
-  registry: CorpusRegistry,
-  term: string,
-): TermLocation | undefined {
+export function findTerm(registry: CorpusRegistry, term: string): TermLocation | undefined {
   return registry.termIndex.get(term);
 }
 

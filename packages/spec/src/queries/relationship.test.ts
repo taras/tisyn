@@ -1,12 +1,7 @@
 // SS-QR: relationship queries (impact, transitive, dependencyOrder, cycles).
 
 import { describe, expect, it } from "vitest";
-import {
-  dependencyOrder,
-  hasCycles,
-  impactOf,
-  transitiveDependencies,
-} from "./relationship.ts";
+import { dependencyOrder, hasCycles, impactOf, transitiveDependencies } from "./relationship.ts";
 import { buildTestRegistry } from "../__fixtures__/registry.ts";
 import {
   fixtureAlpha,
@@ -17,10 +12,7 @@ import {
 } from "../__fixtures__/index.ts";
 
 describe("SS-QR relationship", () => {
-  const r = buildTestRegistry(
-    [fixtureAlpha, fixtureBeta, fixtureDelta],
-    [fixtureAlphaPlan],
-  );
+  const r = buildTestRegistry([fixtureAlpha, fixtureBeta, fixtureDelta], [fixtureAlphaPlan]);
 
   it("dependencyOrder returns registry order", () => {
     expect(dependencyOrder(r)).toEqual(r.dependencyOrder);

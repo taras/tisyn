@@ -5,13 +5,7 @@
 // via the v1 `section` field. v1 `complements: [...]` became a single
 // `relationships: [{ type: "complements", target: ... }]` array.
 
-import {
-  errorCode,
-  relationship,
-  rule,
-  section,
-  spec,
-} from "../../src/constructors.ts";
+import { errorCode, relationship, rule, section, spec } from "../../src/constructors.ts";
 import type { SpecModule } from "../../src/types.ts";
 
 export const tisynCliSpec: SpecModule = spec({
@@ -38,8 +32,7 @@ export const tisynCliSpec: SpecModule = spec({
             rule({
               id: "CLI-1.1-R1",
               level: "must",
-              text:
-                "The `@tisyn/cli` package registers `tsn` as a `bin` entry in `package.json`.",
+              text: "The `@tisyn/cli` package registers `tsn` as a `bin` entry in `package.json`.",
             }),
           ],
         }),
@@ -77,20 +70,17 @@ export const tisynCliSpec: SpecModule = spec({
             rule({
               id: "CLI-2.1-R1",
               level: "must-not",
-              text:
-                "The CLI assembles source text, strips imports, or injects stubs for `tsn generate`; those are compiler responsibilities.",
+              text: "The CLI assembles source text, strips imports, or injects stubs for `tsn generate`; those are compiler responsibilities.",
             }),
             rule({
               id: "CLI-2.1-R2",
               level: "must",
-              text:
-                "`tsn generate` supports `--format printed` (default) and `--format json` output formats.",
+              text: "`tsn generate` supports `--format printed` (default) and `--format json` output formats.",
             }),
             rule({
               id: "CLI-2.1-R3",
               level: "must",
-              text:
-                "`tsn generate` writes generated source to the `--output` path when specified, else to stdout.",
+              text: "`tsn generate` writes generated source to the `--output` path when specified, else to stdout.",
             }),
           ],
         }),
@@ -103,8 +93,7 @@ export const tisynCliSpec: SpecModule = spec({
             rule({
               id: "CLI-2.2-R1",
               level: "must",
-              text:
-                "If `--config` is not specified, `tsn build` walks from the current working directory toward the filesystem root and stops at the first `tisyn.config.ts` or `tisyn.config.json`.",
+              text: "If `--config` is not specified, `tsn build` walks from the current working directory toward the filesystem root and stops at the first `tisyn.config.ts` or `tisyn.config.json`.",
             }),
             rule({
               id: "CLI-2.2-R2",
@@ -114,8 +103,7 @@ export const tisynCliSpec: SpecModule = spec({
             rule({
               id: "CLI-2.2-R3",
               level: "must",
-              text:
-                "`tsn build` with `--filter <name>` executes the named pass and its dependencies.",
+              text: "`tsn build` with `--filter <name>` executes the named pass and its dependencies.",
             }),
             rule({
               id: "CLI-2.2-R4",
@@ -149,26 +137,22 @@ export const tisynCliSpec: SpecModule = spec({
             rule({
               id: "CLI-2.4-R3",
               level: "must",
-              text:
-                "`tsn check --env-example` prints an environment variable template to stdout and exits 0.",
+              text: "`tsn check --env-example` prints an environment variable template to stdout and exits 0.",
             }),
             rule({
               id: "CLI-2.4-R4",
               level: "must",
-              text:
-                "`tsn check --entrypoint <name>` applies the named entrypoint overlay before validation.",
+              text: "`tsn check --entrypoint <name>` applies the named entrypoint overlay before validation.",
             }),
             rule({
               id: "CLI-2.4-R5",
               level: "may",
-              text:
-                "`tsn check` may report an advisory invocation input schema when derivation succeeds.",
+              text: "`tsn check` may report an advisory invocation input schema when derivation succeeds.",
             }),
             rule({
               id: "CLI-2.4-R6",
               level: "must",
-              text:
-                "Schema derivation failure does not cause `tsn check` to fail; it is reported as a warning.",
+              text: "Schema derivation failure does not cause `tsn check` to fail; it is reported as a warning.",
             }),
           ],
         }),
@@ -206,32 +190,27 @@ export const tisynCliSpec: SpecModule = spec({
             rule({
               id: "CLI-3.4-R1",
               level: "must",
-              text:
-                "The CLI exits with the appropriate exit code and does not exit with code 0 when an error occurred.",
+              text: "The CLI exits with the appropriate exit code and does not exit with code 0 when an error occurred.",
             }),
             rule({
               id: "CLI-3.4-R2",
               level: "must",
-              text:
-                "Unrecognized built-in CLI flags for `generate`, `build`, or `check` fail with exit code 2.",
+              text: "Unrecognized built-in CLI flags for `generate`, `build`, or `check` fail with exit code 2.",
             }),
             rule({
               id: "CLI-3.4-R3",
               level: "must",
-              text:
-                "Unknown top-level commands (e.g. `tsn foo`) and nonexistent root files for `tsn generate` are reported with exit codes 2 and 3 respectively.",
+              text: "Unknown top-level commands (e.g. `tsn foo`) and nonexistent root files for `tsn generate` are reported with exit codes 2 and 3 respectively.",
             }),
             rule({
               id: "CLI-3.4-R4",
               level: "must",
-              text:
-                "Code 2 applies to loaded-but-structurally-invalid content; code 3 applies when the CLI cannot locate or read a file or module at the filesystem level.",
+              text: "Code 2 applies to loaded-but-structurally-invalid content; code 3 applies when the CLI cannot locate or read a file or module at the filesystem level.",
             }),
             rule({
               id: "CLI-3.4-R5",
               level: "must",
-              text:
-                "Missing required invocation inputs, coercion failures, and unknown invocation flags for `tsn run` fail with exit code 4.",
+              text: "Missing required invocation inputs, coercion failures, and unknown invocation flags for `tsn run` fail with exit code 4.",
             }),
             rule({
               id: "CLI-3.4-R6",
@@ -241,8 +220,7 @@ export const tisynCliSpec: SpecModule = spec({
             rule({
               id: "CLI-3.4-R7",
               level: "may",
-              text:
-                "Runtime execution errors during workflow execution are reported with exit code 6.",
+              text: "Runtime execution errors during workflow execution are reported with exit code 6.",
             }),
             rule({
               id: "CLI-3.4-R8",
@@ -312,14 +290,12 @@ export const tisynCliSpec: SpecModule = spec({
             rule({
               id: "CLI-4.3-R1",
               level: "must",
-              text:
-                "Build config validation: `generates` contains at least one entry; each `name` is unique and matches `[a-z][a-z0-9-]*`; each `roots` is non-empty; each root resolves to an existing file; each `output` is writable; `dependsOn` references name passes in `generates`.",
+              text: "Build config validation: `generates` contains at least one entry; each `name` is unique and matches `[a-z][a-z0-9-]*`; each `roots` is non-empty; each root resolves to an existing file; each `output` is writable; `dependsOn` references name passes in `generates`.",
             }),
             rule({
               id: "CLI-4.3-R2",
               level: "must",
-              text:
-                "Legacy fields (e.g. `input`) on the build config are rejected as unknown with exit code 2.",
+              text: "Legacy fields (e.g. `input`) on the build config are rejected as unknown with exit code 2.",
             }),
           ],
         }),
@@ -340,14 +316,12 @@ export const tisynCliSpec: SpecModule = spec({
             rule({
               id: "CLI-5.1-R1",
               level: "must",
-              text:
-                "The CLI infers pass dependencies from the declared roots' import graph and orders passes topologically.",
+              text: "The CLI infers pass dependencies from the declared roots' import graph and orders passes topologically.",
             }),
             rule({
               id: "CLI-5.1-R2",
               level: "must",
-              text:
-                "A dependency cycle detected during topological sorting fails with exit code 2 and a diagnostic.",
+              text: "A dependency cycle detected during topological sorting fails with exit code 2 and a diagnostic.",
             }),
           ],
         }),
@@ -366,8 +340,7 @@ export const tisynCliSpec: SpecModule = spec({
             rule({
               id: "CLI-5.3-R1",
               level: "must",
-              text:
-                "Cross-pass boundaries are communicated by passing prior pass output paths as `generatedModulePaths`. The CLI does not perform source-level stub injection or import stripping.",
+              text: "Cross-pass boundaries are communicated by passing prior pass output paths as `generatedModulePaths`. The CLI does not perform source-level stub injection or import stripping.",
             }),
           ],
         }),
@@ -405,8 +378,7 @@ export const tisynCliSpec: SpecModule = spec({
             rule({
               id: "CLI-7.1-R1",
               level: "must",
-              text:
-                "Compilation errors are formatted for terminal display with error code, message, and source location if available.",
+              text: "Compilation errors are formatted for terminal display with error code, message, and source location if available.",
             }),
           ],
         }),
@@ -438,20 +410,17 @@ export const tisynCliSpec: SpecModule = spec({
             rule({
               id: "CLI-8.1-R1",
               level: "must",
-              text:
-                "IS1: The CLI must obtain a conforming workflow invocation input schema before parsing invocation flags; if no schema is available, it fails with exit code 2.",
+              text: "IS1: The CLI must obtain a conforming workflow invocation input schema before parsing invocation flags; if no schema is available, it fails with exit code 2.",
             }),
             rule({
               id: "CLI-8.1-R2",
               level: "must",
-              text:
-                "IS2: If the obtained schema contains unsupported shapes, the CLI fails with exit code 2 and a diagnostic identifying the unsupported construct.",
+              text: "IS2: If the obtained schema contains unsupported shapes, the CLI fails with exit code 2 and a diagnostic identifying the unsupported construct.",
             }),
             rule({
               id: "CLI-8.1-R3",
               level: "must",
-              text:
-                "IS3: A zero-parameter workflow has an empty schema, produces no derived invocation flags, and is not a failure.",
+              text: "IS3: A zero-parameter workflow has an empty schema, produces no derived invocation flags, and is not a failure.",
             }),
           ],
         }),
@@ -464,8 +433,7 @@ export const tisynCliSpec: SpecModule = spec({
             rule({
               id: "CLI-8.2-R1",
               level: "must",
-              text:
-                "S2: A flat object parameter is supported; each field of the object becomes a derived invocation input.",
+              text: "S2: A flat object parameter is supported; each field of the object becomes a derived invocation input.",
             }),
           ],
         }),
@@ -478,14 +446,12 @@ export const tisynCliSpec: SpecModule = spec({
             rule({
               id: "CLI-8.3-R1",
               level: "must",
-              text:
-                "B1: `boolean` and `boolean?` are equivalent in CLI mapping — both produce an optional presence flag.",
+              text: "B1: `boolean` and `boolean?` are equivalent in CLI mapping — both produce an optional presence flag.",
             }),
             rule({
               id: "CLI-8.3-R2",
               level: "must",
-              text:
-                "B2: Supplying `--flag` sets the value to `true`; omitting it sets the value to `false`. The CLI always provides a concrete `boolean`, never `undefined`.",
+              text: "B2: Supplying `--flag` sets the value to `true`; omitting it sets the value to `false`. The CLI always provides a concrete `boolean`, never `undefined`.",
             }),
             rule({
               id: "CLI-8.3-R3",
@@ -503,8 +469,7 @@ export const tisynCliSpec: SpecModule = spec({
             rule({
               id: "CLI-8.4-R1",
               level: "must",
-              text:
-                "Schema derivation rejects multiple parameters, non-object parameter types, array-typed fields, nested object fields, union-typed fields (other than `T | undefined`), enum/tuple/mapped types, and fields typed as `EnvDescriptor` or any config-node type.",
+              text: "Schema derivation rejects multiple parameters, non-object parameter types, array-typed fields, nested object fields, union-typed fields (other than `T | undefined`), enum/tuple/mapped types, and fields typed as `EnvDescriptor` or any config-node type.",
             }),
           ],
         }),
@@ -517,8 +482,7 @@ export const tisynCliSpec: SpecModule = spec({
             rule({
               id: "CLI-8.5-R1",
               level: "should",
-              text:
-                "If a field has a JSDoc or `@param` annotation, its description is included in help output.",
+              text: "If a field has a JSDoc or `@param` annotation, its description is included in help output.",
             }),
           ],
         }),
@@ -538,8 +502,7 @@ export const tisynCliSpec: SpecModule = spec({
             rule({
               id: "CLI-9.1-R1",
               level: "must",
-              text:
-                "Field names are converted from `camelCase` to `--kebab-case` by splitting on uppercase boundaries, lowercasing, and joining with hyphens.",
+              text: "Field names are converted from `camelCase` to `--kebab-case` by splitting on uppercase boundaries, lowercasing, and joining with hyphens.",
             }),
           ],
         }),
@@ -552,8 +515,7 @@ export const tisynCliSpec: SpecModule = spec({
             rule({
               id: "CLI-9.2-R1",
               level: "must",
-              text:
-                "Non-boolean non-optional fields are supplied via their CLI flag; missing required fields cause exit code 4 with a diagnostic listing all missing inputs.",
+              text: "Non-boolean non-optional fields are supplied via their CLI flag; missing required fields cause exit code 4 with a diagnostic listing all missing inputs.",
             }),
             rule({
               id: "CLI-9.2-R2",
@@ -571,8 +533,7 @@ export const tisynCliSpec: SpecModule = spec({
             rule({
               id: "CLI-9.3-R1",
               level: "must",
-              text:
-                "Value coercion: `string` is verbatim; `number` uses `parseFloat`, and `NaN` causes exit code 4.",
+              text: "Value coercion: `string` is verbatim; `number` uses `parseFloat`, and `NaN` causes exit code 4.",
             }),
           ],
         }),
@@ -585,8 +546,7 @@ export const tisynCliSpec: SpecModule = spec({
             rule({
               id: "CLI-9.4-R1",
               level: "must",
-              text:
-                "During `tsn run` input parsing, any CLI token in the workflow-input remainder that does not match a derived input (including unknown long flags, short flags, and bare positionals) causes exit code 4.",
+              text: "During `tsn run` input parsing, any CLI token in the workflow-input remainder that does not match a derived input (including unknown long flags, short flags, and bare positionals) causes exit code 4.",
             }),
           ],
         }),
@@ -599,8 +559,7 @@ export const tisynCliSpec: SpecModule = spec({
             rule({
               id: "CLI-9.5-R1",
               level: "must",
-              text:
-                "Collision is checked on derived kebab-case flag names. If a derived flag collides with a built-in option, the built-in takes precedence and the workflow parameter must be renamed.",
+              text: "Collision is checked on derived kebab-case flag names. If a derived flag collides with a built-in option, the built-in takes precedence and the workflow parameter must be renamed.",
             }),
             rule({
               id: "CLI-9.5-R2",
@@ -618,20 +577,17 @@ export const tisynCliSpec: SpecModule = spec({
             rule({
               id: "CLI-9.6-R1",
               level: "must",
-              text:
-                "Dynamic help for `tsn run <module> --help` produces a usage line, built-in options, workflow-derived flags with type and required/optional status and descriptions, and named entrypoints from the descriptor.",
+              text: "Dynamic help for `tsn run <module> --help` produces a usage line, built-in options, workflow-derived flags with type and required/optional status and descriptions, and named entrypoints from the descriptor.",
             }),
             rule({
               id: "CLI-9.6-R2",
               level: "must",
-              text:
-                "Help describes invocation inputs only and must not describe resolved workflow config or `Config.useConfig()` internals.",
+              text: "Help describes invocation inputs only and must not describe resolved workflow config or `Config.useConfig()` internals.",
             }),
             rule({
               id: "CLI-9.6-R3",
               level: "must",
-              text:
-                "If module loading, descriptor validation, or schema derivation fails during dynamic help, the CLI displays built-in options and a diagnostic explaining why workflow-derived flags cannot be shown, then exits with the appropriate error code.",
+              text: "If module loading, descriptor validation, or schema derivation fails during dynamic help, the CLI displays built-in options and a diagnostic explaining why workflow-derived flags cannot be shown, then exits with the appropriate error code.",
             }),
             rule({
               id: "CLI-9.6-R4",
@@ -641,8 +597,7 @@ export const tisynCliSpec: SpecModule = spec({
             rule({
               id: "CLI-9.6-R5",
               level: "must",
-              text:
-                "Static help (`tsn run --help` with no module argument) displays the command's built-in options and usage and exits 0 without loading any descriptor or workflow metadata.",
+              text: "Static help (`tsn run --help` with no module argument) displays the command's built-in options and usage and exits 0 without loading any descriptor or workflow metadata.",
             }),
           ],
         }),
@@ -662,20 +617,17 @@ export const tisynCliSpec: SpecModule = spec({
             rule({
               id: "CLI-10.1-R1",
               level: "must",
-              text:
-                "`tsn run <module>` performs the steps of §10.1 in order: module loading, run-target resolution, entrypoint overlay, descriptor validation, schema derivation, input parsing, environment collection, environment resolution, environment validation, resource startup, workflow execution, and process lifecycle.",
+              text: "`tsn run <module>` performs the steps of §10.1 in order: module loading, run-target resolution, entrypoint overlay, descriptor validation, schema derivation, input parsing, environment collection, environment resolution, environment validation, resource startup, workflow execution, and process lifecycle.",
             }),
             rule({
               id: "CLI-10.1-R2",
               level: "must",
-              text:
-                "If `--entrypoint` is specified, the named entrypoint overlay is applied; an unknown name fails with exit code 2.",
+              text: "If `--entrypoint` is specified, the named entrypoint overlay is applied; an unknown name fails with exit code 2.",
             }),
             rule({
               id: "CLI-10.1-R3",
               level: "must",
-              text:
-                "The workflow receives validated invocation arguments, and resolved workflow config is accessed via `yield* Config.useConfig(Token)`. Invocation arguments and `Config.useConfig()` return values are separate channels.",
+              text: "The workflow receives validated invocation arguments, and resolved workflow config is accessed via `yield* Config.useConfig(Token)`. Invocation arguments and `Config.useConfig()` return values are separate channels.",
             }),
           ],
         }),
@@ -688,26 +640,22 @@ export const tisynCliSpec: SpecModule = spec({
             rule({
               id: "CLI-10.2-R1",
               level: "must",
-              text:
-                "M1: The descriptor module has a `default` export that is a valid `WorkflowDescriptor`.",
+              text: "M1: The descriptor module has a `default` export that is a valid `WorkflowDescriptor`.",
             }),
             rule({
               id: "CLI-10.2-R2",
               level: "must",
-              text:
-                "M2: The workflow function module exports the workflow entrypoint under the name specified by `run.export`.",
+              text: "M2: The workflow function module exports the workflow entrypoint under the name specified by `run.export`.",
             }),
             rule({
               id: "CLI-10.2-R3",
               level: "must",
-              text:
-                "M3: `run.module`, if specified, is resolved relative to the descriptor module's location.",
+              text: "M3: `run.module`, if specified, is resolved relative to the descriptor module's location.",
             }),
             rule({
               id: "CLI-10.2-R4",
               level: "must",
-              text:
-                "When `run.module` points to a generated workflow module, the CLI loads it at runtime and the compiler is not invoked. The descriptor module itself is runtime-loaded and is not treated as a workflow compilation root.",
+              text: "When `run.module` points to a generated workflow module, the CLI loads it at runtime and the compiler is not invoked. The descriptor module itself is runtime-loaded and is not treated as a workflow compilation root.",
             }),
           ],
         }),
@@ -719,8 +667,7 @@ export const tisynCliSpec: SpecModule = spec({
             rule({
               id: "CLI-10.3-R1",
               level: "must",
-              text:
-                "Phases A–C (steps 1–9) must succeed before any transport starts (step 10) or any workflow executes (step 11).",
+              text: "Phases A–C (steps 1–9) must succeed before any transport starts (step 10) or any workflow executes (step 11).",
             }),
           ],
         }),
@@ -733,8 +680,7 @@ export const tisynCliSpec: SpecModule = spec({
             rule({
               id: "CLI-10.4-R1",
               level: "should",
-              text:
-                "When both invocation input errors and environment errors exist, the CLI reports both before exiting.",
+              text: "When both invocation input errors and environment errors exist, the CLI reports both before exiting.",
             }),
           ],
         }),
@@ -752,14 +698,12 @@ export const tisynCliSpec: SpecModule = spec({
                 rule({
                   id: "CLI-10.5.1-R1",
                   level: "must",
-                  text:
-                    "`tsn run` and `tsn check` accept TypeScript (`.ts`, `.mts`, `.cts`) and JavaScript (`.js`, `.mjs`, `.cjs`) descriptor modules.",
+                  text: "`tsn run` and `tsn check` accept TypeScript (`.ts`, `.mts`, `.cts`) and JavaScript (`.js`, `.mjs`, `.cjs`) descriptor modules.",
                 }),
                 rule({
                   id: "CLI-10.5.1-R2",
                   level: "must",
-                  text:
-                    "`.tsx` is not a supported module extension; unsupported extensions fail with exit code 3 and an unsupported-extension diagnostic.",
+                  text: "`.tsx` is not a supported module extension; unsupported extensions fail with exit code 3 and an unsupported-extension diagnostic.",
                 }),
               ],
             }),
@@ -784,8 +728,7 @@ export const tisynCliSpec: SpecModule = spec({
                 rule({
                   id: "CLI-10.5.4-R1",
                   level: "must",
-                  text:
-                    "When `run.module` points to authored workflow source, the CLI uses the Tisyn compiler to produce IR. Module loading must not replace workflow source compilation.",
+                  text: "When `run.module` points to authored workflow source, the CLI uses the Tisyn compiler to produce IR. Module loading must not replace workflow source compilation.",
                 }),
               ],
             }),
@@ -921,8 +864,7 @@ export const tisynCliSpec: SpecModule = spec({
             rule({
               id: "CLI-16.2-R1",
               level: "must",
-              text:
-                "The CLI must not derive workflow flags from raw `process.argv`; built-in options such as `--verbose` and `--entrypoint` are consumed in Phase 1 and must not leak into workflow-derived flag parsing.",
+              text: "The CLI must not derive workflow flags from raw `process.argv`; built-in options such as `--verbose` and `--entrypoint` are consumed in Phase 1 and must not leak into workflow-derived flag parsing.",
             }),
           ],
         }),
@@ -945,28 +887,28 @@ export const tisynCliSpec: SpecModule = spec({
       title: "Final Consistency Changes",
       prose: [
         "1. **Exit code 2 vs 3 boundary.** Code 2 and code 3 had",
-        "   overlapping coverage (\"module not found\" appeared",
-        "   under code 2; \"file not found\" under code 3). The",
+        '   overlapping coverage ("module not found" appeared',
+        '   under code 2; "file not found" under code 3). The',
         "   boundary is now unambiguous: code 3 applies when the",
         "   CLI cannot locate or read a file at the filesystem",
         "   level; code 2 applies when a file was loaded but its",
         "   contents are structurally invalid. §10.1 step 1 now",
         "   specifies both failure modes explicitly.",
         "",
-        "2. **M2 softened.** \"Compiled workflow function\" replaced",
-        "   with \"workflow entrypoint function\" plus \"the CLI does",
-        "   not prescribe how this function was produced.\" The",
+        '2. **M2 softened.** "Compiled workflow function" replaced',
+        '   with "workflow entrypoint function" plus "the CLI does',
+        '   not prescribe how this function was produced." The',
         "   module contract is now stable regardless of compiler",
         "   or runtime internals.",
         "",
         "3. **`tsn check` example qualified.** The output example",
         "   now labels the invocation inputs section as",
-        "   \"(advisory)\" and adds prose clarifying that the",
+        '   "(advisory)" and adds prose clarifying that the',
         "   section is omitted when schema derivation fails or",
         "   is not attempted.",
         "",
         "4. **Document ending consolidated.** The previous",
-        "   \"Remaining Open Questions\" and \"Final Cleanup Changes\"",
+        '   "Remaining Open Questions" and "Final Cleanup Changes"',
         "   sections merged into this single section.",
         "",
         "**Open question.** One question remains genuinely",
@@ -981,8 +923,7 @@ export const tisynCliSpec: SpecModule = spec({
   openQuestions: [
     {
       id: "CLI-OQ-flag-collision-strategy",
-      text:
-        "Whether flag collisions (§9.5) should be handled by built-in-wins precedence (current rule) or by namespacing workflow inputs (e.g., `--input.max-turns`). The current rule is simpler. This may be revisited if collision surprises users in practice.",
+      text: "Whether flag collisions (§9.5) should be handled by built-in-wins precedence (current rule) or by namespacing workflow inputs (e.g., `--input.max-turns`). The current rule is simpler. This may be revisited if collision surprises users in practice.",
       status: "open",
     },
   ],

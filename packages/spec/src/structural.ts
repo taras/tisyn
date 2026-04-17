@@ -30,12 +30,7 @@ import type {
 
 type Path = readonly (string | number)[];
 
-function push(
-  errors: NormalizationError[],
-  constraint: string,
-  message: string,
-  path: Path,
-): void {
+function push(errors: NormalizationError[], constraint: string, message: string, path: Path): void {
   errors.push({ constraint, message, path });
 }
 
@@ -98,11 +93,7 @@ function v6Field(
 
 // V8 — Section ids are finite numbers or non-empty strings. Applies to both
 // Section.id (§4.4 D5/D7) and TestPlanSection.id (§4.13 D21).
-function v8SectionId(
-  errors: NormalizationError[],
-  id: unknown,
-  path: Path,
-): void {
+function v8SectionId(errors: NormalizationError[], id: unknown, path: Path): void {
   if (typeof id === "number") {
     if (!Number.isFinite(id)) {
       push(errors, "V8", `section id must be finite`, path);
@@ -244,7 +235,9 @@ function walkRules(
 ): void {
   for (let i = 0; i < rules.length; i++) {
     const at: Path = [...base, i];
-    if (!v6Field(errors, rules[i], at, "object")) continue;
+    if (!v6Field(errors, rules[i], at, "object")) {
+      continue;
+    }
     const rule = rules[i] as Partial<Rule>;
     // V2 (D8) + V3 (D8 uniqueness within spec).
     if (v6Field(errors, rule.id, [...at, "id"], "string")) {
@@ -268,10 +261,18 @@ function walkRules(
 function walkErrorCodes(codes: readonly unknown[], base: Path, errors: NormalizationError[]): void {
   for (let i = 0; i < codes.length; i++) {
     const at: Path = [...base, i];
-    if (!v6Field(errors, codes[i], at, "object")) continue;
+    if (!v6Field(errors, codes[i], at, "object")) {
+      continue;
+    }
     const code = codes[i] as { code?: unknown; trigger?: unknown; requiredContent?: unknown };
     if (v6Field(errors, code.code, [...at, "code"], "string")) {
-      v2NonEmptyString(errors, "V2", code.code, [...at, "code"], `ErrorCode.code MUST be non-empty (D15)`);
+      v2NonEmptyString(
+        errors,
+        "V2",
+        code.code,
+        [...at, "code"],
+        `ErrorCode.code MUST be non-empty (D15)`,
+      );
     }
     v6Field(errors, code.trigger, [...at, "trigger"], "string");
     if (code.requiredContent !== undefined) {
@@ -287,7 +288,9 @@ function walkConceptExports(
 ): void {
   for (let i = 0; i < concepts.length; i++) {
     const at: Path = [...base, i];
-    if (!v6Field(errors, concepts[i], at, "object")) continue;
+    if (!v6Field(errors, concepts[i], at, "object")) {
+      continue;
+    }
     const concept = concepts[i] as { name?: unknown; description?: unknown };
     if (v6Field(errors, concept.name, [...at, "name"], "string")) {
       v2NonEmptyString(
@@ -310,7 +313,9 @@ function walkTermDefinitions(
 ): void {
   for (let i = 0; i < terms.length; i++) {
     const at: Path = [...base, i];
-    if (!v6Field(errors, terms[i], at, "object")) continue;
+    if (!v6Field(errors, terms[i], at, "object")) {
+      continue;
+    }
     const term = terms[i] as { term?: unknown; definition?: unknown };
     if (v6Field(errors, term.term, [...at, "term"], "string")) {
       // D10 is not named under V2 explicitly but is required by §4.6. Treat as
@@ -320,12 +325,10 @@ function walkTermDefinitions(
       }
       if (typeof term.term === "string" && term.term.length > 0) {
         if (termPaths.has(term.term)) {
-          push(
-            errors,
-            "V3",
-            `term "${term.term}" is defined more than once within spec (D11)`,
-            [...at, "term"],
-          );
+          push(errors, "V3", `term "${term.term}" is defined more than once within spec (D11)`, [
+            ...at,
+            "term",
+          ]);
         } else {
           termPaths.set(term.term, [...at, "term"]);
         }
@@ -338,7 +341,9 @@ function walkTermDefinitions(
 function walkInvariants(invs: readonly unknown[], base: Path, errors: NormalizationError[]): void {
   for (let i = 0; i < invs.length; i++) {
     const at: Path = [...base, i];
-    if (!v6Field(errors, invs[i], at, "object")) continue;
+    if (!v6Field(errors, invs[i], at, "object")) {
+      continue;
+    }
     const inv = invs[i] as { id?: unknown; text?: unknown };
     if (v6Field(errors, inv.id, [...at, "id"], "string")) {
       v2NonEmptyString(
@@ -361,7 +366,9 @@ function walkOpenQuestions(
   const seen = new Map<string, Path>();
   for (let i = 0; i < oqs.length; i++) {
     const at: Path = [...base, i];
-    if (!v6Field(errors, oqs[i], at, "object")) continue;
+    if (!v6Field(errors, oqs[i], at, "object")) {
+      continue;
+    }
     const oq = oqs[i] as Partial<OpenQuestion>;
     if (v6Field(errors, oq.id, [...at, "id"], "string")) {
       v2NonEmptyString(
@@ -373,12 +380,10 @@ function walkOpenQuestions(
       );
       if (typeof oq.id === "string" && oq.id.length > 0) {
         if (seen.has(oq.id)) {
-          push(
-            errors,
-            "V3",
-            `open-question id "${oq.id}" is declared more than once (D13)`,
-            [...at, "id"],
-          );
+          push(errors, "V3", `open-question id "${oq.id}" is declared more than once (D13)`, [
+            ...at,
+            "id",
+          ]);
         } else {
           seen.set(oq.id, [...at, "id"]);
         }
@@ -398,7 +403,9 @@ function walkRelationships(
 ): void {
   for (let i = 0; i < rels.length; i++) {
     const at: Path = [...base, i];
-    if (!v6Field(errors, rels[i], at, "object")) continue;
+    if (!v6Field(errors, rels[i], at, "object")) {
+      continue;
+    }
     const rel = rels[i] as { type?: unknown; target?: unknown };
     if (v6Field(errors, rel.type, [...at, "type"], "string")) {
       v9Enum(errors, rel.type, RELATIONSHIP_TYPES, [...at, "type"]);
@@ -464,11 +471,7 @@ export function validateSpecStructural(module: SpecModule): readonly Normalizati
   // Optional openQuestions.
   if (module.openQuestions !== undefined) {
     if (v6Field(errors, module.openQuestions, ["openQuestions"], "array")) {
-      walkOpenQuestions(
-        module.openQuestions as readonly unknown[],
-        ["openQuestions"],
-        errors,
-      );
+      walkOpenQuestions(module.openQuestions as readonly unknown[], ["openQuestions"], errors);
     }
   }
 
@@ -486,26 +489,22 @@ function walkTestPlanSections(
 ): void {
   for (let i = 0; i < sections.length; i++) {
     const at: Path = [...base, i];
-    if (!v6Field(errors, sections[i], at, "object")) continue;
+    if (!v6Field(errors, sections[i], at, "object")) {
+      continue;
+    }
     const section = sections[i] as Partial<TestPlanSection>;
     if (v6Field(errors, section.id, [...at, "id"], "string-or-number")) {
       v8SectionId(errors, section.id, [...at, "id"]);
       if (typeof section.id === "string" && section.id.length > 0) {
         const key = `str:${section.id}`;
         if (ids.has(key)) {
-          push(errors, "V3", `duplicate test-plan section id "${section.id}" (D21)`, [
-            ...at,
-            "id",
-          ]);
+          push(errors, "V3", `duplicate test-plan section id "${section.id}" (D21)`, [...at, "id"]);
         } else {
           ids.set(key, [...at, "id"]);
         }
       } else if (typeof section.id === "number" && Number.isFinite(section.id)) {
         if (numericIds.has(section.id)) {
-          push(errors, "V3", `duplicate test-plan section id ${section.id} (D21)`, [
-            ...at,
-            "id",
-          ]);
+          push(errors, "V3", `duplicate test-plan section id ${section.id} (D21)`, [...at, "id"]);
         } else {
           numericIds.add(section.id);
           ids.set(`num:${section.id}`, [...at, "id"]);
@@ -541,7 +540,9 @@ function walkTestCategories(
   const ids = new Map<string, Path>();
   for (let i = 0; i < categories.length; i++) {
     const at: Path = [...base, i];
-    if (!v6Field(errors, categories[i], at, "object")) continue;
+    if (!v6Field(errors, categories[i], at, "object")) {
+      continue;
+    }
     const category = categories[i] as { id?: unknown; title?: unknown; cases?: unknown };
     if (v6Field(errors, category.id, [...at, "id"], "string")) {
       v2NonEmptyString(
@@ -553,12 +554,10 @@ function walkTestCategories(
       );
       if (typeof category.id === "string" && category.id.length > 0) {
         if (ids.has(category.id)) {
-          push(
-            errors,
-            "V3",
-            `duplicate test category id "${category.id}" within plan (D23)`,
-            [...at, "id"],
-          );
+          push(errors, "V3", `duplicate test category id "${category.id}" within plan (D23)`, [
+            ...at,
+            "id",
+          ]);
         } else {
           ids.set(category.id, [...at, "id"]);
         }
@@ -583,7 +582,9 @@ function walkTestCases(
 ): void {
   for (let i = 0; i < cases.length; i++) {
     const at: Path = [...base, i];
-    if (!v6Field(errors, cases[i], at, "object")) continue;
+    if (!v6Field(errors, cases[i], at, "object")) {
+      continue;
+    }
     const tc = cases[i] as Partial<TestCase>;
     if (v6Field(errors, tc.id, [...at, "id"], "string")) {
       v2NonEmptyString(errors, "V2", tc.id, [...at, "id"], `TestCase.id MUST be non-empty (D24)`);
@@ -609,7 +610,9 @@ function walkCoverageMatrix(
 ): void {
   for (let i = 0; i < entries.length; i++) {
     const at: Path = [...base, i];
-    if (!v6Field(errors, entries[i], at, "object")) continue;
+    if (!v6Field(errors, entries[i], at, "object")) {
+      continue;
+    }
     const entry = entries[i] as Partial<CoverageEntry>;
     v6Field(errors, entry.rule, [...at, "rule"], "string");
     v6Field(errors, entry.testIds, [...at, "testIds"], "array");
@@ -639,9 +642,7 @@ function walkCoverageMatrix(
   }
 }
 
-export function validateTestPlanStructural(
-  module: TestPlanModule,
-): readonly NormalizationError[] {
+export function validateTestPlanStructural(module: TestPlanModule): readonly NormalizationError[] {
   const errors: NormalizationError[] = [];
 
   // V1 / I8 — root discriminant.
@@ -654,13 +655,7 @@ export function validateTestPlanStructural(
 
   // V2 (D18) + V6 — id.
   if (v6Field(errors, module.id, ["id"], "string")) {
-    v2NonEmptyString(
-      errors,
-      "V2",
-      module.id,
-      ["id"],
-      `TestPlanModule.id MUST be non-empty (D18)`,
-    );
+    v2NonEmptyString(errors, "V2", module.id, ["id"], `TestPlanModule.id MUST be non-empty (D18)`);
   }
   if (v6Field(errors, module.title, ["title"], "string")) {
     if (module.title.length === 0) {
@@ -669,9 +664,7 @@ export function validateTestPlanStructural(
   }
   if (v6Field(errors, module.validatesSpec, ["validatesSpec"], "string")) {
     if ((module.validatesSpec as string).length === 0) {
-      push(errors, "V6", `TestPlanModule.validatesSpec MUST be non-empty (D19)`, [
-        "validatesSpec",
-      ]);
+      push(errors, "V6", `TestPlanModule.validatesSpec MUST be non-empty (D19)`, ["validatesSpec"]);
     }
   }
 
@@ -693,12 +686,9 @@ export function validateTestPlanStructural(
     const csid = module.categoriesSectionId;
     const key = typeof csid === "number" ? `num:${csid}` : `str:${csid}`;
     if (typeof csid === "string" && csid.length === 0) {
-      push(
-        errors,
-        "V5",
-        `TestPlanModule.categoriesSectionId MUST be non-empty`,
-        ["categoriesSectionId"],
-      );
+      push(errors, "V5", `TestPlanModule.categoriesSectionId MUST be non-empty`, [
+        "categoriesSectionId",
+      ]);
     } else if (!sectionIds.has(key)) {
       push(
         errors,

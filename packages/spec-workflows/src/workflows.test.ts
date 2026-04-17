@@ -69,9 +69,7 @@ const fixturePlan: TestPlanModule = testPlan({
       ],
     }),
   ],
-  coverageMatrix: [
-    coverageEntry({ rule: "W1", testIds: ["T-W-001"], status: "covered" }),
-  ],
+  coverageMatrix: [coverageEntry({ rule: "W1", testIds: ["T-W-001"], status: "covered" })],
 });
 
 // Direct composition: workflow bodies are `function* (input) { const r =
@@ -171,12 +169,12 @@ describe("SS-WF workflow composition", () => {
       specIds: ["tisyn-cli"],
     });
     const spec = registry.specs.get("tisyn-cli");
-    const plan = [...registry.plans.values()].find(
-      (p) => p.validatesSpec === "tisyn-cli",
-    );
+    const plan = [...registry.plans.values()].find((p) => p.validatesSpec === "tisyn-cli");
     expect(spec).toBeDefined();
     expect(plan).toBeDefined();
-    if (spec === undefined || plan === undefined) return;
+    if (spec === undefined || plan === undefined) {
+      return;
+    }
 
     const originalSpec = yield* acquireFixture("tisyn-cli", "spec");
     const originalPlan = yield* acquireFixture("tisyn-cli", "plan");
@@ -209,7 +207,9 @@ describe("SS-WF workflow composition", () => {
     const plan = normalizeTestPlan(fixturePlan);
     expect(spec.status).toBe("ok");
     expect(plan.status).toBe("ok");
-    if (spec.status !== "ok" || plan.status !== "ok") return;
+    if (spec.status !== "ok" || plan.status !== "ok") {
+      return;
+    }
     const registry = buildRegistry(
       [spec.value as NormalizedSpecModule, plan.value as NormalizedTestPlanModule],
       { kind: "full" },

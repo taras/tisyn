@@ -16,10 +16,7 @@ import {
 } from "../__fixtures__/index.ts";
 
 describe("SS-QP discovery pack", () => {
-  const r = buildTestRegistry(
-    [fixtureAlpha, fixtureBeta, fixtureDelta],
-    [fixtureAlphaPlan],
-  );
+  const r = buildTestRegistry([fixtureAlpha, fixtureBeta, fixtureDelta], [fixtureAlphaPlan]);
 
   it("returns a typed object, not a string (SS-QP-001)", () => {
     const pack = generateDiscoveryPack(r, { now: () => "2026-01-01T00:00:00Z" });

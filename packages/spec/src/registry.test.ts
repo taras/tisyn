@@ -44,10 +44,7 @@ describe("SS-RG dependencyOrder", () => {
     const [a, b] = fixtureEpsilonCycle();
     const r = buildTestRegistry([a, b]);
     expect(r.dependencyOrder.length).toBe(2);
-    expect([...r.dependencyOrder].sort()).toEqual([
-      "fixture-epsilon-a",
-      "fixture-epsilon-b",
-    ]);
+    expect([...r.dependencyOrder].sort()).toEqual(["fixture-epsilon-a", "fixture-epsilon-b"]);
   });
 });
 
@@ -63,9 +60,7 @@ describe("SS-RG precedence (R3/R4)", () => {
 describe("SS-RG edges", () => {
   it("emits one RelationshipEdge per in-scope relationship", () => {
     const r = buildTestRegistry([fixtureAlpha, fixtureBeta]);
-    const edge = r.edges.find(
-      (e) => e.source === "fixture-beta" && e.target === "fixture-alpha",
-    );
+    const edge = r.edges.find((e) => e.source === "fixture-beta" && e.target === "fixture-alpha");
     expect(edge).toBeDefined();
     expect(edge!.type).toBe("depends-on");
   });
@@ -96,11 +91,10 @@ describe("SS-RG scope filter", () => {
   });
 
   it("pulls companion plans in automatically under filtered scope", () => {
-    const r = buildTestRegistry(
-      [fixtureAlpha, fixtureBeta],
-      [fixtureAlphaPlan],
-      { kind: "filtered", specIds: ["fixture-alpha"] },
-    );
+    const r = buildTestRegistry([fixtureAlpha, fixtureBeta], [fixtureAlphaPlan], {
+      kind: "filtered",
+      specIds: ["fixture-alpha"],
+    });
     expect(r.plans.has("fixture-alpha-plan")).toBe(true);
   });
 });
@@ -154,12 +148,7 @@ describe("SS-RG immutability", () => {
       () => Map.prototype.set.call(r.termIndex as unknown as Map<string, unknown>, "x", {}),
       () => Map.prototype.set.call(r.conceptIndex as unknown as Map<string, unknown>, "x", {}),
       () => Map.prototype.set.call(r.errorCodeIndex as unknown as Map<string, unknown>, "x", {}),
-      () =>
-        Map.prototype.set.call(
-          r.openQuestionIndex as unknown as Map<string, unknown>,
-          "x",
-          {},
-        ),
+      () => Map.prototype.set.call(r.openQuestionIndex as unknown as Map<string, unknown>, "x", {}),
     ];
     for (const mutate of prototypeMutators) {
       expect(mutate).toThrow(TypeError);
@@ -177,8 +166,8 @@ describe("SS-RG cross-module id collisions", () => {
 
   it("throws when a spec and a test-plan share an id (D2 + D18)", () => {
     const collidingPlan = { ...fixtureAlphaPlan, id: "fixture-alpha" };
-    expect(() =>
-      buildTestRegistry([fixtureAlpha], [collidingPlan]),
-    ).toThrow(/duplicate id "fixture-alpha"/);
+    expect(() => buildTestRegistry([fixtureAlpha], [collidingPlan])).toThrow(
+      /duplicate id "fixture-alpha"/,
+    );
   });
 });

@@ -12,9 +12,7 @@ export function* draftTestPlan(input: {
   readonly specIds?: readonly string[];
 }): Operation<TestPlanContext> {
   const scope =
-    input.specIds !== undefined
-      ? { specIds: [input.targetSpec, ...input.specIds] }
-      : undefined;
+    input.specIds !== undefined ? { specIds: [input.targetSpec, ...input.specIds] } : undefined;
   const registry = yield* acquireCorpusRegistry(scope);
   return assembleTestPlanContext(registry, { targetSpec: input.targetSpec });
 }

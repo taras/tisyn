@@ -24,7 +24,9 @@ export function assembleReviewContext(
             terms.push({ specId: spec.id, sectionId: s.id, definition });
           }
         }
-        if (s.subsections !== undefined) walk(s.subsections);
+        if (s.subsections !== undefined) {
+          walk(s.subsections);
+        }
       }
     };
     walk(spec.sections);

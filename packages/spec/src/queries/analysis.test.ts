@@ -58,10 +58,7 @@ describe("SS-QA readiness", () => {
 
 describe("SS-QA term conflicts", () => {
   it("detects same term with different definitions across specs", () => {
-    const r = buildTestRegistry(
-      [fixtureAlpha, fixtureBetaConflictingTerm()],
-      [],
-    );
+    const r = buildTestRegistry([fixtureAlpha, fixtureBetaConflictingTerm()], []);
     const conflicts = findTermConflicts(r);
     expect(conflicts.map((c) => c.term)).toContain("Alpha");
   });
@@ -71,7 +68,9 @@ describe("SS-QA stale references", () => {
   it("flags missing-spec for unresolved relationship targets", () => {
     const r = buildTestRegistry([fixtureDelta, fixtureAlpha], []);
     const stale = findStaleReferences(r);
-    expect(stale.some((s) => s.problem === "missing-spec" && s.referencedSpecId === "fixture-missing")).toBe(true);
+    expect(
+      stale.some((s) => s.problem === "missing-spec" && s.referencedSpecId === "fixture-missing"),
+    ).toBe(true);
   });
 
   it("flags superseded-spec when target is superseded", () => {

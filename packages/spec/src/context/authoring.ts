@@ -4,10 +4,7 @@
 import type { AuthoringContext, CorpusRegistry } from "../types.ts";
 import { findSpec } from "../queries/lookup.ts";
 import { listOpenQuestions, listRules, listTerms } from "../queries/listing.ts";
-import {
-  generateConstraintDocument,
-  generateDiscoveryPack,
-} from "../queries/projection.ts";
+import { generateConstraintDocument, generateDiscoveryPack } from "../queries/projection.ts";
 
 function estimateTokens(payload: unknown): number {
   const text = JSON.stringify(payload) ?? "";

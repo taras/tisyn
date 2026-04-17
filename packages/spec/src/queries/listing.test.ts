@@ -21,10 +21,7 @@ import {
 } from "../__fixtures__/index.ts";
 
 describe("SS-QS listing", () => {
-  const r = buildTestRegistry(
-    [fixtureAlpha, fixtureBeta, fixtureDelta],
-    [fixtureAlphaPlan],
-  );
+  const r = buildTestRegistry([fixtureAlpha, fixtureBeta, fixtureDelta], [fixtureAlphaPlan]);
 
   it("listRules returns rules in section order", () => {
     const rules = listRules(r, "fixture-alpha");

@@ -46,9 +46,7 @@ describe("SS-AQ acquireCorpusRegistry", () => {
 
   it("ignores unknown requested spec ids (A6 / RI3)", function* () {
     const api = createAcquire({
-      manifest: buildTestManifest([
-        { id: "fixture-alpha", spec: fixtureAlpha },
-      ]),
+      manifest: buildTestManifest([{ id: "fixture-alpha", spec: fixtureAlpha }]),
     });
     const registry = yield* api.acquireCorpusRegistry({
       specIds: ["fixture-alpha", "fixture-does-not-exist"],
@@ -60,9 +58,7 @@ describe("SS-AQ acquireCorpusRegistry", () => {
 describe("SS-AQ F1 — normalization failure", () => {
   it("raises AcquisitionError(kind=F1) listing the failing module", function* () {
     const api = createAcquire({
-      manifest: buildTestManifest([
-        { id: "fixture-malformed", spec: fixtureMalformed },
-      ]),
+      manifest: buildTestManifest([{ id: "fixture-malformed", spec: fixtureMalformed }]),
     });
     let caught: unknown;
     try {
@@ -72,9 +68,7 @@ describe("SS-AQ F1 — normalization failure", () => {
     }
     expect(caught).toBeInstanceOf(AcquisitionError);
     expect((caught as AcquisitionError).kind).toBe("F1");
-    expect((caught as AcquisitionError).modules.map((m) => m.id)).toContain(
-      "fixture-malformed",
-    );
+    expect((caught as AcquisitionError).modules.map((m) => m.id)).toContain("fixture-malformed");
   });
 });
 

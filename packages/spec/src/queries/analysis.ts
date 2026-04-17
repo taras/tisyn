@@ -25,7 +25,9 @@ function findCompanionPlan(
   specId: string,
 ): NormalizedTestPlanModule | undefined {
   for (const plan of registry.plans.values()) {
-    if (plan.validatesSpec === specId) return plan;
+    if (plan.validatesSpec === specId) {
+      return plan;
+    }
   }
   return undefined;
 }
@@ -55,14 +57,18 @@ export function checkCoverage(registry: CorpusRegistry, specId: string): Coverag
     };
   }
   const ruleToLoc = new Map<string, RuleLocation>();
-  for (const loc of ruleLocations) ruleToLoc.set(loc.rule.id, loc);
+  for (const loc of ruleLocations) {
+    ruleToLoc.set(loc.rule.id, loc);
+  }
 
   const covered: CoveredRule[] = [];
   const deferred: DeferredRule[] = [];
   const matchedIds = new Set<string>();
   for (const entry of plan.coverageMatrix) {
     const loc = ruleToLoc.get(entry.rule);
-    if (loc === undefined) continue; // SS-QA-017: ignore unresolved rule refs
+    if (loc === undefined) {
+      continue;
+    } // SS-QA-017: ignore unresolved rule refs
     matchedIds.add(entry.rule);
     if (entry.status === "covered") {
       covered.push({
@@ -113,17 +119,25 @@ export function isReady(registry: CorpusRegistry, specId: string): ReadinessResu
     return { specId, ready: false, blocking: ["spec-not-found"] };
   }
   const blocking: string[] = [];
-  if (spec.status !== "active") blocking.push("status-not-active");
+  if (spec.status !== "active") {
+    blocking.push("status-not-active");
+  }
   const plan = findCompanionPlan(registry, specId);
-  if (plan === undefined) blocking.push("no-companion-plan");
+  if (plan === undefined) {
+    blocking.push("no-companion-plan");
+  }
   const coverage = checkCoverage(registry, specId);
   const uncoveredMust = coverage.uncoveredRules.some(
     (r) => r.rule.level === "must" || r.rule.level === "must-not",
   );
-  if (uncoveredMust) blocking.push("uncovered-must-rules");
+  if (uncoveredMust) {
+    blocking.push("uncovered-must-rules");
+  }
   if (spec.openQuestions !== undefined) {
     const hasOpen = spec.openQuestions.some((oq) => oq.status === "open");
-    if (hasOpen) blocking.push("open-questions");
+    if (hasOpen) {
+      blocking.push("open-questions");
+    }
   }
   return { specId, ready: blocking.length === 0, blocking };
 }
@@ -142,21 +156,24 @@ export function findTermConflicts(registry: CorpusRegistry): readonly TermConfli
   }
   const out: TermConflict[] = [];
   for (const [term, locations] of byTerm) {
-    if (locations.length < 2) continue;
+    if (locations.length < 2) {
+      continue;
+    }
     const definitions = new Set(locations.map((l) => l.definition.definition));
-    if (definitions.size < 2) continue;
+    if (definitions.size < 2) {
+      continue;
+    }
     out.push({ term, definitions: locations });
   }
   return out;
 }
 
-function collectSectionIds(
-  sections: readonly Section[],
-  out: Set<string>,
-): void {
+function collectSectionIds(sections: readonly Section[], out: Set<string>): void {
   for (const section of sections) {
     out.add(String(section.id));
-    if (section.subsections !== undefined) collectSectionIds(section.subsections, out);
+    if (section.subsections !== undefined) {
+      collectSectionIds(section.subsections, out);
+    }
   }
 }
 
@@ -194,7 +211,9 @@ export function findStaleReferences(registry: CorpusRegistry): readonly StaleRef
     function walk(sections: readonly Section[]): void {
       for (const s of sections) {
         proseBlobs.push(s.prose);
-        if (s.subsections !== undefined) walk(s.subsections);
+        if (s.subsections !== undefined) {
+          walk(s.subsections);
+        }
       }
     }
     walk(spec.sections);
@@ -218,12 +237,11 @@ export function findStaleReferences(registry: CorpusRegistry): readonly StaleRef
 }
 
 // §8.6 findErrorCodeCollisions — same code in two or more in-scope specs.
-export function findErrorCodeCollisions(
-  registry: CorpusRegistry,
-): readonly ErrorCodeCollision[] {
+export function findErrorCodeCollisions(registry: CorpusRegistry): readonly ErrorCodeCollision[] {
   const extras = getInternalExtras(registry);
-  const all = extras !== undefined ? extras.allErrorCodeLocations : [...registry.errorCodeIndex.values()];
-  const byCode = new Map<string, typeof all[number][]>();
+  const all =
+    extras !== undefined ? extras.allErrorCodeLocations : [...registry.errorCodeIndex.values()];
+  const byCode = new Map<string, (typeof all)[number][]>();
   for (const loc of all) {
     const bucket = byCode.get(loc.errorCode.code) ?? [];
     bucket.push(loc);
@@ -232,7 +250,9 @@ export function findErrorCodeCollisions(
   const out: ErrorCodeCollision[] = [];
   for (const [code, locations] of byCode) {
     const distinctSpecs = new Set(locations.map((l) => l.specId));
-    if (distinctSpecs.size < 2) continue;
+    if (distinctSpecs.size < 2) {
+      continue;
+    }
     out.push({ code, locations });
   }
   return out;
@@ -242,7 +262,7 @@ export function findErrorCodeCollisions(
 export function findDuplicateRules(registry: CorpusRegistry): readonly DuplicateRule[] {
   const extras = getInternalExtras(registry);
   const all = extras !== undefined ? extras.allRuleLocations : [...registry.ruleIndex.values()];
-  const byId = new Map<string, typeof all[number][]>();
+  const byId = new Map<string, (typeof all)[number][]>();
   for (const loc of all) {
     const bucket = byId.get(loc.rule.id) ?? [];
     bucket.push(loc);
@@ -251,7 +271,9 @@ export function findDuplicateRules(registry: CorpusRegistry): readonly Duplicate
   const out: DuplicateRule[] = [];
   for (const [ruleId, locations] of byId) {
     const distinctSpecs = new Set(locations.map((l) => l.specId));
-    if (distinctSpecs.size < 2) continue;
+    if (distinctSpecs.size < 2) {
+      continue;
+    }
     out.push({ ruleId, locations });
   }
   return out;
