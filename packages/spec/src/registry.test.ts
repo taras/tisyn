@@ -174,4 +174,11 @@ describe("SS-RG cross-module id collisions", () => {
   it("throws on duplicate spec ids at construction time (D2)", () => {
     expect(() => buildTestRegistry([fixtureAlpha, fixtureAlpha])).toThrow();
   });
+
+  it("throws when a spec and a test-plan share an id (D2 + D18)", () => {
+    const collidingPlan = { ...fixtureAlphaPlan, id: "fixture-alpha" };
+    expect(() =>
+      buildTestRegistry([fixtureAlpha], [collidingPlan]),
+    ).toThrow(/duplicate id "fixture-alpha"/);
+  });
 });

@@ -218,26 +218,28 @@ export function buildRegistry(
     else allPlans.push(m);
   }
 
-  // Cross-module id collision (SS-RG-016 / D2 corpus-wide half of V3).
-  const seenSpecIds = new Map<string, NormalizedSpecModule>();
+  // Cross-module id collision across the whole corpus (D2 + D18).
+  // Defense-in-depth invariant: acquire.ts decides F3 with full manifest
+  // context before calling buildRegistry, so this path fires in practice
+  // only for direct buildRegistry callers that bypass acquisition.
+  const seenIds = new Map<string, "spec" | "test-plan">();
   for (const s of allSpecs) {
-    const prior = seenSpecIds.get(s.id);
-    if (prior !== undefined && prior !== s) {
+    const prior = seenIds.get(s.id);
+    if (prior !== undefined) {
       throw new Error(
-        `buildRegistry: duplicate spec id "${s.id}" — two distinct modules share this id`,
+        `buildRegistry: duplicate id "${s.id}" — ${prior} and spec share this id`,
       );
     }
-    seenSpecIds.set(s.id, s);
+    seenIds.set(s.id, "spec");
   }
-  const seenPlanIds = new Map<string, NormalizedTestPlanModule>();
   for (const p of allPlans) {
-    const prior = seenPlanIds.get(p.id);
-    if (prior !== undefined && prior !== p) {
+    const prior = seenIds.get(p.id);
+    if (prior !== undefined) {
       throw new Error(
-        `buildRegistry: duplicate test-plan id "${p.id}" — two distinct modules share this id`,
+        `buildRegistry: duplicate id "${p.id}" — ${prior} and test-plan share this id`,
       );
     }
-    seenPlanIds.set(p.id, p);
+    seenIds.set(p.id, "test-plan");
   }
 
   // Compute in-scope subsets. buildRegistry owns all filtered-scope semantics;

@@ -122,8 +122,18 @@ export function createAcquire(opts: AcquireOptions): AcquireAPI {
     }
 
     // F1 — normalization phase. Every module must normalize, else aggregate.
-    const normalizedSpecs: NormalizedSpecModule[] = [];
-    const normalizedPlans: NormalizedTestPlanModule[] = [];
+    // Track manifest entry id alongside each normalized module so F3 below
+    // can name both colliding origins per §8.4 ("MUST identify both modules").
+    type NormalizedSpecEntry = {
+      readonly entryId: string;
+      readonly module: NormalizedSpecModule;
+    };
+    type NormalizedPlanEntry = {
+      readonly entryId: string;
+      readonly module: NormalizedTestPlanModule;
+    };
+    const normalizedSpecs: NormalizedSpecEntry[] = [];
+    const normalizedPlans: NormalizedPlanEntry[] = [];
     const normFailures: AcquisitionFailureEntry[] = [];
     for (const item of loaded) {
       const specResult = normalizeSpec(item.spec);
@@ -131,7 +141,7 @@ export function createAcquire(opts: AcquireOptions): AcquireAPI {
         normFailures.push({ id: item.id, reason: formatNormErrors(specResult.errors) });
         continue;
       }
-      normalizedSpecs.push(specResult.value);
+      normalizedSpecs.push({ entryId: item.id, module: specResult.value });
       if (item.plan !== undefined) {
         const planResult = normalizeTestPlan(item.plan);
         if (planResult.status === "error") {
@@ -141,7 +151,7 @@ export function createAcquire(opts: AcquireOptions): AcquireAPI {
           });
           continue;
         }
-        normalizedPlans.push(planResult.value);
+        normalizedPlans.push({ entryId: item.id, module: planResult.value });
       }
     }
     if (normFailures.length > 0) {
@@ -152,23 +162,54 @@ export function createAcquire(opts: AcquireOptions): AcquireAPI {
       );
     }
 
-    // F3 — duplicate id. buildRegistry throws; map to AcquisitionError.
-    const all = [...normalizedSpecs, ...normalizedPlans];
+    // F3 — duplicate id across the whole corpus (D2, D18). Unified pass over
+    // spec and plan id spaces: the moment a second module claims an
+    // already-seen id, throw with both origins in `modules`.
+    type SeenEntry = {
+      readonly entryId: string;
+      readonly kind: "spec" | "test-plan";
+    };
+    const seen = new Map<string, SeenEntry>();
+    for (const e of normalizedSpecs) {
+      const prior = seen.get(e.module.id);
+      if (prior !== undefined) {
+        throw new AcquisitionError(
+          "F3",
+          `Duplicate id "${e.module.id}" — ${prior.kind} from manifest entry "${prior.entryId}" collides with spec from manifest entry "${e.entryId}"`,
+          [
+            { id: e.module.id, reason: `${prior.kind} from manifest entry "${prior.entryId}"` },
+            { id: e.module.id, reason: `spec from manifest entry "${e.entryId}"` },
+          ],
+        );
+      }
+      seen.set(e.module.id, { entryId: e.entryId, kind: "spec" });
+    }
+    for (const e of normalizedPlans) {
+      const prior = seen.get(e.module.id);
+      if (prior !== undefined) {
+        throw new AcquisitionError(
+          "F3",
+          `Duplicate id "${e.module.id}" — ${prior.kind} from manifest entry "${prior.entryId}" collides with test-plan from manifest entry "${e.entryId}"`,
+          [
+            { id: e.module.id, reason: `${prior.kind} from manifest entry "${prior.entryId}"` },
+            { id: e.module.id, reason: `test-plan from manifest entry "${e.entryId}"` },
+          ],
+        );
+      }
+      seen.set(e.module.id, { entryId: e.entryId, kind: "test-plan" });
+    }
+
+    // Hand off to buildRegistry. F3 is already decided above; buildRegistry's
+    // own duplicate-id guard is defense-in-depth for direct callers and
+    // should never fire on this path.
+    const all = [
+      ...normalizedSpecs.map((e) => e.module),
+      ...normalizedPlans.map((e) => e.module),
+    ];
     const buildScope: Scope = filtered
       ? { kind: "filtered", specIds: [...scope!.specIds!] }
       : { kind: "full" };
-    try {
-      return buildRegistry(all, buildScope);
-    } catch (err) {
-      const message = errorMessage(err);
-      // buildRegistry phrases duplicate-id errors with the offending id in
-      // quotes; parse it out when present, else surface the raw message.
-      const match = /"([^"]+)"/.exec(message);
-      const offending: AcquisitionFailureEntry[] = match
-        ? [{ id: match[1]!, reason: message }]
-        : [{ id: "<unknown>", reason: message }];
-      throw new AcquisitionError("F3", message, offending);
-    }
+    return buildRegistry(all, buildScope);
   }
 
   function* acquireFixtureImpl(id: string, kind: "spec" | "plan"): Operation<string> {

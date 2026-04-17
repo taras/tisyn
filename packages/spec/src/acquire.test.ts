@@ -11,7 +11,7 @@ import {
   fixtureBeta,
   fixtureMalformed,
 } from "./__fixtures__/index.ts";
-import { AcquisitionError, type SpecModule } from "./types.ts";
+import { AcquisitionError, type SpecModule, type TestPlanModule } from "./types.ts";
 
 describe("SS-AQ acquireCorpusRegistry", () => {
   it("full scope loads every manifest entry", function* () {
@@ -115,7 +115,65 @@ describe("SS-AQ F3 — duplicate id", () => {
       caught = e;
     }
     expect(caught).toBeInstanceOf(AcquisitionError);
-    expect((caught as AcquisitionError).kind).toBe("F3");
+    const err = caught as AcquisitionError;
+    expect(err.kind).toBe("F3");
+    expect(err.modules).toHaveLength(2);
+    expect(err.modules.every((m) => m.id === "fixture-alpha")).toBe(true);
+    const reasons = err.modules.map((m) => m.reason).join(" | ");
+    expect(reasons).toMatch(/"first"/);
+    expect(reasons).toMatch(/"second"/);
+  });
+
+  it("raises AcquisitionError(kind=F3) when a spec and a test-plan share an id (D2 + D18)", function* () {
+    const collidingPlan: TestPlanModule = {
+      ...fixtureAlphaPlan,
+      id: "fixture-beta",
+    };
+    const api = createAcquire({
+      manifest: [
+        { id: "beta-entry", loadSpec: () => Promise.resolve(fixtureBeta) },
+        {
+          id: "plan-entry",
+          loadSpec: () => Promise.resolve(fixtureAlpha),
+          loadPlan: () => Promise.resolve(collidingPlan),
+        },
+      ],
+    });
+    let caught: unknown;
+    try {
+      yield* api.acquireCorpusRegistry();
+    } catch (e) {
+      caught = e;
+    }
+    expect(caught).toBeInstanceOf(AcquisitionError);
+    const err = caught as AcquisitionError;
+    expect(err.kind).toBe("F3");
+    expect(err.modules).toHaveLength(2);
+    expect(err.modules.every((m) => m.id === "fixture-beta")).toBe(true);
+    const reasons = err.modules.map((m) => m.reason).join(" | ");
+    expect(reasons).toMatch(/spec from manifest entry "beta-entry"/);
+    expect(reasons).toMatch(/test-plan from manifest entry "plan-entry"/);
+  });
+
+  it("F3 error identifies both colliding modules in `modules`", function* () {
+    const dup: SpecModule = { ...fixtureAlpha, id: "fixture-alpha" };
+    const api = createAcquire({
+      manifest: [
+        { id: "first", loadSpec: () => Promise.resolve(fixtureAlpha) },
+        { id: "second", loadSpec: () => Promise.resolve(dup) },
+      ],
+    });
+    let caught: unknown;
+    try {
+      yield* api.acquireCorpusRegistry();
+    } catch (e) {
+      caught = e;
+    }
+    const err = caught as AcquisitionError;
+    expect(err.modules).toHaveLength(2);
+    expect(err.modules[0]!.id).toBe("fixture-alpha");
+    expect(err.modules[1]!.id).toBe("fixture-alpha");
+    expect(err.modules[0]!.reason).not.toBe(err.modules[1]!.reason);
   });
 });
 
