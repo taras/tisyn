@@ -51,6 +51,16 @@ export function getInternalExtras(registry: CorpusRegistry): InternalExtras | un
   return registryExtras.get(registry);
 }
 
+function freezeMapInPlace<K, V>(map: Map<K, V>): ReadonlyMap<K, V> {
+  const reject = (method: "set" | "delete" | "clear"): never => {
+    throw new TypeError(`Map.${method} is not allowed on a frozen CorpusRegistry map`);
+  };
+  Object.defineProperty(map, "set", { value: () => reject("set"), configurable: false, writable: false });
+  Object.defineProperty(map, "delete", { value: () => reject("delete"), configurable: false, writable: false });
+  Object.defineProperty(map, "clear", { value: () => reject("clear"), configurable: false, writable: false });
+  return map;
+}
+
 function deepFreeze<T>(value: T): T {
   if (value === null) return value;
   if (typeof value !== "object") return value;
@@ -299,6 +309,18 @@ export function buildRegistry(
       ? { kind: "full" }
       : { kind: "filtered", specIds: deepFreeze([...scope.specIds]) };
 
+  // RI1 requires every map surfaced on the registry to be immutable at
+  // runtime. Object.freeze on a Map object does not block .set / .delete /
+  // .clear (mutations go through internal slots, not own properties), so
+  // override the mutating methods in place on each instance.
+  freezeMapInPlace(specs);
+  freezeMapInPlace(plans);
+  freezeMapInPlace(ruleIndex);
+  freezeMapInPlace(termIndex);
+  freezeMapInPlace(conceptIndex);
+  freezeMapInPlace(errorCodeIndex);
+  freezeMapInPlace(openQuestionIndex);
+
   const registry: CorpusRegistry = {
     specs,
     plans,
@@ -312,9 +334,6 @@ export function buildRegistry(
     scope: deepFreeze(preservedScope),
   };
 
-  // Freeze location records. Map objects themselves are not frozen (freezing
-  // a Map in JS is a no-op at the mutation surface), but every element and
-  // the registry wrapper object are.
   Object.freeze(registry);
   for (const loc of allRules) deepFreeze(loc);
   for (const loc of allTerms) deepFreeze(loc);

@@ -20,6 +20,14 @@ describe("SS-RN compareMarkdown", () => {
     expect(compareMarkdown(a, b).match).toBe(true);
   });
 
+  it("detects a top-level title change", () => {
+    const a = "# Title A\n\n## §1 Core\n";
+    const b = "# Title B\n\n## §1 Core\n";
+    const result = compareMarkdown(a, b);
+    expect(result.match).toBe(false);
+    expect(result.differences.some((d) => d.kind === "section-heading")).toBe(true);
+  });
+
   it("detects a missing section heading", () => {
     const a = "## §1 Core\n## §2 Extras\n";
     const b = "## §1 Core\n";

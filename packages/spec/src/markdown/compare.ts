@@ -8,7 +8,7 @@
 import type { CompareResult, MarkdownDifference } from "../types.ts";
 import { stripBanner } from "./banner.ts";
 
-const HEADING_RE = /^(#{2,6})\s+(.+?)\s*$/;
+const HEADING_RE = /^(#{1,6})\s+(.+?)\s*$/;
 const RELATIONSHIP_RE = /^-\s+([a-z-]+):\s+([a-zA-Z0-9_-]+)(?:\s+—\s+(.+))?$/;
 const TEST_ID_RE = /\b([A-Z][A-Z0-9]+-[A-Z0-9]+(?:-[A-Z0-9]+)*)\b/g;
 const SECTION_REF_RE = /§(\d+(?:\.\d+)*)/g;

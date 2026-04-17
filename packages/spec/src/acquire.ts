@@ -36,8 +36,41 @@ import {
 // Markdown — fixtures from `packages/spec/corpus/<id>/__fixtures__/` and
 // emitted Markdown from repo-root `specs/`. These paths are implementation
 // choices, not part of the spec surface.
+//
+// Locating the package root via `resolve(HERE, "..", ...)` is fragile
+// because `HERE` differs between the source tree (`src/`) and the compiled
+// output (`dist/src/`). Instead, walk up the directory tree until the
+// `@tisyn/spec` package.json is found; that is the unambiguous anchor for
+// both the in-package `corpus/` directory and the repo-root `specs/`
+// directory. Resolution is async and memoized — no sync filesystem IO.
 const HERE = dirname(fileURLToPath(import.meta.url));
-const REPO_ROOT = resolve(HERE, "..", "..", "..");
+
+let packageRootPromise: Promise<string> | undefined;
+
+function resolvePackageRoot(): Promise<string> {
+  if (packageRootPromise === undefined) {
+    packageRootPromise = (async () => {
+      let dir = HERE;
+      while (true) {
+        try {
+          const pkgText = await readFile(resolve(dir, "package.json"), "utf8");
+          const pkg = JSON.parse(pkgText) as { name?: string };
+          if (pkg.name === "@tisyn/spec") return dir;
+        } catch {
+          // no readable package.json here, keep walking
+        }
+        const parent = dirname(dir);
+        if (parent === dir) {
+          throw new Error(
+            `Unable to locate @tisyn/spec package root starting from ${HERE}`,
+          );
+        }
+        dir = parent;
+      }
+    })();
+  }
+  return packageRootPromise;
+}
 
 // Effection-compatible promise awaiter. Yields an instruction object with the
 // shape the effection reducer understands: { description, enter } where enter
@@ -65,13 +98,16 @@ function* awaitPromise<T>(promise: Promise<T>): Operation<T> {
 
 function* defaultReadFixture(id: string, kind: "spec" | "plan"): Operation<string> {
   const filename = kind === "spec" ? "original-spec.md" : "original-test-plan.md";
-  const path = resolve(REPO_ROOT, "packages/spec/corpus", id, "__fixtures__", filename);
+  const packageRoot = yield* awaitPromise(resolvePackageRoot());
+  const path = resolve(packageRoot, "corpus", id, "__fixtures__", filename);
   return yield* awaitPromise(readFile(path, "utf8"));
 }
 
 function* defaultReadEmitted(id: string, kind: "spec" | "plan"): Operation<string> {
   const suffix = kind === "spec" ? "spec.md" : "test-plan.md";
-  const path = resolve(REPO_ROOT, "specs", `${id}-${suffix}`);
+  const packageRoot = yield* awaitPromise(resolvePackageRoot());
+  const repoRoot = resolve(packageRoot, "..", "..");
+  const path = resolve(repoRoot, "specs", `${id}-${suffix}`);
   return yield* awaitPromise(readFile(path, "utf8"));
 }
 

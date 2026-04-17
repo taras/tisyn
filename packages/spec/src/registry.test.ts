@@ -112,6 +112,29 @@ describe("SS-RG immutability", () => {
     expect(Object.isFrozen(r.edges)).toBe(true);
     expect(Object.isFrozen(r.dependencyOrder)).toBe(true);
   });
+
+  it("registry maps reject set/delete/clear (RI1)", () => {
+    const r = buildTestRegistry([fixtureAlpha], [fixtureAlphaPlan]);
+    const snapshotSize = r.specs.size;
+    const snapshotRuleSize = r.ruleIndex.size;
+    const setters: Array<() => void> = [
+      () => (r.specs as unknown as Map<string, unknown>).set("x", {}),
+      () => (r.specs as unknown as Map<string, unknown>).delete("fixture-alpha"),
+      () => (r.specs as unknown as Map<string, unknown>).clear(),
+      () => (r.plans as unknown as Map<string, unknown>).set("x", {}),
+      () => (r.ruleIndex as unknown as Map<string, unknown>).set("X1", {}),
+      () => (r.termIndex as unknown as Map<string, unknown>).set("x", {}),
+      () => (r.conceptIndex as unknown as Map<string, unknown>).set("x", {}),
+      () => (r.errorCodeIndex as unknown as Map<string, unknown>).set("x", {}),
+      () => (r.openQuestionIndex as unknown as Map<string, unknown>).set("x", {}),
+    ];
+    for (const setter of setters) {
+      expect(setter).toThrow(TypeError);
+    }
+    expect(r.specs.size).toBe(snapshotSize);
+    expect(r.specs.has("fixture-alpha")).toBe(true);
+    expect(r.ruleIndex.size).toBe(snapshotRuleSize);
+  });
 });
 
 describe("SS-RG cross-module id collisions", () => {
