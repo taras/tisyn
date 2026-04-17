@@ -31,7 +31,7 @@ import {
 } from "@tisyn/spec";
 import type { Val } from "@tisyn/ir";
 import { acquireFixture } from "./acquire.ts";
-import { compile, type CompileOutput } from "./corpus-agent.ts";
+import { compile, evaluateCompile, type CompileOutput } from "./corpus-agent.ts";
 
 const fixtureSpec: SpecModule = spec({
   id: "wf-fixture",
@@ -154,8 +154,54 @@ describe("SS-WF workflow composition", () => {
     const output = result as unknown as CompileOutput;
     expect(typeof output.specCompareSummary).toBe("string");
     expect(typeof output.planCompareSummary).toBe("string");
+    expect(typeof output.emittedSpecCompareSummary).toBe("string");
+    expect(typeof output.emittedPlanCompareSummary).toBe("string");
     expect(typeof output.prompt).toBe("string");
     expect(output.prompt.length).toBeGreaterThan(0);
+  });
+
+  it("evaluateCompile marks ok=false when emitted markdown drifts from live render", function* (): Operation<void> {
+    // Regression for the reviewer's verify-corpus contract requirement: a
+    // stale committed file under `specs/` must fail the deterministic gate.
+    // We drive the pure evaluator with the real `tisyn-cli` registry + real
+    // fixtures, but pass crafted stale emitted strings — no filesystem
+    // mutation needed.
+    const sanityApi = createAcquire({ manifest });
+    const registry = yield* sanityApi.acquireCorpusRegistry({
+      specIds: ["tisyn-cli"],
+    });
+    const spec = registry.specs.get("tisyn-cli");
+    const plan = [...registry.plans.values()].find(
+      (p) => p.validatesSpec === "tisyn-cli",
+    );
+    expect(spec).toBeDefined();
+    expect(plan).toBeDefined();
+    if (spec === undefined || plan === undefined) return;
+
+    const originalSpec = yield* acquireFixture("tisyn-cli", "spec");
+    const originalPlan = yield* acquireFixture("tisyn-cli", "plan");
+
+    const staleEmittedSpec = "# Stale\n\n## Outdated Heading\n\nStale body.\n";
+    const staleEmittedPlan = "# Stale Plan\n\n## Outdated Heading\n\nStale.\n";
+
+    const result = evaluateCompile(
+      spec,
+      plan,
+      originalSpec,
+      originalPlan,
+      staleEmittedSpec,
+      staleEmittedPlan,
+    );
+
+    expect(result.ok).toBe(false);
+    const emittedSpecReport = JSON.parse(result.emittedSpecCompareSummary) as {
+      match: boolean;
+    };
+    const emittedPlanReport = JSON.parse(result.emittedPlanCompareSummary) as {
+      match: boolean;
+    };
+    expect(emittedSpecReport.match).toBe(false);
+    expect(emittedPlanReport.match).toBe(false);
   });
 
   it("normalizes the shipped corpus cleanly", function* (): Operation<void> {

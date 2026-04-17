@@ -1,8 +1,8 @@
 // Pilot-local corpus binding. Owns the full structured-spec pipeline
 // for every target the pipeline knows about — acquire the corpus
-// registry for the requested target, check readiness, render, compare
-// against the frozen Markdown fixture, and build the Claude review
-// prompt. Target-specific data is no longer a hand-map in this file:
+// registry for the requested target, render, compare live-rendered
+// markdown against BOTH the frozen round-trip fixture AND the emitted
+// `specs/*.md` tree, and build the Claude review prompt. Target-specific data is no longer a hand-map in this file:
 // `acquireCorpusRegistry({ specIds: [target] })` drives the module
 // lookup through the `@tisyn/spec` manifest, so adding a second target
 // later means adding a manifest entry — nothing in this file.
@@ -29,7 +29,12 @@ import {
   renderSpecMarkdown,
   renderTestPlanMarkdown,
 } from "@tisyn/spec";
-import type { CorpusRegistry, NormalizedTestPlanModule } from "@tisyn/spec";
+import type {
+  CompareResult,
+  CorpusRegistry,
+  NormalizedSpecModule,
+  NormalizedTestPlanModule,
+} from "@tisyn/spec";
 import { acquireEmittedMarkdown } from "./acquire.ts";
 import { corpusDeclaration } from "./agents.ts";
 import { buildReviewPrompt, parseVerdict } from "./claude-reviewer.ts";
@@ -44,6 +49,8 @@ export interface CompileOutput {
   readonly ok: boolean;
   readonly specCompareSummary: string;
   readonly planCompareSummary: string;
+  readonly emittedSpecCompareSummary: string;
+  readonly emittedPlanCompareSummary: string;
   readonly generatedSpec: string;
   readonly generatedPlan: string;
   readonly prompt: string;
@@ -102,41 +109,58 @@ export function* compile(payload: Val): Operation<Val> {
     );
   }
 
-  // Render live from the structured modules. v2 `renderSpecMarkdown`
-  // and `renderTestPlanMarkdown` take only the module — the
-  // relationship titles and rule sections are typed into the module
-  // surface, so the v1 side-tables are no longer needed.
-  const generatedSpec = renderSpecMarkdown(spec);
-  const generatedPlan = renderTestPlanMarkdown(plan);
-
-  // Sanity-check that the emitted markdown under `specs/` is readable
-  // for this target. Acquisition failure here is a configuration
-  // error worth surfacing early (the emitted markdown is what the
-  // deployed artifact tracks); we do not use it for the structural
-  // compare — that is fixture vs live-rendered.
-  yield* call(
+  // Acquire emitted markdown under `specs/` as a real compare target,
+  // not a readability probe. A stale committed file there must make
+  // verify-corpus fail, so the strings participate in the verdict
+  // through `evaluateCompile` below.
+  const emittedSpec = yield* call(
     () => acquireEmittedMarkdown(target, "spec") as unknown as Operation<string>,
   );
-  yield* call(
+  const emittedPlan = yield* call(
     () => acquireEmittedMarkdown(target, "plan") as unknown as Operation<string>,
   );
 
-  // Spec and test plan travel through the same compareMarkdown gate.
-  // The gate observes a coarse structural surface (H2 headings, test
-  // IDs, coverage refs, relationship lines); Claude remains the
-  // secondary semantic gate for prose wording and table content.
+  const result = evaluateCompile(
+    spec,
+    plan,
+    originalSpec,
+    originalPlan,
+    emittedSpec,
+    emittedPlan,
+  );
+  return result as unknown as Val;
+}
+
+// Pure evaluator. Renders live markdown from the normalized modules and
+// runs four structural compares through the same `compareMarkdown` gate:
+//   generated-vs-fixture  (round-trip authored->rendered stability)
+//   generated-vs-emitted  (the `specs/*.md` tree must track live render)
+// `ok` is the AND of all four `.match` flags. Exposed for tests that
+// drive drift detection without touching filesystem state.
+export function evaluateCompile(
+  spec: NormalizedSpecModule,
+  plan: NormalizedTestPlanModule,
+  originalSpec: string,
+  originalPlan: string,
+  emittedSpec: string,
+  emittedPlan: string,
+): CompileOutput {
+  const generatedSpec = renderSpecMarkdown(spec);
+  const generatedPlan = renderTestPlanMarkdown(plan);
+
   const specReport = compareMarkdown(generatedSpec, originalSpec);
   const planReport = compareMarkdown(generatedPlan, originalPlan);
-  const specCompareSummary = JSON.stringify(
-    { match: specReport.match, differences: specReport.differences },
-    null,
-    2,
-  );
-  const planCompareSummary = JSON.stringify(
-    { match: planReport.match, differences: planReport.differences },
-    null,
-    2,
-  );
+  const emittedSpecReport = compareMarkdown(generatedSpec, emittedSpec);
+  const emittedPlanReport = compareMarkdown(generatedPlan, emittedPlan);
+
+  const summarize = (r: CompareResult) =>
+    JSON.stringify({ match: r.match, differences: r.differences }, null, 2);
+
+  const specCompareSummary = summarize(specReport);
+  const planCompareSummary = summarize(planReport);
+  const emittedSpecCompareSummary = summarize(emittedSpecReport);
+  const emittedPlanCompareSummary = summarize(emittedPlanReport);
+
   const prompt = buildReviewPrompt({
     originalSpec,
     originalPlan,
@@ -146,15 +170,20 @@ export function* compile(payload: Val): Operation<Val> {
     planCompareSummary,
   });
 
-  const result: CompileOutput = {
-    ok: specReport.match && planReport.match,
+  return {
+    ok:
+      specReport.match &&
+      planReport.match &&
+      emittedSpecReport.match &&
+      emittedPlanReport.match,
     specCompareSummary,
     planCompareSummary,
+    emittedSpecCompareSummary,
+    emittedPlanCompareSummary,
     generatedSpec,
     generatedPlan,
     prompt,
   };
-  return result as unknown as Val;
 }
 
 function* checkVerdict(payload: Val): Operation<Val> {

@@ -112,6 +112,8 @@ declare function Corpus(): {
     ok: boolean;
     specCompareSummary: string;
     planCompareSummary: string;
+    emittedSpecCompareSummary: string;
+    emittedPlanCompareSummary: string;
     generatedSpec: string;
     generatedPlan: string;
     prompt: string;
@@ -194,10 +196,22 @@ events will be reused, and each run starts from a clean slate.`,
 
   yield* Output().log({ label: "compare:spec", text: compiled.specCompareSummary });
   yield* Output().log({ label: "compare:plan", text: compiled.planCompareSummary });
+  yield* Output().log({
+    label: "compare:emitted-spec",
+    text: compiled.emittedSpecCompareSummary,
+  });
+  yield* Output().log({
+    label: "compare:emitted-plan",
+    text: compiled.emittedPlanCompareSummary,
+  });
 
   if (!compiled.ok) {
     throw new Error(
-      `verify-corpus failed at compare: spec=${compiled.specCompareSummary} plan=${compiled.planCompareSummary}`,
+      `verify-corpus failed at compare: ` +
+        `spec=${compiled.specCompareSummary} ` +
+        `plan=${compiled.planCompareSummary} ` +
+        `emitted-spec=${compiled.emittedSpecCompareSummary} ` +
+        `emitted-plan=${compiled.emittedPlanCompareSummary}`,
     );
   }
 
