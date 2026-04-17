@@ -1,0 +1,34 @@
+{
+  "name": "@tisyn/spec-workflows",
+  "version": "0.1.0",
+  "private": true,
+  "license": "UNLICENSED",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "scripts": {
+    "build": "tsc --build",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@tisyn/agent": "workspace:*",
+    "@tisyn/claude-code": "workspace:*",
+    "@tisyn/config": "workspace:*",
+    "@tisyn/ir": "workspace:*",
+    "@tisyn/spec": "workspace:*",
+    "@tisyn/transport": "workspace:*",
+    "effection": "4.0.2"
+  },
+  "devDependencies": {
+    "@effectionx/vitest": "^0.3.1",
+    "@tisyn/cli": "workspace:*",
+    "tsx": "^4.21.0",
+    "vitest": "^4"
+  }
+}

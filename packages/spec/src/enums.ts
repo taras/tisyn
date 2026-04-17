@@ -1,39 +1,44 @@
-// String-backed enums per §4.4 of spec-system-specification.source.md.
-// Values are the JSON-stable string backing required by A8.
+// v2 enum const arrays per §4 of tisyn-spec-system-specification.source.md.
+// Exposed as `as const` readonly tuples; their element types are the canonical
+// union types used across the type surface.
 
-export enum Status {
-  Draft = "draft",
-  Active = "active",
-  Superseded = "superseded",
-}
+// §4.3 SpecModule.status
+export const SPEC_STATUS = ["draft", "active", "superseded"] as const;
+export type SpecStatus = (typeof SPEC_STATUS)[number];
 
-export enum Strength {
-  MUST = "MUST",
-  MUST_NOT = "MUST NOT",
-  SHOULD = "SHOULD",
-  SHOULD_NOT = "SHOULD NOT",
-  MAY = "MAY",
-}
+// §4.5 Rule.level — the five RFC 2119 levels.
+export const RULE_LEVELS = [
+  "must",
+  "must-not",
+  "should",
+  "should-not",
+  "may",
+] as const;
+export type RuleLevel = (typeof RULE_LEVELS)[number];
 
-export enum Tier {
-  Core = "core",
-  Extended = "extended",
-  Draft = "draft",
-}
+// §4.7 Relationship.type
+export const RELATIONSHIP_TYPES = [
+  "complements",
+  "depends-on",
+  "amends",
+  "extends",
+  "implements",
+  "superseded-by",
+] as const;
+export type RelationshipType = (typeof RELATIONSHIP_TYPES)[number];
 
-export enum EvidenceTier {
-  Normative = "normative",
-  Harness = "harness",
-}
+// §4.8 OpenQuestion.status
+export const OPEN_QUESTION_STATUS = ["open", "resolved", "deferred"] as const;
+export type OpenQuestionStatus = (typeof OPEN_QUESTION_STATUS)[number];
 
-export enum ChangeType {
-  Added = "added",
-  Modified = "modified",
-  Removed = "removed",
-}
+// §4.16 CoverageEntry.status
+export const COVERAGE_STATUS = ["covered", "uncovered", "deferred"] as const;
+export type CoverageStatus = (typeof COVERAGE_STATUS)[number];
 
-export enum Resolution {
-  Resolved = "resolved",
-  Deferred = "deferred",
-  Unresolved = "unresolved",
-}
+// §4.15 TestCase.priority
+export const TEST_PRIORITY = ["p0", "p1", "deferred"] as const;
+export type TestPriority = (typeof TEST_PRIORITY)[number];
+
+// §4.15 TestCase.type
+export const TEST_TYPE = ["unit", "integration", "e2e"] as const;
+export type TestType = (typeof TEST_TYPE)[number];

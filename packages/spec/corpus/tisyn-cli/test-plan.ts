@@ -1,38 +1,25 @@
-// Structured tisyn-cli test plan. Test IDs are preserved verbatim from
-// the pre-migration `specs/tisyn-cli-test-plan.md` — do not rename.
-// Categories keep their source letters via `CLI-TC-{letter}` IDs; the
-// renderer strips the `CLI-TC-` prefix when emitting headings.
+// v2 tisyn-cli test plan. Ported verbatim from the v1 corpus at
+// packages/spec/corpus/tisyn-cli/test-plan.ts (main tree). Test IDs,
+// category IDs, section prose, rule→test bindings are preserved
+// byte-for-byte. The v1 `testsSpec` relation became `validatesSpec`.
+// v1 tier Core→p0, Extended→p1. TestCase.type is assigned by the
+// surface a test exercises: explicit `[Unit]` descriptions → "unit";
+// all others → "e2e" (the CLI is invoked as a child process).
+// TestCase.specRef carries the first rule from the v1 `rules` array;
+// the complete rule→test bindings live in `coverageMatrix`.
 //
-// Tier mapping:
-//   P0     → Tier.Core
-//   P1     → Tier.Extended
-//   GOLDEN → Tier.Core (output-stability coverage, orthogonal to priority)
-//
-// coverageMatrix entries are built from the reverse index of
-// `TestCase.rules` arrays so `checkCoverage` can bind rules to tests via
-// the authoring-only rule ID scheme declared in `spec.ts`.
+// Every coverageMatrix row ports with status "covered" because every
+// v1 row carried a non-empty testIds array (D27: covered iff
+// testIds.length > 0).
 
 import {
-  Covers,
-  DependsOn,
-  TestCase,
-  TestCategory,
-  TestPlan,
-  TestPlanSection,
-} from "../../src/index.ts";
-import { Status, Tier } from "../../src/enums.ts";
-import type { TestPlanModule } from "../../src/index.ts";
-
-const core = Tier.Core;
-const ext = Tier.Extended;
-
-// Prose bodies for the outer test-plan sections. Lifted verbatim from
-// `__fixtures__/original-test-plan.md` so that
-// `renderTestPlanMarkdown(normalizeTestPlan(tisynCliTestPlan))` round-
-// trips through the frozen fixture's coarse-structural surface (H2
-// headings, test IDs, coverage refs) observed by `compareMarkdown`.
-// Prose is stored without a trailing newline; the renderer supplies
-// the blank-line separator.
+  coverageEntry,
+  testCase,
+  testCategory,
+  testPlan,
+  testPlanSection,
+} from "../../src/constructors.ts";
+import type { TestPlanModule } from "../../src/types.ts";
 
 const PURPOSE_PROSE = `This document defines the conformance test plan for the
 Tisyn CLI Specification. An implementation of \`@tisyn/cli\`
@@ -279,101 +266,92 @@ namespacing, this test must be updated.`;
 const CATEGORY_N_NOTES = `§10.4 uses SHOULD for combined reporting and MAY for
 continued diagnostic collection. P1.`;
 
-// Outer section tree. §6 "Test Matrix" is the slot the renderer fills
-// with category blocks (categoriesSectionId === "6"). §7/§10/§11 carry
-// `precedingDivider: true` to reproduce the frozen fixture's HR-
-// separated group boundaries. §10/§11 are unnumbered H2 headings, so
-// their `number` is omitted and the id uses a slug (`"risks"`, `"notes"`).
 const CLI_SECTIONS = [
-  TestPlanSection({
+  testPlanSection({
     id: "1",
-    number: "1",
+    number: 1,
     title: "Purpose",
     prose: PURPOSE_PROSE,
   }),
-  TestPlanSection({
+  testPlanSection({
     id: "2",
-    number: "2",
+    number: 2,
     title: "Scope",
     prose: SCOPE_PROSE,
   }),
-  TestPlanSection({
+  testPlanSection({
     id: "3",
-    number: "3",
+    number: 3,
     title: "Conformance Targets",
     prose: CONFORMANCE_TARGETS_PROSE,
   }),
-  TestPlanSection({
+  testPlanSection({
     id: "4",
-    number: "4",
+    number: 4,
     title: "Test Strategy",
     prose: "",
     subsections: [
-      TestPlanSection({
+      testPlanSection({
         id: "4.1",
-        number: "4.1",
         title: "Priority Model",
         prose: PRIORITY_MODEL_PROSE,
       }),
-      TestPlanSection({
+      testPlanSection({
         id: "4.2",
-        number: "4.2",
         title: "Black-Box vs. White-Box",
         prose: BLACK_BOX_PROSE,
       }),
-      TestPlanSection({
+      testPlanSection({
         id: "4.3",
-        number: "4.3",
         title: "Schema-Related Tests",
         prose: SCHEMA_TESTS_PROSE,
       }),
-      TestPlanSection({
+      testPlanSection({
         id: "4.4",
-        number: "4.4",
         title: "Lifecycle Observability",
         prose: LIFECYCLE_OBS_PROSE,
       }),
     ],
   }),
-  TestPlanSection({
+  testPlanSection({
     id: "5",
-    number: "5",
+    number: 5,
     title: "Required Test Fixtures",
     prose: REQUIRED_FIXTURES_PROSE,
   }),
-  TestPlanSection({
+  testPlanSection({
     id: "6",
-    number: "6",
+    number: 6,
     title: "Test Matrix",
     prose: "",
     precedingDivider: true,
   }),
-  TestPlanSection({
+  testPlanSection({
     id: "7",
-    number: "7",
+    number: 7,
     title: "Summary",
     prose: SUMMARY_PROSE,
     precedingDivider: true,
   }),
-  TestPlanSection({
+  testPlanSection({
     id: "8",
-    number: "8",
+    number: 8,
     title: "Assumptions",
     prose: ASSUMPTIONS_PROSE,
   }),
-  TestPlanSection({
+  testPlanSection({
     id: "9",
-    number: "9",
+    number: 9,
     title: "Implementation Readiness",
     prose: READINESS_PROSE,
   }),
-  TestPlanSection({
+  testPlanSection({
     id: "risks",
     title: "Highest-Risk Drift Areas",
     prose: RISKS_PROSE,
     precedingDivider: true,
   }),
-  TestPlanSection({
+  testPlanSection({
     id: "notes",
     title: "Final Conformance Notes",
     prose: NOTES_PROSE,
@@ -381,1368 +359,1349 @@ const CLI_SECTIONS = [
   }),
 ];
 
-export const tisynCliTestPlan: TestPlanModule = TestPlan({
+export const tisynCliTestPlan: TestPlanModule = testPlan({
   id: "tisyn-cli-test-plan",
   title: "Tisyn CLI Test Plan",
-  version: "0.1.0",
-  status: Status.Active,
-  testsSpec: DependsOn("tisyn-cli", "0.1.0"),
+  validatesSpec: "tisyn-cli",
   styleReference: "Blocking Scope Conformance Test Plan",
   sections: CLI_SECTIONS,
   categoriesSectionId: "6",
-  coreTier: 136,
-  extendedTier: 1,
   categories: [
-    TestCategory({
+    testCategory({
       id: "CLI-TC-A",
       title: "Command Surface",
-      tests: [
-        TestCase({
+      cases: [
+        testCase({
           id: "CLI-CMD-001",
-          tier: core,
-          rules: ["CLI-2.1-R2"],
-          description: "`tsn generate --help` exits 0 and shows usage",
-          setup: "",
-          expected: "exit code 0, usage text printed",
+          priority: "p0",
+          type: "e2e",
+          specRef: "CLI-2.1-R2",
+          assertion: "`tsn generate --help` exits 0 and shows usage",
         }),
-        TestCase({
+        testCase({
           id: "CLI-CMD-002",
-          tier: core,
-          rules: ["CLI-2.2-R1"],
-          description: "`tsn build --help` exits 0 and shows usage",
-          setup: "",
-          expected: "exit code 0, usage text printed",
+          priority: "p0",
+          type: "e2e",
+          specRef: "CLI-2.2-R1",
+          assertion: "`tsn build --help` exits 0 and shows usage",
         }),
-        TestCase({
+        testCase({
           id: "CLI-CMD-003",
-          tier: core,
-          rules: ["CLI-9.6-R1"],
-          description:
+          priority: "p0",
+          type: "e2e",
+          specRef: "CLI-9.6-R1",
+          assertion:
             "`tsn run <valid-module> --help` loads the module and shows workflow-derived help (see CLI-HLP-008/009 for the failure path)",
-          setup: "",
-          expected: "exit code 0, help with workflow-derived flags",
         }),
-        TestCase({
+        testCase({
           id: "CLI-CMD-003a",
-          tier: core,
-          rules: ["CLI-9.6-R5"],
-          description:
+          priority: "p0",
+          type: "e2e",
+          specRef: "CLI-9.6-R5",
+          assertion:
             "`tsn run --help` (no module argument) shows static command help and exits 0",
-          setup: "",
-          expected: "exit code 0, static help only",
         }),
-        TestCase({
+        testCase({
           id: "CLI-CMD-004",
-          tier: core,
-          rules: ["CLI-2.4-R3"],
-          description: "`tsn check --help` exits 0 and shows usage",
-          setup: "",
-          expected: "exit code 0, usage text printed",
+          priority: "p0",
+          type: "e2e",
+          specRef: "CLI-2.4-R3",
+          assertion: "`tsn check --help` exits 0 and shows usage",
         }),
-        TestCase({
+        testCase({
           id: "CLI-CMD-005",
-          tier: core,
-          rules: ["CLI-1.1-R1"],
-          description: "`tsn --version` prints version and exits 0",
-          setup: "",
-          expected: "exit code 0, version string printed",
+          priority: "p0",
+          type: "e2e",
+          specRef: "CLI-1.1-R1",
+          assertion: "`tsn --version` prints version and exits 0",
         }),
-        TestCase({
+        testCase({
           id: "CLI-CMD-006",
-          tier: core,
-          rules: ["CLI-3.4-R3", "CLI-3.4-R1"],
-          description: "Unknown command `tsn foo` exits with code 2",
-          setup: "",
-          expected: "exit code 2",
+          priority: "p0",
+          type: "e2e",
+          specRef: "CLI-3.4-R3",
+          assertion: "Unknown command `tsn foo` exits with code 2",
         }),
       ],
     }),
-    TestCategory({
+    testCategory({
       id: "CLI-TC-B",
       title: "`tsn generate`",
-      tests: [
-        TestCase({
+      cases: [
+        testCase({
           id: "CLI-GEN-001",
-          tier: core,
-          rules: ["CLI-2.1-R3"],
-          description: "Single valid root → exits 0, generated output on stdout",
-          setup: "",
-          expected: "exit code 0, stdout contains generated output",
+          priority: "p0",
+          type: "e2e",
+          specRef: "CLI-2.1-R3",
+          assertion: "Single valid root → exits 0, generated output on stdout",
         }),
-        TestCase({
+        testCase({
           id: "CLI-GEN-002",
-          tier: core,
-          rules: ["CLI-2.1-R3"],
-          description: "Multiple valid roots with `-o` → exits 0, output file written",
-          setup: "",
-          expected: "exit code 0, output file created",
+          priority: "p0",
+          type: "e2e",
+          specRef: "CLI-2.1-R3",
+          assertion: "Multiple valid roots with `-o` → exits 0, output file written",
         }),
-        TestCase({
+        testCase({
           id: "CLI-GEN-003",
-          tier: core,
-          rules: ["CLI-3.4-R3"],
-          description: "Nonexistent root file → exit code 3",
-          setup: "",
-          expected: "exit code 3",
+          priority: "p0",
+          type: "e2e",
+          specRef: "CLI-3.4-R3",
+          assertion: "Nonexistent root file → exit code 3",
         }),
-        TestCase({
+        testCase({
           id: "CLI-GEN-004",
-          tier: core,
-          rules: ["CLI-3.4-R2"],
-          description: "Unrecognized built-in flag → exit code 2",
-          setup: "",
-          expected: "exit code 2",
+          priority: "p0",
+          type: "e2e",
+          specRef: "CLI-3.4-R2",
+          assertion: "Unrecognized built-in flag → exit code 2",
         }),
-        TestCase({
+        testCase({
           id: "CLI-GEN-005",
-          tier: core,
-          rules: ["CLI-2.1-R2"],
-          description: "`--format json` → exits 0 with JSON output",
-          setup: "",
-          expected: "exit code 0, JSON output",
+          priority: "p0",
+          type: "e2e",
+          specRef: "CLI-2.1-R2",
+          assertion: "`--format json` → exits 0 with JSON output",
         }),
-        TestCase({
+        testCase({
           id: "CLI-GEN-006",
-          tier: core,
-          rules: ["CLI-2.1-R1"],
-          description: "Legacy `--include` flag is rejected as unrecognized",
-          setup: "",
-          expected: "exit code 2",
+          priority: "p0",
+          type: "e2e",
+          specRef: "CLI-2.1-R1",
+          assertion: "Legacy `--include` flag is rejected as unrecognized",
         }),
       ],
     }),
-    TestCategory({
+    testCategory({
       id: "CLI-TC-C",
       title: "`tsn build`",
       notes: CATEGORY_C_NOTES,
-      tests: [
-        TestCase({
+      cases: [
+        testCase({
           id: "CLI-BLD-001",
-          tier: core,
-          rules: ["CLI-2.2-R1"],
-          description: "Valid rooted config → exits 0, output files written",
-          setup: "",
-          expected: "exit code 0, all declared outputs written",
+          priority: "p0",
+          type: "e2e",
+          specRef: "CLI-2.2-R1",
+          assertion: "Valid rooted config → exits 0, output files written",
         }),
-        TestCase({
+        testCase({
           id: "CLI-BLD-002",
-          tier: core,
-          rules: ["CLI-2.2-R2"],
-          description: "No config file found → exit code 2",
-          setup: "",
-          expected: "exit code 2",
+          priority: "p0",
+          type: "e2e",
+          specRef: "CLI-2.2-R2",
+          assertion: "No config file found → exit code 2",
         }),
-        TestCase({
+        testCase({
           id: "CLI-BLD-003",
-          tier: core,
-          rules: ["CLI-4.3-R1"],
-          description: "Empty `generates` array → exit code 2",
-          setup: "",
-          expected: "exit code 2",
+          priority: "p0",
+          type: "e2e",
+          specRef: "CLI-4.3-R1",
+          assertion: "Empty `generates` array → exit code 2",
         }),
-        TestCase({
+        testCase({
           id: "CLI-BLD-004",
-          tier: core,
-          rules: ["CLI-5.1-R2"],
-          description: "Dependency cycle → exit code 2 with diagnostic",
-          setup: "",
-          expected: "exit code 2, cycle diagnostic",
+          priority: "p0",
+          type: "e2e",
+          specRef: "CLI-5.1-R2",
+          assertion: "Dependency cycle → exit code 2 with diagnostic",
         }),
-        TestCase({
+        testCase({
           id: "CLI-BLD-005",
-          tier: core,
-          rules: ["CLI-2.2-R3"],
-          description: "`--filter` runs named pass and its dependencies",
-          setup: "",
-          expected: "only the named pass (and its deps) is built",
+          priority: "p0",
+          type: "e2e",
+          specRef: "CLI-2.2-R3",
+          assertion: "`--filter` runs named pass and its dependencies",
         }),
-        TestCase({
+        testCase({
           id: "CLI-BLD-006",
-          tier: core,
-          rules: ["CLI-2.2-R4"],
-          description: "`--filter` unknown name → exit code 2",
-          setup: "",
-          expected: "exit code 2",
+          priority: "p0",
+          type: "e2e",
+          specRef: "CLI-2.2-R4",
+          assertion: "`--filter` unknown name → exit code 2",
         }),
-        TestCase({
+        testCase({
           id: "CLI-BLD-007",
-          tier: core,
-          rules: ["CLI-5.3-R1"],
-          description:
+          priority: "p0",
+          type: "e2e",
+          specRef: "CLI-5.3-R1",
+          assertion:
             "Multi-pass rooted build passes prior outputs as generated-module boundaries; no stub injection or import stripping required",
-          setup: "",
-          expected: "compileGraph receives generatedModulePaths with prior pass outputs",
         }),
-        TestCase({
+        testCase({
           id: "CLI-BLD-008",
-          tier: core,
-          rules: ["CLI-4.3-R2"],
-          description: "Legacy `input` field in build config is rejected",
-          setup: "",
-          expected: "exit code 2",
+          priority: "p0",
+          type: "e2e",
+          specRef: "CLI-4.3-R2",
+          assertion: "Legacy `input` field in build config is rejected",
         }),
-        TestCase({
+        testCase({
           id: "CLI-BLD-009",
-          tier: core,
-          rules: ["CLI-5.1-R1"],
-          description:
+          priority: "p0",
+          type: "e2e",
+          specRef: "CLI-5.1-R1",
+          assertion:
             "Inferred import-graph dependency ordering matches declared output paths in a two-pass build",
-          setup: "",
-          expected: "passes execute in the correct inferred order",
         }),
       ],
     }),
-    TestCategory({
+    testCategory({
       id: "CLI-TC-D",
       title: "Descriptor Loading (`tsn run`)",
-      tests: [
-        TestCase({
+      cases: [
+        testCase({
           id: "CLI-LOAD-001",
-          tier: core,
-          rules: ["CLI-10.1-R1"],
-          description:
+          priority: "p0",
+          type: "e2e",
+          specRef: "CLI-10.1-R1",
+          assertion:
             "`tsn run <valid-module>` proceeds past loading (fixture `minimal.ts`); observable as reaching a later phase, not a load-phase error",
-          setup: "",
-          expected: "no load-phase error (code 2/3)",
         }),
-        TestCase({
+        testCase({
           id: "CLI-LOAD-002",
-          tier: core,
-          rules: ["CLI-3.4-R4"],
-          description: "Nonexistent module path → exit code 3",
-          setup: "",
-          expected: "exit code 3",
+          priority: "p0",
+          type: "e2e",
+          specRef: "CLI-3.4-R4",
+          assertion: "Nonexistent module path → exit code 3",
         }),
-        TestCase({
+        testCase({
           id: "CLI-LOAD-003",
-          tier: core,
-          rules: ["CLI-10.2-R1"],
-          description: "Module with no default export → exit code 2",
-          setup: "",
-          expected: "exit code 2",
+          priority: "p0",
+          type: "e2e",
+          specRef: "CLI-10.2-R1",
+          assertion: "Module with no default export → exit code 2",
         }),
-        TestCase({
+        testCase({
           id: "CLI-LOAD-004",
-          tier: core,
-          rules: ["CLI-10.2-R1"],
-          description: "Default export is not a `WorkflowDescriptor` → exit code 2",
-          setup: "",
-          expected: "exit code 2",
+          priority: "p0",
+          type: "e2e",
+          specRef: "CLI-10.2-R1",
+          assertion: "Default export is not a `WorkflowDescriptor` → exit code 2",
         }),
-        TestCase({
+        testCase({
           id: "CLI-LOAD-005",
-          tier: core,
-          rules: ["CLI-10.2-R2"],
-          description: "`run.export` names a non-existent export → exit code 2",
-          setup: "",
-          expected: "exit code 2",
+          priority: "p0",
+          type: "e2e",
+          specRef: "CLI-10.2-R2",
+          assertion: "`run.export` names a non-existent export → exit code 2",
         }),
-        TestCase({
+        testCase({
           id: "CLI-LOAD-006",
-          tier: core,
-          rules: ["CLI-10.2-R3"],
-          description:
+          priority: "p0",
+          type: "e2e",
+          specRef: "CLI-10.2-R3",
+          assertion:
             "`run.module` relative path resolves correctly; observable as workflow loading without code 3",
-          setup: "",
-          expected: "no load-phase error",
         }),
-        TestCase({
+        testCase({
           id: "CLI-LOAD-007",
-          tier: core,
-          rules: ["CLI-10.2-R3"],
-          description: "`run.module` path does not exist → exit code 3",
-          setup: "",
-          expected: "exit code 3",
+          priority: "p0",
+          type: "e2e",
+          specRef: "CLI-10.2-R3",
+          assertion: "`run.module` path does not exist → exit code 3",
         }),
-        TestCase({
+        testCase({
           id: "CLI-LOAD-008",
-          tier: core,
-          rules: ["CLI-10.1-R1"],
-          description:
+          priority: "p0",
+          type: "e2e",
+          specRef: "CLI-10.1-R1",
+          assertion:
             "`run.module` omitted → workflow function resolved from descriptor module; successful execution",
-          setup: "",
-          expected: "workflow executes",
         }),
-        TestCase({
+        testCase({
           id: "CLI-LOAD-009",
-          tier: core,
-          rules: ["CLI-10.5.1-R1"],
-          description:
+          priority: "p0",
+          type: "e2e",
+          specRef: "CLI-10.5.1-R1",
+          assertion:
             "TypeScript descriptor module (`.ts`/`.mts`/`.cts`) loads successfully; reaches a later phase, not a load-phase error",
-          setup: "",
-          expected: "no load-phase error",
         }),
-        TestCase({
+        testCase({
           id: "CLI-LOAD-010",
-          tier: core,
-          rules: ["CLI-10.5.1-R2"],
-          description:
+          priority: "p0",
+          type: "e2e",
+          specRef: "CLI-10.5.1-R2",
+          assertion:
             "Unsupported extension (for example `.tsx`) → exit code 3 with unsupported-extension diagnostic",
-          setup: "",
-          expected: "exit code 3",
         }),
-        TestCase({
+        testCase({
           id: "CLI-LOAD-011",
-          tier: core,
-          rules: ["CLI-10.5.4-R1"],
-          description:
+          priority: "p0",
+          type: "e2e",
+          specRef: "CLI-10.5.4-R1",
+          assertion:
             "Explicit TypeScript `run.module` target that is authored workflow source uses compiler-based rooted compilation, not module loading; observable via successful `tsn check`",
-          setup: "",
-          expected: "check succeeds",
         }),
-        TestCase({
+        testCase({
           id: "CLI-LOAD-012",
-          tier: core,
-          rules: ["CLI-10.5.4-R1"],
-          description:
+          priority: "p0",
+          type: "e2e",
+          specRef: "CLI-10.5.4-R1",
+          assertion:
             "Same-module workflow export in a TypeScript descriptor resolves from the descriptor module instead of the compiler path",
-          setup: "",
-          expected: "execution or check succeeds",
         }),
-        TestCase({
+        testCase({
           id: "CLI-LOAD-013",
-          tier: core,
-          rules: ["CLI-10.2-R4"],
-          description:
+          priority: "p0",
+          type: "e2e",
+          specRef: "CLI-10.2-R4",
+          assertion:
             "`run.module` pointing to a generated workflow module is runtime-loaded; compiler is not invoked",
-          setup: "",
-          expected: "no compiler invocation",
         }),
-        TestCase({
+        testCase({
           id: "CLI-LOAD-014",
-          tier: core,
-          rules: ["CLI-10.2-R4"],
-          description:
+          priority: "p0",
+          type: "e2e",
+          specRef: "CLI-10.2-R4",
+          assertion:
             "Descriptor module itself is runtime-loaded and not treated as a workflow compilation root",
-          setup: "",
-          expected: "no compiler invocation on the descriptor module",
         }),
       ],
     }),
-    TestCategory({
+    testCategory({
       id: "CLI-TC-E",
       title: "Entrypoint Selection (`tsn run`)",
-      tests: [
-        TestCase({
+      cases: [
+        testCase({
           id: "CLI-ENT-001",
-          tier: core,
-          rules: ["CLI-10.1-R2"],
-          description:
+          priority: "p0",
+          type: "e2e",
+          specRef: "CLI-10.1-R2",
+          assertion:
             "`--entrypoint dev` with an existing entrypoint → overlay applied; entrypoint-specific behavior differs from base",
-          setup: "",
-          expected: "overlay-specific observable",
         }),
-        TestCase({
+        testCase({
           id: "CLI-ENT-002",
-          tier: core,
-          rules: ["CLI-10.1-R2"],
-          description: "`--entrypoint unknown` → exit code 2",
-          setup: "",
-          expected: "exit code 2",
+          priority: "p0",
+          type: "e2e",
+          specRef: "CLI-10.1-R2",
+          assertion: "`--entrypoint unknown` → exit code 2",
         }),
-        TestCase({
+        testCase({
           id: "CLI-ENT-003",
-          tier: core,
-          rules: ["CLI-10.1-R2"],
-          description: "No `--entrypoint` → base descriptor used",
-          setup: "",
-          expected: "base descriptor observable",
+          priority: "p0",
+          type: "e2e",
+          specRef: "CLI-10.1-R2",
+          assertion: "No `--entrypoint` → base descriptor used",
         }),
-        TestCase({
+        testCase({
           id: "CLI-ENT-004",
-          tier: core,
-          rules: ["CLI-10.1-R1"],
-          description: "Overlay that introduces a validation error → exit code 2",
-          setup: "",
-          expected: "exit code 2",
+          priority: "p0",
+          type: "e2e",
+          specRef: "CLI-10.1-R1",
+          assertion: "Overlay that introduces a validation error → exit code 2",
         }),
       ],
     }),
-    TestCategory({
+    testCategory({
       id: "CLI-TC-F",
       title: "Invocation Input Schema Contract",
       notes: CATEGORY_F_NOTES,
-      tests: [
-        TestCase({
+      cases: [
+        testCase({
           id: "CLI-IS-001",
-          tier: core,
-          rules: ["CLI-8.1-R1"],
-          description: "Schema unavailable → exit code 2",
-          setup: "",
-          expected: "exit code 2",
+          priority: "p0",
+          type: "e2e",
+          specRef: "CLI-8.1-R1",
+          assertion: "Schema unavailable → exit code 2",
         }),
-        TestCase({
+        testCase({
           id: "CLI-IS-002",
-          tier: core,
-          rules: ["CLI-8.1-R2"],
-          description:
+          priority: "p0",
+          type: "e2e",
+          specRef: "CLI-8.1-R2",
+          assertion:
             "Schema contains unsupported shape → exit code 2 with diagnostic naming the unsupported construct",
-          setup: "",
-          expected: "exit code 2 + diagnostic",
         }),
-        TestCase({
+        testCase({
           id: "CLI-IS-003",
-          tier: core,
-          rules: ["CLI-8.1-R3"],
-          description: "Zero-parameter workflow → no derived flags, no failure",
-          setup: "",
-          expected: "no derived flags",
+          priority: "p0",
+          type: "e2e",
+          specRef: "CLI-8.1-R3",
+          assertion: "Zero-parameter workflow → no derived flags, no failure",
         }),
-        TestCase({
+        testCase({
           id: "CLI-IS-004",
-          tier: core,
-          rules: ["CLI-8.2-R1"],
-          description: "Flat object parameter → one flag per field",
-          setup: "",
-          expected: "one derived flag per object field",
+          priority: "p0",
+          type: "e2e",
+          specRef: "CLI-8.2-R1",
+          assertion: "Flat object parameter → one flag per field",
         }),
-        TestCase({
+        testCase({
           id: "CLI-IS-005",
-          tier: core,
-          rules: ["CLI-8.4-R1"],
-          description: "Multiple parameters → rejected with exit code 2",
-          setup: "",
-          expected: "exit code 2",
+          priority: "p0",
+          type: "e2e",
+          specRef: "CLI-8.4-R1",
+          assertion: "Multiple parameters → rejected with exit code 2",
         }),
-        TestCase({
+        testCase({
           id: "CLI-IS-006",
-          tier: core,
-          rules: ["CLI-8.4-R1"],
-          description: "Non-object parameter → rejected",
-          setup: "",
-          expected: "exit code 2",
+          priority: "p0",
+          type: "e2e",
+          specRef: "CLI-8.4-R1",
+          assertion: "Non-object parameter → rejected",
         }),
-        TestCase({
+        testCase({
           id: "CLI-IS-007",
-          tier: core,
-          rules: ["CLI-8.4-R1"],
-          description: "Array-typed field → rejected",
-          setup: "",
-          expected: "exit code 2",
+          priority: "p0",
+          type: "e2e",
+          specRef: "CLI-8.4-R1",
+          assertion: "Array-typed field → rejected",
         }),
-        TestCase({
+        testCase({
           id: "CLI-IS-008",
-          tier: core,
-          rules: ["CLI-8.4-R1"],
-          description: "Nested object field → rejected",
-          setup: "",
-          expected: "exit code 2",
+          priority: "p0",
+          type: "e2e",
+          specRef: "CLI-8.4-R1",
+          assertion: "Nested object field → rejected",
         }),
-        TestCase({
+        testCase({
           id: "CLI-IS-009",
-          tier: core,
-          rules: ["CLI-8.4-R1"],
-          description: "Union-typed field other than optionality unions → rejected",
-          setup: "",
-          expected: "exit code 2",
+          priority: "p0",
+          type: "e2e",
+          specRef: "CLI-8.4-R1",
+          assertion: "Union-typed field other than optionality unions → rejected",
         }),
-        TestCase({
+        testCase({
           id: "CLI-IS-010",
-          tier: core,
-          rules: ["CLI-8.4-R1"],
-          description: "Enum-typed field → rejected",
-          setup: "",
-          expected: "exit code 2",
+          priority: "p0",
+          type: "e2e",
+          specRef: "CLI-8.4-R1",
+          assertion: "Enum-typed field → rejected",
         }),
-        TestCase({
+        testCase({
           id: "CLI-IS-011",
-          tier: core,
-          rules: ["CLI-8.4-R1"],
-          description: "Config-node-typed field → rejected",
-          setup: "",
-          expected: "exit code 2",
+          priority: "p0",
+          type: "e2e",
+          specRef: "CLI-8.4-R1",
+          assertion: "Config-node-typed field → rejected",
         }),
       ],
     }),
-    TestCategory({
+    testCategory({
       id: "CLI-TC-G",
       title: "CLI Flag Derivation and Mapping",
-      tests: [
-        TestCase({
+      cases: [
+        testCase({
           id: "CLI-FLG-001",
-          tier: core,
-          rules: ["CLI-9.1-R1"],
-          description: "[Unit] `maxTurns` → `--max-turns`",
-          setup: "",
-          expected: "conversion matches",
+          priority: "p0",
+          type: "unit",
+          specRef: "CLI-9.1-R1",
+          assertion: "[Unit] `maxTurns` → `--max-turns`",
         }),
-        TestCase({
+        testCase({
           id: "CLI-FLG-002",
-          tier: core,
-          rules: ["CLI-9.1-R1"],
-          description: "[Unit] `model` → `--model` (no case change)",
-          setup: "",
-          expected: "conversion matches",
+          priority: "p0",
+          type: "unit",
+          specRef: "CLI-9.1-R1",
+          assertion: "[Unit] `model` → `--model` (no case change)",
         }),
-        TestCase({
+        testCase({
           id: "CLI-FLG-003",
-          tier: core,
-          rules: ["CLI-9.1-R1"],
-          description: "[Unit] `outputDir` → `--output-dir`",
-          setup: "",
-          expected: "conversion matches",
+          priority: "p0",
+          type: "unit",
+          specRef: "CLI-9.1-R1",
+          assertion: "[Unit] `outputDir` → `--output-dir`",
         }),
-        TestCase({
+        testCase({
           id: "CLI-FLG-004",
-          tier: core,
-          rules: ["CLI-9.1-R1"],
-          description: "[Unit] `a` (single char) → `--a`",
-          setup: "",
-          expected: "conversion matches",
+          priority: "p0",
+          type: "unit",
+          specRef: "CLI-9.1-R1",
+          assertion: "[Unit] `a` (single char) → `--a`",
         }),
-        TestCase({
+        testCase({
           id: "CLI-FLG-005",
-          tier: core,
-          rules: ["CLI-9.2-R1"],
-          description: 'Required string: `--model foo` → `"foo"`',
-          setup: "",
-          expected: "value propagates to workflow",
+          priority: "p0",
+          type: "e2e",
+          specRef: "CLI-9.2-R1",
+          assertion: "Required string: `--model foo` → `\"foo\"`",
         }),
-        TestCase({
+        testCase({
           id: "CLI-FLG-006",
-          tier: core,
-          rules: ["CLI-9.2-R1"],
-          description: "Required string missing → exit code 4",
-          setup: "",
-          expected: "exit code 4",
+          priority: "p0",
+          type: "e2e",
+          specRef: "CLI-9.2-R1",
+          assertion: "Required string missing → exit code 4",
         }),
-        TestCase({
+        testCase({
           id: "CLI-FLG-007",
-          tier: core,
-          rules: ["CLI-9.2-R1"],
-          description: 'Optional string: `--model foo` → `"foo"`',
-          setup: "",
-          expected: "value propagates",
+          priority: "p0",
+          type: "e2e",
+          specRef: "CLI-9.2-R1",
+          assertion: "Optional string: `--model foo` → `\"foo\"`",
         }),
-        TestCase({
+        testCase({
           id: "CLI-FLG-008",
-          tier: core,
-          rules: ["CLI-9.2-R2"],
-          description: "Optional string omitted → `undefined`",
-          setup: "",
-          expected: "field is undefined",
+          priority: "p0",
+          type: "e2e",
+          specRef: "CLI-9.2-R2",
+          assertion: "Optional string omitted → `undefined`",
         }),
-        TestCase({
+        testCase({
           id: "CLI-FLG-009",
-          tier: core,
-          rules: ["CLI-9.2-R1"],
-          description: "Required number: `--max-turns 10` → `10`",
-          setup: "",
-          expected: "numeric value propagates",
+          priority: "p0",
+          type: "e2e",
+          specRef: "CLI-9.2-R1",
+          assertion: "Required number: `--max-turns 10` → `10`",
         }),
-        TestCase({
+        testCase({
           id: "CLI-FLG-010",
-          tier: core,
-          rules: ["CLI-9.2-R1"],
-          description: "Required number missing → exit code 4",
-          setup: "",
-          expected: "exit code 4",
+          priority: "p0",
+          type: "e2e",
+          specRef: "CLI-9.2-R1",
+          assertion: "Required number missing → exit code 4",
         }),
-        TestCase({
+        testCase({
           id: "CLI-FLG-011",
-          tier: core,
-          rules: ["CLI-9.3-R1"],
-          description: "Number coercion failure: `--max-turns abc` → exit code 4",
-          setup: "",
-          expected: "exit code 4",
+          priority: "p0",
+          type: "e2e",
+          specRef: "CLI-9.3-R1",
+          assertion: "Number coercion failure: `--max-turns abc` → exit code 4",
         }),
-        TestCase({
+        testCase({
           id: "CLI-FLG-012",
-          tier: core,
-          rules: ["CLI-9.4-R1"],
-          description: "Unknown invocation flag → exit code 4",
-          setup: "",
-          expected: "exit code 4",
+          priority: "p0",
+          type: "e2e",
+          specRef: "CLI-9.4-R1",
+          assertion: "Unknown invocation flag → exit code 4",
         }),
-        TestCase({
+        testCase({
           id: "CLI-FLG-013",
-          tier: core,
-          rules: ["CLI-9.2-R1"],
-          description: "Multiple missing required fields → all reported in one diagnostic",
-          setup: "",
-          expected: "combined diagnostic before exit 4",
+          priority: "p0",
+          type: "e2e",
+          specRef: "CLI-9.2-R1",
+          assertion: "Multiple missing required fields → all reported in one diagnostic",
         }),
-        TestCase({
+        testCase({
           id: "CLI-FLG-014",
-          tier: core,
-          rules: ["CLI-16.2-R1"],
-          description:
+          priority: "p0",
+          type: "e2e",
+          specRef: "CLI-16.2-R1",
+          assertion:
             "`--verbose` after module does not leak into workflow flag parsing (not rejected as unknown)",
-          setup: "",
-          expected: "no code 4 for `--verbose`",
         }),
-        TestCase({
+        testCase({
           id: "CLI-FLG-015",
-          tier: core,
-          rules: ["CLI-16.2-R1"],
-          description:
+          priority: "p0",
+          type: "e2e",
+          specRef: "CLI-16.2-R1",
+          assertion:
             "`--entrypoint <name>` after module does not leak into workflow flag parsing",
-          setup: "",
-          expected: "no code 4 for `--entrypoint`",
         }),
-        TestCase({
+        testCase({
           id: "CLI-FLG-016",
-          tier: core,
-          rules: ["CLI-16.2-R1"],
-          description:
+          priority: "p0",
+          type: "e2e",
+          specRef: "CLI-16.2-R1",
+          assertion:
             "Built-in and workflow flags coexist: `--entrypoint dev --max-turns 10` parses both correctly",
-          setup: "",
-          expected: "both parsed",
         }),
-        TestCase({
+        testCase({
           id: "CLI-FLG-017",
-          tier: core,
-          rules: ["CLI-9.4-R1"],
-          description: "Unknown short flag `-x` after module → exit code 4",
-          setup: "",
-          expected: "exit code 4",
+          priority: "p0",
+          type: "e2e",
+          specRef: "CLI-9.4-R1",
+          assertion: "Unknown short flag `-x` after module → exit code 4",
         }),
-        TestCase({
+        testCase({
           id: "CLI-FLG-018",
-          tier: core,
-          rules: ["CLI-9.4-R1"],
-          description: "Bare positional arg `stray` after module → exit code 4",
-          setup: "",
-          expected: "exit code 4",
+          priority: "p0",
+          type: "e2e",
+          specRef: "CLI-9.4-R1",
+          assertion: "Bare positional arg `stray` after module → exit code 4",
         }),
-        TestCase({
+        testCase({
           id: "CLI-FLG-019",
-          tier: core,
-          rules: ["CLI-9.4-R1"],
-          description: "Zero-parameter workflow + unknown flag → exit code 4",
-          setup: "",
-          expected: "exit code 4",
+          priority: "p0",
+          type: "e2e",
+          specRef: "CLI-9.4-R1",
+          assertion: "Zero-parameter workflow + unknown flag → exit code 4",
         }),
-        TestCase({
+        testCase({
           id: "CLI-FLG-020",
-          tier: core,
-          rules: ["CLI-9.4-R1"],
-          description: "Empty-object-schema workflow + unknown flag → exit code 4",
-          setup: "",
-          expected: "exit code 4",
+          priority: "p0",
+          type: "e2e",
+          specRef: "CLI-9.4-R1",
+          assertion: "Empty-object-schema workflow + unknown flag → exit code 4",
         }),
       ],
     }),
-    TestCategory({
+    testCategory({
       id: "CLI-TC-H",
       title: "Boolean v1 Semantics",
-      tests: [
-        TestCase({
+      cases: [
+        testCase({
           id: "CLI-BOOL-001",
-          tier: core,
-          rules: ["CLI-8.3-R1"],
-          description: "`boolean` field: `--flag` present → `true`",
-          setup: "",
-          expected: "workflow sees true",
+          priority: "p0",
+          type: "e2e",
+          specRef: "CLI-8.3-R1",
+          assertion: "`boolean` field: `--flag` present → `true`",
         }),
-        TestCase({
+        testCase({
           id: "CLI-BOOL-002",
-          tier: core,
-          rules: ["CLI-8.3-R2"],
-          description: "`boolean` field: flag absent → `false`",
-          setup: "",
-          expected: "workflow sees false (not undefined)",
+          priority: "p0",
+          type: "e2e",
+          specRef: "CLI-8.3-R2",
+          assertion: "`boolean` field: flag absent → `false`",
         }),
-        TestCase({
+        testCase({
           id: "CLI-BOOL-003",
-          tier: core,
-          rules: ["CLI-8.3-R1"],
-          description: "`boolean?` field: `--flag` present → `true`",
-          setup: "",
-          expected: "workflow sees true",
+          priority: "p0",
+          type: "e2e",
+          specRef: "CLI-8.3-R1",
+          assertion: "`boolean?` field: `--flag` present → `true`",
         }),
-        TestCase({
+        testCase({
           id: "CLI-BOOL-004",
-          tier: core,
-          rules: ["CLI-8.3-R2"],
-          description: "`boolean?` field: flag absent → `false` (not `undefined`)",
-          setup: "",
-          expected: "workflow sees false",
+          priority: "p0",
+          type: "e2e",
+          specRef: "CLI-8.3-R2",
+          assertion: "`boolean?` field: flag absent → `false` (not `undefined`)",
         }),
-        TestCase({
+        testCase({
           id: "CLI-BOOL-005",
-          tier: core,
-          rules: ["CLI-8.3-R1"],
-          description:
+          priority: "p0",
+          type: "e2e",
+          specRef: "CLI-8.3-R1",
+          assertion:
             "Non-optional `boolean` is NOT treated as a required CLI flag — absent → `false`",
-          setup: "",
-          expected: "no exit 4 for missing boolean",
         }),
-        TestCase({
+        testCase({
           id: "CLI-BOOL-006",
-          tier: core,
-          rules: ["CLI-8.3-R3"],
-          description: "`--no-flag` syntax → exit code 4 (rejected as unknown flag)",
-          setup: "",
-          expected: "exit code 4",
+          priority: "p0",
+          type: "e2e",
+          specRef: "CLI-8.3-R3",
+          assertion: "`--no-flag` syntax → exit code 4 (rejected as unknown flag)",
         }),
-        TestCase({
+        testCase({
           id: "CLI-BOOL-007",
-          tier: core,
-          rules: ["CLI-8.3-R1"],
-          description: "[Unit] `boolean` and `boolean?` map to identical CLI surface",
-          setup: "",
-          expected: "identical derived flag mapping",
+          priority: "p0",
+          type: "unit",
+          specRef: "CLI-8.3-R1",
+          assertion: "[Unit] `boolean` and `boolean?` map to identical CLI surface",
         }),
       ],
     }),
-    TestCategory({
+    testCategory({
       id: "CLI-TC-I",
       title: "Flag Collision",
       notes: CATEGORY_I_NOTES,
-      tests: [
-        TestCase({
+      cases: [
+        testCase({
           id: "CLI-COL-001",
-          tier: core,
-          rules: ["CLI-9.5-R1"],
-          description:
+          priority: "p0",
+          type: "e2e",
+          specRef: "CLI-9.5-R1",
+          assertion:
             "Derived `--verbose` (from `verbose` parameter) collides with built-in → built-in wins, workflow parameter not addressable via `--verbose`",
-          setup: "",
-          expected: "built-in wins",
         }),
-        TestCase({
+        testCase({
           id: "CLI-COL-002",
-          tier: core,
-          rules: ["CLI-9.5-R1"],
-          description: "[Unit] Collision check operates on derived kebab-case names",
-          setup: "",
-          expected: "collision detection uses kebab-case",
+          priority: "p0",
+          type: "unit",
+          specRef: "CLI-9.5-R1",
+          assertion: "[Unit] Collision check operates on derived kebab-case names",
         }),
-        TestCase({
+        testCase({
           id: "CLI-COL-003",
-          tier: core,
-          rules: ["CLI-9.5-R2"],
-          description: "Collision produces advisory diagnostic (SHOULD)",
-          setup: "",
-          expected: "advisory diagnostic observed",
+          priority: "p0",
+          type: "e2e",
+          specRef: "CLI-9.5-R2",
+          assertion: "Collision produces advisory diagnostic (SHOULD)",
         }),
       ],
     }),
-    TestCategory({
+    testCategory({
       id: "CLI-TC-J",
       title: "Help Generation",
-      tests: [
-        TestCase({
+      cases: [
+        testCase({
           id: "CLI-HLP-001",
-          tier: core,
-          rules: ["CLI-9.6-R1"],
-          description: "Help output includes usage line",
-          setup: "",
-          expected: "usage line present",
+          priority: "p0",
+          type: "e2e",
+          specRef: "CLI-9.6-R1",
+          assertion: "Help output includes usage line",
         }),
-        TestCase({
+        testCase({
           id: "CLI-HLP-002",
-          tier: core,
-          rules: ["CLI-9.6-R1"],
-          description: "Help includes built-in options",
-          setup: "",
-          expected: "built-in options present",
+          priority: "p0",
+          type: "e2e",
+          specRef: "CLI-9.6-R1",
+          assertion: "Help includes built-in options",
         }),
-        TestCase({
+        testCase({
           id: "CLI-HLP-003",
-          tier: core,
-          rules: ["CLI-9.6-R1"],
-          description: "Help includes workflow-derived flags with type indicators",
-          setup: "",
-          expected: "derived flags present with types",
+          priority: "p0",
+          type: "e2e",
+          specRef: "CLI-9.6-R1",
+          assertion: "Help includes workflow-derived flags with type indicators",
         }),
-        TestCase({
+        testCase({
           id: "CLI-HLP-004",
-          tier: core,
-          rules: ["CLI-9.6-R1"],
-          description: "Help marks required vs optional for each derived flag",
-          setup: "",
-          expected: "required/optional markers present",
+          priority: "p0",
+          type: "e2e",
+          specRef: "CLI-9.6-R1",
+          assertion: "Help marks required vs optional for each derived flag",
         }),
-        TestCase({
+        testCase({
           id: "CLI-HLP-005",
-          tier: core,
-          rules: ["CLI-8.5-R1"],
-          description: "JSDoc descriptions appear in help (SHOULD)",
-          setup: "",
-          expected: "JSDoc text in help output",
+          priority: "p0",
+          type: "e2e",
+          specRef: "CLI-8.5-R1",
+          assertion: "JSDoc descriptions appear in help (SHOULD)",
         }),
-        TestCase({
+        testCase({
           id: "CLI-HLP-006",
-          tier: core,
-          rules: ["CLI-9.6-R2"],
-          description: "Help does NOT describe `Config.useConfig()` internals",
-          setup: "",
-          expected: "no Config.useConfig references",
+          priority: "p0",
+          type: "e2e",
+          specRef: "CLI-9.6-R2",
+          assertion: "Help does NOT describe `Config.useConfig()` internals",
         }),
-        TestCase({
+        testCase({
           id: "CLI-HLP-007",
-          tier: ext,
-          rules: ["CLI-9.6-R1"],
-          description: "Help lists available entrypoints",
-          setup: "",
-          expected: "entrypoints listed",
+          priority: "p1",
+          type: "e2e",
+          specRef: "CLI-9.6-R1",
+          assertion: "Help lists available entrypoints",
         }),
-        TestCase({
+        testCase({
           id: "CLI-HLP-008",
-          tier: core,
-          rules: ["CLI-9.6-R3"],
-          description:
+          priority: "p0",
+          type: "e2e",
+          specRef: "CLI-9.6-R3",
+          assertion:
             "Module load failure → help shows built-in options + diagnostic, exits with error code",
-          setup: "",
-          expected: "built-in options + diagnostic, non-zero exit",
         }),
-        TestCase({
+        testCase({
           id: "CLI-HLP-009",
-          tier: core,
-          rules: ["CLI-9.6-R3"],
-          description:
+          priority: "p0",
+          type: "e2e",
+          specRef: "CLI-9.6-R3",
+          assertion:
             "Schema derivation failure → help shows built-in options + diagnostic, exits with error code",
-          setup: "",
-          expected: "built-in options + diagnostic, non-zero exit",
         }),
-        TestCase({
+        testCase({
           id: "CLI-HLP-010",
-          tier: core,
-          rules: ["CLI-9.6-R4"],
-          description: "Help MUST NOT silently omit workflow inputs section without explanation",
-          setup: "",
-          expected: "explanation accompanies any omission",
+          priority: "p0",
+          type: "e2e",
+          specRef: "CLI-9.6-R4",
+          assertion: "Help MUST NOT silently omit workflow inputs section without explanation",
         }),
-        TestCase({
+        testCase({
           id: "CLI-HLP-011",
-          tier: core,
-          rules: ["CLI-9.6-R1"],
-          description: "[Golden] Snapshot: help output for `with-inputs` fixture",
-          setup: "",
-          expected: "matches snapshot",
+          priority: "p0",
+          type: "e2e",
+          specRef: "CLI-9.6-R1",
+          assertion: "[Golden] Snapshot: help output for `with-inputs` fixture",
         }),
-        TestCase({
+        testCase({
           id: "CLI-HLP-012",
-          tier: core,
-          rules: ["CLI-10.5.1-R1"],
-          description:
+          priority: "p0",
+          type: "e2e",
+          specRef: "CLI-10.5.1-R1",
+          assertion:
             "`tsn run <ts-descriptor> --help` loads a TypeScript descriptor module and shows workflow-derived help",
-          setup: "",
-          expected: "derived help shown for TS descriptor",
         }),
       ],
     }),
-    TestCategory({
+    testCategory({
       id: "CLI-TC-K",
       title: "`tsn check`",
-      tests: [
-        TestCase({
+      cases: [
+        testCase({
           id: "CLI-CHK-001",
-          tier: core,
-          rules: ["CLI-10.2-R1"],
-          description: "Valid descriptor + env vars set → exit 0",
-          setup: "",
-          expected: "exit code 0",
+          priority: "p0",
+          type: "e2e",
+          specRef: "CLI-10.2-R1",
+          assertion: "Valid descriptor + env vars set → exit 0",
         }),
-        TestCase({
+        testCase({
           id: "CLI-CHK-002",
-          tier: core,
-          rules: ["CLI-10.2-R1"],
-          description: "Invalid descriptor → exit code 2",
-          setup: "",
-          expected: "exit code 2",
+          priority: "p0",
+          type: "e2e",
+          specRef: "CLI-10.2-R1",
+          assertion: "Invalid descriptor → exit code 2",
         }),
-        TestCase({
+        testCase({
           id: "CLI-CHK-003",
-          tier: core,
-          rules: ["CLI-3.4-R6"],
-          description: "Missing required env var → exit code 5",
-          setup: "",
-          expected: "exit code 5",
+          priority: "p0",
+          type: "e2e",
+          specRef: "CLI-3.4-R6",
+          assertion: "Missing required env var → exit code 5",
         }),
-        TestCase({
+        testCase({
           id: "CLI-CHK-004",
-          tier: core,
-          rules: ["CLI-2.4-R2"],
-          description:
+          priority: "p0",
+          type: "e2e",
+          specRef: "CLI-2.4-R2",
+          assertion:
             "`tsn check` does not start transports; observable as process exiting promptly after checks",
-          setup: "",
-          expected: "prompt exit",
         }),
-        TestCase({
+        testCase({
           id: "CLI-CHK-005",
-          tier: core,
-          rules: ["CLI-2.4-R2"],
-          description:
+          priority: "p0",
+          type: "e2e",
+          specRef: "CLI-2.4-R2",
+          assertion:
             "`tsn check` does not execute the workflow; `side-effect` fixture sentinel file NOT created",
-          setup: "",
-          expected: "no sentinel file",
         }),
-        TestCase({
+        testCase({
           id: "CLI-CHK-006",
-          tier: core,
-          rules: ["CLI-2.4-R4"],
-          description: "`--entrypoint dev` applies overlay before checking",
-          setup: "",
-          expected: "overlay applied prior to checks",
+          priority: "p0",
+          type: "e2e",
+          specRef: "CLI-2.4-R4",
+          assertion: "`--entrypoint dev` applies overlay before checking",
         }),
-        TestCase({
+        testCase({
           id: "CLI-CHK-007",
-          tier: core,
-          rules: ["CLI-2.4-R5"],
-          description: "Reports invocation input schema if derivation succeeds (MAY)",
-          setup: "",
-          expected: "advisory schema reported",
+          priority: "p0",
+          type: "e2e",
+          specRef: "CLI-2.4-R5",
+          assertion: "Reports invocation input schema if derivation succeeds (MAY)",
         }),
-        TestCase({
+        testCase({
           id: "CLI-CHK-008",
-          tier: core,
-          rules: ["CLI-2.4-R6"],
-          description: "Schema derivation failure does NOT cause `tsn check` to fail",
-          setup: "",
-          expected: "check still exits 0",
+          priority: "p0",
+          type: "e2e",
+          specRef: "CLI-2.4-R6",
+          assertion: "Schema derivation failure does NOT cause `tsn check` to fail",
         }),
-        TestCase({
+        testCase({
           id: "CLI-CHK-009",
-          tier: core,
-          rules: ["CLI-2.4-R1"],
-          description: "`tsn check` does NOT validate specific invocation input values",
-          setup: "",
-          expected: "no input-value validation",
+          priority: "p0",
+          type: "e2e",
+          specRef: "CLI-2.4-R1",
+          assertion: "`tsn check` does NOT validate specific invocation input values",
         }),
-        TestCase({
+        testCase({
           id: "CLI-CHK-010",
-          tier: core,
-          rules: ["CLI-2.4-R3"],
-          description: "`--env-example` prints environment variable template to stdout and exits 0",
-          setup: "",
-          expected: "env template on stdout, exit 0",
+          priority: "p0",
+          type: "e2e",
+          specRef: "CLI-2.4-R3",
+          assertion:
+            "`--env-example` prints environment variable template to stdout and exits 0",
         }),
-        TestCase({
+        testCase({
           id: "CLI-CHK-011",
-          tier: core,
-          rules: ["CLI-2.4-R3"],
-          description: "[Golden] Snapshot: `tsn check` output for `multi-agent` fixture",
-          setup: "",
-          expected: "matches snapshot",
+          priority: "p0",
+          type: "e2e",
+          specRef: "CLI-2.4-R3",
+          assertion: "[Golden] Snapshot: `tsn check` output for `multi-agent` fixture",
         }),
-        TestCase({
+        testCase({
           id: "CLI-CHK-012",
-          tier: core,
-          rules: ["CLI-10.5.1-R1"],
-          description:
+          priority: "p0",
+          type: "e2e",
+          specRef: "CLI-10.5.1-R1",
+          assertion:
             "`tsn check` accepts a TypeScript descriptor module and respects explicit TS workflow-source compilation behavior",
-          setup: "",
-          expected: "TS descriptor accepted",
         }),
       ],
     }),
-    TestCategory({
+    testCategory({
       id: "CLI-TC-L",
       title: "Startup Lifecycle Ordering",
-      tests: [
-        TestCase({
+      cases: [
+        testCase({
           id: "CLI-LIFE-001",
-          tier: core,
-          rules: ["CLI-10.3-R1"],
-          description:
+          priority: "p0",
+          type: "e2e",
+          specRef: "CLI-10.3-R1",
+          assertion:
             "Phase A before B. Fixture: `bad-descriptor.ts`. Observable: exit 2 with only descriptor-related diagnostics, no input-parsing diagnostics",
-          setup: "",
-          expected: "exit 2 without input-parsing diagnostics",
         }),
-        TestCase({
+        testCase({
           id: "CLI-LIFE-002",
-          tier: core,
-          rules: ["CLI-10.3-R1"],
-          description:
+          priority: "p0",
+          type: "e2e",
+          specRef: "CLI-10.3-R1",
+          assertion:
             "Phase B before C. Fixture: `with-inputs.ts` with a required input omitted and all env vars set. Observable: exit 4 for missing input",
-          setup: "",
-          expected: "exit 4 for missing input",
         }),
-        TestCase({
+        testCase({
           id: "CLI-LIFE-003",
-          tier: core,
-          rules: ["CLI-10.3-R1"],
-          description:
+          priority: "p0",
+          type: "e2e",
+          specRef: "CLI-10.3-R1",
+          assertion:
             "Phases A–C before transport startup: validation failure exits and `side-effect` fixture transport side effect is not observable",
-          setup: "",
-          expected: "no transport side effect",
         }),
-        TestCase({
+        testCase({
           id: "CLI-LIFE-004",
-          tier: core,
-          rules: ["CLI-10.3-R1"],
-          description:
+          priority: "p0",
+          type: "e2e",
+          specRef: "CLI-10.3-R1",
+          assertion:
             "Phases A–C before workflow execution: validation failure exits and `side-effect` fixture sentinel file NOT created",
-          setup: "",
-          expected: "no sentinel file",
         }),
-        TestCase({
+        testCase({
           id: "CLI-LIFE-005",
-          tier: core,
-          rules: ["CLI-10.1-R3"],
-          description:
+          priority: "p0",
+          type: "e2e",
+          specRef: "CLI-10.1-R3",
+          assertion:
             "Workflow receives validated invocation args. Observable: workflow produces output derived from args",
-          setup: "",
-          expected: "args observable in workflow output",
         }),
-        TestCase({
+        testCase({
           id: "CLI-LIFE-006",
-          tier: core,
-          rules: ["CLI-10.1-R3"],
-          description:
+          priority: "p0",
+          type: "e2e",
+          specRef: "CLI-10.1-R3",
+          assertion:
             "Resolved config available via `yield* Config.useConfig(Token)` only after pre-execution validation/resolution complete",
-          setup: "",
-          expected: "post-resolution config visible",
         }),
-        TestCase({
+        testCase({
           id: "CLI-LIFE-007",
-          tier: core,
-          rules: ["CLI-10.1-R3"],
-          description:
+          priority: "p0",
+          type: "e2e",
+          specRef: "CLI-10.1-R3",
+          assertion:
             "Invocation args and `Config.useConfig(Token)` return value are separate. Observable: workflow asserts the two are distinct",
-          setup: "",
-          expected: "channels are distinct",
         }),
       ],
     }),
-    TestCategory({
+    testCategory({
       id: "CLI-TC-M",
       title: "Exit Code Behavior",
-      tests: [
-        TestCase({
+      cases: [
+        testCase({
           id: "CLI-EXIT-001",
-          tier: core,
-          rules: ["CLI-3.4-R8"],
-          description: "Successful `tsn generate` → exit 0",
-          setup: "",
-          expected: "exit 0",
+          priority: "p0",
+          type: "e2e",
+          specRef: "CLI-3.4-R8",
+          assertion: "Successful `tsn generate` → exit 0",
         }),
-        TestCase({
+        testCase({
           id: "CLI-EXIT-002",
-          tier: core,
-          rules: ["CLI-3.4-R9"],
-          description: "Compilation error → exit 1",
-          setup: "",
-          expected: "exit 1",
+          priority: "p0",
+          type: "e2e",
+          specRef: "CLI-3.4-R9",
+          assertion: "Compilation error → exit 1",
         }),
-        TestCase({
+        testCase({
           id: "CLI-EXIT-003",
-          tier: core,
-          rules: ["CLI-3.4-R4"],
-          description: "Loaded module, invalid descriptor → exit 2",
-          setup: "",
-          expected: "exit 2",
+          priority: "p0",
+          type: "e2e",
+          specRef: "CLI-3.4-R4",
+          assertion: "Loaded module, invalid descriptor → exit 2",
         }),
-        TestCase({
+        testCase({
           id: "CLI-EXIT-004",
-          tier: core,
-          rules: ["CLI-3.4-R4"],
-          description: "Module file not found → exit 3",
-          setup: "",
-          expected: "exit 3",
+          priority: "p0",
+          type: "e2e",
+          specRef: "CLI-3.4-R4",
+          assertion: "Module file not found → exit 3",
         }),
-        TestCase({
+        testCase({
           id: "CLI-EXIT-005",
-          tier: core,
-          rules: ["CLI-3.4-R4"],
-          description: "Module file not readable → exit 3",
-          setup: "",
-          expected: "exit 3",
+          priority: "p0",
+          type: "e2e",
+          specRef: "CLI-3.4-R4",
+          assertion: "Module file not readable → exit 3",
         }),
-        TestCase({
+        testCase({
           id: "CLI-EXIT-006",
-          tier: core,
-          rules: ["CLI-3.4-R5"],
-          description: "Missing required invocation input → exit 4",
-          setup: "",
-          expected: "exit 4",
+          priority: "p0",
+          type: "e2e",
+          specRef: "CLI-3.4-R5",
+          assertion: "Missing required invocation input → exit 4",
         }),
-        TestCase({
+        testCase({
           id: "CLI-EXIT-007",
-          tier: core,
-          rules: ["CLI-3.4-R5"],
-          description: "Unknown invocation flag (`tsn run`) → exit 4",
-          setup: "",
-          expected: "exit 4",
+          priority: "p0",
+          type: "e2e",
+          specRef: "CLI-3.4-R5",
+          assertion: "Unknown invocation flag (`tsn run`) → exit 4",
         }),
-        TestCase({
+        testCase({
           id: "CLI-EXIT-008",
-          tier: core,
-          rules: ["CLI-3.4-R5"],
-          description: "Number coercion failure → exit 4",
-          setup: "",
-          expected: "exit 4",
+          priority: "p0",
+          type: "e2e",
+          specRef: "CLI-3.4-R5",
+          assertion: "Number coercion failure → exit 4",
         }),
-        TestCase({
+        testCase({
           id: "CLI-EXIT-009",
-          tier: core,
-          rules: ["CLI-3.4-R6"],
-          description: "Missing required env var → exit 5",
-          setup: "",
-          expected: "exit 5",
+          priority: "p0",
+          type: "e2e",
+          specRef: "CLI-3.4-R6",
+          assertion: "Missing required env var → exit 5",
         }),
-        TestCase({
+        testCase({
           id: "CLI-EXIT-010",
-          tier: core,
-          rules: ["CLI-3.4-R2"],
-          description: "Unrecognized built-in flag (`generate`) → exit 2",
-          setup: "",
-          expected: "exit 2",
+          priority: "p0",
+          type: "e2e",
+          specRef: "CLI-3.4-R2",
+          assertion: "Unrecognized built-in flag (`generate`) → exit 2",
         }),
-        TestCase({
+        testCase({
           id: "CLI-EXIT-011",
-          tier: core,
-          rules: ["CLI-3.4-R4"],
-          description: "Code 2 vs 3: loaded but invalid → exit 2",
-          setup: "",
-          expected: "exit 2",
+          priority: "p0",
+          type: "e2e",
+          specRef: "CLI-3.4-R4",
+          assertion: "Code 2 vs 3: loaded but invalid → exit 2",
         }),
-        TestCase({
+        testCase({
           id: "CLI-EXIT-012",
-          tier: core,
-          rules: ["CLI-3.4-R4"],
-          description: "Code 2 vs 3: path does not exist → exit 3",
-          setup: "",
-          expected: "exit 3",
+          priority: "p0",
+          type: "e2e",
+          specRef: "CLI-3.4-R4",
+          assertion: "Code 2 vs 3: path does not exist → exit 3",
         }),
-        TestCase({
+        testCase({
           id: "CLI-EXIT-013",
-          tier: core,
-          rules: ["CLI-3.4-R8"],
-          description: "Successful `tsn run` → exit 0",
-          setup: "",
-          expected: "exit 0",
+          priority: "p0",
+          type: "e2e",
+          specRef: "CLI-3.4-R8",
+          assertion: "Successful `tsn run` → exit 0",
         }),
-        TestCase({
+        testCase({
           id: "CLI-EXIT-014",
-          tier: core,
-          rules: ["CLI-3.4-R7"],
-          description: "Runtime error → exit 6",
-          setup: "",
-          expected: "exit 6",
+          priority: "p0",
+          type: "e2e",
+          specRef: "CLI-3.4-R7",
+          assertion: "Runtime error → exit 6",
         }),
       ],
     }),
-    TestCategory({
+    testCategory({
       id: "CLI-TC-N",
       title: "Combined Error Reporting",
       notes: CATEGORY_N_NOTES,
-      tests: [
-        TestCase({
+      cases: [
+        testCase({
           id: "CLI-CER-001",
-          tier: core,
-          rules: ["CLI-10.4-R1"],
-          description:
+          priority: "p0",
+          type: "e2e",
+          specRef: "CLI-10.4-R1",
+          assertion:
             "Both missing input and missing env var → both reported before exit (SHOULD)",
-          setup: "",
-          expected: "combined diagnostic",
         }),
       ],
     }),
-    TestCategory({
+    testCategory({
       id: "CLI-TC-O",
       title: "Golden/Snapshot Tests",
-      tests: [
-        TestCase({
+      cases: [
+        testCase({
           id: "CLI-SNAP-001",
-          tier: core,
-          rules: ["CLI-9.6-R1"],
-          description: "[Golden] Help output: zero-parameter workflow",
-          setup: "",
-          expected: "matches snapshot",
+          priority: "p0",
+          type: "e2e",
+          specRef: "CLI-9.6-R1",
+          assertion: "[Golden] Help output: zero-parameter workflow",
         }),
-        TestCase({
+        testCase({
           id: "CLI-SNAP-002",
-          tier: core,
-          rules: ["CLI-9.6-R1"],
-          description: "[Golden] Help output: multi-field workflow",
-          setup: "",
-          expected: "matches snapshot",
+          priority: "p0",
+          type: "e2e",
+          specRef: "CLI-9.6-R1",
+          assertion: "[Golden] Help output: multi-field workflow",
         }),
-        TestCase({
+        testCase({
           id: "CLI-SNAP-003",
-          tier: core,
-          rules: ["CLI-2.4-R3"],
-          description: "[Golden] `tsn check` output: passing descriptor",
-          setup: "",
-          expected: "matches snapshot",
+          priority: "p0",
+          type: "e2e",
+          specRef: "CLI-2.4-R3",
+          assertion: "[Golden] `tsn check` output: passing descriptor",
         }),
-        TestCase({
+        testCase({
           id: "CLI-SNAP-004",
-          tier: core,
-          rules: ["CLI-2.4-R3"],
-          description: "[Golden] `tsn check` output: failing descriptor",
-          setup: "",
-          expected: "matches snapshot",
+          priority: "p0",
+          type: "e2e",
+          specRef: "CLI-2.4-R3",
+          assertion: "[Golden] `tsn check` output: failing descriptor",
         }),
-        TestCase({
+        testCase({
           id: "CLI-SNAP-005",
-          tier: core,
-          rules: ["CLI-7.1-R1"],
-          description: "[Golden] Compilation error diagnostic",
-          setup: "",
-          expected: "matches snapshot",
+          priority: "p0",
+          type: "e2e",
+          specRef: "CLI-7.1-R1",
+          assertion: "[Golden] Compilation error diagnostic",
         }),
-        TestCase({
+        testCase({
           id: "CLI-SNAP-006",
-          tier: core,
-          rules: ["CLI-3.4-R5"],
-          description: "[Golden] Missing required invocation input diagnostic",
-          setup: "",
-          expected: "matches snapshot",
+          priority: "p0",
+          type: "e2e",
+          specRef: "CLI-3.4-R5",
+          assertion: "[Golden] Missing required invocation input diagnostic",
         }),
-        TestCase({
+        testCase({
           id: "CLI-SNAP-007",
-          tier: core,
-          rules: ["CLI-3.4-R5"],
-          description: "[Golden] Unknown flag diagnostic",
-          setup: "",
-          expected: "matches snapshot",
+          priority: "p0",
+          type: "e2e",
+          specRef: "CLI-3.4-R5",
+          assertion: "[Golden] Unknown flag diagnostic",
         }),
       ],
     }),
-    TestCategory({
+    testCategory({
       id: "CLI-TC-P",
       title: "Authored Source Execution (`tsn run`)",
-      tests: [
-        TestCase({
+      cases: [
+        testCase({
           id: "RUN-SRC-001",
-          tier: core,
-          rules: ["CLI-10.5.4-R1"],
-          description: "Authored `.ts` with same-file helper executes without `UnboundVariable`",
-          setup: "",
-          expected: "workflow executes cleanly",
+          priority: "p0",
+          type: "e2e",
+          specRef: "CLI-10.5.4-R1",
+          assertion: "Authored `.ts` with same-file helper executes without `UnboundVariable`",
         }),
-        TestCase({
+        testCase({
           id: "RUN-SRC-002",
-          tier: core,
-          rules: ["CLI-10.5.4-R1"],
-          description: "Authored `.ts` with cross-module helper executes without `UnboundVariable`",
-          setup: "",
-          expected: "workflow executes cleanly",
+          priority: "p0",
+          type: "e2e",
+          specRef: "CLI-10.5.4-R1",
+          assertion:
+            "Authored `.ts` with cross-module helper executes without `UnboundVariable`",
         }),
-        TestCase({
+        testCase({
           id: "RUN-SRC-003",
-          tier: core,
-          rules: ["CLI-10.5.4-R1"],
-          description: "Authored `.ts` with aliased import executes without `UnboundVariable`",
-          setup: "",
-          expected: "workflow executes cleanly",
+          priority: "p0",
+          type: "e2e",
+          specRef: "CLI-10.5.4-R1",
+          assertion: "Authored `.ts` with aliased import executes without `UnboundVariable`",
         }),
       ],
     }),
   ],
   coverageMatrix: [
-    Covers("CLI-1.1-R1", ["CLI-CMD-005"]),
-    Covers("CLI-2.1-R1", ["CLI-GEN-006"]),
-    Covers("CLI-2.1-R2", ["CLI-CMD-001", "CLI-GEN-005"]),
-    Covers("CLI-2.1-R3", ["CLI-GEN-001", "CLI-GEN-002"]),
-    Covers("CLI-2.2-R1", ["CLI-CMD-002", "CLI-BLD-001"]),
-    Covers("CLI-2.2-R2", ["CLI-BLD-002"]),
-    Covers("CLI-2.2-R3", ["CLI-BLD-005"]),
-    Covers("CLI-2.2-R4", ["CLI-BLD-006"]),
-    Covers("CLI-2.4-R1", ["CLI-CHK-009"]),
-    Covers("CLI-2.4-R2", ["CLI-CHK-004", "CLI-CHK-005"]),
-    Covers("CLI-2.4-R3", [
-      "CLI-CMD-004",
-      "CLI-CHK-010",
-      "CLI-CHK-011",
-      "CLI-SNAP-003",
-      "CLI-SNAP-004",
-    ]),
-    Covers("CLI-2.4-R4", ["CLI-CHK-006"]),
-    Covers("CLI-2.4-R5", ["CLI-CHK-007"]),
-    Covers("CLI-2.4-R6", ["CLI-CHK-008"]),
-    Covers("CLI-3.4-R1", ["CLI-CMD-006"]),
-    Covers("CLI-3.4-R2", ["CLI-GEN-004", "CLI-EXIT-010"]),
-    Covers("CLI-3.4-R3", ["CLI-CMD-006", "CLI-GEN-003"]),
-    Covers("CLI-3.4-R4", [
-      "CLI-LOAD-002",
-      "CLI-EXIT-003",
-      "CLI-EXIT-004",
-      "CLI-EXIT-005",
-      "CLI-EXIT-011",
-      "CLI-EXIT-012",
-    ]),
-    Covers("CLI-3.4-R5", [
-      "CLI-EXIT-006",
-      "CLI-EXIT-007",
-      "CLI-EXIT-008",
-      "CLI-SNAP-006",
-      "CLI-SNAP-007",
-    ]),
-    Covers("CLI-3.4-R6", ["CLI-CHK-003", "CLI-EXIT-009"]),
-    Covers("CLI-3.4-R7", ["CLI-EXIT-014"]),
-    Covers("CLI-3.4-R8", ["CLI-EXIT-001", "CLI-EXIT-013"]),
-    Covers("CLI-3.4-R9", ["CLI-EXIT-002"]),
-    Covers("CLI-4.3-R1", ["CLI-BLD-003"]),
-    Covers("CLI-4.3-R2", ["CLI-BLD-008"]),
-    Covers("CLI-5.1-R1", ["CLI-BLD-009"]),
-    Covers("CLI-5.1-R2", ["CLI-BLD-004"]),
-    Covers("CLI-5.3-R1", ["CLI-BLD-007"]),
-    Covers("CLI-7.1-R1", ["CLI-SNAP-005"]),
-    Covers("CLI-8.1-R1", ["CLI-IS-001"]),
-    Covers("CLI-8.1-R2", ["CLI-IS-002"]),
-    Covers("CLI-8.1-R3", ["CLI-IS-003"]),
-    Covers("CLI-8.2-R1", ["CLI-IS-004"]),
-    Covers("CLI-8.3-R1", ["CLI-BOOL-001", "CLI-BOOL-003", "CLI-BOOL-005", "CLI-BOOL-007"]),
-    Covers("CLI-8.3-R2", ["CLI-BOOL-002", "CLI-BOOL-004"]),
-    Covers("CLI-8.3-R3", ["CLI-BOOL-006"]),
-    Covers("CLI-8.4-R1", [
-      "CLI-IS-005",
-      "CLI-IS-006",
-      "CLI-IS-007",
-      "CLI-IS-008",
-      "CLI-IS-009",
-      "CLI-IS-010",
-      "CLI-IS-011",
-    ]),
-    Covers("CLI-8.5-R1", ["CLI-HLP-005"]),
-    Covers("CLI-9.1-R1", ["CLI-FLG-001", "CLI-FLG-002", "CLI-FLG-003", "CLI-FLG-004"]),
-    Covers("CLI-9.2-R1", [
-      "CLI-FLG-005",
-      "CLI-FLG-006",
-      "CLI-FLG-007",
-      "CLI-FLG-009",
-      "CLI-FLG-010",
-      "CLI-FLG-013",
-    ]),
-    Covers("CLI-9.2-R2", ["CLI-FLG-008"]),
-    Covers("CLI-9.3-R1", ["CLI-FLG-011"]),
-    Covers("CLI-9.4-R1", [
-      "CLI-FLG-012",
-      "CLI-FLG-017",
-      "CLI-FLG-018",
-      "CLI-FLG-019",
-      "CLI-FLG-020",
-    ]),
-    Covers("CLI-9.5-R1", ["CLI-COL-001", "CLI-COL-002"]),
-    Covers("CLI-9.5-R2", ["CLI-COL-003"]),
-    Covers("CLI-9.6-R1", [
-      "CLI-CMD-003",
-      "CLI-HLP-001",
-      "CLI-HLP-002",
-      "CLI-HLP-003",
-      "CLI-HLP-004",
-      "CLI-HLP-007",
-      "CLI-HLP-011",
-      "CLI-SNAP-001",
-      "CLI-SNAP-002",
-    ]),
-    Covers("CLI-9.6-R2", ["CLI-HLP-006"]),
-    Covers("CLI-9.6-R3", ["CLI-HLP-008", "CLI-HLP-009"]),
-    Covers("CLI-9.6-R4", ["CLI-HLP-010"]),
-    Covers("CLI-9.6-R5", ["CLI-CMD-003a"]),
-    Covers("CLI-10.1-R1", ["CLI-LOAD-001", "CLI-LOAD-008", "CLI-ENT-004"]),
-    Covers("CLI-10.1-R2", ["CLI-ENT-001", "CLI-ENT-002", "CLI-ENT-003"]),
-    Covers("CLI-10.1-R3", ["CLI-LIFE-005", "CLI-LIFE-006", "CLI-LIFE-007"]),
-    Covers("CLI-10.2-R1", ["CLI-LOAD-003", "CLI-LOAD-004", "CLI-CHK-001", "CLI-CHK-002"]),
-    Covers("CLI-10.2-R2", ["CLI-LOAD-005"]),
-    Covers("CLI-10.2-R3", ["CLI-LOAD-006", "CLI-LOAD-007"]),
-    Covers("CLI-10.2-R4", ["CLI-LOAD-013", "CLI-LOAD-014"]),
-    Covers("CLI-10.3-R1", ["CLI-LIFE-001", "CLI-LIFE-002", "CLI-LIFE-003", "CLI-LIFE-004"]),
-    Covers("CLI-10.4-R1", ["CLI-CER-001"]),
-    Covers("CLI-10.5.1-R1", ["CLI-LOAD-009", "CLI-HLP-012", "CLI-CHK-012"]),
-    Covers("CLI-10.5.1-R2", ["CLI-LOAD-010"]),
-    Covers("CLI-10.5.4-R1", [
-      "CLI-LOAD-011",
-      "CLI-LOAD-012",
-      "RUN-SRC-001",
-      "RUN-SRC-002",
-      "RUN-SRC-003",
-    ]),
-    Covers("CLI-16.2-R1", ["CLI-FLG-014", "CLI-FLG-015", "CLI-FLG-016"]),
+    coverageEntry({ rule: "CLI-1.1-R1", testIds: ["CLI-CMD-005"], status: "covered" }),
+    coverageEntry({ rule: "CLI-2.1-R1", testIds: ["CLI-GEN-006"], status: "covered" }),
+    coverageEntry({
+      rule: "CLI-2.1-R2",
+      testIds: ["CLI-CMD-001", "CLI-GEN-005"],
+      status: "covered",
+    }),
+    coverageEntry({
+      rule: "CLI-2.1-R3",
+      testIds: ["CLI-GEN-001", "CLI-GEN-002"],
+      status: "covered",
+    }),
+    coverageEntry({
+      rule: "CLI-2.2-R1",
+      testIds: ["CLI-CMD-002", "CLI-BLD-001"],
+      status: "covered",
+    }),
+    coverageEntry({ rule: "CLI-2.2-R2", testIds: ["CLI-BLD-002"], status: "covered" }),
+    coverageEntry({ rule: "CLI-2.2-R3", testIds: ["CLI-BLD-005"], status: "covered" }),
+    coverageEntry({ rule: "CLI-2.2-R4", testIds: ["CLI-BLD-006"], status: "covered" }),
+    coverageEntry({ rule: "CLI-2.4-R1", testIds: ["CLI-CHK-009"], status: "covered" }),
+    coverageEntry({
+      rule: "CLI-2.4-R2",
+      testIds: ["CLI-CHK-004", "CLI-CHK-005"],
+      status: "covered",
+    }),
+    coverageEntry({
+      rule: "CLI-2.4-R3",
+      testIds: [
+        "CLI-CMD-004",
+        "CLI-CHK-010",
+        "CLI-CHK-011",
+        "CLI-SNAP-003",
+        "CLI-SNAP-004",
+      ],
+      status: "covered",
+    }),
+    coverageEntry({ rule: "CLI-2.4-R4", testIds: ["CLI-CHK-006"], status: "covered" }),
+    coverageEntry({ rule: "CLI-2.4-R5", testIds: ["CLI-CHK-007"], status: "covered" }),
+    coverageEntry({ rule: "CLI-2.4-R6", testIds: ["CLI-CHK-008"], status: "covered" }),
+    coverageEntry({ rule: "CLI-3.4-R1", testIds: ["CLI-CMD-006"], status: "covered" }),
+    coverageEntry({
+      rule: "CLI-3.4-R2",
+      testIds: ["CLI-GEN-004", "CLI-EXIT-010"],
+      status: "covered",
+    }),
+    coverageEntry({
+      rule: "CLI-3.4-R3",
+      testIds: ["CLI-CMD-006", "CLI-GEN-003"],
+      status: "covered",
+    }),
+    coverageEntry({
+      rule: "CLI-3.4-R4",
+      testIds: [
+        "CLI-LOAD-002",
+        "CLI-EXIT-003",
+        "CLI-EXIT-004",
+        "CLI-EXIT-005",
+        "CLI-EXIT-011",
+        "CLI-EXIT-012",
+      ],
+      status: "covered",
+    }),
+    coverageEntry({
+      rule: "CLI-3.4-R5",
+      testIds: [
+        "CLI-EXIT-006",
+        "CLI-EXIT-007",
+        "CLI-EXIT-008",
+        "CLI-SNAP-006",
+        "CLI-SNAP-007",
+      ],
+      status: "covered",
+    }),
+    coverageEntry({
+      rule: "CLI-3.4-R6",
+      testIds: ["CLI-CHK-003", "CLI-EXIT-009"],
+      status: "covered",
+    }),
+    coverageEntry({ rule: "CLI-3.4-R7", testIds: ["CLI-EXIT-014"], status: "covered" }),
+    coverageEntry({
+      rule: "CLI-3.4-R8",
+      testIds: ["CLI-EXIT-001", "CLI-EXIT-013"],
+      status: "covered",
+    }),
+    coverageEntry({ rule: "CLI-3.4-R9", testIds: ["CLI-EXIT-002"], status: "covered" }),
+    coverageEntry({ rule: "CLI-4.3-R1", testIds: ["CLI-BLD-003"], status: "covered" }),
+    coverageEntry({ rule: "CLI-4.3-R2", testIds: ["CLI-BLD-008"], status: "covered" }),
+    coverageEntry({ rule: "CLI-5.1-R1", testIds: ["CLI-BLD-009"], status: "covered" }),
+    coverageEntry({ rule: "CLI-5.1-R2", testIds: ["CLI-BLD-004"], status: "covered" }),
+    coverageEntry({ rule: "CLI-5.3-R1", testIds: ["CLI-BLD-007"], status: "covered" }),
+    coverageEntry({ rule: "CLI-7.1-R1", testIds: ["CLI-SNAP-005"], status: "covered" }),
+    coverageEntry({ rule: "CLI-8.1-R1", testIds: ["CLI-IS-001"], status: "covered" }),
+    coverageEntry({ rule: "CLI-8.1-R2", testIds: ["CLI-IS-002"], status: "covered" }),
+    coverageEntry({ rule: "CLI-8.1-R3", testIds: ["CLI-IS-003"], status: "covered" }),
+    coverageEntry({ rule: "CLI-8.2-R1", testIds: ["CLI-IS-004"], status: "covered" }),
+    coverageEntry({
+      rule: "CLI-8.3-R1",
+      testIds: ["CLI-BOOL-001", "CLI-BOOL-003", "CLI-BOOL-005", "CLI-BOOL-007"],
+      status: "covered",
+    }),
+    coverageEntry({
+      rule: "CLI-8.3-R2",
+      testIds: ["CLI-BOOL-002", "CLI-BOOL-004"],
+      status: "covered",
+    }),
+    coverageEntry({ rule: "CLI-8.3-R3", testIds: ["CLI-BOOL-006"], status: "covered" }),
+    coverageEntry({
+      rule: "CLI-8.4-R1",
+      testIds: [
+        "CLI-IS-005",
+        "CLI-IS-006",
+        "CLI-IS-007",
+        "CLI-IS-008",
+        "CLI-IS-009",
+        "CLI-IS-010",
+        "CLI-IS-011",
+      ],
+      status: "covered",
+    }),
+    coverageEntry({ rule: "CLI-8.5-R1", testIds: ["CLI-HLP-005"], status: "covered" }),
+    coverageEntry({
+      rule: "CLI-9.1-R1",
+      testIds: ["CLI-FLG-001", "CLI-FLG-002", "CLI-FLG-003", "CLI-FLG-004"],
+      status: "covered",
+    }),
+    coverageEntry({
+      rule: "CLI-9.2-R1",
+      testIds: [
+        "CLI-FLG-005",
+        "CLI-FLG-006",
+        "CLI-FLG-007",
+        "CLI-FLG-009",
+        "CLI-FLG-010",
+        "CLI-FLG-013",
+      ],
+      status: "covered",
+    }),
+    coverageEntry({ rule: "CLI-9.2-R2", testIds: ["CLI-FLG-008"], status: "covered" }),
+    coverageEntry({ rule: "CLI-9.3-R1", testIds: ["CLI-FLG-011"], status: "covered" }),
+    coverageEntry({
+      rule: "CLI-9.4-R1",
+      testIds: [
+        "CLI-FLG-012",
+        "CLI-FLG-017",
+        "CLI-FLG-018",
+        "CLI-FLG-019",
+        "CLI-FLG-020",
+      ],
+      status: "covered",
+    }),
+    coverageEntry({
+      rule: "CLI-9.5-R1",
+      testIds: ["CLI-COL-001", "CLI-COL-002"],
+      status: "covered",
+    }),
+    coverageEntry({ rule: "CLI-9.5-R2", testIds: ["CLI-COL-003"], status: "covered" }),
+    coverageEntry({
+      rule: "CLI-9.6-R1",
+      testIds: [
+        "CLI-CMD-003",
+        "CLI-HLP-001",
+        "CLI-HLP-002",
+        "CLI-HLP-003",
+        "CLI-HLP-004",
+        "CLI-HLP-007",
+        "CLI-HLP-011",
+        "CLI-SNAP-001",
+        "CLI-SNAP-002",
+      ],
+      status: "covered",
+    }),
+    coverageEntry({ rule: "CLI-9.6-R2", testIds: ["CLI-HLP-006"], status: "covered" }),
+    coverageEntry({
+      rule: "CLI-9.6-R3",
+      testIds: ["CLI-HLP-008", "CLI-HLP-009"],
+      status: "covered",
+    }),
+    coverageEntry({ rule: "CLI-9.6-R4", testIds: ["CLI-HLP-010"], status: "covered" }),
+    coverageEntry({ rule: "CLI-9.6-R5", testIds: ["CLI-CMD-003a"], status: "covered" }),
+    coverageEntry({
+      rule: "CLI-10.1-R1",
+      testIds: ["CLI-LOAD-001", "CLI-LOAD-008", "CLI-ENT-004"],
+      status: "covered",
+    }),
+    coverageEntry({
+      rule: "CLI-10.1-R2",
+      testIds: ["CLI-ENT-001", "CLI-ENT-002", "CLI-ENT-003"],
+      status: "covered",
+    }),
+    coverageEntry({
+      rule: "CLI-10.1-R3",
+      testIds: ["CLI-LIFE-005", "CLI-LIFE-006", "CLI-LIFE-007"],
+      status: "covered",
+    }),
+    coverageEntry({
+      rule: "CLI-10.2-R1",
+      testIds: ["CLI-LOAD-003", "CLI-LOAD-004", "CLI-CHK-001", "CLI-CHK-002"],
+      status: "covered",
+    }),
+    coverageEntry({ rule: "CLI-10.2-R2", testIds: ["CLI-LOAD-005"], status: "covered" }),
+    coverageEntry({
+      rule: "CLI-10.2-R3",
+      testIds: ["CLI-LOAD-006", "CLI-LOAD-007"],
+      status: "covered",
+    }),
+    coverageEntry({
+      rule: "CLI-10.2-R4",
+      testIds: ["CLI-LOAD-013", "CLI-LOAD-014"],
+      status: "covered",
+    }),
+    coverageEntry({
+      rule: "CLI-10.3-R1",
+      testIds: ["CLI-LIFE-001", "CLI-LIFE-002", "CLI-LIFE-003", "CLI-LIFE-004"],
+      status: "covered",
+    }),
+    coverageEntry({ rule: "CLI-10.4-R1", testIds: ["CLI-CER-001"], status: "covered" }),
+    coverageEntry({
+      rule: "CLI-10.5.1-R1",
+      testIds: ["CLI-LOAD-009", "CLI-HLP-012", "CLI-CHK-012"],
+      status: "covered",
+    }),
+    coverageEntry({ rule: "CLI-10.5.1-R2", testIds: ["CLI-LOAD-010"], status: "covered" }),
+    coverageEntry({
+      rule: "CLI-10.5.4-R1",
+      testIds: [
+        "CLI-LOAD-011",
+        "CLI-LOAD-012",
+        "RUN-SRC-001",
+        "RUN-SRC-002",
+        "RUN-SRC-003",
+      ],
+      status: "covered",
+    }),
+    coverageEntry({
+      rule: "CLI-16.2-R1",
+      testIds: ["CLI-FLG-014", "CLI-FLG-015", "CLI-FLG-016"],
+      status: "covered",
+    }),
   ],
 });

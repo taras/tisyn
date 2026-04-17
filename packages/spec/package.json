@@ -1,6 +1,6 @@
 {
   "name": "@tisyn/spec",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "license": "UNLICENSED",
   "repository": {
     "type": "git",
@@ -11,36 +11,28 @@
     "dist"
   ],
   "type": "module",
-  "main": "./dist/index.js",
-  "types": "./dist/index.d.ts",
+  "main": "./dist/src/index.js",
+  "types": "./dist/src/index.d.ts",
   "exports": {
     ".": {
-      "types": "./dist/index.d.ts",
-      "import": "./dist/index.js"
+      "types": "./dist/src/index.d.ts",
+      "import": "./dist/src/index.js"
     },
     "./markdown": {
-      "types": "./dist/markdown/index.d.ts",
-      "import": "./dist/markdown/index.js"
+      "types": "./dist/src/markdown/index.d.ts",
+      "import": "./dist/src/markdown/index.js"
     }
   },
   "publishConfig": {
     "access": "public"
   },
   "scripts": {
-    "build": "tsc --build && tsc --build tsconfig.authoring.json",
-    "test": "vitest run",
-    "emit:cli": "node --import tsx scripts/emit-cli-markdown.ts"
+    "build": "tsc --build",
+    "test": "vitest run"
   },
+  "dependencies": {},
   "devDependencies": {
     "@effectionx/vitest": "^0.3.1",
-    "@tisyn/agent": "workspace:*",
-    "@tisyn/claude-code": "workspace:*",
-    "@tisyn/cli": "workspace:*",
-    "@tisyn/config": "workspace:*",
-    "@tisyn/ir": "workspace:*",
-    "@tisyn/transport": "workspace:*",
-    "effection": "4.0.2",
-    "tsx": "^4.21.0",
     "vitest": "^4"
   }
 }

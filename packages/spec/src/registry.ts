@@ -1,199 +1,334 @@
-// buildRegistry + internal R9–R12 graph structures per §7 of
-// spec-system-specification.source.md. Public surface is the SpecRegistry
-// interface (R3–R8). R9–R12 are internal module-private state, exposed to
-// validate.ts through a same-package import — never attached to SpecRegistry
-// and never re-exported from src/index.ts (R14).
+// buildRegistry per §6.1–§6.3 of tisyn-spec-system-specification.source.md.
+//
+// buildRegistry is a pure function: it takes a mixed superset of normalized
+// modules plus an explicit Scope and owns all filtered-scope semantics. It
+// performs no I/O and never mutates its inputs. The returned registry is
+// deep-frozen so downstream code cannot violate RI1.
+//
+// Scope rules (§6.2 R5/R6/R7, §6.3 RI4):
+//
+// • scope.kind === "full"
+//     → every input spec is in-scope; every input plan is in-scope.
+// • scope.kind === "filtered"
+//     → specs whose `id ∈ scope.specIds` are in-scope; plans whose
+//       `validatesSpec ∈ scope.specIds` come along automatically (§7.1).
+//       Specs whose id is requested but absent from the input contribute
+//       nothing (unresolved targets are acceptable per A6 / RI3).
+//
+// Cross-module id collision is a construction-time error (SS-RG-016): it is
+// the registry half of the D2 corpus-wide uniqueness check that normalization
+// explicitly defers (§5.3 V3).
 
-import { Strength } from "./enums.ts";
 import type {
   ConceptLocation,
+  CorpusRegistry,
   ErrorCodeLocation,
   NormalizedSpecModule,
   NormalizedTestPlanModule,
+  OpenQuestionLocation,
+  RelationshipEdge,
   RuleLocation,
-  SpecRegistry,
+  Scope,
+  Section,
+  TermLocation,
 } from "./types.ts";
 
-// R9–R12 plus collision bookkeeping — internal structures, keyed by registry
-// identity so a single buildRegistry call's graphs never leak into another
-// call's validation. V1-3..V1-6 need the raw duplicate lists because
-// buildRegistry itself runs no validation and overwrites colliding keys.
-export interface InternalGraphs {
-  readonly dependencyGraph: ReadonlyMap<string, readonly string[]>;
-  readonly reverseDependencyGraph: ReadonlyMap<string, readonly string[]>;
-  readonly amendmentChain: ReadonlyMap<string, readonly string[]>;
-  readonly specToTestPlans: ReadonlyMap<string, readonly string[]>;
-  readonly duplicateSpecIds: readonly string[];
-  readonly duplicateTestPlanIds: readonly string[];
-  readonly duplicateRuleIds: readonly string[];
-  readonly duplicateErrorCodes: readonly string[];
+// Internal extras exposed to analysis queries (findDuplicateRules,
+// findTermConflicts, findErrorCodeCollisions). These record the pre-precedence
+// collision pool so analysis queries can report both sides even though the
+// primary index only stores the winning entry per R3/R4.
+interface InternalExtras {
+  readonly allRuleLocations: readonly RuleLocation[];
+  readonly allTermLocations: readonly TermLocation[];
+  readonly allConceptLocations: readonly ConceptLocation[];
+  readonly allErrorCodeLocations: readonly ErrorCodeLocation[];
+  readonly allOpenQuestionLocations: readonly OpenQuestionLocation[];
 }
 
-const internalGraphsByRegistry = new WeakMap<SpecRegistry, InternalGraphs>();
+const registryExtras = new WeakMap<CorpusRegistry, InternalExtras>();
 
-export function getInternalGraphs(registry: SpecRegistry): InternalGraphs {
-  const graphs = internalGraphsByRegistry.get(registry);
-  if (graphs === undefined) {
-    throw new Error(
-      "InternalGraphs not registered for this SpecRegistry — registry was not created by buildRegistry().",
-    );
+export function getInternalExtras(registry: CorpusRegistry): InternalExtras | undefined {
+  return registryExtras.get(registry);
+}
+
+function deepFreeze<T>(value: T): T {
+  if (value === null) return value;
+  if (typeof value !== "object") return value;
+  if (Object.isFrozen(value)) return value;
+  Object.freeze(value);
+  if (Array.isArray(value)) {
+    for (const element of value) deepFreeze(element);
+  } else {
+    for (const key of Object.keys(value as object)) {
+      deepFreeze((value as Record<string, unknown>)[key]);
+    }
   }
-  return graphs;
+  return value;
+}
+
+function isSpec(
+  m: NormalizedSpecModule | NormalizedTestPlanModule,
+): m is NormalizedSpecModule {
+  return m.tisyn_spec === "spec";
+}
+
+// Depth-first walk of a section tree collecting locations for the four
+// section-contained entity kinds. The containing spec's id is stamped on
+// every location so downstream queries need no parent lookup.
+function collectFromSections(
+  specId: string,
+  sections: readonly Section[],
+  rules: RuleLocation[],
+  terms: TermLocation[],
+  concepts: ConceptLocation[],
+  errorCodes: ErrorCodeLocation[],
+): void {
+  for (const section of sections) {
+    if (section.rules !== undefined) {
+      for (const rule of section.rules) {
+        rules.push({ specId, sectionId: section.id, rule });
+      }
+    }
+    if (section.termDefinitions !== undefined) {
+      for (const definition of section.termDefinitions) {
+        terms.push({ specId, sectionId: section.id, definition });
+      }
+    }
+    if (section.conceptExports !== undefined) {
+      for (const concept of section.conceptExports) {
+        concepts.push({ specId, sectionId: section.id, concept });
+      }
+    }
+    if (section.errorCodes !== undefined) {
+      for (const errorCode of section.errorCodes) {
+        errorCodes.push({ specId, sectionId: section.id, errorCode });
+      }
+    }
+    if (section.subsections !== undefined) {
+      collectFromSections(specId, section.subsections, rules, terms, concepts, errorCodes);
+    }
+  }
+}
+
+// Kahn's algorithm over `depends-on` and `amends` edges. On cycles, residual
+// nodes are appended in stable id-sorted order (R6, SS-RG-009).
+function topoSort(
+  specIds: readonly string[],
+  edges: readonly { readonly source: string; readonly target: string }[],
+): readonly string[] {
+  const inScope = new Set(specIds);
+  const incoming = new Map<string, Set<string>>();
+  const outgoing = new Map<string, Set<string>>();
+  for (const id of specIds) {
+    incoming.set(id, new Set());
+    outgoing.set(id, new Set());
+  }
+  // Edge source=A, target=B means "A depends-on/amends B". B is a dependency
+  // of A, so B must come first in dependencyOrder. Orient the Kahn graph so
+  // `incoming` counts unresolved dependencies: A has incoming from B, B has
+  // outgoing to A.
+  for (const edge of edges) {
+    if (!inScope.has(edge.source) || !inScope.has(edge.target)) continue;
+    if (edge.source === edge.target) continue;
+    outgoing.get(edge.target)!.add(edge.source);
+    incoming.get(edge.source)!.add(edge.target);
+  }
+
+  const ready: string[] = [];
+  for (const id of specIds) {
+    if (incoming.get(id)!.size === 0) ready.push(id);
+  }
+  ready.sort();
+
+  const order: string[] = [];
+  while (ready.length > 0) {
+    const id = ready.shift()!;
+    order.push(id);
+    for (const next of outgoing.get(id)!) {
+      const incs = incoming.get(next)!;
+      incs.delete(id);
+      if (incs.size === 0) {
+        const insertAt = ready.findIndex((r) => r > next);
+        if (insertAt === -1) ready.push(next);
+        else ready.splice(insertAt, 0, next);
+      }
+    }
+  }
+
+  if (order.length < specIds.length) {
+    const placed = new Set(order);
+    const residual = specIds.filter((id) => !placed.has(id)).slice().sort();
+    for (const id of residual) order.push(id);
+  }
+  return order;
 }
 
 export function buildRegistry(
-  specs: readonly NormalizedSpecModule[],
-  testPlans: readonly NormalizedTestPlanModule[],
-): SpecRegistry {
-  // Seed the spec / test-plan maps. Duplicates are retained here — collision
-  // detection is V1 / V2's job, not buildRegistry's. Duplicate IDs are
-  // recorded in InternalGraphs for validate.ts to read.
-  const specMap = new Map<string, NormalizedSpecModule>();
-  const duplicateSpecIds: string[] = [];
-  for (const spec of specs) {
-    if (specMap.has(spec.id)) {
-      duplicateSpecIds.push(spec.id);
-    } else {
-      specMap.set(spec.id, spec);
+  modules: readonly (NormalizedSpecModule | NormalizedTestPlanModule)[],
+  scope: Scope,
+): CorpusRegistry {
+  const allSpecs: NormalizedSpecModule[] = [];
+  const allPlans: NormalizedTestPlanModule[] = [];
+  for (const m of modules) {
+    if (isSpec(m)) allSpecs.push(m);
+    else allPlans.push(m);
+  }
+
+  // Cross-module id collision (SS-RG-016 / D2 corpus-wide half of V3).
+  const seenSpecIds = new Map<string, NormalizedSpecModule>();
+  for (const s of allSpecs) {
+    const prior = seenSpecIds.get(s.id);
+    if (prior !== undefined && prior !== s) {
+      throw new Error(
+        `buildRegistry: duplicate spec id "${s.id}" — two distinct modules share this id`,
+      );
+    }
+    seenSpecIds.set(s.id, s);
+  }
+  const seenPlanIds = new Map<string, NormalizedTestPlanModule>();
+  for (const p of allPlans) {
+    const prior = seenPlanIds.get(p.id);
+    if (prior !== undefined && prior !== p) {
+      throw new Error(
+        `buildRegistry: duplicate test-plan id "${p.id}" — two distinct modules share this id`,
+      );
+    }
+    seenPlanIds.set(p.id, p);
+  }
+
+  // Compute in-scope subsets. buildRegistry owns all filtered-scope semantics;
+  // out-of-scope modules are silently dropped, unresolved requested ids
+  // contribute nothing (A6 / RI3).
+  let inScopeSpecs: NormalizedSpecModule[];
+  let inScopePlans: NormalizedTestPlanModule[];
+  if (scope.kind === "full") {
+    inScopeSpecs = allSpecs.slice();
+    inScopePlans = allPlans.slice();
+  } else {
+    const want = new Set(scope.specIds);
+    inScopeSpecs = allSpecs.filter((s) => want.has(s.id));
+    inScopePlans = allPlans.filter((p) => want.has(p.validatesSpec));
+  }
+
+  // Dependency order (R6) from in-scope specs' depends-on/amends edges.
+  const depEdges: { source: string; target: string }[] = [];
+  for (const s of inScopeSpecs) {
+    for (const r of s.relationships) {
+      if (r.type === "depends-on" || r.type === "amends") {
+        depEdges.push({ source: s.id, target: r.target });
+      }
+    }
+  }
+  const dependencyOrder = topoSort(
+    inScopeSpecs.map((s) => s.id),
+    depEdges,
+  );
+  const orderIndex = new Map<string, number>();
+  for (let i = 0; i < dependencyOrder.length; i++) orderIndex.set(dependencyOrder[i]!, i);
+
+  // Collect all locations per in-scope spec.
+  const allRules: RuleLocation[] = [];
+  const allTerms: TermLocation[] = [];
+  const allConcepts: ConceptLocation[] = [];
+  const allErrorCodes: ErrorCodeLocation[] = [];
+  const allOpenQuestions: OpenQuestionLocation[] = [];
+  for (const s of inScopeSpecs) {
+    collectFromSections(s.id, s.sections, allRules, allTerms, allConcepts, allErrorCodes);
+    if (s.openQuestions !== undefined) {
+      for (const oq of s.openQuestions) {
+        allOpenQuestions.push({ specId: s.id, openQuestion: oq });
+      }
     }
   }
 
-  const testPlanMap = new Map<string, NormalizedTestPlanModule>();
-  const duplicateTestPlanIds: string[] = [];
-  for (const plan of testPlans) {
-    if (testPlanMap.has(plan.id)) {
-      duplicateTestPlanIds.push(plan.id);
-    } else {
-      testPlanMap.set(plan.id, plan);
+  // Precedence rule (R3/R4): earlier in dependencyOrder wins on key collision.
+  function installWithPrecedence<K, V extends { readonly specId: string }>(
+    index: Map<K, V>,
+    key: K,
+    location: V,
+  ): void {
+    const prior = index.get(key);
+    if (prior === undefined) {
+      index.set(key, location);
+      return;
+    }
+    const priorOrder = orderIndex.get(prior.specId) ?? Number.MAX_SAFE_INTEGER;
+    const newOrder = orderIndex.get(location.specId) ?? Number.MAX_SAFE_INTEGER;
+    if (newOrder < priorOrder) {
+      index.set(key, location);
     }
   }
 
-  // R5 — rule index covers both rules and invariants (SS-REG-006).
-  // Invariants carry no authored Strength; D22 treats them as always
-  // normative, so they index with Strength.MUST.
   const ruleIndex = new Map<string, RuleLocation>();
-  const duplicateRuleIds: string[] = [];
-  for (const spec of specs) {
-    for (const rule of spec.rules) {
-      if (ruleIndex.has(rule.id)) {
-        duplicateRuleIds.push(rule.id);
-      } else {
-        ruleIndex.set(rule.id, {
-          specId: spec.id,
-          section: rule.section,
-          strength: rule.strength,
-        });
-      }
-    }
-    for (const inv of spec.invariants) {
-      if (ruleIndex.has(inv.id)) {
-        duplicateRuleIds.push(inv.id);
-      } else {
-        ruleIndex.set(inv.id, {
-          specId: spec.id,
-          section: inv.section,
-          strength: Strength.MUST,
-        });
-      }
-    }
-  }
+  for (const loc of allRules) installWithPrecedence(ruleIndex, loc.rule.id, loc);
 
-  // R6 — error code index
-  const errorCodeIndex = new Map<string, ErrorCodeLocation>();
-  const duplicateErrorCodes: string[] = [];
-  for (const spec of specs) {
-    for (const ec of spec.errorCodes) {
-      if (errorCodeIndex.has(ec.code)) {
-        duplicateErrorCodes.push(ec.code);
-      } else {
-        errorCodeIndex.set(ec.code, {
-          specId: spec.id,
-          section: ec.section,
-          trigger: ec.trigger,
-        });
-      }
-    }
-  }
+  const termIndex = new Map<string, TermLocation>();
+  for (const loc of allTerms) installWithPrecedence(termIndex, loc.definition.term, loc);
 
-  // R8 — concept index
   const conceptIndex = new Map<string, ConceptLocation>();
-  for (const spec of specs) {
-    for (const concept of spec.concepts) {
-      conceptIndex.set(concept.name, {
-        specId: spec.id,
-        section: concept.section,
-        description: concept.description,
-      });
+  for (const loc of allConcepts) installWithPrecedence(conceptIndex, loc.concept.name, loc);
+
+  const errorCodeIndex = new Map<string, ErrorCodeLocation>();
+  for (const loc of allErrorCodes) installWithPrecedence(errorCodeIndex, loc.errorCode.code, loc);
+
+  const openQuestionIndex = new Map<string, OpenQuestionLocation>();
+  for (const loc of allOpenQuestions)
+    installWithPrecedence(openQuestionIndex, loc.openQuestion.id, loc);
+
+  // Edges: one per Relationship on every in-scope spec (R5). Edges whose
+  // target is out-of-scope are still emitted (RI3 / A6); edges from
+  // out-of-scope specs are excluded by construction of `inScopeSpecs`.
+  const edges: RelationshipEdge[] = [];
+  for (const s of inScopeSpecs) {
+    for (const r of s.relationships) {
+      const edge: RelationshipEdge = r.qualifier !== undefined
+        ? { source: s.id, target: r.target, type: r.type, qualifier: r.qualifier }
+        : { source: s.id, target: r.target, type: r.type };
+      edges.push(edge);
     }
   }
 
-  // R7 — term authority
-  const termAuthority = new Map<string, string>();
-  for (const spec of specs) {
-    for (const term of spec.terms) {
-      termAuthority.set(term.term, spec.id);
-    }
-  }
+  const specs = new Map<string, NormalizedSpecModule>();
+  for (const s of inScopeSpecs) specs.set(s.id, s);
+  const plans = new Map<string, NormalizedTestPlanModule>();
+  for (const p of inScopePlans) plans.set(p.id, p);
 
-  // R9 — dependency graph
-  const dependencyGraph = new Map<string, readonly string[]>();
-  for (const spec of specs) {
-    dependencyGraph.set(
-      spec.id,
-      spec.dependsOn.map((ref) => ref.specId),
-    );
-  }
+  // Preserve scope verbatim (R7 / I9). Freeze the specIds copy for filtered.
+  const preservedScope: Scope =
+    scope.kind === "full"
+      ? { kind: "full" }
+      : { kind: "filtered", specIds: deepFreeze([...scope.specIds]) };
 
-  // R10 — reverse dependency graph
-  const reverseDependencyGraph = new Map<string, string[]>();
-  for (const [from, targets] of dependencyGraph.entries()) {
-    for (const to of targets) {
-      const list = reverseDependencyGraph.get(to) ?? [];
-      list.push(from);
-      reverseDependencyGraph.set(to, list);
-    }
-  }
-
-  // R11 — amendment chain map
-  const amendmentChain = new Map<string, readonly string[]>();
-  for (const spec of specs) {
-    amendmentChain.set(
-      spec.id,
-      spec.amends.map((ref) => ref.specId),
-    );
-  }
-
-  // R12 — spec-to-test-plan pairing. A spec may in theory be paired with
-  // more than one test plan (V2 does not forbid it), so this is a multi-map;
-  // callers that assume a single companion use the first entry.
-  const specToTestPlansMut = new Map<string, string[]>();
-  for (const plan of testPlans) {
-    const list = specToTestPlansMut.get(plan.testsSpec.specId) ?? [];
-    list.push(plan.id);
-    specToTestPlansMut.set(plan.testsSpec.specId, list);
-  }
-  const specToTestPlans = new Map<string, readonly string[]>(specToTestPlansMut);
-
-  const registry: SpecRegistry = {
-    specs: specMap,
-    testPlans: testPlanMap,
+  const registry: CorpusRegistry = {
+    specs,
+    plans,
     ruleIndex,
-    errorCodeIndex,
-    termAuthority,
+    termIndex,
     conceptIndex,
+    errorCodeIndex,
+    openQuestionIndex,
+    edges: deepFreeze(edges),
+    dependencyOrder: deepFreeze([...dependencyOrder]),
+    scope: deepFreeze(preservedScope),
   };
 
-  const graphs: InternalGraphs = {
-    dependencyGraph,
-    reverseDependencyGraph,
-    amendmentChain,
-    specToTestPlans,
-    duplicateSpecIds,
-    duplicateTestPlanIds,
-    duplicateRuleIds,
-    duplicateErrorCodes,
-  };
-  internalGraphsByRegistry.set(registry, graphs);
+  // Freeze location records. Map objects themselves are not frozen (freezing
+  // a Map in JS is a no-op at the mutation surface), but every element and
+  // the registry wrapper object are.
+  Object.freeze(registry);
+  for (const loc of allRules) deepFreeze(loc);
+  for (const loc of allTerms) deepFreeze(loc);
+  for (const loc of allConcepts) deepFreeze(loc);
+  for (const loc of allErrorCodes) deepFreeze(loc);
+  for (const loc of allOpenQuestions) deepFreeze(loc);
+
+  registryExtras.set(registry, {
+    allRuleLocations: allRules,
+    allTermLocations: allTerms,
+    allConceptLocations: allConcepts,
+    allErrorCodeLocations: allErrorCodes,
+    allOpenQuestionLocations: allOpenQuestions,
+  });
 
   return registry;
 }
