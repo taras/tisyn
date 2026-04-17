@@ -6,7 +6,7 @@ import type { Operation } from "effection";
 import type { Val } from "@tisyn/ir";
 import type { AgentDeclaration, OperationSpec, ImplementationHandlers } from "@tisyn/agent";
 import type { AgentTransportFactory, HostMessage } from "./transport.js";
-import { agent, operation, Effects, dispatch, invoke } from "@tisyn/agent";
+import { agent, operation, Effects, dispatch } from "@tisyn/agent";
 import { installRemoteAgent } from "./install-remote.js";
 import { parseEffectId } from "@tisyn/kernel";
 
@@ -56,7 +56,7 @@ export function transportComplianceSuite(name: string, createFactory: TransportF
 
         yield* scoped(function* () {
           yield* installRemoteAgent(math, recordingFactory);
-          yield* invoke(math.double({ value: 21 }));
+          yield* dispatch(math.double({ value: 21 }));
         });
 
         const initIndex = messages.findIndex((m) => m.method === "initialize");
@@ -91,9 +91,9 @@ export function transportComplianceSuite(name: string, createFactory: TransportF
 
         yield* scoped(function* () {
           yield* installRemoteAgent(math, recordingFactory);
-          yield* invoke(math.double({ value: 1 }));
-          yield* invoke(math.double({ value: 2 }));
-          yield* invoke(math.double({ value: 3 }));
+          yield* dispatch(math.double({ value: 1 }));
+          yield* dispatch(math.double({ value: 2 }));
+          yield* dispatch(math.double({ value: 3 }));
         });
 
         const initMessages = messages.filter((m) => m.method === "initialize");
@@ -113,9 +113,9 @@ export function transportComplianceSuite(name: string, createFactory: TransportF
 
         yield* scoped(function* () {
           yield* installRemoteAgent(math, factory);
-          expect(yield* invoke(math.double({ value: 1 }))).toBe(2);
-          expect(yield* invoke(math.double({ value: 5 }))).toBe(10);
-          expect(yield* invoke(math.double({ value: 21 }))).toBe(42);
+          expect(yield* dispatch(math.double({ value: 1 }))).toBe(2);
+          expect(yield* dispatch(math.double({ value: 5 }))).toBe(10);
+          expect(yield* dispatch(math.double({ value: 21 }))).toBe(42);
         });
       });
 
@@ -145,7 +145,7 @@ export function transportComplianceSuite(name: string, createFactory: TransportF
 
         yield* scoped(function* () {
           yield* installRemoteAgent(math, recordingFactory);
-          yield* invoke(math.double({ value: 1 }));
+          yield* dispatch(math.double({ value: 1 }));
         });
 
         const shutdownMessages = messages.filter((m) => m.method === "shutdown");
@@ -169,7 +169,7 @@ export function transportComplianceSuite(name: string, createFactory: TransportF
 
         yield* scoped(function* () {
           yield* installRemoteAgent(math, factory);
-          const result = yield* invoke(math.double({ value: 21 }));
+          const result = yield* dispatch(math.double({ value: 21 }));
           expect(result).toBe(42);
         });
       });
@@ -188,7 +188,7 @@ export function transportComplianceSuite(name: string, createFactory: TransportF
         yield* scoped(function* () {
           yield* installRemoteAgent(failing, factory);
           try {
-            yield* invoke(failing.boom());
+            yield* dispatch(failing.boom());
             expect.unreachable("should have thrown");
           } catch (error) {
             expect(error).toBeInstanceOf(Error);
@@ -211,7 +211,7 @@ export function transportComplianceSuite(name: string, createFactory: TransportF
         yield* scoped(function* () {
           yield* installRemoteAgent(math, factory);
           try {
-            yield* invoke({ effectId: "math-unknown.nonexistent", data: {} });
+            yield* dispatch({ effectId: "math-unknown.nonexistent", data: {} });
             expect.unreachable("should have thrown");
           } catch (error) {
             expect(error).toBeInstanceOf(Error);
@@ -267,7 +267,7 @@ export function transportComplianceSuite(name: string, createFactory: TransportF
         yield* scoped(function* () {
           yield* installRemoteAgent(failing, factory);
           try {
-            yield* invoke(failing.boom());
+            yield* dispatch(failing.boom());
             expect.unreachable("should have thrown");
           } catch (error) {
             expect(error).toBeInstanceOf(Error);
@@ -310,7 +310,7 @@ export function transportComplianceSuite(name: string, createFactory: TransportF
         yield* scoped(function* () {
           yield* installRemoteAgent(slow, recordingFactory);
           const task = yield* spawn(function* () {
-            yield* invoke(slow.work());
+            yield* dispatch(slow.work());
           });
           // Wait until the execute request has been sent before halting
           yield* when(function* () {
@@ -356,7 +356,7 @@ export function transportComplianceSuite(name: string, createFactory: TransportF
           });
 
           // Remote agent should work
-          expect(yield* invoke(math.double({ value: 5 }))).toBe(10);
+          expect(yield* dispatch(math.double({ value: 5 }))).toBe(10);
 
           // Local agent should also work
           const localResult = yield* dispatch("local.op", null);

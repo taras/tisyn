@@ -105,7 +105,7 @@ const { result } = yield* execute({ ir });
 ### Define an agent and install a remote transport
 
 ```ts
-import { agent, operation, invoke } from "@tisyn/agent";
+import { agent, operation, dispatch } from "@tisyn/agent";
 import { installRemoteAgent, websocketTransport } from "@tisyn/transport";
 
 const math = agent("math", {
@@ -113,7 +113,7 @@ const math = agent("math", {
 });
 
 yield* installRemoteAgent(math, websocketTransport({ url: "ws://localhost:8080" }));
-const result = yield* invoke(math.double({ value: 21 }));
+const result = yield* dispatch(math.double({ value: 21 }));
 ```
 
 For the detailed agent model and API examples, see [`@tisyn/agent`](./packages/agent/README.md).

@@ -1,6 +1,6 @@
 import { describe, it } from "@effectionx/vitest";
 import { expect } from "vitest";
-import { agent, operation, implementAgent, invoke } from "@tisyn/agent";
+import { agent, operation, implementAgent, dispatch } from "@tisyn/agent";
 import { executeRemote } from "./execute-remote.js";
 import type { Json } from "@tisyn/ir";
 
@@ -29,7 +29,7 @@ describe("Over the wire", () => {
       // Install shopify agent that uses GraphQL internally
       const shopifyImpl = implementAgent(shopify, {
         *createOrder(input) {
-          return yield* invoke(
+          return yield* dispatch(
             graphql.execute({
               document:
                 "mutation CreateOrder($input: CreateOrderInput!) { createOrder(input: $input) { orderId status } }",
@@ -45,7 +45,7 @@ describe("Over the wire", () => {
         customerId: "123",
         lineItems: [{ sku: "ABC", quantity: 2 }],
       });
-      const result = yield* invoke(invocation);
+      const result = yield* dispatch(invocation);
 
       expect(result).toEqual({
         orderId: "order-1",

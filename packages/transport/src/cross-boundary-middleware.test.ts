@@ -22,7 +22,6 @@ import { Fn, Q, Throw, If, Eq, Ref, Eval } from "@tisyn/ir";
 import {
   agent,
   operation,
-  invoke,
   implementAgent,
   installCrossBoundaryMiddleware,
   Effects,
@@ -65,7 +64,7 @@ describe("cross-boundary middleware", () => {
       yield* installCrossBoundaryMiddleware(alwaysDeny);
 
       try {
-        yield* invoke(calc.add({ a: 1, b: 2 }));
+        yield* dispatch(calc.add({ a: 1, b: 2 }));
         expect.unreachable("should have thrown");
       } catch (error) {
         expect(error).toBeInstanceOf(Error);
@@ -89,7 +88,7 @@ describe("cross-boundary middleware", () => {
     yield* scoped(function* () {
       yield* installRemoteAgent(calc, factory);
       // No installCrossBoundaryMiddleware call
-      const result = yield* invoke(calc.add({ a: 3, b: 4 }));
+      const result = yield* dispatch(calc.add({ a: 3, b: 4 }));
       expect(result).toBe(7);
     });
   });
@@ -112,7 +111,7 @@ describe("cross-boundary middleware", () => {
       yield* installRemoteAgent(calc, factory);
       yield* installCrossBoundaryMiddleware(shortCircuit);
 
-      const result = yield* invoke(calc.add({ a: 1, b: 2 }));
+      const result = yield* dispatch(calc.add({ a: 1, b: 2 }));
       expect(result).toBe("short-circuit");
     });
   });
@@ -235,7 +234,7 @@ describe("cross-boundary middleware", () => {
       yield* installCrossBoundaryMiddleware(denyProbe);
 
       try {
-        yield* invoke(child.op({ a: 1, b: 2 }));
+        yield* dispatch(child.op({ a: 1, b: 2 }));
         expect.unreachable("should have thrown");
       } catch (error) {
         expect(error).toBeInstanceOf(Error);
@@ -301,7 +300,7 @@ describe("cross-boundary middleware", () => {
       yield* installRemoteAgent(probe, factory);
       yield* installCrossBoundaryMiddleware(transform);
 
-      const log = (yield* invoke(probe.run())) as unknown as string[];
+      const log = (yield* dispatch(probe.run())) as unknown as string[];
       expect(log).toEqual(["child-max:transformed", "child-min:transformed", "core:transformed"]);
     });
   });
@@ -340,7 +339,7 @@ describe("cross-boundary middleware", () => {
       yield* installRemoteAgent(probe, factory);
       yield* installCrossBoundaryMiddleware(passthrough);
 
-      const result = (yield* invoke(probe.run({ x: 42 }))) as unknown as {
+      const result = (yield* dispatch(probe.run({ x: 42 }))) as unknown as {
         receivedEffectId: string;
         receivedData: { x: number };
       };

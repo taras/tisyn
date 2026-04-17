@@ -20,9 +20,8 @@ This package sits between authored workflow logic and concrete side effects.
 - `operation<Spec>()` declares one typed operation on that boundary.
 - `Agents.use()` binds handlers directly to a declaration in the current scope, installing routing and resolve middleware.
 - `Effects.around()` installs Effection middleware layers that intercept or route effect invocations.
-- `dispatch()` performs an effect call through the current `Effects` middleware boundary.
+- `dispatch()` performs an effect call through the current `Effects` middleware boundary. It accepts either an explicit `(effectId, data)` pair or a call descriptor object produced by `agent().op(args)`.
 - `resolve()` queries the Effects middleware chain to check if an agent is bound in the current scope.
-- `invoke()` executes a declared operation against the current dispatch stack.
 - `useAgent()` retrieves a typed facade for an agent bound in the current scope via `Agents.use()` or `useTransport()`. The facade exposes direct methods for each operation plus `.around()` for per-operation middleware.
 
 Agent declarations are typed metadata plus call helpers. They describe invocations, but do not execute anything by themselves.
@@ -36,9 +35,8 @@ The public surface exported from `src/index.ts` includes:
 - `Agents` — setup namespace; `Agents.use(declaration, handlers)` binds handlers directly in the current scope
 - `implementAgent` — create an `AgentImplementation` object for use by protocol servers and transports (internal/advanced)
 - `Effects` — the Effection middleware context for invocation routing; use `Effects.around()` to install intercept layers
-- `dispatch` — perform an effect call through the current `Effects` middleware boundary
+- `dispatch` — perform an effect call through the current `Effects` middleware boundary. Accepts either `(effectId, data)` or a `{ effectId, data }` descriptor returned by `agent().op(args)`
 - `resolve` — query the Effects middleware chain to check if an agent is bound
-- `invoke` — execute a declared operation against the current dispatch stack
 - `useAgent` — retrieve a typed facade for an agent previously bound via `Agents.use()` or `useTransport()`; returns an object with one method per operation plus `.around()`
 - `installCrossBoundaryMiddleware` — install an IR function node as the cross-boundary middleware carrier for further remote delegation
 - `getCrossBoundaryMiddleware` — read the current cross-boundary middleware carrier from scope (returns `null` if not set)
@@ -51,7 +49,6 @@ Important exported types:
 - `AgentDeclaration` — structural type for a declared agent contract
 - `AgentImplementation` — declaration paired with handlers and install logic
 - `ImplementationHandlers` — type the handler map expected by `Agents.use()` and `implementAgent()`
-- `Invocation` — represent one concrete operation call ready for dispatch
 - `ArgsOf` — extract the input shape from an operation declaration
 - `ResultOf` — extract the result type from an operation declaration
 - `Workflow` — represent the authored workflow return type used in ambient declarations
@@ -69,7 +66,7 @@ const orders = agent("orders", {
 });
 ```
 
-Calling a declared operation produces an invocation description. It is a typed effect request, not a direct function call.
+Calling a declared operation produces a call descriptor. It is a typed effect request, not a direct function call.
 
 ```ts
 const request = orders.fetch({ input: { orderId: "ord-1" } });
@@ -121,12 +118,12 @@ facade.around MW → facade core handler → dispatch() → Effects.around MW �
 
 Multiple `useAgent()` calls with the same declaration in the same scope share middleware visibility — middleware installed via one reference is visible to all. Child-scope facade middleware inherits down but does not affect the parent scope.
 
-## Invoke an Operation
+## Dispatch an Operation
 
 ```ts
-import { invoke } from "@tisyn/agent";
+import { dispatch } from "@tisyn/agent";
 
-const order = yield* invoke(
+const order = yield* dispatch(
   orders.fetch({ input: { orderId: "ord-1" } }),
 );
 ```
@@ -139,7 +136,7 @@ This is useful when:
 ```ts
 yield* Agents.use(checkout, {
   *complete({ input }) {
-    const order = yield* invoke(
+    const order = yield* dispatch(
       orders.fetch({ input: { orderId: input.orderId } }),
     );
 
@@ -153,10 +150,10 @@ yield* Agents.use(checkout, {
 An agent declaration gives Tisyn a typed, named capability boundary.
 
 - **Declarations** define what operations exist and what they accept or return.
-- **Invocations** describe one requested operation call.
+- **Call descriptors** — produced by calling a declared operation (e.g. `orders.fetch(args)`) — describe one requested operation as a plain `{ effectId, data }` object.
 - **Implementations** attach concrete handlers to those declarations.
 - **Facades** (from `useAgent()`) expose per-operation dispatch methods and `.around()` for per-operation middleware.
-- **Effects middleware** decides how invocations are routed.
+- **Effects middleware** decides how dispatched calls are routed.
 - **Cross-boundary constraints** are installed as ordinary `Effects.around()` middleware in the execution scope — there is no separate enforcement mechanism.
 
 That routing can stay local, or it can be forwarded through another layer such as a worker or network transport. `@tisyn/agent` stays focused on the contract and dispatch shape rather than the transport itself.

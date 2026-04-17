@@ -1,8 +1,7 @@
 import { describe, it } from "@effectionx/vitest";
 import { expect, vi, beforeEach } from "vitest";
 import { scoped } from "effection";
-import { invoke } from "@tisyn/agent";
-import { agent, operation } from "@tisyn/agent";
+import { agent, operation, dispatch } from "@tisyn/agent";
 import { Fn } from "@tisyn/ir";
 import type { IrInput } from "@tisyn/ir";
 import { installRemoteAgent } from "../install-remote.js";
@@ -111,7 +110,7 @@ describe("browser transport", () => {
 
       yield* scoped(function* () {
         yield* installRemoteAgent(Browser, factory);
-        const result = yield* invoke(
+        const result = yield* dispatch(
           Browser.execute({ workflow: effectWorkflow("calc", "add", { a: 3, b: 4 }) }),
         );
         expect(result).toBe(7);
@@ -130,12 +129,12 @@ describe("browser transport", () => {
       yield* scoped(function* () {
         yield* installRemoteAgent(Browser, factory);
 
-        const sum = yield* invoke(
+        const sum = yield* dispatch(
           Browser.execute({ workflow: effectWorkflow("calc", "add", { a: 10, b: 20 }) }),
         );
         expect(sum).toBe(30);
 
-        const greeting = yield* invoke(
+        const greeting = yield* dispatch(
           Browser.execute({ workflow: effectWorkflow("greet", "hello", { name: "World" }) }),
         );
         expect(greeting).toBe("Hello, World!");
@@ -149,7 +148,7 @@ describe("browser transport", () => {
       yield* scoped(function* () {
         yield* installRemoteAgent(Browser, factory);
         try {
-          yield* invoke(
+          yield* dispatch(
             Browser.execute({ workflow: effectWorkflow("calc", "add", { a: 1, b: 2 }) }),
           );
           expect.unreachable("should have thrown");
@@ -170,14 +169,14 @@ describe("browser transport", () => {
         yield* installRemoteAgent(Browser, factory);
 
         // Calc works
-        const sum = yield* invoke(
+        const sum = yield* dispatch(
           Browser.execute({ workflow: effectWorkflow("calc", "add", { a: 1, b: 2 }) }),
         );
         expect(sum).toBe(3);
 
         // Greet fails — no host fallback
         try {
-          yield* invoke(
+          yield* dispatch(
             Browser.execute({ workflow: effectWorkflow("greet", "hello", { name: "X" }) }),
           );
           expect.unreachable("should have thrown");
@@ -199,7 +198,7 @@ describe("browser transport", () => {
       yield* scoped(function* () {
         yield* installRemoteAgent(Browser, factory);
         // Execute to trigger transport setup
-        yield* invoke(Browser.execute({ workflow: literalWorkflow(42) }));
+        yield* dispatch(Browser.execute({ workflow: literalWorkflow(42) }));
       });
 
       expect(mockContext.addInitScript).toHaveBeenCalledWith({
@@ -218,7 +217,7 @@ describe("browser transport", () => {
 
       yield* scoped(function* () {
         yield* installRemoteAgent(Browser, factory);
-        const result = yield* invoke(Browser.execute({ workflow: literalWorkflow("ignored") }));
+        const result = yield* dispatch(Browser.execute({ workflow: literalWorkflow("ignored") }));
         expect(result).toEqual(expectedResult);
       });
 
@@ -238,7 +237,7 @@ describe("browser transport", () => {
       yield* scoped(function* () {
         yield* installRemoteAgent(Browser, factory);
         try {
-          yield* invoke(Browser.execute({ workflow: literalWorkflow(null) }));
+          yield* dispatch(Browser.execute({ workflow: literalWorkflow(null) }));
           expect.unreachable("should have thrown");
         } catch (error) {
           expect(error).toBeInstanceOf(Error);
@@ -259,7 +258,7 @@ describe("browser transport", () => {
 
       yield* scoped(function* () {
         yield* installRemoteAgent(Browser, factory);
-        const result = yield* invoke(
+        const result = yield* dispatch(
           Browser.execute({ workflow: effectWorkflow("calc", "add", { a: 100, b: 200 }) }),
         );
         expect(JSON.parse(JSON.stringify(result))).toEqual(result);
@@ -277,7 +276,7 @@ describe("browser transport", () => {
         yield* installRemoteAgent(Browser, factory);
         try {
           // Pass IR that references nonexistent agent — causes runtime error
-          yield* invoke(Browser.execute({ workflow: effectWorkflow("nonexistent", "op", {}) }));
+          yield* dispatch(Browser.execute({ workflow: effectWorkflow("nonexistent", "op", {}) }));
           expect.unreachable("should have thrown");
         } catch (error) {
           expect(error).toBeInstanceOf(Error);
@@ -305,10 +304,10 @@ describe("browser transport", () => {
       yield* scoped(function* () {
         yield* installRemoteAgent(Browser, factory);
 
-        const r1 = yield* invoke(
+        const r1 = yield* dispatch(
           Browser.execute({ workflow: effectWorkflow("counting", "inc", {}) }),
         );
-        const r2 = yield* invoke(
+        const r2 = yield* dispatch(
           Browser.execute({ workflow: effectWorkflow("counting", "inc", {}) }),
         );
 
@@ -330,7 +329,7 @@ describe("browser transport", () => {
 
       yield* scoped(function* () {
         yield* installRemoteAgent(Browser, factory);
-        const result = yield* invoke(Browser.execute({ workflow: literalWorkflow(42) }));
+        const result = yield* dispatch(Browser.execute({ workflow: literalWorkflow(42) }));
         expect(result).toBe(42);
       });
     });
@@ -343,7 +342,7 @@ describe("browser transport", () => {
 
       yield* scoped(function* () {
         yield* installRemoteAgent(Browser, factory);
-        yield* invoke(Browser.execute({ workflow: effectWorkflow("calc", "add", { a: 1, b: 2 }) }));
+        yield* dispatch(Browser.execute({ workflow: effectWorkflow("calc", "add", { a: 1, b: 2 }) }));
       });
 
       // Playwright should never have been launched
@@ -359,7 +358,7 @@ describe("browser transport", () => {
 
       yield* scoped(function* () {
         yield* installRemoteAgent(Browser, factory);
-        yield* invoke(Browser.execute({ workflow: literalWorkflow("hello") }));
+        yield* dispatch(Browser.execute({ workflow: literalWorkflow("hello") }));
       });
 
       expect(mockBrowser.close).toHaveBeenCalled();
@@ -376,7 +375,7 @@ describe("browser transport", () => {
 
       yield* scoped(function* () {
         yield* installRemoteAgent(Browser, factory);
-        yield* invoke(Browser.navigate({ url: "https://example.com" }));
+        yield* dispatch(Browser.navigate({ url: "https://example.com" }));
       });
 
       expect(mockPage.goto).toHaveBeenCalledWith("https://example.com");
@@ -390,8 +389,8 @@ describe("browser transport", () => {
 
       yield* scoped(function* () {
         yield* installRemoteAgent(Browser, factory);
-        yield* invoke(Browser.navigate({ url: "https://example.com/app" }));
-        yield* invoke(Browser.execute({ workflow: literalWorkflow("test") }));
+        yield* dispatch(Browser.navigate({ url: "https://example.com/app" }));
+        yield* dispatch(Browser.execute({ workflow: literalWorkflow("test") }));
       });
 
       expect(mockPage.goto).toHaveBeenCalledWith("https://example.com/app");
@@ -409,7 +408,7 @@ describe("browser transport", () => {
       yield* scoped(function* () {
         yield* installRemoteAgent(Browser, factory);
         try {
-          yield* invoke(Browser.navigate({ url: "https://unreachable.test" }));
+          yield* dispatch(Browser.navigate({ url: "https://unreachable.test" }));
           expect.unreachable("should have thrown");
         } catch (error) {
           expect(error).toBeInstanceOf(Error);
@@ -431,7 +430,7 @@ describe("browser transport", () => {
       yield* scoped(function* () {
         yield* installRemoteAgent(Browser, factory);
         try {
-          yield* invoke(Browser.navigate({ url: "https://example.com" }));
+          yield* dispatch(Browser.navigate({ url: "https://example.com" }));
           expect.unreachable("should have thrown");
         } catch (error) {
           expect(error).toBeInstanceOf(Error);

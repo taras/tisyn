@@ -1,7 +1,7 @@
 import { describe, it } from "@effectionx/vitest";
 import { expect } from "vitest";
 import { spawn, scoped, sleep } from "effection";
-import { agent, operation, invoke } from "@tisyn/agent";
+import { agent, operation, dispatch } from "@tisyn/agent";
 import { installRemoteAgent } from "../install-remote.js";
 import { stdioTransport } from "./stdio.js";
 import { resolve } from "node:path";
@@ -25,7 +25,7 @@ describe("stdio transport", () => {
       });
 
       yield* installRemoteAgent(math, fixtureTransport("math-agent"));
-      const result = yield* invoke(math.double({ value: 21 }));
+      const result = yield* dispatch(math.double({ value: 21 }));
       expect(result).toBe(42);
     });
 
@@ -36,7 +36,7 @@ describe("stdio transport", () => {
 
       yield* installRemoteAgent(failing, fixtureTransport("failing-agent"));
       try {
-        yield* invoke(failing.boom());
+        yield* dispatch(failing.boom());
         expect.unreachable("should have thrown");
       } catch (error) {
         expect(error).toBeInstanceOf(Error);
@@ -50,9 +50,9 @@ describe("stdio transport", () => {
       });
 
       yield* installRemoteAgent(math, fixtureTransport("math-agent"));
-      expect(yield* invoke(math.double({ value: 1 }))).toBe(2);
-      expect(yield* invoke(math.double({ value: 5 }))).toBe(10);
-      expect(yield* invoke(math.double({ value: 21 }))).toBe(42);
+      expect(yield* dispatch(math.double({ value: 1 }))).toBe(2);
+      expect(yield* dispatch(math.double({ value: 5 }))).toBe(10);
+      expect(yield* dispatch(math.double({ value: 21 }))).toBe(42);
     });
 
     it("cancel on interruption", function* () {
@@ -62,7 +62,7 @@ describe("stdio transport", () => {
 
       yield* installRemoteAgent(slow, fixtureTransport("slow-agent"));
       const task = yield* spawn(function* () {
-        yield* invoke(slow.work());
+        yield* dispatch(slow.work());
       });
       yield* sleep(100);
       yield* task.halt();
@@ -74,10 +74,10 @@ describe("stdio transport", () => {
         double: operation<{ value: number }, number>(),
       });
 
-      // Scope exits cleanly after invoke
+      // Scope exits cleanly after dispatch
       yield* scoped(function* () {
         yield* installRemoteAgent(math, fixtureTransport("math-agent"));
-        yield* invoke(math.double({ value: 1 }));
+        yield* dispatch(math.double({ value: 1 }));
       });
       // No timeout = process exited cleanly
     });
@@ -91,7 +91,7 @@ describe("stdio transport", () => {
 
       yield* installRemoteAgent(badAgent, fixtureTransport("bad-json-agent"));
       try {
-        yield* invoke(badAgent.op());
+        yield* dispatch(badAgent.op());
         expect.unreachable("should have thrown");
       } catch (error) {
         expect(error).toBeInstanceOf(Error);
@@ -105,7 +105,7 @@ describe("stdio transport", () => {
 
       yield* installRemoteAgent(crashAgent, fixtureTransport("crash-agent"));
       try {
-        yield* invoke(crashAgent.op());
+        yield* dispatch(crashAgent.op());
         expect.unreachable("should have thrown");
       } catch (error) {
         expect(error).toBeInstanceOf(Error);
@@ -121,7 +121,7 @@ describe("stdio transport", () => {
       // Fire multiple requests rapidly to test framing
       const results = [];
       for (let i = 1; i <= 10; i++) {
-        results.push(yield* invoke(math.double({ value: i })));
+        results.push(yield* dispatch(math.double({ value: i })));
       }
       expect(results).toEqual([2, 4, 6, 8, 10, 12, 14, 16, 18, 20]);
     });

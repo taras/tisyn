@@ -6,7 +6,7 @@ import { resource, useScope, withResolvers, createQueue, scoped, spawn } from "e
 import { WebSocketServer } from "ws";
 import type { HostMessage } from "@tisyn/protocol";
 import { parseHostMessage } from "@tisyn/protocol";
-import { agent, operation, invoke, implementAgent } from "@tisyn/agent";
+import { agent, operation, dispatch, implementAgent } from "@tisyn/agent";
 import { installRemoteAgent } from "../install-remote.js";
 import { createProtocolServer } from "../protocol-server.js";
 import { transportComplianceSuite } from "../transport-compliance.js";
@@ -96,7 +96,7 @@ describe("websocket transport specific", () => {
       for (let i = 1; i <= 5; i++) {
         tasks.push(
           yield* spawn(function* () {
-            return yield* invoke(math.double({ value: i }));
+            return yield* dispatch(math.double({ value: i }));
           }),
         );
       }
@@ -149,7 +149,7 @@ describe("websocket transport specific", () => {
 
       try {
         yield* installRemoteAgent(slow, factory);
-        yield* invoke(slow.work());
+        yield* dispatch(slow.work());
         expect.unreachable("should have thrown");
       } catch (error) {
         expect(error).toBeInstanceOf(Error);

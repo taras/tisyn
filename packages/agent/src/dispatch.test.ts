@@ -1,9 +1,9 @@
 import { describe, it } from "@effectionx/vitest";
 import { expect } from "vitest";
-import { agent, operation, implementAgent, invoke } from "./index.js";
+import { agent, operation, implementAgent, dispatch } from "./index.js";
 
-describe("invoke", () => {
-  it("dispatches through installed middleware", function* () {
+describe("dispatch", () => {
+  it("routes a call descriptor through installed middleware", function* () {
     const math = agent("math", {
       double: operation<{ value: number }, number>(),
     });
@@ -16,11 +16,11 @@ describe("invoke", () => {
 
     yield* impl.install();
 
-    const result = yield* invoke(math.double({ value: 21 }));
+    const result = yield* dispatch(math.double({ value: 21 }));
     expect(result).toBe(42);
   });
 
-  it("propagates errors from dispatch", function* () {
+  it("propagates errors from the handler", function* () {
     const failing = agent("failing", {
       boom: operation<void, never>(),
     });
@@ -34,7 +34,7 @@ describe("invoke", () => {
     yield* impl.install();
 
     try {
-      yield* invoke(failing.boom());
+      yield* dispatch(failing.boom());
       expect.unreachable("should have thrown");
     } catch (error) {
       expect(error).toBeInstanceOf(Error);
