@@ -21,7 +21,8 @@
     "./markdown": {
       "types": "./dist/src/markdown/index.d.ts",
       "import": "./dist/src/markdown/index.js"
-    }
+    },
+    "./package.json": "./package.json"
   },
   "publishConfig": {
     "access": "public"

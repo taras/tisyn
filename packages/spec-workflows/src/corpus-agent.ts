@@ -25,13 +25,13 @@ import type { LocalAgentBinding } from "@tisyn/transport";
 import type { Val } from "@tisyn/ir";
 import {
   acquireCorpusRegistry,
-  acquireEmittedMarkdown,
   compareMarkdown,
   isReady,
   renderSpecMarkdown,
   renderTestPlanMarkdown,
 } from "@tisyn/spec";
 import type { CorpusRegistry, NormalizedTestPlanModule } from "@tisyn/spec";
+import { acquireEmittedMarkdown } from "./acquire.ts";
 import { corpusDeclaration } from "./agents.ts";
 import { buildReviewPrompt, parseVerdict } from "./claude-reviewer.ts";
 

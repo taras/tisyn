@@ -23,7 +23,7 @@ import { call } from "effection";
 import { inprocessTransport } from "@tisyn/transport";
 import type { LocalAgentBinding } from "@tisyn/transport";
 import type { Val } from "@tisyn/ir";
-import { acquireFixture } from "@tisyn/spec";
+import { acquireFixture } from "./acquire.ts";
 import { filesystemDeclaration } from "./agents.ts";
 
 // `acquireFixture` is typed with @tisyn/spec's local `Operation<T>`

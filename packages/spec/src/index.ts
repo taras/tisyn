@@ -43,13 +43,8 @@ export { normalizeSpec, normalizeTestPlan } from "./normalize.ts";
 
 export { buildRegistry } from "./registry.ts";
 
-export {
-  acquireCorpusRegistry,
-  acquireEmittedMarkdown,
-  acquireFixture,
-  createAcquire,
-} from "./acquire.ts";
-export type { AcquireAPI } from "./acquire.ts";
+export { acquireCorpusRegistry, createAcquire } from "./acquire.ts";
+export type { AcquireAPI, AcquireOptions } from "./acquire.ts";
 
 export { manifest } from "./manifest.ts";
 export type { ManifestEntry } from "./manifest.ts";

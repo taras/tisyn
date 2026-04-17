@@ -51,14 +51,48 @@ export function getInternalExtras(registry: CorpusRegistry): InternalExtras | un
   return registryExtras.get(registry);
 }
 
-function freezeMapInPlace<K, V>(map: Map<K, V>): ReadonlyMap<K, V> {
-  const reject = (method: "set" | "delete" | "clear"): never => {
-    throw new TypeError(`Map.${method} is not allowed on a frozen CorpusRegistry map`);
-  };
-  Object.defineProperty(map, "set", { value: () => reject("set"), configurable: false, writable: false });
-  Object.defineProperty(map, "delete", { value: () => reject("delete"), configurable: false, writable: false });
-  Object.defineProperty(map, "clear", { value: () => reject("clear"), configurable: false, writable: false });
-  return map;
+// Real `ReadonlyMap` wrapper that does not extend `Map`. Patching mutating
+// methods on a live `Map` instance (the earlier `freezeMapInPlace` strategy)
+// leaves the prototype chain intact — `Map.prototype.set.call(instance, ...)`
+// bypasses the own-property override and mutates the internal `[[MapData]]`
+// slot directly. A wrapper class without the internal slot defeats that
+// bypass: `Map.prototype.set.call(wrapper, ...)` throws `TypeError:
+// Method Map.prototype.set called on incompatible receiver`.
+class ImmutableMap<K, V> implements ReadonlyMap<K, V> {
+  readonly #inner: Map<K, V>;
+  constructor(source: Iterable<readonly [K, V]>) {
+    this.#inner = new Map(source);
+  }
+  get size(): number {
+    return this.#inner.size;
+  }
+  has(key: K): boolean {
+    return this.#inner.has(key);
+  }
+  get(key: K): V | undefined {
+    return this.#inner.get(key);
+  }
+  keys(): MapIterator<K> {
+    return this.#inner.keys();
+  }
+  values(): MapIterator<V> {
+    return this.#inner.values();
+  }
+  entries(): MapIterator<[K, V]> {
+    return this.#inner.entries();
+  }
+  forEach(
+    cb: (value: V, key: K, map: ReadonlyMap<K, V>) => void,
+    thisArg?: unknown,
+  ): void {
+    this.#inner.forEach((v, k) => cb.call(thisArg, v, k, this));
+  }
+  [Symbol.iterator](): MapIterator<[K, V]> {
+    return this.#inner[Symbol.iterator]();
+  }
+  get [Symbol.toStringTag](): string {
+    return "ReadonlyMap";
+  }
 }
 
 function deepFreeze<T>(value: T): T {
@@ -309,26 +343,18 @@ export function buildRegistry(
       ? { kind: "full" }
       : { kind: "filtered", specIds: deepFreeze([...scope.specIds]) };
 
-  // RI1 requires every map surfaced on the registry to be immutable at
-  // runtime. Object.freeze on a Map object does not block .set / .delete /
-  // .clear (mutations go through internal slots, not own properties), so
-  // override the mutating methods in place on each instance.
-  freezeMapInPlace(specs);
-  freezeMapInPlace(plans);
-  freezeMapInPlace(ruleIndex);
-  freezeMapInPlace(termIndex);
-  freezeMapInPlace(conceptIndex);
-  freezeMapInPlace(errorCodeIndex);
-  freezeMapInPlace(openQuestionIndex);
-
+  // RI1: surface real `ReadonlyMap` wrappers, not live `Map` instances. A
+  // bare `Map` lets callers mutate it via `Map.prototype.set.call(map, ...)`
+  // even when own-property `.set` is overridden. `ImmutableMap` has no
+  // `[[MapData]]` slot, so the prototype-call bypass throws at runtime.
   const registry: CorpusRegistry = {
-    specs,
-    plans,
-    ruleIndex,
-    termIndex,
-    conceptIndex,
-    errorCodeIndex,
-    openQuestionIndex,
+    specs: new ImmutableMap(specs),
+    plans: new ImmutableMap(plans),
+    ruleIndex: new ImmutableMap(ruleIndex),
+    termIndex: new ImmutableMap(termIndex),
+    conceptIndex: new ImmutableMap(conceptIndex),
+    errorCodeIndex: new ImmutableMap(errorCodeIndex),
+    openQuestionIndex: new ImmutableMap(openQuestionIndex),
     edges: deepFreeze(edges),
     dependencyOrder: deepFreeze([...dependencyOrder]),
     scope: deepFreeze(preservedScope),

@@ -135,6 +135,39 @@ describe("SS-RG immutability", () => {
     expect(r.specs.has("fixture-alpha")).toBe(true);
     expect(r.ruleIndex.size).toBe(snapshotRuleSize);
   });
+
+  it("rejects prototype-path mutation (RI1)", () => {
+    // Own-property overrides on a live Map don't stop callers from going
+    // through `Map.prototype.set.call(instance, ...)`. The registry's
+    // `ImmutableMap` wrapper carries no `[[MapData]]` slot, so prototype
+    // invocation throws `TypeError` with "incompatible receiver".
+    const r = buildTestRegistry([fixtureAlpha], [fixtureAlphaPlan]);
+    const snapshotSize = r.specs.size;
+    const snapshotRuleSize = r.ruleIndex.size;
+
+    const prototypeMutators: Array<() => void> = [
+      () => Map.prototype.set.call(r.specs as unknown as Map<string, unknown>, "x", {}),
+      () => Map.prototype.delete.call(r.specs as unknown as Map<string, unknown>, "fixture-alpha"),
+      () => Map.prototype.clear.call(r.specs as unknown as Map<string, unknown>),
+      () => Map.prototype.set.call(r.plans as unknown as Map<string, unknown>, "x", {}),
+      () => Map.prototype.set.call(r.ruleIndex as unknown as Map<string, unknown>, "X1", {}),
+      () => Map.prototype.set.call(r.termIndex as unknown as Map<string, unknown>, "x", {}),
+      () => Map.prototype.set.call(r.conceptIndex as unknown as Map<string, unknown>, "x", {}),
+      () => Map.prototype.set.call(r.errorCodeIndex as unknown as Map<string, unknown>, "x", {}),
+      () =>
+        Map.prototype.set.call(
+          r.openQuestionIndex as unknown as Map<string, unknown>,
+          "x",
+          {},
+        ),
+    ];
+    for (const mutate of prototypeMutators) {
+      expect(mutate).toThrow(TypeError);
+    }
+    expect(r.specs.size).toBe(snapshotSize);
+    expect(r.specs.has("fixture-alpha")).toBe(true);
+    expect(r.ruleIndex.size).toBe(snapshotRuleSize);
+  });
 });
 
 describe("SS-RG cross-module id collisions", () => {

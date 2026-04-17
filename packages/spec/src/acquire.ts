@@ -9,13 +9,19 @@
 //   F3 — duplicate id         (SS-AQ-013)
 //
 // Operation<T> bodies `yield` Promise values. Consuming runtimes (effection
-// under `tsn run`, `@effectionx/vitest`'s `run` in tests) resolve them. The
-// `createAcquire` factory is the DI seam that tests use with in-memory
-// manifests and custom filesystem readers.
+// under `tsn run`, `@effectionx/vitest`'s `run` in tests) resolve them.
+//
+// §7.7 auxiliary deviation. The §7.7 auxiliary operations `acquireFixture`
+// and `acquireEmittedMarkdown` live on the `AcquireAPI` returned by
+// `createAcquire` but are NOT exported as default-bound module-level
+// operations. Default readers that read `corpus/*/__fixtures__/*.md` and
+// repo-root `specs/*.md` cannot be honest for published consumers: the
+// tarball ships `dist/` only and there is no repo root in an install
+// context. Callers (incl. `@tisyn/spec-workflows`) construct a pre-bound
+// API via `createAcquire({ manifest, readFixture, readEmitted })` with
+// readers that know their own deployment layout. This is a deliberate,
+// scoped deviation from §7.7; the §7.7 operation shapes are preserved.
 
-import { readFile } from "node:fs/promises";
-import { dirname, resolve } from "node:path";
-import { fileURLToPath } from "node:url";
 import { manifest as defaultManifest, type ManifestEntry } from "./manifest.ts";
 import { normalizeSpec, normalizeTestPlan } from "./normalize.ts";
 import { buildRegistry } from "./registry.ts";
@@ -32,52 +38,12 @@ import {
   type TestPlanModule,
 } from "./types.ts";
 
-// Default filesystem readers. Auxiliary acquisition (§7.7) reads raw
-// Markdown — fixtures from `packages/spec/corpus/<id>/__fixtures__/` and
-// emitted Markdown from repo-root `specs/`. These paths are implementation
-// choices, not part of the spec surface.
-//
-// Locating the package root via `resolve(HERE, "..", ...)` is fragile
-// because `HERE` differs between the source tree (`src/`) and the compiled
-// output (`dist/src/`). Instead, walk up the directory tree until the
-// `@tisyn/spec` package.json is found; that is the unambiguous anchor for
-// both the in-package `corpus/` directory and the repo-root `specs/`
-// directory. Resolution is async and memoized — no sync filesystem IO.
-const HERE = dirname(fileURLToPath(import.meta.url));
-
-let packageRootPromise: Promise<string> | undefined;
-
-function resolvePackageRoot(): Promise<string> {
-  if (packageRootPromise === undefined) {
-    packageRootPromise = (async () => {
-      let dir = HERE;
-      while (true) {
-        try {
-          const pkgText = await readFile(resolve(dir, "package.json"), "utf8");
-          const pkg = JSON.parse(pkgText) as { name?: string };
-          if (pkg.name === "@tisyn/spec") return dir;
-        } catch {
-          // no readable package.json here, keep walking
-        }
-        const parent = dirname(dir);
-        if (parent === dir) {
-          throw new Error(
-            `Unable to locate @tisyn/spec package root starting from ${HERE}`,
-          );
-        }
-        dir = parent;
-      }
-    })();
-  }
-  return packageRootPromise;
-}
-
 // Effection-compatible promise awaiter. Yields an instruction object with the
 // shape the effection reducer understands: { description, enter } where enter
 // receives a `settle` callback taking { ok: true, value } or
 // { ok: false, error }. Keeping this local avoids a direct dependency on
-// effection while allowing the yielded Operation<T> to drive cleanly under
-// `tsn run` and `@effectionx/vitest`.
+// effection (§1.2) while allowing the yielded Operation<T> to drive cleanly
+// under `tsn run` and `@effectionx/vitest`.
 function* awaitPromise<T>(promise: Promise<T>): Operation<T> {
   const instruction = {
     description: "awaitPromise",
@@ -96,22 +62,7 @@ function* awaitPromise<T>(promise: Promise<T>): Operation<T> {
   return (yield instruction) as T;
 }
 
-function* defaultReadFixture(id: string, kind: "spec" | "plan"): Operation<string> {
-  const filename = kind === "spec" ? "original-spec.md" : "original-test-plan.md";
-  const packageRoot = yield* awaitPromise(resolvePackageRoot());
-  const path = resolve(packageRoot, "corpus", id, "__fixtures__", filename);
-  return yield* awaitPromise(readFile(path, "utf8"));
-}
-
-function* defaultReadEmitted(id: string, kind: "spec" | "plan"): Operation<string> {
-  const suffix = kind === "spec" ? "spec.md" : "test-plan.md";
-  const packageRoot = yield* awaitPromise(resolvePackageRoot());
-  const repoRoot = resolve(packageRoot, "..", "..");
-  const path = resolve(repoRoot, "specs", `${id}-${suffix}`);
-  return yield* awaitPromise(readFile(path, "utf8"));
-}
-
-interface AcquireOptions {
+export interface AcquireOptions {
   readonly manifest: readonly ManifestEntry[];
   readonly readFixture?: (id: string, kind: "spec" | "plan") => Operation<string>;
   readonly readEmitted?: (id: string, kind: "spec" | "plan") => Operation<string>;
@@ -125,8 +76,8 @@ export interface AcquireAPI {
 
 export function createAcquire(opts: AcquireOptions): AcquireAPI {
   const entries = opts.manifest;
-  const readFixture = opts.readFixture ?? defaultReadFixture;
-  const readEmitted = opts.readEmitted ?? defaultReadEmitted;
+  const readFixture = opts.readFixture;
+  const readEmitted = opts.readEmitted;
 
   function* acquireCorpusRegistryImpl(
     scope?: AcquisitionScope,
@@ -221,6 +172,12 @@ export function createAcquire(opts: AcquireOptions): AcquireAPI {
   }
 
   function* acquireFixtureImpl(id: string, kind: "spec" | "plan"): Operation<string> {
+    if (readFixture === undefined) {
+      throw new TypeError(
+        "createAcquire: acquireFixture called without a readFixture reader — " +
+          "supply one via createAcquire({ manifest, readFixture }).",
+      );
+    }
     return (yield* readFixture(id, kind)) as string;
   }
 
@@ -228,6 +185,12 @@ export function createAcquire(opts: AcquireOptions): AcquireAPI {
     id: string,
     kind: "spec" | "plan",
   ): Operation<string> {
+    if (readEmitted === undefined) {
+      throw new TypeError(
+        "createAcquire: acquireEmittedMarkdown called without a readEmitted reader — " +
+          "supply one via createAcquire({ manifest, readEmitted }).",
+      );
+    }
     return (yield* readEmitted(id, kind)) as string;
   }
 
@@ -259,11 +222,10 @@ function formatNormErrors(
     .join("; ");
 }
 
-// Default instance bound to the repo manifest + filesystem readers. Workflow
-// code imports these directly; tests use `createAcquire` with in-memory
-// loaders.
+// Only `acquireCorpusRegistry` is bound at module level — it reads only
+// compiled corpus TS modules shipped under `dist/corpus/`, which is honest
+// for published consumers. Fixture/emitted readers are constructed by
+// callers with their own readers (see `@tisyn/spec-workflows/src/acquire.ts`).
 const defaultApi = createAcquire({ manifest: defaultManifest });
 
 export const acquireCorpusRegistry = defaultApi.acquireCorpusRegistry;
-export const acquireFixture = defaultApi.acquireFixture;
-export const acquireEmittedMarkdown = defaultApi.acquireEmittedMarkdown;
