@@ -112,7 +112,7 @@ separately.
 
 - **In-process composition:** Uses `browserTransport({ capabilities })` with test agents (`Calc`, `Greet`) defined via `localCapability()`. No Playwright mock needed.
 - **Real-browser mode:** Mocks `playwright-core` at module level. `page.evaluate` returns predetermined result envelopes. `page.addScriptTag`, `page.waitForFunction`, and `page.goto` are verified.
-- **Navigate tests:** Use `Browser.navigate({ url })` via `invoke`. Real-browser tests verify `mockPage.goto` calls. In-process test verifies thrown error.
+- **Navigate tests:** Use `Browser.navigate({ url })` via `dispatch`. Real-browser tests verify `mockPage.goto` calls. In-process test verifies thrown error.
 
 ### 3.2 Compiler Acceptance Tests
 

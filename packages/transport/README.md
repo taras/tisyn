@@ -230,7 +230,7 @@ yield* scoped(function* () {
 
 `@tisyn/transport/browser` exports:
 
-- `Browser` — a `DeclaredAgent` for use with `installRemoteAgent(Browser, factory)` and `invoke(Browser.navigate(...))` / `invoke(Browser.execute(...))`
+- `Browser` — a `DeclaredAgent` for use with `installRemoteAgent(Browser, factory)` and `dispatch(Browser.navigate(...))` / `dispatch(Browser.execute(...))`
 - `browserTransport` — transport factory
 - `LocalCapability` — composition primitive type
 - `localCapability` — capability constructor
