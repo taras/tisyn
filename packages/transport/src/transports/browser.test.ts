@@ -342,7 +342,9 @@ describe("browser transport", () => {
 
       yield* scoped(function* () {
         yield* installRemoteAgent(Browser, factory);
-        yield* dispatch(Browser.execute({ workflow: effectWorkflow("calc", "add", { a: 1, b: 2 }) }));
+        yield* dispatch(
+          Browser.execute({ workflow: effectWorkflow("calc", "add", { a: 1, b: 2 }) }),
+        );
       });
 
       // Playwright should never have been launched

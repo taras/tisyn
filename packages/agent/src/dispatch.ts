@@ -57,9 +57,10 @@ export const Effects = Object.assign(EffectsApi, {
  * object with the same shape returned by agent().op(args).
  */
 export function dispatch<T = Val>(effectId: string, data: Val): Operation<T>;
-export function dispatch<T = Val>(
-  request: { readonly effectId: string; readonly data: unknown },
-): Operation<T>;
+export function dispatch<T = Val>(request: {
+  readonly effectId: string;
+  readonly data: unknown;
+}): Operation<T>;
 export function dispatch<T = Val>(
   effectIdOrRequest: string | { readonly effectId: string; readonly data: unknown },
   maybeData?: Val,
