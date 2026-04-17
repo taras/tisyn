@@ -7,7 +7,12 @@ export {
   resolve,
   installCrossBoundaryMiddleware,
   getCrossBoundaryMiddleware,
+  DispatchContext,
+  InvalidInvokeCallSiteError,
+  InvalidInvokeInputError,
+  InvalidInvokeOptionError,
 } from "./dispatch.js";
+export type { DispatchCtx, InvokeOpts, ScopedEffectFrame } from "./dispatch.js";
 export { useAgent } from "./use-agent.js";
 export { Agents } from "./agents.js";
 export type { AgentHandle } from "./use-agent.js";

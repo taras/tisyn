@@ -29,3 +29,15 @@ export class SubscriptionCapabilityError extends Error {
     super(message);
   }
 }
+
+/**
+ * Thrown at the `yield* ctx.invoke(...)` await site when the invoked child
+ * closed with `status: "cancelled"` (either live cancellation propagated via
+ * Effection halt, or replay of a previously-cancelled child).
+ */
+export class InvocationCancelledError extends Error {
+  override name = "InvocationCancelledError" as const;
+  constructor(message = "Invoked child was cancelled") {
+    super(message);
+  }
+}
