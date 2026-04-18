@@ -1,5 +1,15 @@
 # @tisyn/durable-streams
 
+## 0.13.0
+
+### Minor Changes
+
+- a779cb7: Add a file-backed durable stream via `FileStream`, exported from the package root. It stores durable events as NDJSON on disk, treats a missing file as an empty journal, and reports malformed lines with path and line-number context for debugging.
+
+### Patch Changes
+
+- @tisyn/kernel@0.13.0
+
 ## 0.12.0
 
 ### Patch Changes

@@ -1,5 +1,20 @@
 # @tisyn/claude-code
 
+## 0.12.0
+
+### Minor Changes
+
+- dd4f627: Expose `createMockClaudeCodeTransport` (and its `MockClaudeCodeConfig` / `MockOperationConfig` types) from the package root so cross-package test harnesses can drive the Claude Code ACP agent without touching internal deep paths. Previously the mock was a test-only internal of this package; it is now a first-class test-helper surface consumers can import via `@tisyn/claude-code`.
+
+### Patch Changes
+
+- Updated dependencies [db46668]
+- Updated dependencies [12f992d]
+  - @tisyn/agent@0.13.0
+  - @tisyn/transport@0.13.0
+  - @tisyn/ir@0.13.0
+  - @tisyn/protocol@0.13.0
+
 ## 0.11.0
 
 ### Minor Changes
