@@ -162,14 +162,21 @@ export function createSdkBinding(config?: CodexSdkConfig): LocalAgentBinding {
               }
 
               const streamedTurn = yield* call(() =>
-                (thread as { runStreamed(input: string): Promise<{ events: AsyncGenerator<Record<string, unknown>> }> })
-                  .runStreamed(prompt),
+                (
+                  thread as {
+                    runStreamed(
+                      input: string,
+                    ): Promise<{ events: AsyncGenerator<Record<string, unknown>> }>;
+                  }
+                ).runStreamed(prompt),
               );
               let responseText = "";
 
               for (;;) {
                 const { value: event, done } = yield* call(() => streamedTurn.events.next());
-                if (done) break;
+                if (done) {
+                  break;
+                }
 
                 if (event.type === "turn.failed") {
                   const failedEvent = event as { error: { message: string } };

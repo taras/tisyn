@@ -10,6 +10,10 @@ import type { ProgressEvent, AgentTransportFactory, HostMessage } from "@tisyn/t
 import { createMockClaudeCodeTransport } from "./mock.js";
 import { createBinding } from "./index.js";
 import { createSdkBinding } from "./sdk-adapter.js";
+// Anchor the public type re-export so a missing `PromptResult` passthrough
+// breaks the package's typecheck at a well-known boundary.
+import type { PromptResult } from "@tisyn/claude-code";
+type _PromptResultAnchor = PromptResult;
 
 const claudeCodeDeclaration = agent("claude-code", {
   newSession: operation<Val, Val>(),

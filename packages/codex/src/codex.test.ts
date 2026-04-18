@@ -16,7 +16,9 @@ const mockCodexExec = resolve(import.meta.dirname, "test-assets/mock-codex-exec.
 // ── SDK mock ──
 // Per-test factory that test bodies configure before dispatching.
 // The mock itself must be async because that's the SDK's interface shape.
-let mockRunStreamed: (input: string) => Promise<{ events: AsyncGenerator<Record<string, unknown>> }>;
+let mockRunStreamed: (
+  input: string,
+) => Promise<{ events: AsyncGenerator<Record<string, unknown>> }>;
 let startThreadCallCount = 0;
 
 vi.mock("@openai/codex-sdk", () => {
@@ -152,7 +154,10 @@ describe("Codex SDK Adapter", () => {
       mockRunStreamed = async (input: string) => ({
         events: (async function* () {
           yield { type: "item.started", item: { id: "msg-1", type: "agent_message", text: "" } };
-          yield { type: "item.completed", item: { id: "msg-1", type: "agent_message", text: `mock: ${input}` } };
+          yield {
+            type: "item.completed",
+            item: { id: "msg-1", type: "agent_message", text: `mock: ${input}` },
+          };
           yield { type: "turn.completed", usage: null };
         })(),
       });
@@ -176,7 +181,10 @@ describe("Codex SDK Adapter", () => {
       mockRunStreamed = async (input: string) => ({
         events: (async function* () {
           yield { type: "item.started", item: { id: "msg-1", type: "agent_message", text: "" } };
-          yield { type: "item.completed", item: { id: "msg-1", type: "agent_message", text: `mock: ${input}` } };
+          yield {
+            type: "item.completed",
+            item: { id: "msg-1", type: "agent_message", text: `mock: ${input}` },
+          };
           yield { type: "turn.completed", usage: null };
         })(),
       });
@@ -208,7 +216,10 @@ describe("Codex SDK Adapter", () => {
       startThreadCallCount = 0;
       mockRunStreamed = async (input: string) => ({
         events: (async function* () {
-          yield { type: "item.completed", item: { id: "msg-1", type: "agent_message", text: `mock: ${input}` } };
+          yield {
+            type: "item.completed",
+            item: { id: "msg-1", type: "agent_message", text: `mock: ${input}` },
+          };
           yield { type: "turn.completed", usage: null };
         })(),
       });

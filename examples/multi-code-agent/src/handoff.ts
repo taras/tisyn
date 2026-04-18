@@ -1,12 +1,7 @@
 import type { Workflow } from "@tisyn/agent";
 import { resource, provide } from "@tisyn/agent";
 import { workflow, agent, transport, journal } from "@tisyn/config";
-import type {
-  SessionHandle,
-  PromptResult,
-  NewSessionConfig,
-  PromptArgs,
-} from "@tisyn/code-agent";
+import type { SessionHandle, PromptResult, NewSessionConfig, PromptArgs } from "@tisyn/code-agent";
 
 /**
  * Multi Code Agent handoff — authored workflow example.
@@ -90,7 +85,10 @@ export function* handoff(input: { task: string }) {
   // Phase 2: Codex responds to Claude's message
   yield* Output().log({ label: "Status", text: "Opening Codex session..." });
   const codexSession = yield* useCodexSession({});
-  yield* Output().log({ label: "Status", text: "Handing Claude message to Codex for a brief reply..." });
+  yield* Output().log({
+    label: "Status",
+    text: "Handing Claude message to Codex for a brief reply...",
+  });
   const codexResult = yield* Codex().prompt({
     session: codexSession,
     prompt: `Hello, Codex. Reply to Claude with exactly one short greeting sentence. Do not inspect files, run commands, or suggest next steps.\n\nClaude's message:\n${claudeResult.response}`,
