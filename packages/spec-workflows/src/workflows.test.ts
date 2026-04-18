@@ -11,18 +11,18 @@ import {
   assembleReviewContext,
   assembleTestPlanContext,
   buildRegistry,
-  coverageEntry,
+  CoverageEntry,
   createAcquire,
   manifest,
   normalizeSpec,
   normalizeTestPlan,
-  rule,
-  section,
-  spec,
-  testCase,
-  testCategory,
-  testPlan,
-  testPlanSection,
+  Rule,
+  Section,
+  Spec,
+  TestCase,
+  TestCategory,
+  TestPlan,
+  TestPlanSection,
   type NormalizedSpecModule,
   type NormalizedTestPlanModule,
   type Operation,
@@ -33,33 +33,33 @@ import type { Val } from "@tisyn/ir";
 import { acquireFixture } from "./acquire.ts";
 import { compile, evaluateCompile, type CompileOutput } from "./corpus-agent.ts";
 
-const fixtureSpec: SpecModule = spec({
+const fixtureSpec: SpecModule = Spec({
   id: "wf-fixture",
   title: "Workflow Fixture",
   status: "active",
   relationships: [],
   sections: [
-    section({
+    Section({
       id: 1,
       title: "Core",
       prose: "Prose.",
-      rules: [rule({ id: "W1", level: "must", text: "Must do W1." })],
+      rules: [Rule({ id: "W1", level: "must", text: "Must do W1." })],
     }),
   ],
 });
 
-const fixturePlan: TestPlanModule = testPlan({
+const fixturePlan: TestPlanModule = TestPlan({
   id: "wf-fixture-plan",
   title: "Workflow Fixture Plan",
   validatesSpec: "wf-fixture",
-  sections: [testPlanSection({ id: 1, title: "Cases", prose: "" })],
+  sections: [TestPlanSection({ id: 1, title: "Cases", prose: "" })],
   categoriesSectionId: 1,
   categories: [
-    testCategory({
+    TestCategory({
       id: "CAT-W",
       title: "W cases",
       cases: [
-        testCase({
+        TestCase({
           id: "T-W-001",
           priority: "p0",
           type: "unit",
@@ -69,7 +69,7 @@ const fixturePlan: TestPlanModule = testPlan({
       ],
     }),
   ],
-  coverageMatrix: [coverageEntry({ rule: "W1", testIds: ["T-W-001"], status: "covered" })],
+  coverageMatrix: [CoverageEntry({ rule: "W1", testIds: ["T-W-001"], status: "covered" })],
 });
 
 // Direct composition: workflow bodies are `function* (input) { const r =

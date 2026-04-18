@@ -13,11 +13,11 @@
 // testIds.length > 0).
 
 import {
-  coverageEntry,
-  testCase,
-  testCategory,
-  testPlan,
-  testPlanSection,
+  CoverageEntry,
+  TestCase,
+  TestCategory,
+  TestPlan,
+  TestPlanSection,
 } from "../../src/constructors.ts";
 import type { TestPlanModule } from "../../src/types.ts";
 
@@ -267,91 +267,91 @@ const CATEGORY_N_NOTES = `§10.4 uses SHOULD for combined reporting and MAY for
 continued diagnostic collection. P1.`;
 
 const CLI_SECTIONS = [
-  testPlanSection({
+  TestPlanSection({
     id: "1",
     number: 1,
     title: "Purpose",
     prose: PURPOSE_PROSE,
   }),
-  testPlanSection({
+  TestPlanSection({
     id: "2",
     number: 2,
     title: "Scope",
     prose: SCOPE_PROSE,
   }),
-  testPlanSection({
+  TestPlanSection({
     id: "3",
     number: 3,
     title: "Conformance Targets",
     prose: CONFORMANCE_TARGETS_PROSE,
   }),
-  testPlanSection({
+  TestPlanSection({
     id: "4",
     number: 4,
     title: "Test Strategy",
     prose: "",
     subsections: [
-      testPlanSection({
+      TestPlanSection({
         id: "4.1",
         title: "Priority Model",
         prose: PRIORITY_MODEL_PROSE,
       }),
-      testPlanSection({
+      TestPlanSection({
         id: "4.2",
         title: "Black-Box vs. White-Box",
         prose: BLACK_BOX_PROSE,
       }),
-      testPlanSection({
+      TestPlanSection({
         id: "4.3",
         title: "Schema-Related Tests",
         prose: SCHEMA_TESTS_PROSE,
       }),
-      testPlanSection({
+      TestPlanSection({
         id: "4.4",
         title: "Lifecycle Observability",
         prose: LIFECYCLE_OBS_PROSE,
       }),
     ],
   }),
-  testPlanSection({
+  TestPlanSection({
     id: "5",
     number: 5,
     title: "Required Test Fixtures",
     prose: REQUIRED_FIXTURES_PROSE,
   }),
-  testPlanSection({
+  TestPlanSection({
     id: "6",
     number: 6,
     title: "Test Matrix",
     prose: "",
     precedingDivider: true,
   }),
-  testPlanSection({
+  TestPlanSection({
     id: "7",
     number: 7,
     title: "Summary",
     prose: SUMMARY_PROSE,
     precedingDivider: true,
   }),
-  testPlanSection({
+  TestPlanSection({
     id: "8",
     number: 8,
     title: "Assumptions",
     prose: ASSUMPTIONS_PROSE,
   }),
-  testPlanSection({
+  TestPlanSection({
     id: "9",
     number: 9,
     title: "Implementation Readiness",
     prose: READINESS_PROSE,
   }),
-  testPlanSection({
+  TestPlanSection({
     id: "risks",
     title: "Highest-Risk Drift Areas",
     prose: RISKS_PROSE,
     precedingDivider: true,
   }),
-  testPlanSection({
+  TestPlanSection({
     id: "notes",
     title: "Final Conformance Notes",
     prose: NOTES_PROSE,
@@ -359,7 +359,7 @@ const CLI_SECTIONS = [
   }),
 ];
 
-export const tisynCliTestPlan: TestPlanModule = testPlan({
+export const tisynCliTestPlan: TestPlanModule = TestPlan({
   id: "tisyn-cli-test-plan",
   title: "Tisyn CLI Test Plan",
   validatesSpec: "tisyn-cli",
@@ -367,25 +367,25 @@ export const tisynCliTestPlan: TestPlanModule = testPlan({
   sections: CLI_SECTIONS,
   categoriesSectionId: "6",
   categories: [
-    testCategory({
+    TestCategory({
       id: "CLI-TC-A",
       title: "Command Surface",
       cases: [
-        testCase({
+        TestCase({
           id: "CLI-CMD-001",
           priority: "p0",
           type: "e2e",
           specRef: "CLI-2.1-R2",
           assertion: "`tsn generate --help` exits 0 and shows usage",
         }),
-        testCase({
+        TestCase({
           id: "CLI-CMD-002",
           priority: "p0",
           type: "e2e",
           specRef: "CLI-2.2-R1",
           assertion: "`tsn build --help` exits 0 and shows usage",
         }),
-        testCase({
+        TestCase({
           id: "CLI-CMD-003",
           priority: "p0",
           type: "e2e",
@@ -393,28 +393,28 @@ export const tisynCliTestPlan: TestPlanModule = testPlan({
           assertion:
             "`tsn run <valid-module> --help` loads the module and shows workflow-derived help (see CLI-HLP-008/009 for the failure path)",
         }),
-        testCase({
+        TestCase({
           id: "CLI-CMD-003a",
           priority: "p0",
           type: "e2e",
           specRef: "CLI-9.6-R5",
           assertion: "`tsn run --help` (no module argument) shows static command help and exits 0",
         }),
-        testCase({
+        TestCase({
           id: "CLI-CMD-004",
           priority: "p0",
           type: "e2e",
           specRef: "CLI-2.4-R3",
           assertion: "`tsn check --help` exits 0 and shows usage",
         }),
-        testCase({
+        TestCase({
           id: "CLI-CMD-005",
           priority: "p0",
           type: "e2e",
           specRef: "CLI-1.1-R1",
           assertion: "`tsn --version` prints version and exits 0",
         }),
-        testCase({
+        TestCase({
           id: "CLI-CMD-006",
           priority: "p0",
           type: "e2e",
@@ -423,46 +423,46 @@ export const tisynCliTestPlan: TestPlanModule = testPlan({
         }),
       ],
     }),
-    testCategory({
+    TestCategory({
       id: "CLI-TC-B",
       title: "`tsn generate`",
       cases: [
-        testCase({
+        TestCase({
           id: "CLI-GEN-001",
           priority: "p0",
           type: "e2e",
           specRef: "CLI-2.1-R3",
           assertion: "Single valid root → exits 0, generated output on stdout",
         }),
-        testCase({
+        TestCase({
           id: "CLI-GEN-002",
           priority: "p0",
           type: "e2e",
           specRef: "CLI-2.1-R3",
           assertion: "Multiple valid roots with `-o` → exits 0, output file written",
         }),
-        testCase({
+        TestCase({
           id: "CLI-GEN-003",
           priority: "p0",
           type: "e2e",
           specRef: "CLI-3.4-R3",
           assertion: "Nonexistent root file → exit code 3",
         }),
-        testCase({
+        TestCase({
           id: "CLI-GEN-004",
           priority: "p0",
           type: "e2e",
           specRef: "CLI-3.4-R2",
           assertion: "Unrecognized built-in flag → exit code 2",
         }),
-        testCase({
+        TestCase({
           id: "CLI-GEN-005",
           priority: "p0",
           type: "e2e",
           specRef: "CLI-2.1-R2",
           assertion: "`--format json` → exits 0 with JSON output",
         }),
-        testCase({
+        TestCase({
           id: "CLI-GEN-006",
           priority: "p0",
           type: "e2e",
@@ -471,54 +471,54 @@ export const tisynCliTestPlan: TestPlanModule = testPlan({
         }),
       ],
     }),
-    testCategory({
+    TestCategory({
       id: "CLI-TC-C",
       title: "`tsn build`",
       notes: CATEGORY_C_NOTES,
       cases: [
-        testCase({
+        TestCase({
           id: "CLI-BLD-001",
           priority: "p0",
           type: "e2e",
           specRef: "CLI-2.2-R1",
           assertion: "Valid rooted config → exits 0, output files written",
         }),
-        testCase({
+        TestCase({
           id: "CLI-BLD-002",
           priority: "p0",
           type: "e2e",
           specRef: "CLI-2.2-R2",
           assertion: "No config file found → exit code 2",
         }),
-        testCase({
+        TestCase({
           id: "CLI-BLD-003",
           priority: "p0",
           type: "e2e",
           specRef: "CLI-4.3-R1",
           assertion: "Empty `generates` array → exit code 2",
         }),
-        testCase({
+        TestCase({
           id: "CLI-BLD-004",
           priority: "p0",
           type: "e2e",
           specRef: "CLI-5.1-R2",
           assertion: "Dependency cycle → exit code 2 with diagnostic",
         }),
-        testCase({
+        TestCase({
           id: "CLI-BLD-005",
           priority: "p0",
           type: "e2e",
           specRef: "CLI-2.2-R3",
           assertion: "`--filter` runs named pass and its dependencies",
         }),
-        testCase({
+        TestCase({
           id: "CLI-BLD-006",
           priority: "p0",
           type: "e2e",
           specRef: "CLI-2.2-R4",
           assertion: "`--filter` unknown name → exit code 2",
         }),
-        testCase({
+        TestCase({
           id: "CLI-BLD-007",
           priority: "p0",
           type: "e2e",
@@ -526,14 +526,14 @@ export const tisynCliTestPlan: TestPlanModule = testPlan({
           assertion:
             "Multi-pass rooted build passes prior outputs as generated-module boundaries; no stub injection or import stripping required",
         }),
-        testCase({
+        TestCase({
           id: "CLI-BLD-008",
           priority: "p0",
           type: "e2e",
           specRef: "CLI-4.3-R2",
           assertion: "Legacy `input` field in build config is rejected",
         }),
-        testCase({
+        TestCase({
           id: "CLI-BLD-009",
           priority: "p0",
           type: "e2e",
@@ -543,11 +543,11 @@ export const tisynCliTestPlan: TestPlanModule = testPlan({
         }),
       ],
     }),
-    testCategory({
+    TestCategory({
       id: "CLI-TC-D",
       title: "Descriptor Loading (`tsn run`)",
       cases: [
-        testCase({
+        TestCase({
           id: "CLI-LOAD-001",
           priority: "p0",
           type: "e2e",
@@ -555,35 +555,35 @@ export const tisynCliTestPlan: TestPlanModule = testPlan({
           assertion:
             "`tsn run <valid-module>` proceeds past loading (fixture `minimal.ts`); observable as reaching a later phase, not a load-phase error",
         }),
-        testCase({
+        TestCase({
           id: "CLI-LOAD-002",
           priority: "p0",
           type: "e2e",
           specRef: "CLI-3.4-R4",
           assertion: "Nonexistent module path → exit code 3",
         }),
-        testCase({
+        TestCase({
           id: "CLI-LOAD-003",
           priority: "p0",
           type: "e2e",
           specRef: "CLI-10.2-R1",
           assertion: "Module with no default export → exit code 2",
         }),
-        testCase({
+        TestCase({
           id: "CLI-LOAD-004",
           priority: "p0",
           type: "e2e",
           specRef: "CLI-10.2-R1",
           assertion: "Default export is not a `WorkflowDescriptor` → exit code 2",
         }),
-        testCase({
+        TestCase({
           id: "CLI-LOAD-005",
           priority: "p0",
           type: "e2e",
           specRef: "CLI-10.2-R2",
           assertion: "`run.export` names a non-existent export → exit code 2",
         }),
-        testCase({
+        TestCase({
           id: "CLI-LOAD-006",
           priority: "p0",
           type: "e2e",
@@ -591,14 +591,14 @@ export const tisynCliTestPlan: TestPlanModule = testPlan({
           assertion:
             "`run.module` relative path resolves correctly; observable as workflow loading without code 3",
         }),
-        testCase({
+        TestCase({
           id: "CLI-LOAD-007",
           priority: "p0",
           type: "e2e",
           specRef: "CLI-10.2-R3",
           assertion: "`run.module` path does not exist → exit code 3",
         }),
-        testCase({
+        TestCase({
           id: "CLI-LOAD-008",
           priority: "p0",
           type: "e2e",
@@ -606,7 +606,7 @@ export const tisynCliTestPlan: TestPlanModule = testPlan({
           assertion:
             "`run.module` omitted → workflow function resolved from descriptor module; successful execution",
         }),
-        testCase({
+        TestCase({
           id: "CLI-LOAD-009",
           priority: "p0",
           type: "e2e",
@@ -614,7 +614,7 @@ export const tisynCliTestPlan: TestPlanModule = testPlan({
           assertion:
             "TypeScript descriptor module (`.ts`/`.mts`/`.cts`) loads successfully; reaches a later phase, not a load-phase error",
         }),
-        testCase({
+        TestCase({
           id: "CLI-LOAD-010",
           priority: "p0",
           type: "e2e",
@@ -622,7 +622,7 @@ export const tisynCliTestPlan: TestPlanModule = testPlan({
           assertion:
             "Unsupported extension (for example `.tsx`) → exit code 3 with unsupported-extension diagnostic",
         }),
-        testCase({
+        TestCase({
           id: "CLI-LOAD-011",
           priority: "p0",
           type: "e2e",
@@ -630,7 +630,7 @@ export const tisynCliTestPlan: TestPlanModule = testPlan({
           assertion:
             "Explicit TypeScript `run.module` target that is authored workflow source uses compiler-based rooted compilation, not module loading; observable via successful `tsn check`",
         }),
-        testCase({
+        TestCase({
           id: "CLI-LOAD-012",
           priority: "p0",
           type: "e2e",
@@ -638,7 +638,7 @@ export const tisynCliTestPlan: TestPlanModule = testPlan({
           assertion:
             "Same-module workflow export in a TypeScript descriptor resolves from the descriptor module instead of the compiler path",
         }),
-        testCase({
+        TestCase({
           id: "CLI-LOAD-013",
           priority: "p0",
           type: "e2e",
@@ -646,7 +646,7 @@ export const tisynCliTestPlan: TestPlanModule = testPlan({
           assertion:
             "`run.module` pointing to a generated workflow module is runtime-loaded; compiler is not invoked",
         }),
-        testCase({
+        TestCase({
           id: "CLI-LOAD-014",
           priority: "p0",
           type: "e2e",
@@ -656,11 +656,11 @@ export const tisynCliTestPlan: TestPlanModule = testPlan({
         }),
       ],
     }),
-    testCategory({
+    TestCategory({
       id: "CLI-TC-E",
       title: "Entrypoint Selection (`tsn run`)",
       cases: [
-        testCase({
+        TestCase({
           id: "CLI-ENT-001",
           priority: "p0",
           type: "e2e",
@@ -668,21 +668,21 @@ export const tisynCliTestPlan: TestPlanModule = testPlan({
           assertion:
             "`--entrypoint dev` with an existing entrypoint → overlay applied; entrypoint-specific behavior differs from base",
         }),
-        testCase({
+        TestCase({
           id: "CLI-ENT-002",
           priority: "p0",
           type: "e2e",
           specRef: "CLI-10.1-R2",
           assertion: "`--entrypoint unknown` → exit code 2",
         }),
-        testCase({
+        TestCase({
           id: "CLI-ENT-003",
           priority: "p0",
           type: "e2e",
           specRef: "CLI-10.1-R2",
           assertion: "No `--entrypoint` → base descriptor used",
         }),
-        testCase({
+        TestCase({
           id: "CLI-ENT-004",
           priority: "p0",
           type: "e2e",
@@ -691,19 +691,19 @@ export const tisynCliTestPlan: TestPlanModule = testPlan({
         }),
       ],
     }),
-    testCategory({
+    TestCategory({
       id: "CLI-TC-F",
       title: "Invocation Input Schema Contract",
       notes: CATEGORY_F_NOTES,
       cases: [
-        testCase({
+        TestCase({
           id: "CLI-IS-001",
           priority: "p0",
           type: "e2e",
           specRef: "CLI-8.1-R1",
           assertion: "Schema unavailable → exit code 2",
         }),
-        testCase({
+        TestCase({
           id: "CLI-IS-002",
           priority: "p0",
           type: "e2e",
@@ -711,63 +711,63 @@ export const tisynCliTestPlan: TestPlanModule = testPlan({
           assertion:
             "Schema contains unsupported shape → exit code 2 with diagnostic naming the unsupported construct",
         }),
-        testCase({
+        TestCase({
           id: "CLI-IS-003",
           priority: "p0",
           type: "e2e",
           specRef: "CLI-8.1-R3",
           assertion: "Zero-parameter workflow → no derived flags, no failure",
         }),
-        testCase({
+        TestCase({
           id: "CLI-IS-004",
           priority: "p0",
           type: "e2e",
           specRef: "CLI-8.2-R1",
           assertion: "Flat object parameter → one flag per field",
         }),
-        testCase({
+        TestCase({
           id: "CLI-IS-005",
           priority: "p0",
           type: "e2e",
           specRef: "CLI-8.4-R1",
           assertion: "Multiple parameters → rejected with exit code 2",
         }),
-        testCase({
+        TestCase({
           id: "CLI-IS-006",
           priority: "p0",
           type: "e2e",
           specRef: "CLI-8.4-R1",
           assertion: "Non-object parameter → rejected",
         }),
-        testCase({
+        TestCase({
           id: "CLI-IS-007",
           priority: "p0",
           type: "e2e",
           specRef: "CLI-8.4-R1",
           assertion: "Array-typed field → rejected",
         }),
-        testCase({
+        TestCase({
           id: "CLI-IS-008",
           priority: "p0",
           type: "e2e",
           specRef: "CLI-8.4-R1",
           assertion: "Nested object field → rejected",
         }),
-        testCase({
+        TestCase({
           id: "CLI-IS-009",
           priority: "p0",
           type: "e2e",
           specRef: "CLI-8.4-R1",
           assertion: "Union-typed field other than optionality unions → rejected",
         }),
-        testCase({
+        TestCase({
           id: "CLI-IS-010",
           priority: "p0",
           type: "e2e",
           specRef: "CLI-8.4-R1",
           assertion: "Enum-typed field → rejected",
         }),
-        testCase({
+        TestCase({
           id: "CLI-IS-011",
           priority: "p0",
           type: "e2e",
@@ -776,102 +776,102 @@ export const tisynCliTestPlan: TestPlanModule = testPlan({
         }),
       ],
     }),
-    testCategory({
+    TestCategory({
       id: "CLI-TC-G",
       title: "CLI Flag Derivation and Mapping",
       cases: [
-        testCase({
+        TestCase({
           id: "CLI-FLG-001",
           priority: "p0",
           type: "unit",
           specRef: "CLI-9.1-R1",
           assertion: "[Unit] `maxTurns` → `--max-turns`",
         }),
-        testCase({
+        TestCase({
           id: "CLI-FLG-002",
           priority: "p0",
           type: "unit",
           specRef: "CLI-9.1-R1",
           assertion: "[Unit] `model` → `--model` (no case change)",
         }),
-        testCase({
+        TestCase({
           id: "CLI-FLG-003",
           priority: "p0",
           type: "unit",
           specRef: "CLI-9.1-R1",
           assertion: "[Unit] `outputDir` → `--output-dir`",
         }),
-        testCase({
+        TestCase({
           id: "CLI-FLG-004",
           priority: "p0",
           type: "unit",
           specRef: "CLI-9.1-R1",
           assertion: "[Unit] `a` (single char) → `--a`",
         }),
-        testCase({
+        TestCase({
           id: "CLI-FLG-005",
           priority: "p0",
           type: "e2e",
           specRef: "CLI-9.2-R1",
           assertion: 'Required string: `--model foo` → `"foo"`',
         }),
-        testCase({
+        TestCase({
           id: "CLI-FLG-006",
           priority: "p0",
           type: "e2e",
           specRef: "CLI-9.2-R1",
           assertion: "Required string missing → exit code 4",
         }),
-        testCase({
+        TestCase({
           id: "CLI-FLG-007",
           priority: "p0",
           type: "e2e",
           specRef: "CLI-9.2-R1",
           assertion: 'Optional string: `--model foo` → `"foo"`',
         }),
-        testCase({
+        TestCase({
           id: "CLI-FLG-008",
           priority: "p0",
           type: "e2e",
           specRef: "CLI-9.2-R2",
           assertion: "Optional string omitted → `undefined`",
         }),
-        testCase({
+        TestCase({
           id: "CLI-FLG-009",
           priority: "p0",
           type: "e2e",
           specRef: "CLI-9.2-R1",
           assertion: "Required number: `--max-turns 10` → `10`",
         }),
-        testCase({
+        TestCase({
           id: "CLI-FLG-010",
           priority: "p0",
           type: "e2e",
           specRef: "CLI-9.2-R1",
           assertion: "Required number missing → exit code 4",
         }),
-        testCase({
+        TestCase({
           id: "CLI-FLG-011",
           priority: "p0",
           type: "e2e",
           specRef: "CLI-9.3-R1",
           assertion: "Number coercion failure: `--max-turns abc` → exit code 4",
         }),
-        testCase({
+        TestCase({
           id: "CLI-FLG-012",
           priority: "p0",
           type: "e2e",
           specRef: "CLI-9.4-R1",
           assertion: "Unknown invocation flag → exit code 4",
         }),
-        testCase({
+        TestCase({
           id: "CLI-FLG-013",
           priority: "p0",
           type: "e2e",
           specRef: "CLI-9.2-R1",
           assertion: "Multiple missing required fields → all reported in one diagnostic",
         }),
-        testCase({
+        TestCase({
           id: "CLI-FLG-014",
           priority: "p0",
           type: "e2e",
@@ -879,14 +879,14 @@ export const tisynCliTestPlan: TestPlanModule = testPlan({
           assertion:
             "`--verbose` after module does not leak into workflow flag parsing (not rejected as unknown)",
         }),
-        testCase({
+        TestCase({
           id: "CLI-FLG-015",
           priority: "p0",
           type: "e2e",
           specRef: "CLI-16.2-R1",
           assertion: "`--entrypoint <name>` after module does not leak into workflow flag parsing",
         }),
-        testCase({
+        TestCase({
           id: "CLI-FLG-016",
           priority: "p0",
           type: "e2e",
@@ -894,28 +894,28 @@ export const tisynCliTestPlan: TestPlanModule = testPlan({
           assertion:
             "Built-in and workflow flags coexist: `--entrypoint dev --max-turns 10` parses both correctly",
         }),
-        testCase({
+        TestCase({
           id: "CLI-FLG-017",
           priority: "p0",
           type: "e2e",
           specRef: "CLI-9.4-R1",
           assertion: "Unknown short flag `-x` after module → exit code 4",
         }),
-        testCase({
+        TestCase({
           id: "CLI-FLG-018",
           priority: "p0",
           type: "e2e",
           specRef: "CLI-9.4-R1",
           assertion: "Bare positional arg `stray` after module → exit code 4",
         }),
-        testCase({
+        TestCase({
           id: "CLI-FLG-019",
           priority: "p0",
           type: "e2e",
           specRef: "CLI-9.4-R1",
           assertion: "Zero-parameter workflow + unknown flag → exit code 4",
         }),
-        testCase({
+        TestCase({
           id: "CLI-FLG-020",
           priority: "p0",
           type: "e2e",
@@ -924,39 +924,39 @@ export const tisynCliTestPlan: TestPlanModule = testPlan({
         }),
       ],
     }),
-    testCategory({
+    TestCategory({
       id: "CLI-TC-H",
       title: "Boolean v1 Semantics",
       cases: [
-        testCase({
+        TestCase({
           id: "CLI-BOOL-001",
           priority: "p0",
           type: "e2e",
           specRef: "CLI-8.3-R1",
           assertion: "`boolean` field: `--flag` present → `true`",
         }),
-        testCase({
+        TestCase({
           id: "CLI-BOOL-002",
           priority: "p0",
           type: "e2e",
           specRef: "CLI-8.3-R2",
           assertion: "`boolean` field: flag absent → `false`",
         }),
-        testCase({
+        TestCase({
           id: "CLI-BOOL-003",
           priority: "p0",
           type: "e2e",
           specRef: "CLI-8.3-R1",
           assertion: "`boolean?` field: `--flag` present → `true`",
         }),
-        testCase({
+        TestCase({
           id: "CLI-BOOL-004",
           priority: "p0",
           type: "e2e",
           specRef: "CLI-8.3-R2",
           assertion: "`boolean?` field: flag absent → `false` (not `undefined`)",
         }),
-        testCase({
+        TestCase({
           id: "CLI-BOOL-005",
           priority: "p0",
           type: "e2e",
@@ -964,14 +964,14 @@ export const tisynCliTestPlan: TestPlanModule = testPlan({
           assertion:
             "Non-optional `boolean` is NOT treated as a required CLI flag — absent → `false`",
         }),
-        testCase({
+        TestCase({
           id: "CLI-BOOL-006",
           priority: "p0",
           type: "e2e",
           specRef: "CLI-8.3-R3",
           assertion: "`--no-flag` syntax → exit code 4 (rejected as unknown flag)",
         }),
-        testCase({
+        TestCase({
           id: "CLI-BOOL-007",
           priority: "p0",
           type: "unit",
@@ -980,12 +980,12 @@ export const tisynCliTestPlan: TestPlanModule = testPlan({
         }),
       ],
     }),
-    testCategory({
+    TestCategory({
       id: "CLI-TC-I",
       title: "Flag Collision",
       notes: CATEGORY_I_NOTES,
       cases: [
-        testCase({
+        TestCase({
           id: "CLI-COL-001",
           priority: "p0",
           type: "e2e",
@@ -993,14 +993,14 @@ export const tisynCliTestPlan: TestPlanModule = testPlan({
           assertion:
             "Derived `--verbose` (from `verbose` parameter) collides with built-in → built-in wins, workflow parameter not addressable via `--verbose`",
         }),
-        testCase({
+        TestCase({
           id: "CLI-COL-002",
           priority: "p0",
           type: "unit",
           specRef: "CLI-9.5-R1",
           assertion: "[Unit] Collision check operates on derived kebab-case names",
         }),
-        testCase({
+        TestCase({
           id: "CLI-COL-003",
           priority: "p0",
           type: "e2e",
@@ -1009,60 +1009,60 @@ export const tisynCliTestPlan: TestPlanModule = testPlan({
         }),
       ],
     }),
-    testCategory({
+    TestCategory({
       id: "CLI-TC-J",
       title: "Help Generation",
       cases: [
-        testCase({
+        TestCase({
           id: "CLI-HLP-001",
           priority: "p0",
           type: "e2e",
           specRef: "CLI-9.6-R1",
           assertion: "Help output includes usage line",
         }),
-        testCase({
+        TestCase({
           id: "CLI-HLP-002",
           priority: "p0",
           type: "e2e",
           specRef: "CLI-9.6-R1",
           assertion: "Help includes built-in options",
         }),
-        testCase({
+        TestCase({
           id: "CLI-HLP-003",
           priority: "p0",
           type: "e2e",
           specRef: "CLI-9.6-R1",
           assertion: "Help includes workflow-derived flags with type indicators",
         }),
-        testCase({
+        TestCase({
           id: "CLI-HLP-004",
           priority: "p0",
           type: "e2e",
           specRef: "CLI-9.6-R1",
           assertion: "Help marks required vs optional for each derived flag",
         }),
-        testCase({
+        TestCase({
           id: "CLI-HLP-005",
           priority: "p0",
           type: "e2e",
           specRef: "CLI-8.5-R1",
           assertion: "JSDoc descriptions appear in help (SHOULD)",
         }),
-        testCase({
+        TestCase({
           id: "CLI-HLP-006",
           priority: "p0",
           type: "e2e",
           specRef: "CLI-9.6-R2",
           assertion: "Help does NOT describe `Config.useConfig()` internals",
         }),
-        testCase({
+        TestCase({
           id: "CLI-HLP-007",
           priority: "p1",
           type: "e2e",
           specRef: "CLI-9.6-R1",
           assertion: "Help lists available entrypoints",
         }),
-        testCase({
+        TestCase({
           id: "CLI-HLP-008",
           priority: "p0",
           type: "e2e",
@@ -1070,7 +1070,7 @@ export const tisynCliTestPlan: TestPlanModule = testPlan({
           assertion:
             "Module load failure → help shows built-in options + diagnostic, exits with error code",
         }),
-        testCase({
+        TestCase({
           id: "CLI-HLP-009",
           priority: "p0",
           type: "e2e",
@@ -1078,21 +1078,21 @@ export const tisynCliTestPlan: TestPlanModule = testPlan({
           assertion:
             "Schema derivation failure → help shows built-in options + diagnostic, exits with error code",
         }),
-        testCase({
+        TestCase({
           id: "CLI-HLP-010",
           priority: "p0",
           type: "e2e",
           specRef: "CLI-9.6-R4",
           assertion: "Help MUST NOT silently omit workflow inputs section without explanation",
         }),
-        testCase({
+        TestCase({
           id: "CLI-HLP-011",
           priority: "p0",
           type: "e2e",
           specRef: "CLI-9.6-R1",
           assertion: "[Golden] Snapshot: help output for `with-inputs` fixture",
         }),
-        testCase({
+        TestCase({
           id: "CLI-HLP-012",
           priority: "p0",
           type: "e2e",
@@ -1102,32 +1102,32 @@ export const tisynCliTestPlan: TestPlanModule = testPlan({
         }),
       ],
     }),
-    testCategory({
+    TestCategory({
       id: "CLI-TC-K",
       title: "`tsn check`",
       cases: [
-        testCase({
+        TestCase({
           id: "CLI-CHK-001",
           priority: "p0",
           type: "e2e",
           specRef: "CLI-10.2-R1",
           assertion: "Valid descriptor + env vars set → exit 0",
         }),
-        testCase({
+        TestCase({
           id: "CLI-CHK-002",
           priority: "p0",
           type: "e2e",
           specRef: "CLI-10.2-R1",
           assertion: "Invalid descriptor → exit code 2",
         }),
-        testCase({
+        TestCase({
           id: "CLI-CHK-003",
           priority: "p0",
           type: "e2e",
           specRef: "CLI-3.4-R6",
           assertion: "Missing required env var → exit code 5",
         }),
-        testCase({
+        TestCase({
           id: "CLI-CHK-004",
           priority: "p0",
           type: "e2e",
@@ -1135,7 +1135,7 @@ export const tisynCliTestPlan: TestPlanModule = testPlan({
           assertion:
             "`tsn check` does not start transports; observable as process exiting promptly after checks",
         }),
-        testCase({
+        TestCase({
           id: "CLI-CHK-005",
           priority: "p0",
           type: "e2e",
@@ -1143,49 +1143,49 @@ export const tisynCliTestPlan: TestPlanModule = testPlan({
           assertion:
             "`tsn check` does not execute the workflow; `side-effect` fixture sentinel file NOT created",
         }),
-        testCase({
+        TestCase({
           id: "CLI-CHK-006",
           priority: "p0",
           type: "e2e",
           specRef: "CLI-2.4-R4",
           assertion: "`--entrypoint dev` applies overlay before checking",
         }),
-        testCase({
+        TestCase({
           id: "CLI-CHK-007",
           priority: "p0",
           type: "e2e",
           specRef: "CLI-2.4-R5",
           assertion: "Reports invocation input schema if derivation succeeds (MAY)",
         }),
-        testCase({
+        TestCase({
           id: "CLI-CHK-008",
           priority: "p0",
           type: "e2e",
           specRef: "CLI-2.4-R6",
           assertion: "Schema derivation failure does NOT cause `tsn check` to fail",
         }),
-        testCase({
+        TestCase({
           id: "CLI-CHK-009",
           priority: "p0",
           type: "e2e",
           specRef: "CLI-2.4-R1",
           assertion: "`tsn check` does NOT validate specific invocation input values",
         }),
-        testCase({
+        TestCase({
           id: "CLI-CHK-010",
           priority: "p0",
           type: "e2e",
           specRef: "CLI-2.4-R3",
           assertion: "`--env-example` prints environment variable template to stdout and exits 0",
         }),
-        testCase({
+        TestCase({
           id: "CLI-CHK-011",
           priority: "p0",
           type: "e2e",
           specRef: "CLI-2.4-R3",
           assertion: "[Golden] Snapshot: `tsn check` output for `multi-agent` fixture",
         }),
-        testCase({
+        TestCase({
           id: "CLI-CHK-012",
           priority: "p0",
           type: "e2e",
@@ -1195,11 +1195,11 @@ export const tisynCliTestPlan: TestPlanModule = testPlan({
         }),
       ],
     }),
-    testCategory({
+    TestCategory({
       id: "CLI-TC-L",
       title: "Startup Lifecycle Ordering",
       cases: [
-        testCase({
+        TestCase({
           id: "CLI-LIFE-001",
           priority: "p0",
           type: "e2e",
@@ -1207,7 +1207,7 @@ export const tisynCliTestPlan: TestPlanModule = testPlan({
           assertion:
             "Phase A before B. Fixture: `bad-descriptor.ts`. Observable: exit 2 with only descriptor-related diagnostics, no input-parsing diagnostics",
         }),
-        testCase({
+        TestCase({
           id: "CLI-LIFE-002",
           priority: "p0",
           type: "e2e",
@@ -1215,7 +1215,7 @@ export const tisynCliTestPlan: TestPlanModule = testPlan({
           assertion:
             "Phase B before C. Fixture: `with-inputs.ts` with a required input omitted and all env vars set. Observable: exit 4 for missing input",
         }),
-        testCase({
+        TestCase({
           id: "CLI-LIFE-003",
           priority: "p0",
           type: "e2e",
@@ -1223,7 +1223,7 @@ export const tisynCliTestPlan: TestPlanModule = testPlan({
           assertion:
             "Phases A–C before transport startup: validation failure exits and `side-effect` fixture transport side effect is not observable",
         }),
-        testCase({
+        TestCase({
           id: "CLI-LIFE-004",
           priority: "p0",
           type: "e2e",
@@ -1231,7 +1231,7 @@ export const tisynCliTestPlan: TestPlanModule = testPlan({
           assertion:
             "Phases A–C before workflow execution: validation failure exits and `side-effect` fixture sentinel file NOT created",
         }),
-        testCase({
+        TestCase({
           id: "CLI-LIFE-005",
           priority: "p0",
           type: "e2e",
@@ -1239,7 +1239,7 @@ export const tisynCliTestPlan: TestPlanModule = testPlan({
           assertion:
             "Workflow receives validated invocation args. Observable: workflow produces output derived from args",
         }),
-        testCase({
+        TestCase({
           id: "CLI-LIFE-006",
           priority: "p0",
           type: "e2e",
@@ -1247,7 +1247,7 @@ export const tisynCliTestPlan: TestPlanModule = testPlan({
           assertion:
             "Resolved config available via `yield* Config.useConfig(Token)` only after pre-execution validation/resolution complete",
         }),
-        testCase({
+        TestCase({
           id: "CLI-LIFE-007",
           priority: "p0",
           type: "e2e",
@@ -1257,102 +1257,102 @@ export const tisynCliTestPlan: TestPlanModule = testPlan({
         }),
       ],
     }),
-    testCategory({
+    TestCategory({
       id: "CLI-TC-M",
       title: "Exit Code Behavior",
       cases: [
-        testCase({
+        TestCase({
           id: "CLI-EXIT-001",
           priority: "p0",
           type: "e2e",
           specRef: "CLI-3.4-R8",
           assertion: "Successful `tsn generate` → exit 0",
         }),
-        testCase({
+        TestCase({
           id: "CLI-EXIT-002",
           priority: "p0",
           type: "e2e",
           specRef: "CLI-3.4-R9",
           assertion: "Compilation error → exit 1",
         }),
-        testCase({
+        TestCase({
           id: "CLI-EXIT-003",
           priority: "p0",
           type: "e2e",
           specRef: "CLI-3.4-R4",
           assertion: "Loaded module, invalid descriptor → exit 2",
         }),
-        testCase({
+        TestCase({
           id: "CLI-EXIT-004",
           priority: "p0",
           type: "e2e",
           specRef: "CLI-3.4-R4",
           assertion: "Module file not found → exit 3",
         }),
-        testCase({
+        TestCase({
           id: "CLI-EXIT-005",
           priority: "p0",
           type: "e2e",
           specRef: "CLI-3.4-R4",
           assertion: "Module file not readable → exit 3",
         }),
-        testCase({
+        TestCase({
           id: "CLI-EXIT-006",
           priority: "p0",
           type: "e2e",
           specRef: "CLI-3.4-R5",
           assertion: "Missing required invocation input → exit 4",
         }),
-        testCase({
+        TestCase({
           id: "CLI-EXIT-007",
           priority: "p0",
           type: "e2e",
           specRef: "CLI-3.4-R5",
           assertion: "Unknown invocation flag (`tsn run`) → exit 4",
         }),
-        testCase({
+        TestCase({
           id: "CLI-EXIT-008",
           priority: "p0",
           type: "e2e",
           specRef: "CLI-3.4-R5",
           assertion: "Number coercion failure → exit 4",
         }),
-        testCase({
+        TestCase({
           id: "CLI-EXIT-009",
           priority: "p0",
           type: "e2e",
           specRef: "CLI-3.4-R6",
           assertion: "Missing required env var → exit 5",
         }),
-        testCase({
+        TestCase({
           id: "CLI-EXIT-010",
           priority: "p0",
           type: "e2e",
           specRef: "CLI-3.4-R2",
           assertion: "Unrecognized built-in flag (`generate`) → exit 2",
         }),
-        testCase({
+        TestCase({
           id: "CLI-EXIT-011",
           priority: "p0",
           type: "e2e",
           specRef: "CLI-3.4-R4",
           assertion: "Code 2 vs 3: loaded but invalid → exit 2",
         }),
-        testCase({
+        TestCase({
           id: "CLI-EXIT-012",
           priority: "p0",
           type: "e2e",
           specRef: "CLI-3.4-R4",
           assertion: "Code 2 vs 3: path does not exist → exit 3",
         }),
-        testCase({
+        TestCase({
           id: "CLI-EXIT-013",
           priority: "p0",
           type: "e2e",
           specRef: "CLI-3.4-R8",
           assertion: "Successful `tsn run` → exit 0",
         }),
-        testCase({
+        TestCase({
           id: "CLI-EXIT-014",
           priority: "p0",
           type: "e2e",
@@ -1361,12 +1361,12 @@ export const tisynCliTestPlan: TestPlanModule = testPlan({
         }),
       ],
     }),
-    testCategory({
+    TestCategory({
       id: "CLI-TC-N",
       title: "Combined Error Reporting",
       notes: CATEGORY_N_NOTES,
       cases: [
-        testCase({
+        TestCase({
           id: "CLI-CER-001",
           priority: "p0",
           type: "e2e",
@@ -1375,53 +1375,53 @@ export const tisynCliTestPlan: TestPlanModule = testPlan({
         }),
       ],
     }),
-    testCategory({
+    TestCategory({
       id: "CLI-TC-O",
       title: "Golden/Snapshot Tests",
       cases: [
-        testCase({
+        TestCase({
           id: "CLI-SNAP-001",
           priority: "p0",
           type: "e2e",
           specRef: "CLI-9.6-R1",
           assertion: "[Golden] Help output: zero-parameter workflow",
         }),
-        testCase({
+        TestCase({
           id: "CLI-SNAP-002",
           priority: "p0",
           type: "e2e",
           specRef: "CLI-9.6-R1",
           assertion: "[Golden] Help output: multi-field workflow",
         }),
-        testCase({
+        TestCase({
           id: "CLI-SNAP-003",
           priority: "p0",
           type: "e2e",
           specRef: "CLI-2.4-R3",
           assertion: "[Golden] `tsn check` output: passing descriptor",
         }),
-        testCase({
+        TestCase({
           id: "CLI-SNAP-004",
           priority: "p0",
           type: "e2e",
           specRef: "CLI-2.4-R3",
           assertion: "[Golden] `tsn check` output: failing descriptor",
         }),
-        testCase({
+        TestCase({
           id: "CLI-SNAP-005",
           priority: "p0",
           type: "e2e",
           specRef: "CLI-7.1-R1",
           assertion: "[Golden] Compilation error diagnostic",
         }),
-        testCase({
+        TestCase({
           id: "CLI-SNAP-006",
           priority: "p0",
           type: "e2e",
           specRef: "CLI-3.4-R5",
           assertion: "[Golden] Missing required invocation input diagnostic",
         }),
-        testCase({
+        TestCase({
           id: "CLI-SNAP-007",
           priority: "p0",
           type: "e2e",
@@ -1430,25 +1430,25 @@ export const tisynCliTestPlan: TestPlanModule = testPlan({
         }),
       ],
     }),
-    testCategory({
+    TestCategory({
       id: "CLI-TC-P",
       title: "Authored Source Execution (`tsn run`)",
       cases: [
-        testCase({
+        TestCase({
           id: "RUN-SRC-001",
           priority: "p0",
           type: "e2e",
           specRef: "CLI-10.5.4-R1",
           assertion: "Authored `.ts` with same-file helper executes without `UnboundVariable`",
         }),
-        testCase({
+        TestCase({
           id: "RUN-SRC-002",
           priority: "p0",
           type: "e2e",
           specRef: "CLI-10.5.4-R1",
           assertion: "Authored `.ts` with cross-module helper executes without `UnboundVariable`",
         }),
-        testCase({
+        TestCase({
           id: "RUN-SRC-003",
           priority: "p0",
           type: "e2e",
@@ -1459,52 +1459,52 @@ export const tisynCliTestPlan: TestPlanModule = testPlan({
     }),
   ],
   coverageMatrix: [
-    coverageEntry({ rule: "CLI-1.1-R1", testIds: ["CLI-CMD-005"], status: "covered" }),
-    coverageEntry({ rule: "CLI-2.1-R1", testIds: ["CLI-GEN-006"], status: "covered" }),
-    coverageEntry({
+    CoverageEntry({ rule: "CLI-1.1-R1", testIds: ["CLI-CMD-005"], status: "covered" }),
+    CoverageEntry({ rule: "CLI-2.1-R1", testIds: ["CLI-GEN-006"], status: "covered" }),
+    CoverageEntry({
       rule: "CLI-2.1-R2",
       testIds: ["CLI-CMD-001", "CLI-GEN-005"],
       status: "covered",
     }),
-    coverageEntry({
+    CoverageEntry({
       rule: "CLI-2.1-R3",
       testIds: ["CLI-GEN-001", "CLI-GEN-002"],
       status: "covered",
     }),
-    coverageEntry({
+    CoverageEntry({
       rule: "CLI-2.2-R1",
       testIds: ["CLI-CMD-002", "CLI-BLD-001"],
       status: "covered",
     }),
-    coverageEntry({ rule: "CLI-2.2-R2", testIds: ["CLI-BLD-002"], status: "covered" }),
-    coverageEntry({ rule: "CLI-2.2-R3", testIds: ["CLI-BLD-005"], status: "covered" }),
-    coverageEntry({ rule: "CLI-2.2-R4", testIds: ["CLI-BLD-006"], status: "covered" }),
-    coverageEntry({ rule: "CLI-2.4-R1", testIds: ["CLI-CHK-009"], status: "covered" }),
-    coverageEntry({
+    CoverageEntry({ rule: "CLI-2.2-R2", testIds: ["CLI-BLD-002"], status: "covered" }),
+    CoverageEntry({ rule: "CLI-2.2-R3", testIds: ["CLI-BLD-005"], status: "covered" }),
+    CoverageEntry({ rule: "CLI-2.2-R4", testIds: ["CLI-BLD-006"], status: "covered" }),
+    CoverageEntry({ rule: "CLI-2.4-R1", testIds: ["CLI-CHK-009"], status: "covered" }),
+    CoverageEntry({
       rule: "CLI-2.4-R2",
       testIds: ["CLI-CHK-004", "CLI-CHK-005"],
       status: "covered",
     }),
-    coverageEntry({
+    CoverageEntry({
       rule: "CLI-2.4-R3",
       testIds: ["CLI-CMD-004", "CLI-CHK-010", "CLI-CHK-011", "CLI-SNAP-003", "CLI-SNAP-004"],
       status: "covered",
     }),
-    coverageEntry({ rule: "CLI-2.4-R4", testIds: ["CLI-CHK-006"], status: "covered" }),
-    coverageEntry({ rule: "CLI-2.4-R5", testIds: ["CLI-CHK-007"], status: "covered" }),
-    coverageEntry({ rule: "CLI-2.4-R6", testIds: ["CLI-CHK-008"], status: "covered" }),
-    coverageEntry({ rule: "CLI-3.4-R1", testIds: ["CLI-CMD-006"], status: "covered" }),
-    coverageEntry({
+    CoverageEntry({ rule: "CLI-2.4-R4", testIds: ["CLI-CHK-006"], status: "covered" }),
+    CoverageEntry({ rule: "CLI-2.4-R5", testIds: ["CLI-CHK-007"], status: "covered" }),
+    CoverageEntry({ rule: "CLI-2.4-R6", testIds: ["CLI-CHK-008"], status: "covered" }),
+    CoverageEntry({ rule: "CLI-3.4-R1", testIds: ["CLI-CMD-006"], status: "covered" }),
+    CoverageEntry({
       rule: "CLI-3.4-R2",
       testIds: ["CLI-GEN-004", "CLI-EXIT-010"],
       status: "covered",
     }),
-    coverageEntry({
+    CoverageEntry({
       rule: "CLI-3.4-R3",
       testIds: ["CLI-CMD-006", "CLI-GEN-003"],
       status: "covered",
     }),
-    coverageEntry({
+    CoverageEntry({
       rule: "CLI-3.4-R4",
       testIds: [
         "CLI-LOAD-002",
@@ -1516,45 +1516,45 @@ export const tisynCliTestPlan: TestPlanModule = testPlan({
       ],
       status: "covered",
     }),
-    coverageEntry({
+    CoverageEntry({
       rule: "CLI-3.4-R5",
       testIds: ["CLI-EXIT-006", "CLI-EXIT-007", "CLI-EXIT-008", "CLI-SNAP-006", "CLI-SNAP-007"],
       status: "covered",
     }),
-    coverageEntry({
+    CoverageEntry({
       rule: "CLI-3.4-R6",
       testIds: ["CLI-CHK-003", "CLI-EXIT-009"],
       status: "covered",
     }),
-    coverageEntry({ rule: "CLI-3.4-R7", testIds: ["CLI-EXIT-014"], status: "covered" }),
-    coverageEntry({
+    CoverageEntry({ rule: "CLI-3.4-R7", testIds: ["CLI-EXIT-014"], status: "covered" }),
+    CoverageEntry({
       rule: "CLI-3.4-R8",
       testIds: ["CLI-EXIT-001", "CLI-EXIT-013"],
       status: "covered",
     }),
-    coverageEntry({ rule: "CLI-3.4-R9", testIds: ["CLI-EXIT-002"], status: "covered" }),
-    coverageEntry({ rule: "CLI-4.3-R1", testIds: ["CLI-BLD-003"], status: "covered" }),
-    coverageEntry({ rule: "CLI-4.3-R2", testIds: ["CLI-BLD-008"], status: "covered" }),
-    coverageEntry({ rule: "CLI-5.1-R1", testIds: ["CLI-BLD-009"], status: "covered" }),
-    coverageEntry({ rule: "CLI-5.1-R2", testIds: ["CLI-BLD-004"], status: "covered" }),
-    coverageEntry({ rule: "CLI-5.3-R1", testIds: ["CLI-BLD-007"], status: "covered" }),
-    coverageEntry({ rule: "CLI-7.1-R1", testIds: ["CLI-SNAP-005"], status: "covered" }),
-    coverageEntry({ rule: "CLI-8.1-R1", testIds: ["CLI-IS-001"], status: "covered" }),
-    coverageEntry({ rule: "CLI-8.1-R2", testIds: ["CLI-IS-002"], status: "covered" }),
-    coverageEntry({ rule: "CLI-8.1-R3", testIds: ["CLI-IS-003"], status: "covered" }),
-    coverageEntry({ rule: "CLI-8.2-R1", testIds: ["CLI-IS-004"], status: "covered" }),
-    coverageEntry({
+    CoverageEntry({ rule: "CLI-3.4-R9", testIds: ["CLI-EXIT-002"], status: "covered" }),
+    CoverageEntry({ rule: "CLI-4.3-R1", testIds: ["CLI-BLD-003"], status: "covered" }),
+    CoverageEntry({ rule: "CLI-4.3-R2", testIds: ["CLI-BLD-008"], status: "covered" }),
+    CoverageEntry({ rule: "CLI-5.1-R1", testIds: ["CLI-BLD-009"], status: "covered" }),
+    CoverageEntry({ rule: "CLI-5.1-R2", testIds: ["CLI-BLD-004"], status: "covered" }),
+    CoverageEntry({ rule: "CLI-5.3-R1", testIds: ["CLI-BLD-007"], status: "covered" }),
+    CoverageEntry({ rule: "CLI-7.1-R1", testIds: ["CLI-SNAP-005"], status: "covered" }),
+    CoverageEntry({ rule: "CLI-8.1-R1", testIds: ["CLI-IS-001"], status: "covered" }),
+    CoverageEntry({ rule: "CLI-8.1-R2", testIds: ["CLI-IS-002"], status: "covered" }),
+    CoverageEntry({ rule: "CLI-8.1-R3", testIds: ["CLI-IS-003"], status: "covered" }),
+    CoverageEntry({ rule: "CLI-8.2-R1", testIds: ["CLI-IS-004"], status: "covered" }),
+    CoverageEntry({
       rule: "CLI-8.3-R1",
       testIds: ["CLI-BOOL-001", "CLI-BOOL-003", "CLI-BOOL-005", "CLI-BOOL-007"],
       status: "covered",
     }),
-    coverageEntry({
+    CoverageEntry({
       rule: "CLI-8.3-R2",
       testIds: ["CLI-BOOL-002", "CLI-BOOL-004"],
       status: "covered",
     }),
-    coverageEntry({ rule: "CLI-8.3-R3", testIds: ["CLI-BOOL-006"], status: "covered" }),
-    coverageEntry({
+    CoverageEntry({ rule: "CLI-8.3-R3", testIds: ["CLI-BOOL-006"], status: "covered" }),
+    CoverageEntry({
       rule: "CLI-8.4-R1",
       testIds: [
         "CLI-IS-005",
@@ -1567,13 +1567,13 @@ export const tisynCliTestPlan: TestPlanModule = testPlan({
       ],
       status: "covered",
     }),
-    coverageEntry({ rule: "CLI-8.5-R1", testIds: ["CLI-HLP-005"], status: "covered" }),
-    coverageEntry({
+    CoverageEntry({ rule: "CLI-8.5-R1", testIds: ["CLI-HLP-005"], status: "covered" }),
+    CoverageEntry({
       rule: "CLI-9.1-R1",
       testIds: ["CLI-FLG-001", "CLI-FLG-002", "CLI-FLG-003", "CLI-FLG-004"],
       status: "covered",
     }),
-    coverageEntry({
+    CoverageEntry({
       rule: "CLI-9.2-R1",
       testIds: [
         "CLI-FLG-005",
@@ -1585,20 +1585,20 @@ export const tisynCliTestPlan: TestPlanModule = testPlan({
       ],
       status: "covered",
     }),
-    coverageEntry({ rule: "CLI-9.2-R2", testIds: ["CLI-FLG-008"], status: "covered" }),
-    coverageEntry({ rule: "CLI-9.3-R1", testIds: ["CLI-FLG-011"], status: "covered" }),
-    coverageEntry({
+    CoverageEntry({ rule: "CLI-9.2-R2", testIds: ["CLI-FLG-008"], status: "covered" }),
+    CoverageEntry({ rule: "CLI-9.3-R1", testIds: ["CLI-FLG-011"], status: "covered" }),
+    CoverageEntry({
       rule: "CLI-9.4-R1",
       testIds: ["CLI-FLG-012", "CLI-FLG-017", "CLI-FLG-018", "CLI-FLG-019", "CLI-FLG-020"],
       status: "covered",
     }),
-    coverageEntry({
+    CoverageEntry({
       rule: "CLI-9.5-R1",
       testIds: ["CLI-COL-001", "CLI-COL-002"],
       status: "covered",
     }),
-    coverageEntry({ rule: "CLI-9.5-R2", testIds: ["CLI-COL-003"], status: "covered" }),
-    coverageEntry({
+    CoverageEntry({ rule: "CLI-9.5-R2", testIds: ["CLI-COL-003"], status: "covered" }),
+    CoverageEntry({
       rule: "CLI-9.6-R1",
       testIds: [
         "CLI-CMD-003",
@@ -1613,63 +1613,63 @@ export const tisynCliTestPlan: TestPlanModule = testPlan({
       ],
       status: "covered",
     }),
-    coverageEntry({ rule: "CLI-9.6-R2", testIds: ["CLI-HLP-006"], status: "covered" }),
-    coverageEntry({
+    CoverageEntry({ rule: "CLI-9.6-R2", testIds: ["CLI-HLP-006"], status: "covered" }),
+    CoverageEntry({
       rule: "CLI-9.6-R3",
       testIds: ["CLI-HLP-008", "CLI-HLP-009"],
       status: "covered",
     }),
-    coverageEntry({ rule: "CLI-9.6-R4", testIds: ["CLI-HLP-010"], status: "covered" }),
-    coverageEntry({ rule: "CLI-9.6-R5", testIds: ["CLI-CMD-003a"], status: "covered" }),
-    coverageEntry({
+    CoverageEntry({ rule: "CLI-9.6-R4", testIds: ["CLI-HLP-010"], status: "covered" }),
+    CoverageEntry({ rule: "CLI-9.6-R5", testIds: ["CLI-CMD-003a"], status: "covered" }),
+    CoverageEntry({
       rule: "CLI-10.1-R1",
       testIds: ["CLI-LOAD-001", "CLI-LOAD-008", "CLI-ENT-004"],
       status: "covered",
     }),
-    coverageEntry({
+    CoverageEntry({
       rule: "CLI-10.1-R2",
       testIds: ["CLI-ENT-001", "CLI-ENT-002", "CLI-ENT-003"],
       status: "covered",
     }),
-    coverageEntry({
+    CoverageEntry({
       rule: "CLI-10.1-R3",
       testIds: ["CLI-LIFE-005", "CLI-LIFE-006", "CLI-LIFE-007"],
       status: "covered",
     }),
-    coverageEntry({
+    CoverageEntry({
       rule: "CLI-10.2-R1",
       testIds: ["CLI-LOAD-003", "CLI-LOAD-004", "CLI-CHK-001", "CLI-CHK-002"],
       status: "covered",
     }),
-    coverageEntry({ rule: "CLI-10.2-R2", testIds: ["CLI-LOAD-005"], status: "covered" }),
-    coverageEntry({
+    CoverageEntry({ rule: "CLI-10.2-R2", testIds: ["CLI-LOAD-005"], status: "covered" }),
+    CoverageEntry({
       rule: "CLI-10.2-R3",
       testIds: ["CLI-LOAD-006", "CLI-LOAD-007"],
       status: "covered",
     }),
-    coverageEntry({
+    CoverageEntry({
       rule: "CLI-10.2-R4",
       testIds: ["CLI-LOAD-013", "CLI-LOAD-014"],
       status: "covered",
     }),
-    coverageEntry({
+    CoverageEntry({
       rule: "CLI-10.3-R1",
       testIds: ["CLI-LIFE-001", "CLI-LIFE-002", "CLI-LIFE-003", "CLI-LIFE-004"],
       status: "covered",
     }),
-    coverageEntry({ rule: "CLI-10.4-R1", testIds: ["CLI-CER-001"], status: "covered" }),
-    coverageEntry({
+    CoverageEntry({ rule: "CLI-10.4-R1", testIds: ["CLI-CER-001"], status: "covered" }),
+    CoverageEntry({
       rule: "CLI-10.5.1-R1",
       testIds: ["CLI-LOAD-009", "CLI-HLP-012", "CLI-CHK-012"],
       status: "covered",
     }),
-    coverageEntry({ rule: "CLI-10.5.1-R2", testIds: ["CLI-LOAD-010"], status: "covered" }),
-    coverageEntry({
+    CoverageEntry({ rule: "CLI-10.5.1-R2", testIds: ["CLI-LOAD-010"], status: "covered" }),
+    CoverageEntry({
       rule: "CLI-10.5.4-R1",
       testIds: ["CLI-LOAD-011", "CLI-LOAD-012", "RUN-SRC-001", "RUN-SRC-002", "RUN-SRC-003"],
       status: "covered",
     }),
-    coverageEntry({
+    CoverageEntry({
       rule: "CLI-16.2-R1",
       testIds: ["CLI-FLG-014", "CLI-FLG-015", "CLI-FLG-016"],
       status: "covered",

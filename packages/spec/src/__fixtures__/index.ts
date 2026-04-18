@@ -2,51 +2,51 @@
 // across the test suite. Not part of the package's public surface.
 
 import {
-  coverageEntry,
-  openQuestion,
-  relationship,
-  rule,
-  section,
-  spec,
-  term,
-  testCase,
-  testCategory,
-  testPlan,
-  testPlanSection,
+  CoverageEntry,
+  OpenQuestion,
+  Relationship,
+  Rule,
+  Section,
+  Spec,
+  Term,
+  TestCase,
+  TestCategory,
+  TestPlan,
+  TestPlanSection,
 } from "../constructors.ts";
 import type { SpecModule, TestPlanModule } from "../types.ts";
 
-export const fixtureAlpha: SpecModule = spec({
+export const fixtureAlpha: SpecModule = Spec({
   id: "fixture-alpha",
   title: "Fixture Alpha",
   status: "active",
   relationships: [],
   sections: [
-    section({
+    Section({
       id: 1,
       title: "Core",
       prose: "Alpha prose.",
       rules: [
-        rule({ id: "A1", level: "must", text: "Alpha must do A1." }),
-        rule({ id: "A2", level: "should", text: "Alpha should do A2." }),
+        Rule({ id: "A1", level: "must", text: "Alpha must do A1." }),
+        Rule({ id: "A2", level: "should", text: "Alpha should do A2." }),
       ],
-      termDefinitions: [term({ term: "Alpha", definition: "The first fixture." })],
+      termDefinitions: [Term({ term: "Alpha", definition: "The first fixture." })],
     }),
   ],
 });
 
-export const fixtureAlphaPlan: TestPlanModule = testPlan({
+export const fixtureAlphaPlan: TestPlanModule = TestPlan({
   id: "fixture-alpha-plan",
   title: "Fixture Alpha Plan",
   validatesSpec: "fixture-alpha",
-  sections: [testPlanSection({ id: 1, title: "Cases", prose: "Case prose." })],
+  sections: [TestPlanSection({ id: 1, title: "Cases", prose: "Case prose." })],
   categoriesSectionId: 1,
   categories: [
-    testCategory({
+    TestCategory({
       id: "CAT-A",
       title: "Alpha Cases",
       cases: [
-        testCase({
+        TestCase({
           id: "T-A-001",
           priority: "p0",
           type: "unit",
@@ -57,79 +57,79 @@ export const fixtureAlphaPlan: TestPlanModule = testPlan({
     }),
   ],
   coverageMatrix: [
-    coverageEntry({ rule: "A1", testIds: ["T-A-001"], status: "covered" }),
-    coverageEntry({ rule: "A2", testIds: [], status: "uncovered" }),
+    CoverageEntry({ rule: "A1", testIds: ["T-A-001"], status: "covered" }),
+    CoverageEntry({ rule: "A2", testIds: [], status: "uncovered" }),
   ],
 });
 
-export const fixtureBeta: SpecModule = spec({
+export const fixtureBeta: SpecModule = Spec({
   id: "fixture-beta",
   title: "Fixture Beta",
   status: "active",
-  relationships: [relationship({ type: "depends-on", target: "fixture-alpha" })],
+  relationships: [Relationship({ type: "depends-on", target: "fixture-alpha" })],
   sections: [
-    section({
+    Section({
       id: 1,
       title: "Core",
       prose: "Beta prose.",
-      rules: [rule({ id: "B1", level: "must", text: "Beta must do B1." })],
+      rules: [Rule({ id: "B1", level: "must", text: "Beta must do B1." })],
     }),
   ],
 });
 
 export function fixtureBetaConflictingTerm(): SpecModule {
-  return spec({
+  return Spec({
     id: "fixture-beta",
     title: "Fixture Beta",
     status: "active",
-    relationships: [relationship({ type: "depends-on", target: "fixture-alpha" })],
+    relationships: [Relationship({ type: "depends-on", target: "fixture-alpha" })],
     sections: [
-      section({
+      Section({
         id: 1,
         title: "Core",
         prose: "",
-        rules: [rule({ id: "B1", level: "must", text: "Beta must do B1." })],
+        rules: [Rule({ id: "B1", level: "must", text: "Beta must do B1." })],
         termDefinitions: [
-          term({ term: "Alpha", definition: "A conflicting redefinition of Alpha." }),
+          Term({ term: "Alpha", definition: "A conflicting redefinition of Alpha." }),
         ],
       }),
     ],
   });
 }
 
-export const fixtureGamma: SpecModule = spec({
+export const fixtureGamma: SpecModule = Spec({
   id: "fixture-gamma",
   title: "Fixture Gamma",
   status: "superseded",
   relationships: [],
   sections: [
-    section({
+    Section({
       id: 1,
       title: "Legacy",
       prose: "Gamma prose.",
-      rules: [rule({ id: "G1", level: "may", text: "Gamma may do G1." })],
+      rules: [Rule({ id: "G1", level: "may", text: "Gamma may do G1." })],
     }),
   ],
 });
 
-export const fixtureDelta: SpecModule = spec({
+export const fixtureDelta: SpecModule = Spec({
   id: "fixture-delta",
   title: "Fixture Delta",
   status: "draft",
   relationships: [
-    relationship({ type: "depends-on", target: "fixture-alpha" }),
-    relationship({ type: "complements", target: "fixture-missing" }),
+    Relationship({ type: "depends-on", target: "fixture-alpha" }),
+    Relationship({ type: "complements", target: "fixture-missing" }),
   ],
   sections: [
-    section({
+    Section({
       id: 1,
       title: "Questions",
       prose: "Delta prose referring to §2 of fixture-alpha.",
-      rules: [rule({ id: "D1", level: "must", text: "Delta must do D1." })],
+      rules: [Rule({ id: "D1", level: "must", text: "Delta must do D1." })],
     }),
   ],
   openQuestions: [
-    openQuestion({
+    OpenQuestion({
       id: "OQ-D-1",
       text: "Should D1 apply transitively?",
       status: "open",
@@ -139,19 +139,19 @@ export const fixtureDelta: SpecModule = spec({
 });
 
 export function fixtureEpsilonCycle(): readonly [SpecModule, SpecModule] {
-  const epsilonA = spec({
+  const epsilonA = Spec({
     id: "fixture-epsilon-a",
     title: "Epsilon A",
     status: "active",
-    relationships: [relationship({ type: "depends-on", target: "fixture-epsilon-b" })],
-    sections: [section({ id: 1, title: "Only", prose: "" })],
+    relationships: [Relationship({ type: "depends-on", target: "fixture-epsilon-b" })],
+    sections: [Section({ id: 1, title: "Only", prose: "" })],
   });
-  const epsilonB = spec({
+  const epsilonB = Spec({
     id: "fixture-epsilon-b",
     title: "Epsilon B",
     status: "active",
-    relationships: [relationship({ type: "depends-on", target: "fixture-epsilon-a" })],
-    sections: [section({ id: 1, title: "Only", prose: "" })],
+    relationships: [Relationship({ type: "depends-on", target: "fixture-epsilon-a" })],
+    sections: [Section({ id: 1, title: "Only", prose: "" })],
   });
   return [epsilonA, epsilonB];
 }

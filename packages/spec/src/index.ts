@@ -23,20 +23,20 @@ export type {
 } from "./enums.ts";
 
 export {
-  concept,
-  coverageEntry,
-  errorCode,
-  invariant,
-  openQuestion,
-  relationship,
-  rule,
-  section,
-  spec,
-  term,
-  testCase,
-  testCategory,
-  testPlan,
-  testPlanSection,
+  Concept,
+  CoverageEntry,
+  ErrorCode,
+  Invariant,
+  OpenQuestion,
+  Relationship,
+  Rule,
+  Section,
+  Spec,
+  Term,
+  TestCase,
+  TestCategory,
+  TestPlan,
+  TestPlanSection,
 } from "./constructors.ts";
 
 export { normalizeSpec, normalizeTestPlan } from "./normalize.ts";
@@ -65,6 +65,13 @@ export type { RenderSpecOptions, RenderTestPlanOptions } from "./markdown/index.
 
 export { AcquisitionError } from "./types.ts";
 
+// Nine names (CoverageEntry, ErrorCode, OpenQuestion, Relationship, Rule,
+// Section, TestCase, TestCategory, TestPlanSection) are intentionally omitted
+// from this re-export block — their interfaces are re-exported by
+// ./constructors.ts as type aliases that declaration-merge with the matching
+// PascalCase constructor functions, giving consumers a single name that
+// resolves to the function in value position and the interface in type
+// position.
 export type {
   AcquisitionFailureEntry,
   AcquisitionFailureKind,
@@ -79,7 +86,6 @@ export type {
   ConsistencySummaryReadiness,
   ConstraintDocument,
   CorpusRegistry,
-  CoverageEntry,
   CoverageResult,
   CoveredRule,
   DeferredRule,
@@ -91,7 +97,6 @@ export type {
   DiscoveryPackSpec,
   DiscoveryPackTerm,
   DuplicateRule,
-  ErrorCode,
   ErrorCodeCollision,
   ErrorCodeLocation,
   ImpactEntry,
@@ -102,17 +107,13 @@ export type {
   NormalizeResult,
   NormalizedSpecModule,
   NormalizedTestPlanModule,
-  OpenQuestion,
   OpenQuestionLocation,
   Operation,
   ReadinessResult,
-  Relationship,
   RelationshipEdge,
   ReviewContext,
-  Rule,
   RuleLocation,
   Scope,
-  Section,
   SpecModule,
   StaleReference,
   TaskContext,
@@ -120,11 +121,8 @@ export type {
   TermConflict,
   TermDefinition,
   TermLocation,
-  TestCase,
   TestCaseLocation,
-  TestCategory,
   TestPlanContext,
   TestPlanModule,
-  TestPlanSection,
   UncoveredRule,
 } from "./types.ts";
