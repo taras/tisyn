@@ -11,13 +11,11 @@ an implementation worker.
 
 ## Conformance
 
-- **Claude side:** uses the conforming `@tisyn/claude-code` SDK
-  adapter, which calls the Claude Agent SDK directly.
-- **Codex side:** uses the non-conforming `@tisyn/codex` exec
-  adapter, which runs `codex exec --json` as an independent
-  subprocess per prompt. This does not preserve session history
-  across prompts, but the handoff only requires a single
-  self-contained Codex prompt.
+- **Claude side:** uses the `@tisyn/claude-code` SDK adapter, which
+  calls the Claude Agent SDK directly.
+- **Codex side:** uses the `@tisyn/codex` SDK adapter, which calls
+  the `@openai/codex-sdk` directly. The SDK maintains per-thread
+  conversation history across prompts.
 
 ## Prerequisites
 
@@ -84,9 +82,8 @@ Handing Claude message to Codex for a brief reply...
 Workflow complete.
 ```
 
-If Claude returns an unusable response (empty, or containing
-auth/billing failure text), the workflow skips the Codex handoff
-and logs a status message explaining why.
+If Claude returns an empty response, the workflow skips the Codex
+handoff and logs a status message explaining why.
 
 ## Architecture
 
@@ -94,5 +91,5 @@ and logs a status message explaining why.
   and `Output()` agent declarations using the portable CodeAgent
   contract types from `@tisyn/code-agent`
 - `claude-binding.ts` — Claude Code SDK adapter binding
-- `codex-binding.ts` — Codex exec adapter binding (one-shot)
+- `codex-binding.ts` — Codex SDK adapter binding
 - `src/output-agent.ts` — inprocess agent that prints labeled results

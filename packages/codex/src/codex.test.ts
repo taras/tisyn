@@ -1,5 +1,5 @@
 import { describe, it } from "@effectionx/vitest";
-import { expect } from "vitest";
+import { expect, vi } from "vitest";
 import { scoped, spawn, sleep } from "effection";
 import { resolve } from "node:path";
 import type { Val } from "@tisyn/ir";
@@ -12,6 +12,28 @@ import { createSdkBinding } from "./sdk-adapter.js";
 import { createExecBinding } from "./exec-adapter.js";
 
 const mockCodexExec = resolve(import.meta.dirname, "test-assets/mock-codex-exec.ts");
+
+// ── SDK mock ──
+// Per-test factory that test bodies configure before dispatching.
+// The mock itself must be async because that's the SDK's interface shape.
+let mockRunStreamed: (input: string) => Promise<{ events: AsyncGenerator<Record<string, unknown>> }>;
+let startThreadCallCount = 0;
+
+vi.mock("@openai/codex-sdk", () => {
+  class MockThread {
+    id = "thread-1";
+    runStreamed(input: string) {
+      return mockRunStreamed(input);
+    }
+  }
+  class MockCodex {
+    startThread() {
+      startThreadCallCount++;
+      return new MockThread();
+    }
+  }
+  return { Codex: MockCodex };
+});
 
 // ── SDK adapter tests ──
 
@@ -108,29 +130,110 @@ describe("Codex SDK Adapter", () => {
     });
   });
 
-  describe("blocked operations", () => {
-    it("newSession throws pending-verification error", function* () {
+  describe("session lifecycle", () => {
+    it("newSession returns handle", function* () {
+      startThreadCallCount = 0;
+      mockRunStreamed = async () => ({ events: (async function* () {})() });
       const binding = createSdkBinding();
-      let caughtError: Error | null = null;
 
       yield* scoped(function* () {
         yield* installRemoteAgent(CodeAgent, binding.transport);
 
-        try {
-          yield* dispatch("code-agent.newSession", {
-            config: { model: "test" },
-          } as unknown as Val);
-        } catch (e) {
-          caughtError = e as Error;
-        }
-      });
+        const handle = yield* dispatch("code-agent.newSession", {
+          config: {},
+        } as unknown as Val);
 
-      expect(caughtError).not.toBeNull();
-      expect(caughtError!.message).toContain("not yet implemented");
-      expect(caughtError!.message).toContain("OQ-CX-1");
+        expect((handle as any).sessionId).toMatch(/^cx-\d+$/);
+        expect(startThreadCallCount).toBe(1);
+      });
     });
 
-    it("prompt throws pending-verification error", function* () {
+    it("prompt returns response from streamed events", function* () {
+      mockRunStreamed = async (input: string) => ({
+        events: (async function* () {
+          yield { type: "item.started", item: { id: "msg-1", type: "agent_message", text: "" } };
+          yield { type: "item.completed", item: { id: "msg-1", type: "agent_message", text: `mock: ${input}` } };
+          yield { type: "turn.completed", usage: null };
+        })(),
+      });
+      const binding = createSdkBinding();
+
+      yield* scoped(function* () {
+        yield* installRemoteAgent(CodeAgent, binding.transport);
+
+        const handle = yield* dispatch("code-agent.newSession", {
+          config: {},
+        } as unknown as Val);
+        const result = yield* dispatch("code-agent.prompt", {
+          args: { session: handle, prompt: "hello" },
+        } as unknown as Val);
+
+        expect((result as any).response).toBe("mock: hello");
+      });
+    });
+
+    it("prompt streams progress events", function* () {
+      mockRunStreamed = async (input: string) => ({
+        events: (async function* () {
+          yield { type: "item.started", item: { id: "msg-1", type: "agent_message", text: "" } };
+          yield { type: "item.completed", item: { id: "msg-1", type: "agent_message", text: `mock: ${input}` } };
+          yield { type: "turn.completed", usage: null };
+        })(),
+      });
+
+      const progressEvents: ProgressEvent[] = [];
+      yield* ProgressContext.set((event) => {
+        progressEvents.push(event);
+      });
+      yield* CoroutineContext.set("root");
+
+      const binding = createSdkBinding();
+
+      yield* scoped(function* () {
+        yield* installRemoteAgent(CodeAgent, binding.transport);
+
+        const handle = yield* dispatch("code-agent.newSession", {
+          config: {},
+        } as unknown as Val);
+        yield* dispatch("code-agent.prompt", {
+          args: { session: handle, prompt: "hello" },
+        } as unknown as Val);
+      });
+
+      // All 3 events forwarded as progress: item.started, item.completed, turn.completed
+      expect(progressEvents.length).toBe(3);
+    });
+
+    it("repeated prompts on same handle reuse thread", function* () {
+      startThreadCallCount = 0;
+      mockRunStreamed = async (input: string) => ({
+        events: (async function* () {
+          yield { type: "item.completed", item: { id: "msg-1", type: "agent_message", text: `mock: ${input}` } };
+          yield { type: "turn.completed", usage: null };
+        })(),
+      });
+      const binding = createSdkBinding();
+
+      yield* scoped(function* () {
+        yield* installRemoteAgent(CodeAgent, binding.transport);
+
+        const handle = yield* dispatch("code-agent.newSession", {
+          config: {},
+        } as unknown as Val);
+        yield* dispatch("code-agent.prompt", {
+          args: { session: handle, prompt: "first" },
+        } as unknown as Val);
+        yield* dispatch("code-agent.prompt", {
+          args: { session: handle, prompt: "second" },
+        } as unknown as Val);
+
+        // startThread called once at newSession, not per-prompt
+        expect(startThreadCallCount).toBe(1);
+      });
+    });
+
+    it("prompt rejects unknown handle", function* () {
+      mockRunStreamed = async () => ({ events: (async function* () {})() });
       const binding = createSdkBinding();
       let caughtError: Error | null = null;
 
@@ -139,7 +242,7 @@ describe("Codex SDK Adapter", () => {
 
         try {
           yield* dispatch("code-agent.prompt", {
-            args: { session: { sessionId: "s-1" }, prompt: "hello" },
+            args: { session: { sessionId: "stale-handle" }, prompt: "hello" },
           } as unknown as Val);
         } catch (e) {
           caughtError = e as Error;
@@ -147,8 +250,40 @@ describe("Codex SDK Adapter", () => {
       });
 
       expect(caughtError).not.toBeNull();
-      expect(caughtError!.message).toContain("not yet implemented");
-      expect(caughtError!.message).toContain("OQ-CX-1");
+      expect(caughtError!.message).toContain("Unknown session handle");
+    });
+  });
+
+  describe("cancellation", () => {
+    it("canceling an in-flight prompt stops the operation", function* () {
+      mockRunStreamed = async () => ({
+        events: (async function* () {
+          yield { type: "item.started", item: { id: "msg-1", type: "agent_message", text: "" } };
+          // Block forever — adapter must be halted externally
+          await new Promise(() => {});
+        })(),
+      });
+      const binding = createSdkBinding();
+
+      yield* scoped(function* () {
+        yield* installRemoteAgent(CodeAgent, binding.transport);
+
+        const handle = yield* dispatch("code-agent.newSession", {
+          config: {},
+        } as unknown as Val);
+
+        let resultReceived = false;
+        const task = yield* spawn(function* () {
+          yield* dispatch("code-agent.prompt", {
+            args: { session: handle, prompt: "hang" },
+          } as unknown as Val);
+          resultReceived = true;
+        });
+
+        yield* sleep(200);
+        yield* task.halt();
+        expect(resultReceived).toBe(false);
+      });
     });
   });
 });

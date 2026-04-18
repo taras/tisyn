@@ -1,19 +1,21 @@
 /**
  * Codex SDK adapter.
  *
- * Candidate conforming path for the CodeAgent contract, pending
- * @openai/codex-sdk API verification (OQ-CX-1).
- *
- * Config validation is verified and implemented. Operation handlers
- * for newSession and prompt are blocked pending SDK verification.
- * closeSession implements verified stale-handle tolerance.
- * fork/openFork throw NotSupported.
+ * Translates between Tisyn protocol messages and the
+ * `@openai/codex-sdk` TypeScript API. Uses `startThread()` to create
+ * a persistent thread per session and `runStreamed()` for prompt
+ * execution with progress forwarding.
  */
 
-import type { Operation } from "effection";
-import { resource, createChannel, spawn } from "effection";
+import type { Operation, Task } from "effection";
+import { resource, createChannel, spawn, call } from "effection";
 import type { AgentMessage, LocalAgentBinding, HostMessage } from "@tisyn/transport";
-import { initializeResponse, executeSuccess, executeApplicationError } from "@tisyn/protocol";
+import {
+  initializeResponse,
+  executeSuccess,
+  executeApplicationError,
+  progressNotification,
+} from "@tisyn/protocol";
 import type { Val } from "@tisyn/ir";
 import type { CodexSdkConfig } from "./types.js";
 import { validateApproval, validateSandbox, validateModel } from "./validate-config.js";
@@ -36,7 +38,9 @@ export function createSdkBinding(config?: CodexSdkConfig): LocalAgentBinding {
       resource(function* (provide) {
         const agentToHost = createChannel<AgentMessage, void>();
 
-        const sessions = new Set<string>();
+        let handleCounter = 0;
+        const threads = new Map<string, { codex: unknown; thread: unknown }>();
+        const inflight = new Map<string, Task<void>>();
 
         yield* provide({
           *send(message: HostMessage) {
@@ -51,11 +55,17 @@ export function createSdkBinding(config?: CodexSdkConfig): LocalAgentBinding {
             }
 
             if (message.method === "shutdown") {
-              sessions.clear();
+              threads.clear();
+              inflight.clear();
               return;
             }
 
             if (message.method === "cancel") {
+              const task = inflight.get(message.params.id);
+              if (task) {
+                inflight.delete(message.params.id);
+                yield* task.halt();
+              }
               return;
             }
 
@@ -65,6 +75,7 @@ export function createSdkBinding(config?: CodexSdkConfig): LocalAgentBinding {
                 ? params.operation.split(".").pop()!
                 : params.operation;
               const args = params.args[0] as Record<string, unknown> | undefined;
+              const token = String(params.progressToken ?? id);
 
               const unwrapKey = UNWRAP[opName];
               let unwrapped: Record<string, unknown>;
@@ -74,9 +85,9 @@ export function createSdkBinding(config?: CodexSdkConfig): LocalAgentBinding {
                 unwrapped = (args as Record<string, unknown>) ?? {};
               }
 
-              yield* spawn(function* () {
+              const task = yield* spawn(function* () {
                 try {
-                  const result: Val = yield* handleOperation(opName, unwrapped);
+                  const result: Val = yield* handleOperation(opName, unwrapped, token, agentToHost);
                   yield* agentToHost.send(executeSuccess(String(id), result));
                 } catch (e) {
                   const err = e instanceof Error ? e : new Error(String(e));
@@ -87,62 +98,103 @@ export function createSdkBinding(config?: CodexSdkConfig): LocalAgentBinding {
                     }),
                   );
                 }
+                inflight.delete(String(id));
               });
+              inflight.set(String(id), task);
               return;
             }
           },
           receive: agentToHost,
         });
 
-        function* handleOperation(opName: string, params: Record<string, unknown>): Operation<Val> {
+        function* handleOperation(
+          opName: string,
+          params: Record<string, unknown>,
+          progressToken: string,
+          channel: { send(msg: AgentMessage): Operation<void> },
+        ): Operation<Val> {
           switch (opName) {
             case "newSession": {
-              // Blocked: SDK thread creation API not verified (OQ-CX-1).
-              // When verified, this will call the SDK to create a thread
-              // and store it in a sessions map.
-              throw new Error(
-                "Codex SDK adapter: newSession is not yet implemented. " +
-                  "The @openai/codex-sdk thread API has not been verified. " +
-                  "See codex-specification.source.md §7.2 and OQ-CX-1.",
-              );
+              const sdk = yield* call(() => import("@openai/codex-sdk"));
+              const codex = new sdk.Codex({
+                env: config?.env,
+              });
+              const thread = codex.startThread({
+                model: config?.model ?? (params.model as string | undefined),
+                sandboxMode: config?.sandbox as
+                  | "read-only"
+                  | "workspace-write"
+                  | "danger-full-access"
+                  | undefined,
+                workingDirectory: config?.cwd,
+                approvalPolicy: config?.approval as "on-request" | "never" | undefined,
+              });
+              const handle = `cx-${++handleCounter}`;
+              threads.set(handle, { codex, thread });
+              return { sessionId: handle } as unknown as Val;
             }
 
             case "closeSession": {
-              // Verified: stale-handle tolerance (base contract §9.1, O-CX-3).
-              // Return null without error regardless of whether the handle
-              // references a live session.
+              // Stale-handle tolerance (base contract §9.1, O-CX-3):
+              // return null without error regardless.
               const sessionHandle =
                 (params.sessionId as string) ??
                 ((params as Record<string, unknown>).sessionId as string);
               if (sessionHandle) {
-                sessions.delete(sessionHandle);
+                threads.delete(sessionHandle);
               }
               return null as unknown as Val;
             }
 
             case "prompt": {
-              // Blocked: SDK prompt/streaming API not verified (OQ-CX-1).
-              throw new Error(
-                "Codex SDK adapter: prompt is not yet implemented. " +
-                  "The @openai/codex-sdk thread API has not been verified. " +
-                  "See codex-specification.source.md §7.2 and OQ-CX-1.",
+              // Stale-handle strict (base contract §9.2, O-CX-4)
+              const sessionHandle = (params.session as Record<string, unknown>)
+                ?.sessionId as string;
+              if (!sessionHandle || !threads.has(sessionHandle)) {
+                const err = new Error(`Unknown session handle: ${sessionHandle ?? "undefined"}`);
+                err.name = "SessionNotFound";
+                throw err;
+              }
+              const { thread } = threads.get(sessionHandle)!;
+              const prompt = params.prompt as string;
+              if (!prompt) {
+                throw new Error("prompt operation requires a prompt parameter");
+              }
+
+              const streamedTurn = yield* call(() =>
+                (thread as { runStreamed(input: string): Promise<{ events: AsyncGenerator<Record<string, unknown>> }> })
+                  .runStreamed(prompt),
               );
+              let responseText = "";
+
+              for (;;) {
+                const { value: event, done } = yield* call(() => streamedTurn.events.next());
+                if (done) break;
+
+                if (event.type === "turn.failed") {
+                  const failedEvent = event as { error: { message: string } };
+                  throw new Error(`Codex turn failed: ${failedEvent.error.message}`);
+                }
+                if (
+                  event.type === "item.completed" &&
+                  (event.item as Record<string, unknown>)?.type === "agent_message"
+                ) {
+                  responseText = (event.item as Record<string, unknown>).text as string;
+                }
+                yield* channel.send(progressNotification(progressToken, event as unknown as Val));
+              }
+
+              return { response: responseText } as unknown as Val;
             }
 
             case "fork": {
-              const err = new Error(
-                "fork is not supported by the Codex adapter. " +
-                  "SDK fork/resume capabilities have not been verified (OQ-CX-3).",
-              );
+              const err = new Error("fork is not supported by the Codex adapter.");
               err.name = "NotSupported";
               throw err;
             }
 
             case "openFork": {
-              const err = new Error(
-                "openFork is not supported by the Codex adapter. " +
-                  "SDK fork/resume capabilities have not been verified (OQ-CX-3).",
-              );
+              const err = new Error("openFork is not supported by the Codex adapter.");
               err.name = "NotSupported";
               throw err;
             }
