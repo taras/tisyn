@@ -33,7 +33,6 @@ import { type DurableStream, InMemoryStream, ReplayIndex } from "@tisyn/durable-
 import {
   dispatch,
   DispatchContext,
-  type DispatchCtx,
   Effects,
   evaluateMiddlewareFn,
   InvalidInvokeCallSiteError,
@@ -173,9 +172,9 @@ function buildDispatchContext(args: {
   parentEnv: Env;
   driveContext: DriveContext;
   allocateChildId: () => string;
-}): DispatchCtx {
+}): DispatchContext {
   const { coroutineId, parentEnv, driveContext, allocateChildId } = args;
-  const self: DispatchCtx = {
+  const self: DispatchContext = {
     coroutineId,
     *invoke<T>(fn: FnNode, invokeArgs: readonly Val[], opts?: InvokeOpts): Operation<T> {
       // §5.3.3: may only be called while the SAME ctx is the currently-active

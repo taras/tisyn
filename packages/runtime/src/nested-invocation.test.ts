@@ -1,35 +1,44 @@
 /**
- * Nested invocation (ctx.invoke) tests — host-side JS dispatch-boundary middleware.
+ * Nested invocation tests — host-side JS dispatch-boundary middleware.
  *
- * Covers Tier 1 normative tests T01–T17 for the host-side JS surface, plus
- * T18 diagnostic and an opts-validator fixture. See the imported
- * `tisyn-nested-invocation-test-plan.md` for full wording.
+ * Covers the 9 primary positive cases (T01, T02, T04, T06, T07, T11, T12,
+ * T15, T16), the 4 boundary cases (T-SHORT, T-NESTED, T-FACADE-NEG, TR),
+ * and the opts-validator fixture group, per the plan's D5 table.
  *
- * Compiler-authored middleware is not exercised here — that path is blocked
- * on a source-doc decision and remains at today's 2-param surface.
+ * The public surface exercised here is the free `invoke(fn, args, opts?)`
+ * helper exported from `@tisyn/agent`, which reads the active
+ * `DispatchContext` set by the runtime at each standard-effect dispatch
+ * site. Agent handlers, `resolve` middleware, and facade `.around(...)`
+ * middleware are explicitly **not** on the dispatch boundary: `invoke`
+ * called from those sites throws `InvalidInvokeCallSiteError`.
  */
 
 import { describe, it } from "@effectionx/vitest";
 import { expect } from "vitest";
 import { InMemoryStream } from "@tisyn/durable-streams";
 import type { DurableEvent, YieldEvent, CloseEvent } from "@tisyn/kernel";
-import { Fn, Eval, Ref, Q, Arr } from "@tisyn/ir";
+import { Fn, Eval, Ref, Q } from "@tisyn/ir";
 import type { FnNode, TisynFn, Val } from "@tisyn/ir";
+import {
+  agent,
+  Agents,
+  Effects,
+  InvalidInvokeCallSiteError,
+  InvalidInvokeInputError,
+  InvalidInvokeOptionError,
+  invoke,
+  operation,
+  resolve,
+  useAgent,
+} from "@tisyn/agent";
+import { execute } from "./execute.js";
+import { currentScopedEffectFrames } from "./scoped-effect-stack.js";
+import { InvocationCancelledError } from "./errors.js";
 
 // Cast helper — Fn() returns TisynFn<A, R> with typed expr bodies; the runtime
 // accepts the erased FnNode shape. The value is identical; only the static
 // type narrows at call sites.
 const asFn = (f: unknown): FnNode => f as FnNode;
-import {
-  Effects,
-  InvalidInvokeCallSiteError,
-  InvalidInvokeInputError,
-  InvalidInvokeOptionError,
-  type DispatchCtx,
-} from "@tisyn/agent";
-import { execute } from "./execute.js";
-import { currentScopedEffectFrames } from "./scoped-effect-stack.js";
-import { InvocationCancelledError } from "./errors.js";
 
 // ── IR helpers ──
 
@@ -48,11 +57,10 @@ function eventsFor(journal: DurableEvent[], coroutineId: string): DurableEvent[]
   return journal.filter((e) => e.coroutineId === coroutineId);
 }
 
-// ── T01: invoke writes child events; no parent event for invoke itself ──
-
 describe("nested invocation", () => {
+  // ── T01 ──
+
   it("T01: invoke writes child events to journal; parent has no invoke event", function* () {
-    // Body yields two agent effects and returns 42.
     const bodyFn = Fn<[], number>(
       [],
       Eval<number>(
@@ -75,23 +83,18 @@ describe("nested invocation", () => {
     let dispatchedByMiddleware = false;
 
     yield* Effects.around({
-      *dispatch([effectId, data]: [string, Val], next, ctx?: DispatchCtx | null) {
+      *dispatch([effectId, data]: [string, Val], next) {
         if (effectId === "parent.trigger") {
-          if (!ctx) {
-            throw new Error("expected active DispatchContext");
-          }
           dispatchedByMiddleware = true;
-          return yield* ctx.invoke<Val>(asFn(bodyFn), []);
+          return yield* invoke<Val>(asFn(bodyFn), []);
         }
         return yield* next(effectId, data);
       },
-      // Core handler for child agents — returns null
       *resolve() {
         return false;
       },
     });
 
-    // Core handler at min priority — handles any child.* effects
     yield* Effects.around(
       {
         *dispatch([_e, _d]: [string, Val]) {
@@ -108,7 +111,6 @@ describe("nested invocation", () => {
     expect(dispatchedByMiddleware).toBe(true);
     expect(result).toEqual({ status: "ok", value: 42 });
 
-    // Child events
     const childYields = yields(journal).filter((e) => e.coroutineId === "root.0");
     expect(childYields).toHaveLength(2);
     expect(childYields[0]?.description).toEqual({ type: "child", name: "E1" });
@@ -118,7 +120,6 @@ describe("nested invocation", () => {
     expect(childCloses).toHaveLength(1);
     expect(childCloses[0]?.result).toMatchObject({ status: "ok", value: 42 });
 
-    // Parent events: one yield for parent.trigger, one close. No invoke event.
     const parentEvents = eventsFor(journal, "root");
     const parentYields = parentEvents.filter((e) => e.type === "yield");
     expect(parentYields).toHaveLength(1);
@@ -127,7 +128,6 @@ describe("nested invocation", () => {
       description: { type: "parent", name: "trigger" },
     });
 
-    // Ordering: parent's close follows child's close.
     const lastIdx = journal.length - 1;
     expect(journal[lastIdx]).toMatchObject({ type: "close", coroutineId: "root" });
     const childCloseIdx = journal.findIndex(
@@ -137,7 +137,7 @@ describe("nested invocation", () => {
     expect(childCloseIdx).toBeLessThan(lastIdx);
   });
 
-  // ── T02 / T10: replay reproduces invocation without re-dispatch ──
+  // ── T02 ──
 
   it("T02: replay reproduces invocation without re-dispatching child effects", function* () {
     const bodyFn = Fn<[], number>(
@@ -154,12 +154,9 @@ describe("nested invocation", () => {
 
     const run = function* (stream: InMemoryStream, childCounter: { n: number }) {
       yield* Effects.around({
-        *dispatch([effectId, data]: [string, Val], next, ctx?: DispatchCtx | null) {
+        *dispatch([effectId, data]: [string, Val], next) {
           if (effectId === "parent.trigger") {
-            if (!ctx) {
-              throw new Error("no ctx");
-            }
-            return yield* ctx.invoke<Val>(asFn(bodyFn), []);
+            return yield* invoke<Val>(asFn(bodyFn), []);
           }
           return yield* next(effectId, data);
         },
@@ -188,20 +185,18 @@ describe("nested invocation", () => {
     expect(first.result).toEqual({ status: "ok", value: 7 });
     expect(counter.n).toBe(1);
 
-    // Replay from persisted journal.
     const second = yield* run(stream, counter);
     expect(second.result).toEqual({ status: "ok", value: 7 });
-    expect(counter.n).toBe(1); // no live re-dispatch on replay
+    expect(counter.n).toBe(1);
 
-    // The persisted stream (shared) retains the child's events from run 1.
     const persisted = yield* stream.readAll();
     const childEvents = persisted.filter((e) => e.coroutineId === "root.0");
-    expect(childEvents).toHaveLength(2); // yield + close (from run 1)
+    expect(childEvents).toHaveLength(2);
   });
 
-  // ── T06: multiple sequential invocations get root.0, root.1, root.2 ──
+  // ── T06 ──
 
-  it("T06: sequential ctx.invoke calls get root.0, root.1, root.2", function* () {
+  it("T06: sequential invoke calls get root.0, root.1, root.2", function* () {
     const mkBody = (v: number): TisynFn<[], number> =>
       Fn<[], number>(
         [],
@@ -221,14 +216,11 @@ describe("nested invocation", () => {
     let results: number[] = [];
 
     yield* Effects.around({
-      *dispatch([effectId, data]: [string, Val], next, ctx?: DispatchCtx | null) {
+      *dispatch([effectId, data]: [string, Val], next) {
         if (effectId === "parent.trigger") {
-          if (!ctx) {
-            throw new Error("no ctx");
-          }
-          const a = yield* ctx.invoke<number>(asFn(F1), []);
-          const b = yield* ctx.invoke<number>(asFn(F2), []);
-          const c = yield* ctx.invoke<number>(asFn(F3), []);
+          const a = yield* invoke<number>(asFn(F1), []);
+          const b = yield* invoke<number>(asFn(F2), []);
+          const c = yield* invoke<number>(asFn(F3), []);
           results = [a, b, c];
           return null as Val;
         }
@@ -251,20 +243,16 @@ describe("nested invocation", () => {
 
     expect(results).toEqual([1, 2, 3]);
 
-    // Each child has exactly one close; all under root.0..root.2
     for (const id of ["root.0", "root.1", "root.2"]) {
       const c = closes(journal).filter((e) => e.coroutineId === id);
       expect(c).toHaveLength(1);
     }
-    // No root.3
     expect(closes(journal).filter((e) => e.coroutineId === "root.3")).toHaveLength(0);
   });
 
-  // ── T07: state flows into child and result flows out ──
+  // ── T07 ──
 
   it("T07: args flow into child and result flows back out", function* () {
-    // body(x, y) = x + y (but we just return x, since we have no add here)
-    // Use concat: return the tuple { x, y } as return value to prove echo.
     const bodyFn = Fn<[Val, Val], Val>(
       ["x", "y"],
       Eval(
@@ -279,12 +267,9 @@ describe("nested invocation", () => {
     let returned: Val = null;
 
     yield* Effects.around({
-      *dispatch([effectId, data]: [string, Val], next, ctx?: DispatchCtx | null) {
+      *dispatch([effectId, data]: [string, Val], next) {
         if (effectId === "parent.trigger") {
-          if (!ctx) {
-            throw new Error("no ctx");
-          }
-          returned = yield* ctx.invoke<Val>(asFn(bodyFn), [
+          returned = yield* invoke<Val>(asFn(bodyFn), [
             "hello" as Val,
             { nested: [1, 2, 3] } as unknown as Val,
           ]);
@@ -299,18 +284,76 @@ describe("nested invocation", () => {
     expect(returned).toEqual({ first: "hello", second: { nested: [1, 2, 3] } });
   });
 
-  // ── T11: child close event shape (ok) ──
+  // ── T04 ──
+
+  it("T04: child error propagates as thrown EffectError at invoke site; replay reproduces", function* () {
+    const bodyFn = Fn<[], Val>([], Eval("child.fail", Q([])));
+
+    const run = function* (stream: InMemoryStream) {
+      let caughtMessage: string | null = null;
+
+      yield* Effects.around({
+        *dispatch([effectId, data]: [string, Val], next) {
+          if (effectId === "parent.trigger") {
+            try {
+              yield* invoke<Val>(asFn(bodyFn), []);
+            } catch (err) {
+              caughtMessage = (err as Error).message;
+            }
+            return "recovered" as Val;
+          }
+          return yield* next(effectId, data);
+        },
+      });
+
+      yield* Effects.around(
+        {
+          *dispatch([eid, _d]: [string, Val]) {
+            if (eid === "child.fail") {
+              throw new Error("boom");
+            }
+            return null as Val;
+          },
+        },
+        { at: "min" },
+      );
+
+      const out = yield* execute({
+        ir: effectIR("parent", "trigger") as never,
+        stream,
+      });
+      return { ...out, caughtMessage };
+    };
+
+    const stream = new InMemoryStream();
+    const first = yield* run(stream);
+    expect(first.caughtMessage).toBe("boom");
+    expect(first.result).toEqual({ status: "ok", value: "recovered" });
+    expect(closes(first.journal).filter((e) => e.coroutineId === "root.0")).toHaveLength(1);
+
+    // Replay: the recorded parent yield carries the recovered result, so the
+    // kernel short-circuits without re-driving the child. Terminal state must
+    // match; the child's journal entries must not grow.
+    const childEventsAfterFirst = (yield* stream.readAll()).filter(
+      (e) => e.coroutineId === "root.0",
+    );
+    const second = yield* run(stream);
+    expect(second.result).toEqual({ status: "ok", value: "recovered" });
+    const childEventsAfterSecond = (yield* stream.readAll()).filter(
+      (e) => e.coroutineId === "root.0",
+    );
+    expect(childEventsAfterSecond.length).toBe(childEventsAfterFirst.length);
+  });
+
+  // ── T11 ──
 
   it("T11: child Close(ok) has expected shape and placement", function* () {
     const bodyFn = Fn<[], string>([], Q("done"));
 
     yield* Effects.around({
-      *dispatch([effectId, data]: [string, Val], next, ctx?: DispatchCtx | null) {
+      *dispatch([effectId, data]: [string, Val], next) {
         if (effectId === "parent.trigger") {
-          if (!ctx) {
-            throw new Error("no ctx");
-          }
-          return yield* ctx.invoke<Val>(asFn(bodyFn), []);
+          return yield* invoke<Val>(asFn(bodyFn), []);
         }
         return yield* next(effectId, data);
       },
@@ -325,72 +368,18 @@ describe("nested invocation", () => {
     expect(childCloses[0]?.result).toEqual({ status: "ok", value: "done" });
   });
 
-  // ── T04 (simplified): child error surfaces at invoke throw site ──
-
-  it("T04: child error propagates as thrown EffectError at invoke site", function* () {
-    // Body yields child.fail which the core handler makes throw.
-    const bodyFn = Fn<[], Val>([], Eval("child.fail", Q([])));
-
-    let caughtMessage: string | null = null;
-
-    yield* Effects.around({
-      *dispatch([effectId, data]: [string, Val], next, ctx?: DispatchCtx | null) {
-        if (effectId === "parent.trigger") {
-          if (!ctx) {
-            throw new Error("no ctx");
-          }
-          try {
-            yield* ctx.invoke<Val>(asFn(bodyFn), []);
-          } catch (err) {
-            caughtMessage = (err as Error).message;
-          }
-          return "recovered" as Val;
-        }
-        return yield* next(effectId, data);
-      },
-    });
-
-    yield* Effects.around(
-      {
-        *dispatch([eid, _d]: [string, Val]) {
-          if (eid === "child.fail") {
-            throw new Error("boom");
-          }
-          return null as Val;
-        },
-      },
-      { at: "min" },
-    );
-
-    const { result, journal } = yield* execute({
-      ir: effectIR("parent", "trigger") as never,
-    });
-
-    expect(caughtMessage).toBe("boom");
-    expect(result).toEqual({ status: "ok", value: "recovered" });
-
-    // Child has a yield(error) and its own close — verify one close exists.
-    const childCloses = closes(journal).filter((e) => e.coroutineId === "root.0");
-    expect(childCloses).toHaveLength(1);
-  });
-
-  // ── T12: overlay scope is child subtree only ──
+  // ── T12 ──
 
   it("T12: overlay is visible in child subtree, absent in parent after return", function* () {
-    // Probe via a custom "probe.frames" effect — the core handler reads
-    // currentScopedEffectFrames() and returns them.
     const bodyFn = Fn<[], Val>([], Eval("probe.frames", Q([])));
 
     let childFrames: unknown = null;
     let parentFramesAfter: unknown = null;
 
     yield* Effects.around({
-      *dispatch([effectId, data]: [string, Val], next, ctx?: DispatchCtx | null) {
+      *dispatch([effectId, data]: [string, Val], next) {
         if (effectId === "parent.trigger") {
-          if (!ctx) {
-            throw new Error("no ctx");
-          }
-          yield* ctx.invoke<Val>(asFn(bodyFn), [], {
+          yield* invoke<Val>(asFn(bodyFn), [], {
             overlay: { kind: "test-overlay", id: "ov1" },
           });
           return null as Val;
@@ -416,7 +405,6 @@ describe("nested invocation", () => {
       { at: "min" },
     );
 
-    // Parent workflow: trigger then probe after.
     yield* execute({
       ir: Eval(
         "seq",
@@ -430,27 +418,15 @@ describe("nested invocation", () => {
     expect(parentFramesAfter).toEqual([]);
   });
 
-  // ── T15: mixed kernel + invoke unified counter ──
+  // ── T15 ──
 
-  it("T15: ctx.invoke shares childSpawnCount with spawn; IDs are sequential", function* () {
-    // Parent workflow: spawn child A, then trigger middleware (invokes F1),
-    // then spawn child B. We expect IDs: A = root.0, F1 = root.1, B = root.2.
-    // Actually: middleware on spawn doesn't fire because spawn is structural.
-    // So: parent yields three dispatch effects — first produces root.0 via
-    // ctx.invoke, second via ctx.invoke (root.1), third via ctx.invoke (root.2).
-    // Then verify allocator integrity with an additional check that no id
-    // contains ".n" or non-numeric segments.
+  it("T15: invoke shares childSpawnCount with sibling children; IDs are sequential", function* () {
     const body = Fn<[], Val>([], Q(null));
 
-    const counter = { n: 0 };
     yield* Effects.around({
-      *dispatch([effectId, _data]: [string, Val], next, ctx?: DispatchCtx | null) {
+      *dispatch([effectId, _data]: [string, Val], next) {
         if (effectId === "parent.trigger") {
-          if (!ctx) {
-            throw new Error("no ctx");
-          }
-          yield* ctx.invoke<Val>(asFn(body), []);
-          counter.n++;
+          yield* invoke<Val>(asFn(body), []);
           return null as Val;
         }
         return yield* next(effectId, _data);
@@ -476,69 +452,227 @@ describe("nested invocation", () => {
       .sort();
     expect(childCloseIds).toEqual(["root.0", "root.1", "root.2"]);
 
-    // Guardrail: no coroutineId contains .n or non-integer segments.
     for (const id of childCloseIds) {
       expect(id).toMatch(/^root\.\d+$/);
     }
   });
 
-  // ── T16: invoke from non-middleware is error with no allocation ──
+  // ── T16 ──
 
-  it("T16: ctx.invoke from agent handler fails with InvalidInvokeCallSiteError", function* () {
+  it("T16: invoke from agent handler fails with InvalidInvokeCallSiteError", function* () {
     const body = Fn<[], Val>([], Q(null));
 
-    let capturedCtx: DispatchCtx | null = null;
-    let caughtErr: Error | null = null;
-    let sawSecondChild = false;
+    const helper = agent("helper-t16", {
+      run: operation<null, Val>(),
+    });
 
-    yield* Effects.around({
-      *dispatch([effectId, data]: [string, Val], next, ctx?: DispatchCtx | null) {
-        if (effectId === "parent.capture") {
-          capturedCtx = ctx ?? null;
-          return yield* next(effectId, data);
+    let caughtErr: Error | null = null;
+    let handlerEntered = false;
+
+    yield* Agents.use(helper, {
+      *run() {
+        handlerEntered = true;
+        try {
+          yield* invoke<Val>(asFn(body), []);
+        } catch (err) {
+          caughtErr = err as Error;
         }
-        if (effectId === "parent.reuse") {
-          // Attempt to reuse the captured ctx outside its own dispatch window.
-          if (!capturedCtx) {
-            throw new Error("no captured ctx");
-          }
-          try {
-            yield* capturedCtx.invoke<Val>(asFn(body), []);
-            sawSecondChild = true;
-          } catch (err) {
-            caughtErr = err as Error;
-          }
+        return null as Val;
+      },
+    });
+
+    // Dispatch-boundary middleware that calls the agent handler. The
+    // handler is wrapped by agents.ts in DispatchContext.with(undefined, …),
+    // so invoke() inside the handler sees `undefined` and throws.
+    yield* Effects.around({
+      *dispatch([effectId, data]: [string, Val], next) {
+        if (effectId === "parent.trigger") {
+          const facade = yield* useAgent(helper);
+          yield* facade.run(null);
           return null as Val;
         }
         return yield* next(effectId, data);
       },
     });
 
-    // Core handler: resolves all effects.
-    yield* Effects.around(
-      {
-        *dispatch([_e, _d]: [string, Val]) {
+    const { journal } = yield* execute({
+      ir: effectIR("parent", "trigger") as never,
+    });
+
+    expect(handlerEntered).toBe(true);
+    expect(caughtErr).toBeInstanceOf(InvalidInvokeCallSiteError);
+
+    // Allocator did not advance — no child close events exist.
+    const childCloses = closes(journal).filter((e) => e.coroutineId.startsWith("root."));
+    expect(childCloses).toHaveLength(0);
+  });
+
+  // ── T-SHORT ──
+
+  it("T-SHORT: short-circuit (no invoke call) does not advance allocator", function* () {
+    const body = Fn<[], number>([], Q(99));
+
+    let results: Array<number | null> = [];
+
+    yield* Effects.around({
+      *dispatch([effectId, data]: [string, Val], next) {
+        if (effectId === "parent.skip") {
+          // Short-circuit with a literal — never calls invoke, never calls next.
+          results.push(null);
           return null as Val;
-        },
+        }
+        if (effectId === "parent.invoke") {
+          const r = yield* invoke<number>(asFn(body), []);
+          results.push(r);
+          return null as Val;
+        }
+        return yield* next(effectId, data);
       },
-      { at: "min" },
-    );
+    });
 
     const { journal } = yield* execute({
       ir: Eval(
         "seq",
         Q({
-          exprs: [effectIR("parent", "capture"), effectIR("parent", "reuse")],
+          exprs: [
+            effectIR("parent", "skip"),
+            effectIR("parent", "skip"),
+            effectIR("parent", "invoke"),
+          ],
         }),
       ) as never,
     });
 
-    expect(caughtErr).toBeInstanceOf(InvalidInvokeCallSiteError);
-    expect(sawSecondChild).toBe(false);
+    expect(results).toEqual([null, null, 99]);
 
-    // No child close event — allocator did not advance.
-    const childCloses = closes(journal).filter((e) => e.coroutineId.startsWith("root."));
-    expect(childCloses).toHaveLength(0);
+    // The one invoked child must be root.0 — skips did not advance the allocator.
+    const childCloseIds = closes(journal)
+      .filter((e) => e.coroutineId !== "root")
+      .map((e) => e.coroutineId);
+    expect(childCloseIds).toEqual(["root.0"]);
+  });
+
+  // ── T-NESTED ──
+
+  it("T-NESTED: nested invoke inside nested invoke; IDs root.0 and root.0.0", function* () {
+    const innerBody = Fn<[], number>([], Q(2));
+    const outerBody = Fn<[], number>(
+      [],
+      Eval<number>(
+        "let",
+        Q({
+          name: "_",
+          value: Eval("childA.inner", Q([])),
+          body: Q(1),
+        }),
+      ),
+    );
+
+    yield* Effects.around({
+      *dispatch([effectId, data]: [string, Val], next) {
+        if (effectId === "parent.trigger") {
+          return yield* invoke<Val>(asFn(outerBody), []);
+        }
+        if (effectId === "childA.inner") {
+          return yield* invoke<Val>(asFn(innerBody), []);
+        }
+        return yield* next(effectId, data);
+      },
+    });
+
+    const runOnce = (stream: InMemoryStream) =>
+      execute({
+        ir: effectIR("parent", "trigger") as never,
+        stream,
+      });
+
+    const stream = new InMemoryStream();
+    const first = yield* runOnce(stream);
+    expect(first.result).toEqual({ status: "ok", value: 1 });
+
+    const firstCloseIds = closes(first.journal)
+      .map((e) => e.coroutineId)
+      .sort();
+    expect(firstCloseIds).toEqual(["root", "root.0", "root.0.0"]);
+
+    // Replay from the same persisted stream reproduces the terminal result
+    // without re-driving the nested children — child journal entries must not
+    // grow.
+    const childIds = ["root.0", "root.0.0"] as const;
+    const childCountsAfterFirst = new Map<string, number>();
+    for (const id of childIds) {
+      childCountsAfterFirst.set(
+        id,
+        (yield* stream.readAll()).filter((e) => e.coroutineId === id).length,
+      );
+    }
+    const replay = yield* runOnce(stream);
+    expect(replay.result).toEqual({ status: "ok", value: 1 });
+    for (const id of childIds) {
+      const after = (yield* stream.readAll()).filter((e) => e.coroutineId === id).length;
+      expect(after).toBe(childCountsAfterFirst.get(id));
+    }
+  });
+
+  // ── T-FACADE-NEG ──
+
+  it("T-FACADE-NEG: invoke from facade.around middleware throws InvalidInvokeCallSiteError", function* () {
+    const body = Fn<[], Val>([], Q(null));
+
+    const calc = agent("calc-facade-neg", {
+      add: operation<{ a: number; b: number }, number>(),
+    });
+
+    yield* Agents.use(calc, {
+      *add({ a, b }) {
+        return a + b;
+      },
+    });
+
+    const facade = yield* useAgent(calc);
+
+    let caughtErr: Error | null = null;
+
+    yield* facade.around({
+      *add([args]: [Val], next) {
+        try {
+          yield* invoke<Val>(asFn(body), []);
+        } catch (err) {
+          caughtErr = err as Error;
+        }
+        return yield* next(args);
+      },
+    });
+
+    // Calling the facade op runs the facade middleware upstream of the
+    // Effects dispatch chain — DispatchContext.get() returns undefined.
+    const sum = yield* facade.add({ a: 2, b: 3 });
+
+    expect(sum).toBe(5);
+    expect(caughtErr).toBeInstanceOf(InvalidInvokeCallSiteError);
+  });
+
+  // ── TR ──
+
+  it("TR: invoke from resolve middleware throws InvalidInvokeCallSiteError", function* () {
+    const body = Fn<[], Val>([], Q(null));
+
+    let caughtErr: Error | null = null;
+
+    yield* Effects.around({
+      *resolve([agentId]: [string], next) {
+        try {
+          yield* invoke<Val>(asFn(body), []);
+        } catch (err) {
+          caughtErr = err as Error;
+        }
+        return yield* next(agentId);
+      },
+    });
+
+    const bound = yield* resolve("anything");
+    expect(bound).toBe(false);
+    expect(caughtErr).toBeInstanceOf(InvalidInvokeCallSiteError);
   });
 
   // ── Opts validator ──
@@ -550,14 +684,11 @@ describe("nested invocation", () => {
       let caught: Error | null = null;
 
       yield* Effects.around({
-        *dispatch([effectId, data]: [string, Val], next, ctx?: DispatchCtx | null) {
+        *dispatch([effectId, data]: [string, Val], next) {
           if (effectId === "parent.trigger") {
-            if (!ctx) {
-              throw new Error("no ctx");
-            }
             try {
               // eslint-disable-next-line @typescript-eslint/no-explicit-any
-              yield* ctx.invoke<Val>(asFn(body), [], opts as any);
+              yield* invoke<Val>(asFn(body), [], opts as any);
             } catch (err) {
               caught = err as Error;
             }
@@ -572,8 +703,6 @@ describe("nested invocation", () => {
     }
 
     it("ignores unknown opts keys (no overlay key = valid)", function* () {
-      // Overlay shape is NOT flattened — these are just unknown top-level keys.
-      // With no `overlay` key present, validator accepts.
       const err = yield* tryInvokeWith({ kind: "x", id: "y" });
       expect(err).toBeNull();
     });
@@ -604,13 +733,10 @@ describe("nested invocation", () => {
     it("rejects non-Fn fn argument", function* () {
       let caught: Error | null = null;
       yield* Effects.around({
-        *dispatch([effectId, data]: [string, Val], next, ctx?: DispatchCtx | null) {
+        *dispatch([effectId, data]: [string, Val], next) {
           if (effectId === "parent.trigger") {
-            if (!ctx) {
-              throw new Error("no ctx");
-            }
             try {
-              yield* ctx.invoke<Val>({} as never, []);
+              yield* invoke<Val>({} as never, []);
             } catch (err) {
               caught = err as Error;
             }
@@ -625,13 +751,4 @@ describe("nested invocation", () => {
   });
 });
 
-// T03, T05, T08, T09, T10, T13, T14, T17, T18, T19: See test plan. Deferred in
-// this pass — the fixtures above cover the primary semantic guarantees
-// (journal shape, replay without re-dispatch, sequential allocation, state
-// flow, error propagation, overlay scope, unified allocator, non-middleware
-// rejection, opts validation). Additional tests require harness agents or
-// cancellation plumbing beyond the scope of the initial host-side-JS pass.
-void closes;
-void yields;
 void InvocationCancelledError;
-void Arr;

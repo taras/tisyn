@@ -26,14 +26,13 @@ export function* getCrossBoundaryMiddleware(): Operation<FnNode | null> {
 }
 
 // ---------------------------------------------------------------------------
-// Dispatch-boundary context — carries ctx.invoke for the active dispatch chain.
+// DispatchContext — carries invocation capability for the active dispatch chain.
 //
-// Nested invocation primitive: dispatch-boundary middleware MAY execute a
-// compiled Fn as a journaled child coroutine via ctx.invoke(fn, args, opts?).
-// The runtime installs a fresh DispatchCtx for each standard-effect dispatch
-// via DispatchContext.with(...); middleware reads the active value via
-// DispatchContext.get(). Agent handlers wrap their body with
-// DispatchContext.with(null, ...) so handler code cannot reuse an outer ctx.
+// The runtime installs a fresh DispatchContext value for each standard-effect
+// dispatch via DispatchContext.with(...); the `invoke(fn, args, opts?)` helper
+// reads the active value via DispatchContext.get(). Agent handlers and other
+// isolated code wrap their body with DispatchContext.with(undefined, ...) so
+// those bodies cannot reuse an outer context.
 // ---------------------------------------------------------------------------
 
 /** Scoped-effect frame pushed for the duration of an invoked child subtree. */
@@ -42,21 +41,30 @@ export interface ScopedEffectFrame {
   readonly id: string;
 }
 
-/** Options to ctx.invoke(fn, args, opts?). */
+/** Options to invoke(fn, args, opts?). */
 export interface InvokeOpts {
   readonly overlay?: ScopedEffectFrame;
   readonly label?: string;
 }
 
 /** Runtime-controlled dispatch-boundary context exposed to middleware. */
-export interface DispatchCtx {
+export interface DispatchContext {
   readonly coroutineId: string;
   invoke<T = Val>(fn: FnNode, args: readonly Val[], opts?: InvokeOpts): Operation<T>;
 }
 
-export const DispatchContext = createContext<DispatchCtx | null>("$tisyn-dispatch-context", null);
+/**
+ * Active dispatch-boundary context, or `undefined` when no dispatch chain is
+ * active. Installed by the runtime via `DispatchContext.with(ctx, body)` for
+ * the duration of each standard-effect dispatch; cleared to `undefined` by
+ * agent handler wrappers.
+ */
+export const DispatchContext = createContext<DispatchContext | undefined>(
+  "$tisyn-dispatch",
+  undefined,
+);
 
-/** Thrown when ctx.invoke is called outside its owning active dispatch-boundary middleware. */
+/** Thrown when invoke() is called outside an active dispatch-boundary middleware. */
 export class InvalidInvokeCallSiteError extends Error {
   override name = "InvalidInvokeCallSiteError" as const;
   constructor(message: string) {
@@ -64,7 +72,7 @@ export class InvalidInvokeCallSiteError extends Error {
   }
 }
 
-/** Thrown when ctx.invoke is called with malformed fn or args. */
+/** Thrown when invoke() is called with malformed fn or args. */
 export class InvalidInvokeInputError extends Error {
   override name = "InvalidInvokeInputError" as const;
   constructor(message: string) {
@@ -72,7 +80,7 @@ export class InvalidInvokeInputError extends Error {
   }
 }
 
-/** Thrown when ctx.invoke is called with malformed opts (overlay shape, label type). */
+/** Thrown when invoke() is called with malformed opts (overlay shape, label type). */
 export class InvalidInvokeOptionError extends Error {
   override name = "InvalidInvokeOptionError" as const;
   constructor(message: string) {
@@ -101,123 +109,13 @@ const EffectsApi = createApi("Effects", {
   },
 });
 
-// ---------------------------------------------------------------------------
-// Arity-based 3-arg adapter.
-//
-// Host-side JS dispatch-boundary middleware MAY declare a third `ctx`
-// parameter whose type is DispatchCtx. The underlying @effectionx/context-api
-// contract calls middleware with (args, next) — so when fn.length > 2 we wrap
-// to read the active DispatchContext and forward it as the third argument.
-// 2-arg middleware is installed byte-identical to the existing behavior.
-// ---------------------------------------------------------------------------
-
-type DispatchMwUser = (
-  args: [string, Val],
-  next: (eid: string, d: Val) => Operation<Val>,
-  ctx: DispatchCtx | null,
-) => Operation<Val>;
-
-type ResolveMwUser = (
-  args: [string],
-  next: (agentId: string) => Operation<boolean>,
-  ctx: DispatchCtx | null,
-) => Operation<boolean>;
-
-function adaptDispatch(userFn: (...a: unknown[]) => Operation<Val>) {
-  if (userFn.length <= 2) {
-    return userFn as unknown as (
-      args: [string, Val],
-      next: (eid: string, d: Val) => Operation<Val>,
-    ) => Operation<Val>;
-  }
-  const threeArg = userFn as unknown as DispatchMwUser;
-  return function* adapted(
-    args: [string, Val],
-    next: (eid: string, d: Val) => Operation<Val>,
-  ): Operation<Val> {
-    const ctx = (yield* DispatchContext.get()) ?? null;
-    return yield* threeArg(args, next, ctx);
-  };
-}
-
-function adaptResolve(userFn: (...a: unknown[]) => Operation<boolean>) {
-  if (userFn.length <= 2) {
-    return userFn as unknown as (
-      args: [string],
-      next: (agentId: string) => Operation<boolean>,
-    ) => Operation<boolean>;
-  }
-  const threeArg = userFn as unknown as ResolveMwUser;
-  return function* adapted(
-    args: [string],
-    next: (agentId: string) => Operation<boolean>,
-  ): Operation<boolean> {
-    const ctx = (yield* DispatchContext.get()) ?? null;
-    return yield* threeArg(args, next, ctx);
-  };
-}
-
-type EffectsApiAround = typeof EffectsApi.around;
-type EffectsMiddlewareArg = Parameters<EffectsApiAround>[0];
-type EffectsAroundOptions = Parameters<EffectsApiAround>[1];
-
-/**
- * Widened middleware shape: dispatch/resolve members MAY declare a third
- * `ctx: DispatchCtx | null` parameter. The arity-based adapter below detects
- * 3-arg functions via `fn.length` and wraps them to read the active
- * DispatchContext; 2-arg functions pass through byte-identical.
- *
- * Other members (sleep, etc.) inherit their original 2-arg constraints.
- */
-type EffectsMiddlewareArgWithCtx = Omit<EffectsMiddlewareArg, "dispatch" | "resolve"> & {
-  dispatch?: (
-    args: [string, Val],
-    next: (eid: string, d: Val) => Operation<Val>,
-    ctx?: DispatchCtx | null,
-  ) => Operation<Val>;
-  resolve?: (
-    args: [string],
-    next: (agentId: string) => Operation<boolean>,
-    ctx?: DispatchCtx | null,
-  ) => Operation<boolean>;
-};
-
-type EffectsAroundWithCtx = (
-  middleware: EffectsMiddlewareArgWithCtx,
-  options?: EffectsAroundOptions,
-) => Operation<void>;
-
-/**
- * Effects.around accepts the underlying 2-arg contract plus an optional
- * 3rd `ctx` argument on dispatch/resolve members. Internally, any function
- * member whose arity is ≥3 is wrapped by the adapter — the 3rd argument is
- * the active DispatchContext (or null when no dispatch chain is active).
- */
-function aroundWithAdapter(
-  middleware: EffectsMiddlewareArgWithCtx,
-  options?: EffectsAroundOptions,
-): Operation<void> {
-  const adapted: Record<string, unknown> = { ...(middleware as object) };
-  const raw = middleware as {
-    dispatch?: (...a: unknown[]) => Operation<Val>;
-    resolve?: (...a: unknown[]) => Operation<boolean>;
-  };
-  if (raw.dispatch) {
-    adapted.dispatch = adaptDispatch(raw.dispatch);
-  }
-  if (raw.resolve) {
-    adapted.resolve = adaptResolve(raw.resolve);
-  }
-  return EffectsApi.around(adapted as EffectsMiddlewareArg, options);
-}
-
 export const Effects: {
   operations: typeof EffectsApi.operations;
-  around: EffectsAroundWithCtx;
+  around: typeof EffectsApi.around;
   sleep: typeof EffectsApi.operations.sleep;
 } = {
   operations: EffectsApi.operations,
-  around: aroundWithAdapter,
+  around: EffectsApi.around,
   sleep: EffectsApi.operations.sleep,
 };
 

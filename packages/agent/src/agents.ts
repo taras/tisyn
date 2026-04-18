@@ -26,7 +26,7 @@ function* use<Ops extends Record<string, OperationSpec>>(
         if (!handler) {
           throw new Error(`Agent "${id}" has no handler for operation: ${name}`);
         }
-        return yield* DispatchContext.with(null, () => handler(data));
+        return yield* DispatchContext.with(undefined, () => handler(data));
       }
       return yield* next(effectId, data);
     },

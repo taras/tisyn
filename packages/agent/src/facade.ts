@@ -15,7 +15,7 @@ import type { Val } from "@tisyn/ir";
 import type { Api } from "@effectionx/context-api";
 import { createApi } from "@effectionx/context-api";
 import type { AgentDeclaration, OperationSpec, ArgsOf, ResultOf } from "./types.js";
-import { DispatchContext, dispatch, type DispatchCtx } from "./dispatch.js";
+import { dispatch } from "./dispatch.js";
 
 // ---------------------------------------------------------------------------
 // AgentFacade type
@@ -119,36 +119,8 @@ export function buildFacade<Ops extends Record<string, OperationSpec>>(
       >) as AgentFacade<Ops>[typeof name];
   }
 
-  // Attach the backing Api's around method with an arity-based 3-arg adapter.
-  // Per-operation middleware that declares a third `ctx` parameter reads the
-  // active DispatchContext; 2-arg middleware is forwarded byte-identical.
-  facade.around = ((
-    middleware: Record<string, (...a: unknown[]) => Operation<Val>>,
-    options?: { at: "min" | "max" },
-  ): Operation<void> => {
-    const adapted: Record<string, unknown> = { ...middleware };
-    for (const [key, fn] of Object.entries(middleware)) {
-      if (typeof fn !== "function") {
-        continue;
-      }
-      if (fn.length <= 2) {
-        continue;
-      }
-      const threeArg = fn as unknown as (
-        args: Val,
-        next: (args: Val) => Operation<Val>,
-        ctx: DispatchCtx | null,
-      ) => Operation<Val>;
-      adapted[key] = function* adaptedOp(
-        args: Val,
-        next: (args: Val) => Operation<Val>,
-      ): Operation<Val> {
-        const ctx = (yield* DispatchContext.get()) ?? null;
-        return yield* threeArg(args, next, ctx);
-      };
-    }
-    return (api.around as (m: unknown, o?: unknown) => Operation<void>)(adapted, options);
-  }) as typeof api.around;
+  // Attach the backing Api's around method directly
+  facade.around = api.around;
 
   return facade;
 }
