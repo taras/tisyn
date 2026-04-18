@@ -32,7 +32,6 @@ import { evaluate, type Env, envFromRecord, extendMulti } from "@tisyn/kernel";
 import { type DurableStream, InMemoryStream, ReplayIndex } from "@tisyn/durable-streams";
 import {
   dispatch,
-  DispatchContext,
   Effects,
   evaluateMiddlewareFn,
   InvalidInvokeCallSiteError,
@@ -40,6 +39,7 @@ import {
   InvalidInvokeOptionError,
   type InvokeOpts,
 } from "@tisyn/agent";
+import { DispatchContext } from "@tisyn/agent/internal";
 import {
   installAgentTransport,
   type AgentTransportFactory,

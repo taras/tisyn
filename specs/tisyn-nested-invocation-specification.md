@@ -88,7 +88,7 @@ invoke<T>(
 ): Operation<T>
 ```
 
-`invoke` is a free function, not a method on any context value. Internally it reads the active runtime-scoped `DispatchContext` installed by the runtime around each standard-effect dispatch (§3). When no such context is active, or when the call site is not an `Effects.around({ dispatch })` body, `invoke` MUST throw `InvalidInvokeCallSiteError` (§5.3).
+`invoke` is a free function, not a method on any context value. Internally it reads the active runtime-scoped `DispatchContext` installed by the runtime around each standard-effect dispatch (§3). `DispatchContext` itself is **not part of the public `@tisyn/agent` surface**: it is a runtime/agent seam and MUST NOT be exported from the package's public barrel. User code therefore has no supported way to install a synthetic ambient context; the only way to reach a non-`undefined` `DispatchContext` is to be inside the dynamic extent of an `Effects.around({ dispatch })` middleware body that the runtime has wrapped around a standard-effect dispatch. When no such context is active, or when the call site is not an `Effects.around({ dispatch })` body, `invoke` MUST throw `InvalidInvokeCallSiteError` (§5.3).
 
 ### 5.2 Naming
 

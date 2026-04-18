@@ -8,6 +8,7 @@ import {
   Effects,
   InvalidInvokeCallSiteError,
 } from "./index.js";
+import * as agentPublicBarrel from "./index.js";
 import { Fn, Q } from "@tisyn/ir";
 import type { FnNode, Val } from "@tisyn/ir";
 import { execute } from "@tisyn/runtime";
@@ -101,6 +102,27 @@ describe("@tisyn/agent", () => {
       ir: { tisyn: "eval", id: "parent.trigger", data: [] } as never,
     });
 
+    expect(caughtErr).toBeInstanceOf(InvalidInvokeCallSiteError);
+  });
+
+  it("public surface: DispatchContext is not exported and invoke() cannot be smuggled through public API", function* () {
+    // DispatchContext is a package-internal runtime/agent seam. User
+    // code importing from `@tisyn/agent` must not see it on the public
+    // barrel — otherwise user code could install a synthetic ambient
+    // context and make `invoke(...)` succeed from a non-dispatch-
+    // boundary call site.
+    expect((agentPublicBarrel as Record<string, unknown>).DispatchContext).toBeUndefined();
+
+    // With no public way to install a DispatchContext and no active
+    // Effects.around({ dispatch }) body, invoke() called from plain
+    // user code MUST throw InvalidInvokeCallSiteError.
+    const bodyFn = Fn<[], Val>([], Q(null));
+    let caughtErr: Error | null = null;
+    try {
+      yield* invoke<Val>(asFn(bodyFn), []);
+    } catch (err) {
+      caughtErr = err as Error;
+    }
     expect(caughtErr).toBeInstanceOf(InvalidInvokeCallSiteError);
   });
 

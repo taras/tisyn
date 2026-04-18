@@ -7,7 +7,6 @@ export {
   resolve,
   installCrossBoundaryMiddleware,
   getCrossBoundaryMiddleware,
-  DispatchContext,
   InvalidInvokeCallSiteError,
   InvalidInvokeInputError,
   InvalidInvokeOptionError,
