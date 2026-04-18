@@ -9,7 +9,8 @@ export {
 } from "./load-module.js";
 export { execute, type ExecuteOptions, type ExecuteResult } from "./execute.js";
 export { executeRemote, type ExecuteRemoteOptions } from "./execute-remote.js";
-export { EffectError } from "./errors.js";
+export { EffectError, InvocationCancelledError } from "./errors.js";
+export { currentScopedEffectFrames } from "./scoped-effect-stack.js";
 export {
   applyOverlay,
   resolveEnv,

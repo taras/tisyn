@@ -2,7 +2,7 @@ import type { Operation } from "effection";
 import type { Val } from "@tisyn/ir";
 import type { AgentDeclaration, ImplementationHandlers, OperationSpec } from "./types.js";
 import { parseEffectId } from "@tisyn/kernel";
-import { Effects } from "./dispatch.js";
+import { DispatchContext, Effects } from "./dispatch.js";
 
 /**
  * Local binding primitive.
@@ -26,7 +26,7 @@ function* use<Ops extends Record<string, OperationSpec>>(
         if (!handler) {
           throw new Error(`Agent "${id}" has no handler for operation: ${name}`);
         }
-        return yield* handler(data);
+        return yield* DispatchContext.with(undefined, () => handler(data));
       }
       return yield* next(effectId, data);
     },

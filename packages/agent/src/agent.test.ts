@@ -1,7 +1,20 @@
+import { readFileSync } from "node:fs";
 import { describe, it } from "@effectionx/vitest";
 import { expect } from "vitest";
-import { agent, operation, implementAgent } from "./index.js";
+import {
+  agent,
+  operation,
+  implementAgent,
+  invoke,
+  Effects,
+  InvalidInvokeCallSiteError,
+} from "./index.js";
+import * as agentPublicBarrel from "./index.js";
+import { Fn, Q } from "@tisyn/ir";
+import type { FnNode, Val } from "@tisyn/ir";
 import { execute } from "@tisyn/runtime";
+
+const asFn = (f: unknown): FnNode => f as FnNode;
 
 describe("@tisyn/agent", () => {
   it("host-side method constructs invocation data", function* () {
@@ -55,6 +68,72 @@ describe("@tisyn/agent", () => {
 
     const result = yield* impl.call("double", { value: 21 });
     expect(result).toBe(42);
+  });
+
+  it("impl.call() handler isolation: invoke from handler under a live DispatchContext throws", function* () {
+    const helper = agent("helper-impl-call-isolation", {
+      run: operation<null, Val>(),
+    });
+    const bodyFn = Fn<[], Val>([], Q(null));
+
+    let caughtErr: Error | null = null;
+
+    const impl = implementAgent(helper, {
+      *run() {
+        try {
+          yield* invoke<Val>(asFn(bodyFn), []);
+        } catch (err) {
+          caughtErr = err as Error;
+        }
+        return null as Val;
+      },
+    });
+
+    yield* Effects.around({
+      *dispatch([effectId, data]: [string, Val], next) {
+        if (effectId === "parent.trigger") {
+          yield* impl.call("run", null);
+          return null as Val;
+        }
+        return yield* next(effectId, data);
+      },
+    });
+
+    yield* execute({
+      ir: { tisyn: "eval", id: "parent.trigger", data: [] } as never,
+    });
+
+    expect(caughtErr).toBeInstanceOf(InvalidInvokeCallSiteError);
+  });
+
+  it("public surface: DispatchContext is not exported and invoke() cannot be smuggled through public API", function* () {
+    // DispatchContext is a package-internal runtime/agent seam. User
+    // code importing from `@tisyn/agent` must not see it on the public
+    // barrel — otherwise user code could install a synthetic ambient
+    // context and make `invoke(...)` succeed from a non-dispatch-
+    // boundary call site.
+    expect((agentPublicBarrel as Record<string, unknown>).DispatchContext).toBeUndefined();
+
+    // With no public way to install a DispatchContext and no active
+    // Effects.around({ dispatch }) body, invoke() called from plain
+    // user code MUST throw InvalidInvokeCallSiteError.
+    const bodyFn = Fn<[], Val>([], Q(null));
+    let caughtErr: Error | null = null;
+    try {
+      yield* invoke<Val>(asFn(bodyFn), []);
+    } catch (err) {
+      caughtErr = err as Error;
+    }
+    expect(caughtErr).toBeInstanceOf(InvalidInvokeCallSiteError);
+
+    // There must be no supported package-import path exposing
+    // DispatchContext — @tisyn/agent's package.json must publish only
+    // the "." subpath.
+    const pkgPath = new URL("../package.json", import.meta.url);
+    const pkg = JSON.parse(readFileSync(pkgPath, "utf8")) as {
+      exports: Record<string, unknown>;
+    };
+    expect(Object.keys(pkg.exports)).toEqual(["."]);
   });
 
   it("fails cleanly for unknown operation", function* () {

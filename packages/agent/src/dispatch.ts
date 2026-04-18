@@ -26,6 +26,69 @@ export function* getCrossBoundaryMiddleware(): Operation<FnNode | null> {
 }
 
 // ---------------------------------------------------------------------------
+// DispatchContext — carries invocation capability for the active dispatch chain.
+//
+// The runtime installs a fresh DispatchContext value for each standard-effect
+// dispatch via DispatchContext.with(...); the `invoke(fn, args, opts?)` helper
+// reads the active value via DispatchContext.get(). Agent handlers and other
+// isolated code wrap their body with DispatchContext.with(undefined, ...) so
+// those bodies cannot reuse an outer context.
+// ---------------------------------------------------------------------------
+
+/** Scoped-effect frame pushed for the duration of an invoked child subtree. */
+export interface ScopedEffectFrame {
+  readonly kind: string;
+  readonly id: string;
+}
+
+/** Options to invoke(fn, args, opts?). */
+export interface InvokeOpts {
+  readonly overlay?: ScopedEffectFrame;
+  readonly label?: string;
+}
+
+/** Runtime-controlled dispatch-boundary context exposed to middleware. */
+export interface DispatchContext {
+  readonly coroutineId: string;
+  invoke<T = Val>(fn: FnNode, args: readonly Val[], opts?: InvokeOpts): Operation<T>;
+}
+
+/**
+ * Active dispatch-boundary context, or `undefined` when no dispatch chain is
+ * active. Installed by the runtime via `DispatchContext.with(ctx, body)` for
+ * the duration of each standard-effect dispatch; cleared to `undefined` by
+ * agent handler wrappers.
+ */
+export const DispatchContext = createContext<DispatchContext | undefined>(
+  "$tisyn-dispatch",
+  undefined,
+);
+
+/** Thrown when invoke() is called outside an active dispatch-boundary middleware. */
+export class InvalidInvokeCallSiteError extends Error {
+  override name = "InvalidInvokeCallSiteError" as const;
+  constructor(message: string) {
+    super(message);
+  }
+}
+
+/** Thrown when invoke() is called with malformed fn or args. */
+export class InvalidInvokeInputError extends Error {
+  override name = "InvalidInvokeInputError" as const;
+  constructor(message: string) {
+    super(message);
+  }
+}
+
+/** Thrown when invoke() is called with malformed opts (overlay shape, label type). */
+export class InvalidInvokeOptionError extends Error {
+  override name = "InvalidInvokeOptionError" as const;
+  constructor(message: string) {
+    super(message);
+  }
+}
+
+// ---------------------------------------------------------------------------
 // Effects API
 // ---------------------------------------------------------------------------
 
@@ -46,9 +109,15 @@ const EffectsApi = createApi("Effects", {
   },
 });
 
-export const Effects = Object.assign(EffectsApi, {
+export const Effects: {
+  operations: typeof EffectsApi.operations;
+  around: typeof EffectsApi.around;
+  sleep: typeof EffectsApi.operations.sleep;
+} = {
+  operations: EffectsApi.operations,
+  around: EffectsApi.around,
   sleep: EffectsApi.operations.sleep,
-});
+};
 
 /**
  * Dispatch an effect through the Effects middleware chain.

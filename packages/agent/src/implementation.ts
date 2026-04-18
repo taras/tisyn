@@ -9,7 +9,7 @@ import type {
   ResultOf,
 } from "./types.js";
 import { parseEffectId } from "@tisyn/kernel";
-import { Effects } from "./dispatch.js";
+import { DispatchContext, Effects } from "./dispatch.js";
 
 /**
  * Bind implementations to an agent declaration.
@@ -35,7 +35,7 @@ export function implementAgent<Ops extends Record<string, OperationSpec>>(
             if (!handler) {
               throw new Error(`Agent "${id}" has no handler for operation: ${name}`);
             }
-            return yield* handler(data);
+            return yield* DispatchContext.with(undefined, () => handler(data));
           }
           return yield* next(effectId, data);
         },
@@ -55,7 +55,9 @@ export function implementAgent<Ops extends Record<string, OperationSpec>>(
       if (!handler) {
         throw new Error(`Agent "${id}" has no handler for operation: ${name}`);
       }
-      return (yield* handler(args as Val)) as ResultOf<Ops[K]>;
+      return (yield* DispatchContext.with(undefined, () => handler(args as Val))) as ResultOf<
+        Ops[K]
+      >;
     },
   };
 }

@@ -22,14 +22,24 @@ import {
 import {
   DivergenceError,
   EffectError,
+  InvocationCancelledError,
   RuntimeBugError,
   ScopeBindingEffectError,
   SubscriptionCapabilityError,
 } from "./errors.js";
 import { assertValidIr } from "@tisyn/validate";
-import { evaluate, type Env, envFromRecord } from "@tisyn/kernel";
+import { evaluate, type Env, envFromRecord, extendMulti } from "@tisyn/kernel";
 import { type DurableStream, InMemoryStream, ReplayIndex } from "@tisyn/durable-streams";
-import { dispatch, Effects, evaluateMiddlewareFn } from "@tisyn/agent";
+import {
+  dispatch,
+  Effects,
+  evaluateMiddlewareFn,
+  InvalidInvokeCallSiteError,
+  InvalidInvokeInputError,
+  InvalidInvokeOptionError,
+  type InvokeOpts,
+} from "@tisyn/agent";
+import { DispatchContext } from "./dispatch-context.js";
 import {
   installAgentTransport,
   type AgentTransportFactory,
@@ -37,6 +47,7 @@ import {
 } from "@tisyn/transport";
 import type { FnNode } from "@tisyn/ir";
 import { ConfigContext } from "./config-scope.js";
+import { withOverlayFrame } from "./scoped-effect-stack.js";
 
 export interface ExecuteOptions {
   /** The IR tree to evaluate. */
@@ -105,6 +116,100 @@ interface ResourceChild {
   childId: string;
   signalTeardown: () => void;
   waitCleanup: Operation<void>;
+}
+
+// ── Nested invocation helpers ──
+
+function isFnNode(value: unknown): value is FnNode {
+  return (
+    typeof value === "object" &&
+    value !== null &&
+    (value as { tisyn?: unknown }).tisyn === "fn" &&
+    Array.isArray((value as { params?: unknown }).params)
+  );
+}
+
+function validateInvokeOpts(opts: InvokeOpts | undefined): void {
+  if (opts === undefined || opts === null) {
+    return;
+  }
+  if (typeof opts !== "object") {
+    throw new InvalidInvokeOptionError("opts must be an object");
+  }
+  if ("overlay" in opts && opts.overlay !== undefined) {
+    const ov = opts.overlay as unknown;
+    if (typeof ov !== "object" || ov === null) {
+      throw new InvalidInvokeOptionError("opts.overlay must be an object");
+    }
+    const frame = ov as Record<string, unknown>;
+    if (typeof frame.kind !== "string") {
+      throw new InvalidInvokeOptionError("opts.overlay.kind must be a string");
+    }
+    if (typeof frame.id !== "string") {
+      throw new InvalidInvokeOptionError("opts.overlay.id must be a string");
+    }
+  }
+  if ("label" in opts && opts.label !== undefined && typeof opts.label !== "string") {
+    throw new InvalidInvokeOptionError("opts.label must be a string");
+  }
+}
+
+function mapChildResultToOperationOutcome<T>(r: EventResult): T {
+  if (r.status === "ok") {
+    return (r.value ?? null) as T;
+  }
+  if (r.status === "error") {
+    throw new EffectError(r.error.message, r.error.name);
+  }
+  if (r.status === "cancelled") {
+    throw new InvocationCancelledError();
+  }
+  throw new RuntimeBugError(`unknown child close status: ${(r as { status: string }).status}`);
+}
+
+function buildDispatchContext(args: {
+  coroutineId: string;
+  parentEnv: Env;
+  driveContext: DriveContext;
+  allocateChildId: () => string;
+}): DispatchContext {
+  const { coroutineId, parentEnv, driveContext, allocateChildId } = args;
+  const self: DispatchContext = {
+    coroutineId,
+    *invoke<T>(fn: FnNode, invokeArgs: readonly Val[], opts?: InvokeOpts): Operation<T> {
+      // §5.3.3: may only be called while the SAME ctx is the currently-active
+      // DispatchContext. Stale/captured/agent-handler reuse fails here and
+      // MUST NOT advance the allocator.
+      const active = yield* DispatchContext.get();
+      if (active !== self) {
+        throw new InvalidInvokeCallSiteError(
+          "ctx.invoke may only be called while its owning dispatch-boundary middleware is active",
+        );
+      }
+      if (!isFnNode(fn)) {
+        throw new InvalidInvokeInputError("fn must be a compiled Fn node");
+      }
+      if (!Array.isArray(invokeArgs)) {
+        throw new InvalidInvokeInputError("args must be an array");
+      }
+      validateInvokeOpts(opts);
+
+      // §6.2: advance allocator atomically at the moment of the call.
+      const childId = allocateChildId();
+
+      const childEnv = extendMulti(parentEnv, [...fn.params], invokeArgs as Val[]);
+      const childKernel = evaluate(fn.body as Expr, childEnv);
+
+      const driveChild = () => driveKernel(childKernel, childId, childEnv, driveContext);
+
+      const childResult: EventResult = opts?.overlay
+        ? yield* withOverlayFrame(opts.overlay, driveChild)
+        : yield* driveChild();
+
+      return mapChildResultToOperationOutcome<T>(childResult);
+    },
+  };
+  return self;
 }
 
 /**
@@ -643,7 +748,19 @@ function* driveKernel(
                 `Effect '${descriptor.id}': resolved data contains a subscription handle, which is a restricted capability value`,
               );
             }
-            resultValue = yield* dispatch(descriptor.id, descriptor.data as Val);
+            // Install a fresh DispatchContext for this dispatch chain —
+            // middleware may read it via DispatchContext.get() and call
+            // ctx.invoke(fn, args, opts?) to run a compiled Fn as a
+            // journaled child coroutine under the parent's unified allocator.
+            const dispatchCtx = buildDispatchContext({
+              coroutineId,
+              parentEnv: env,
+              driveContext: ctx,
+              allocateChildId: () => `${coroutineId}.${childSpawnCount++}`,
+            });
+            resultValue = yield* DispatchContext.with(dispatchCtx, () =>
+              dispatch(descriptor.id, descriptor.data as Val),
+            );
           }
           effectResult = { status: "ok", value: resultValue as Json };
         } catch (error) {
