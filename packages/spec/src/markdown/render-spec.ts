@@ -1,188 +1,126 @@
-// Deterministic Markdown renderer for NormalizedSpecModule.
-//
-// Contract: pure function, same input → byte-identical output. No
-// wall-clock reads, no environment lookups, no randomness. The banner
-// on line 1 is a fixed string so downstream comparison can strip it
-// uniformly.
-//
-// Design notes:
-// - Rule IDs are authoring-only and are NOT emitted. The source
-//   documents don't carry rule IDs, so rendering them would break
-//   round-trip comparison with the pre-migration handwritten files.
-// - Headings are `## {section.id}. {section.title}` for top-level
-//   sections, `### {section.id}. {section.title}` for subsections,
-//   and so on (depth + 2).
-// - Per-section ordering: prose, then rules, errorCodes, concepts,
-//   invariants, terms whose `.section` matches this section's id.
-//   Subsections render after the section's own bullets.
+// §11.1 renderSpecMarkdown — pure, deterministic projection of a spec.
 
-import type {
-  ConceptExport,
-  ErrorCodeDeclaration,
-  InvariantDeclaration,
-  NormalizedSpecModule,
-  RuleDeclaration,
-  SpecSection,
-  TermDefinition,
-} from "../types.ts";
-
-export const GENERATED_BANNER =
-  "<!-- Generated from packages/spec/corpus — do not edit by hand. -->";
+import type { NormalizedSpecModule, Section, SpecModule } from "../types.ts";
+import { GENERATED_BANNER } from "./banner.ts";
 
 export interface RenderSpecOptions {
-  readonly relationshipTitle?: (specId: string) => string | undefined;
+  readonly includeBanner?: boolean;
 }
 
 export function renderSpecMarkdown(
-  spec: NormalizedSpecModule,
+  spec: SpecModule | NormalizedSpecModule,
   options?: RenderSpecOptions,
 ): string {
-  const lines: string[] = [];
-  lines.push(GENERATED_BANNER);
-  lines.push("");
-  lines.push(`# ${spec.title}`);
-  lines.push("");
+  const includeBanner = options?.includeBanner ?? true;
+  const out: string[] = [];
+  if (includeBanner) {
+    out.push(GENERATED_BANNER);
+    out.push("");
+  }
+  out.push(`# ${spec.title}`);
+  out.push("");
+  out.push(`_Status: ${spec.status}_`);
+  if (spec.implementationPackage !== undefined) {
+    out.push(`_Implementation: ${spec.implementationPackage}_`);
+  }
+  out.push("");
 
-  const relLines = renderRelationshipLines(spec, options);
-  if (relLines.length > 0) {
-    for (const line of relLines) {
-      lines.push(line);
+  if (spec.relationships.length > 0) {
+    out.push("## Relationships");
+    out.push("");
+    const sorted = [...spec.relationships].sort(compareRelationship);
+    for (const rel of sorted) {
+      const qualifier = rel.qualifier !== undefined ? ` — ${rel.qualifier}` : "";
+      out.push(`- ${rel.type}: ${rel.target}${qualifier}`);
     }
-    lines.push("");
+    out.push("");
   }
 
-  lines.push("---");
-  lines.push("");
+  if (spec.openQuestions !== undefined && spec.openQuestions.length > 0) {
+    out.push("## Open Questions");
+    out.push("");
+    for (const oq of spec.openQuestions) {
+      const blocks = oq.blocksTarget !== undefined ? ` (blocks ${oq.blocksTarget})` : "";
+      const resolved = oq.resolvedIn !== undefined ? ` (resolved in ${oq.resolvedIn})` : "";
+      out.push(`- [${oq.id}] [${oq.status}]${blocks}${resolved} ${oq.text}`);
+    }
+    out.push("");
+  }
 
   for (const section of spec.sections) {
-    renderSection(lines, section, 0, spec);
+    renderSection(out, section, 2);
   }
 
-  // Normalize: trim trailing whitespace on each line, collapse runs of
-  // empty lines to at most one, ensure a single trailing newline.
-  const trimmed = lines.map((l) => l.replace(/\s+$/, ""));
-  const collapsed: string[] = [];
-  let lastBlank = false;
-  for (const l of trimmed) {
-    const isBlank = l.length === 0;
-    if (isBlank && lastBlank) {
-      continue;
-    }
-    collapsed.push(l);
-    lastBlank = isBlank;
-  }
-  while (collapsed.length > 0 && collapsed[collapsed.length - 1] === "") {
-    collapsed.pop();
-  }
-  return `${collapsed.join("\n")}\n`;
+  return out.join("\n").replace(/\n+$/, "\n");
 }
 
-function renderRelationshipLines(
-  spec: NormalizedSpecModule,
-  options?: RenderSpecOptions,
-): string[] {
-  const label = (specId: string): string => options?.relationshipTitle?.(specId) ?? specId;
-  const out: string[] = [];
-  if (spec.dependsOn.length > 0) {
-    out.push(`**Depends on:** ${spec.dependsOn.map((r) => label(r.specId)).join(", ")}`);
-  }
-  if (spec.complements.length > 0) {
-    out.push(`**Complements:** ${spec.complements.map((r) => label(r.specId)).join(", ")}`);
-  }
-  if (spec.implements.length > 0) {
-    out.push(`**Implements:** ${spec.implements.map((r) => label(r.specId)).join(", ")}`);
-  }
-  if (spec.amends.length > 0) {
-    out.push(`**Amends:** ${spec.amends.map((r) => label(r.specId)).join(", ")}`);
-  }
-  return out;
-}
-
-function renderSection(
-  lines: string[],
-  section: SpecSection,
-  depth: number,
-  spec: NormalizedSpecModule,
-): void {
-  const headingLevel = Math.min(6, depth + 2);
-  const hashes = "#".repeat(headingLevel);
-  const numbered = /^\d/.test(section.id);
-  lines.push(numbered ? `${hashes} ${section.id}. ${section.title}` : `${hashes} ${section.title}`);
-  lines.push("");
+function renderSection(out: string[], section: Section, depth: number): void {
+  const heading = "#".repeat(Math.min(depth, 6));
+  const prefix = typeof section.id === "number" ? `§${section.id} ` : "";
+  out.push(`${heading} ${prefix}${section.title}`);
+  out.push("");
   if (section.prose.length > 0) {
-    lines.push(section.prose);
-    lines.push("");
+    out.push(section.prose);
+    out.push("");
   }
 
-  const rules = spec.rules.filter((r) => r.section === section.id);
-  for (const rule of rules) {
-    renderRuleBullet(lines, rule);
-  }
-  if (rules.length > 0) {
-    lines.push("");
-  }
-
-  const ecs = spec.errorCodes.filter((e) => e.section === section.id);
-  for (const ec of ecs) {
-    renderErrorCodeBullet(lines, ec);
-  }
-  if (ecs.length > 0) {
-    lines.push("");
+  if (section.rules !== undefined && section.rules.length > 0) {
+    for (const rule of section.rules) {
+      out.push(`- [${rule.id}] [${rule.level}] ${rule.text}`);
+    }
+    out.push("");
   }
 
-  const concepts = spec.concepts.filter((c) => c.section === section.id);
-  for (const c of concepts) {
-    renderConceptBullet(lines, c);
-  }
-  if (concepts.length > 0) {
-    lines.push("");
-  }
-
-  const invariants = spec.invariants.filter((i) => i.section === section.id);
-  for (const inv of invariants) {
-    renderInvariantBullet(lines, inv);
-  }
-  if (invariants.length > 0) {
-    lines.push("");
+  if (section.termDefinitions !== undefined && section.termDefinitions.length > 0) {
+    for (const t of section.termDefinitions) {
+      out.push(`**${t.term}** — ${t.definition}`);
+    }
+    out.push("");
   }
 
-  const terms = spec.terms.filter((t) => t.section === section.id);
-  for (const t of terms) {
-    renderTermBullet(lines, t);
-  }
-  if (terms.length > 0) {
-    lines.push("");
+  if (section.errorCodes !== undefined && section.errorCodes.length > 0) {
+    for (const e of section.errorCodes) {
+      const req = e.requiredContent !== undefined ? ` (requires: ${e.requiredContent})` : "";
+      out.push(`- [${e.code}] ${e.trigger}${req}`);
+    }
+    out.push("");
   }
 
-  for (const sub of section.subsections) {
-    renderSection(lines, sub, depth + 1, spec);
+  if (section.conceptExports !== undefined && section.conceptExports.length > 0) {
+    for (const c of section.conceptExports) {
+      out.push(`**${c.name}** — ${c.description}`);
+    }
+    out.push("");
   }
-}
 
-function renderRuleBullet(lines: string[], rule: RuleDeclaration): void {
-  lines.push(`- **${rule.strength}** — ${rule.statement}`);
-  if (rule.prose != null && rule.prose.length > 0) {
-    lines.push(`  ${rule.prose}`);
+  if (section.invariants !== undefined && section.invariants.length > 0) {
+    for (const inv of section.invariants) {
+      out.push(`- [${inv.id}] ${inv.text}`);
+    }
+    out.push("");
   }
-}
 
-function renderErrorCodeBullet(lines: string[], ec: ErrorCodeDeclaration): void {
-  lines.push(`- **${ec.code}** — ${ec.trigger}`);
-  if (ec.requiredContent != null && ec.requiredContent.length > 0) {
-    for (const req of ec.requiredContent) {
-      lines.push(`  - ${req}`);
+  if (section.subsections !== undefined) {
+    for (const sub of section.subsections) {
+      renderSection(out, sub, depth + 1);
     }
   }
 }
 
-function renderConceptBullet(lines: string[], concept: ConceptExport): void {
-  lines.push(`- **${concept.name}** — ${concept.description}`);
-}
-
-function renderInvariantBullet(lines: string[], inv: InvariantDeclaration): void {
-  lines.push(`- **${inv.id}** — ${inv.statement}`);
-}
-
-function renderTermBullet(lines: string[], term: TermDefinition): void {
-  lines.push(`- **${term.term}** — ${term.definition}`);
+function compareRelationship(
+  a: SpecModule["relationships"][number],
+  b: SpecModule["relationships"][number],
+): number {
+  if (a.type !== b.type) {
+    return a.type < b.type ? -1 : 1;
+  }
+  if (a.target !== b.target) {
+    return a.target < b.target ? -1 : 1;
+  }
+  const aq = a.qualifier ?? "";
+  const bq = b.qualifier ?? "";
+  if (aq !== bq) {
+    return aq < bq ? -1 : 1;
+  }
+  return 0;
 }

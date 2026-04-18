@@ -1,295 +1,36 @@
-// Unit tests for the deterministic spec-Markdown renderer.
+// SS-RN: renderSpecMarkdown is deterministic, sorts relationships, banners
+// Markdown by default, and uses §N prefix on numeric section ids.
 
-import { describe, expect, test } from "vitest";
-import {
-  Complements,
-  Concept,
-  DependsOn,
-  ErrorCode,
-  ImplementsSpec,
-  Invariant,
-  Rule,
-  Section,
-  Spec,
-  Term,
-} from "../constructors.ts";
-import { Status, Strength } from "../enums.ts";
-import { normalizeSpec } from "../normalize.ts";
-import type { NormalizedSpecModule, SpecModule } from "../types.ts";
-import { GENERATED_BANNER, renderSpecMarkdown } from "./render-spec.ts";
+import { describe, expect, it } from "vitest";
+import { renderSpecMarkdown } from "./render-spec.ts";
+import { GENERATED_BANNER, stripBanner } from "./banner.ts";
+import { fixtureAlpha, fixtureDelta } from "../__fixtures__/index.ts";
 
-function norm(m: SpecModule): NormalizedSpecModule {
-  const r = normalizeSpec(m);
-  if (!r.ok) {
-    throw new Error(`normalize failed: ${JSON.stringify(r.errors)}`);
-  }
-  return r.value;
-}
-
-describe("renderSpecMarkdown", () => {
-  test("renders title, one section, one rule, one error code", () => {
-    const spec = norm(
-      Spec({
-        id: "sp-x",
-        title: "Spec X",
-        version: "0.1.0",
-        status: Status.Active,
-        sections: [
-          Section({
-            id: "1",
-            title: "Overview",
-            normative: true,
-            prose: "Describes thing.",
-          }),
-        ],
-        rules: [
-          Rule({
-            id: "X-1-R1",
-            section: "1",
-            strength: Strength.MUST,
-            statement: "the thing must exist",
-          }),
-        ],
-        errorCodes: [ErrorCode({ code: "X-E1", section: "1", trigger: "thing missing" })],
-      }),
-    );
-    const md = renderSpecMarkdown(spec);
-    expect(md.startsWith(`${GENERATED_BANNER}\n`)).toBe(true);
-    expect(md).toContain("# Spec X");
-    expect(md).toContain("## 1. Overview");
-    expect(md).toContain("Describes thing.");
-    expect(md).toContain("- **MUST** — the thing must exist");
-    expect(md).toContain("- **X-E1** — thing missing");
-    // Rule IDs are authoring-only: never rendered.
-    expect(md).not.toContain("X-1-R1");
+describe("SS-RN render-spec", () => {
+  it("is deterministic across calls", () => {
+    expect(renderSpecMarkdown(fixtureAlpha)).toBe(renderSpecMarkdown(fixtureAlpha));
   });
 
-  test("heading depth increases with nesting", () => {
-    const spec = norm(
-      Spec({
-        id: "sp-x",
-        title: "X",
-        version: "0.1.0",
-        status: Status.Active,
-        sections: [
-          Section({
-            id: "1",
-            title: "Top",
-            normative: true,
-            prose: "",
-            subsections: [
-              Section({
-                id: "1.1",
-                title: "Child",
-                normative: true,
-                prose: "",
-                subsections: [Section({ id: "1.1.1", title: "Grand", normative: true, prose: "" })],
-              }),
-            ],
-          }),
-        ],
-      }),
-    );
-    const md = renderSpecMarkdown(spec);
-    expect(md).toContain("## 1. Top");
-    expect(md).toContain("### 1.1. Child");
-    expect(md).toContain("#### 1.1.1. Grand");
+  it("prefixes numeric section ids with §N", () => {
+    const out = renderSpecMarkdown(fixtureAlpha);
+    expect(out).toMatch(/## §1 Core/);
   });
 
-  test("empty rule/errorCode/etc lists emit prose only", () => {
-    const spec = norm(
-      Spec({
-        id: "sp-x",
-        title: "X",
-        version: "0.1.0",
-        status: Status.Active,
-        sections: [Section({ id: "1", title: "Only", normative: true, prose: "p." })],
-      }),
-    );
-    const md = renderSpecMarkdown(spec);
-    expect(md).toContain("## 1. Only");
-    expect(md).toContain("p.");
-    expect(md).not.toContain("- **");
+  it("includes the generated banner by default and strips cleanly", () => {
+    const out = renderSpecMarkdown(fixtureAlpha);
+    expect(out.startsWith(GENERATED_BANNER)).toBe(true);
+    const stripped = stripBanner(out);
+    expect(stripped.startsWith("# Fixture Alpha")).toBe(true);
   });
 
-  test("optional rule prose renders as indented line", () => {
-    const spec = norm(
-      Spec({
-        id: "sp-x",
-        title: "X",
-        version: "0.1.0",
-        status: Status.Active,
-        sections: [Section({ id: "1", title: "S", normative: true, prose: "" })],
-        rules: [
-          Rule({
-            id: "X-1-R1",
-            section: "1",
-            strength: Strength.MUST,
-            statement: "statement",
-            prose: "extra explanation",
-          }),
-        ],
-      }),
-    );
-    const md = renderSpecMarkdown(spec);
-    expect(md).toContain("- **MUST** — statement");
-    expect(md).toContain("  extra explanation");
+  it("emits a relationship line per relationship", () => {
+    const out = renderSpecMarkdown(fixtureDelta);
+    expect(out).toMatch(/- depends-on: fixture-alpha/);
+    expect(out).toMatch(/- complements: fixture-missing/);
   });
 
-  test("all relationship arrays populated renders bold label lines", () => {
-    const spec = norm(
-      Spec({
-        id: "sp-x",
-        title: "X",
-        version: "0.1.0",
-        status: Status.Active,
-        dependsOn: [DependsOn("other-a")],
-        complements: [Complements("other-b")],
-        implements: [ImplementsSpec("other-c")],
-        sections: [Section({ id: "1", title: "S", normative: true, prose: "" })],
-      }),
-    );
-    const md = renderSpecMarkdown(spec);
-    expect(md).toContain("**Depends on:** other-a");
-    expect(md).toContain("**Complements:** other-b");
-    expect(md).toContain("**Implements:** other-c");
-  });
-
-  test("is deterministic: same input → byte-equal output", () => {
-    const build = () =>
-      norm(
-        Spec({
-          id: "sp-x",
-          title: "X",
-          version: "0.1.0",
-          status: Status.Active,
-          sections: [
-            Section({ id: "1", title: "A", normative: true, prose: "p." }),
-            Section({ id: "2", title: "B", normative: true, prose: "q." }),
-          ],
-          rules: [
-            Rule({
-              id: "X-1-R1",
-              section: "1",
-              strength: Strength.MUST,
-              statement: "a",
-            }),
-            Rule({
-              id: "X-2-R1",
-              section: "2",
-              strength: Strength.SHOULD,
-              statement: "b",
-            }),
-          ],
-        }),
-      );
-    const a = renderSpecMarkdown(build());
-    const b = renderSpecMarkdown(build());
-    expect(a).toBe(b);
-  });
-
-  test("concept, invariant, and term bullets render", () => {
-    const spec = norm(
-      Spec({
-        id: "sp-x",
-        title: "X",
-        version: "0.1.0",
-        status: Status.Active,
-        sections: [Section({ id: "1", title: "S", normative: true, prose: "" })],
-        concepts: [Concept({ name: "widget", section: "1", description: "a thing" })],
-        invariants: [Invariant({ id: "X-INV-1", section: "1", statement: "always A" })],
-        terms: [Term({ term: "gadget", section: "1", definition: "a different thing" })],
-      }),
-    );
-    const md = renderSpecMarkdown(spec);
-    expect(md).toContain("- **widget** — a thing");
-    expect(md).toContain("- **X-INV-1** — always A");
-    expect(md).toContain("- **gadget** — a different thing");
-  });
-
-  test("non-numeric Section id renders heading without id prefix", () => {
-    const spec = norm(
-      Spec({
-        id: "sp-x",
-        title: "X",
-        version: "0.1.0",
-        status: Status.Active,
-        sections: [
-          Section({ id: "1", title: "Numbered", normative: true, prose: "" }),
-          Section({
-            id: "appendix-consistency",
-            title: "Appendix Consistency",
-            normative: false,
-            prose: "appendix prose.",
-          }),
-        ],
-      }),
-    );
-    const md = renderSpecMarkdown(spec);
-    expect(md).toContain("## 1. Numbered");
-    expect(md).toContain("## Appendix Consistency");
-    expect(md).not.toContain("appendix-consistency.");
-  });
-
-  test("relationshipTitle resolver is applied to Complements list", () => {
-    const spec = norm(
-      Spec({
-        id: "sp-x",
-        title: "X",
-        version: "0.1.0",
-        status: Status.Active,
-        complements: [Complements("other-a"), Complements("other-b")],
-        sections: [Section({ id: "1", title: "S", normative: true, prose: "" })],
-      }),
-    );
-    const titles = new Map<string, string>([
-      ["other-a", "Other A Spec"],
-      ["other-b", "Other B Spec"],
-    ]);
-    const md = renderSpecMarkdown(spec, {
-      relationshipTitle: (id) => titles.get(id),
-    });
-    expect(md).toContain("**Complements:** Other A Spec, Other B Spec");
-  });
-
-  test("relationshipTitle returning undefined falls back to specId per entry", () => {
-    const spec = norm(
-      Spec({
-        id: "sp-x",
-        title: "X",
-        version: "0.1.0",
-        status: Status.Active,
-        complements: [Complements("known"), Complements("unknown")],
-        sections: [Section({ id: "1", title: "S", normative: true, prose: "" })],
-      }),
-    );
-    const md = renderSpecMarkdown(spec, {
-      relationshipTitle: (id) => (id === "known" ? "Known Spec" : undefined),
-    });
-    expect(md).toContain("**Complements:** Known Spec, unknown");
-  });
-
-  test("error code with requiredContent renders nested bullets", () => {
-    const spec = norm(
-      Spec({
-        id: "sp-x",
-        title: "X",
-        version: "0.1.0",
-        status: Status.Active,
-        sections: [Section({ id: "1", title: "S", normative: true, prose: "" })],
-        errorCodes: [
-          ErrorCode({
-            code: "X-E1",
-            section: "1",
-            trigger: "bad thing",
-            requiredContent: ["reason", "path"],
-          }),
-        ],
-      }),
-    );
-    const md = renderSpecMarkdown(spec);
-    expect(md).toContain("- **X-E1** — bad thing");
-    expect(md).toContain("  - reason");
-    expect(md).toContain("  - path");
+  it("omits banner when includeBanner is false", () => {
+    const out = renderSpecMarkdown(fixtureAlpha, { includeBanner: false });
+    expect(out.startsWith("# Fixture Alpha")).toBe(true);
   });
 });

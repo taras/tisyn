@@ -1,1174 +1,420 @@
+<!-- GENERATED FILE — do not edit. Regenerate from the canonical corpus module. -->
+
 # Tisyn CLI Specification
 
-**Complements:** Tisyn Compiler Specification, Tisyn Configuration Specification
+_Status: active_
+_Implementation: @tisyn/cli_
 
----
+## Relationships
 
-## 1. Overview
+- complements: tisyn-compiler
+- complements: tisyn-config
 
-This document specifies `tsn`, the Tisyn command-line interface.
+## Open Questions
 
-`tsn` provides four commands:
+- [CLI-OQ-flag-collision-strategy] [open] Whether flag collisions (§9.5) should be handled by built-in-wins precedence (current rule) or by namespacing workflow inputs (e.g., `--input.max-turns`). The current rule is simpler. This may be revisited if collision surprises users in practice.
 
-- `tsn generate` — compile one workflow source into a generated
-  module artifact from one or more roots
-- `tsn build` — run config-driven multi-pass generation
-- `tsn run` — load a workflow descriptor, validate readiness,
-  and execute
-- `tsn check` — validate descriptor readiness without executing
+## Overview
 
-### 1.1 Package and Binary
+This document specifies `tsn`, the Tisyn command-line interface. `tsn` provides four commands: `tsn generate`, `tsn build`, `tsn run`, and `tsn check`.
+
+### Package and Binary
 
 Package: `@tisyn/cli`. Binary: `tsn`.
 
-The package MUST register `tsn` as a `bin` entry in
-`package.json`.
+- [CLI-1.1-R1] [must] The `@tisyn/cli` package registers `tsn` as a `bin` entry in `package.json`.
 
-### 1.2 Scope
+### Scope
 
-The CLI is responsible for:
+The CLI owns command dispatch, compilation orchestration, descriptor loading and validation, module loading, invocation input parsing, startup lifecycle, and diagnostics. It does NOT own compiler graph semantics, runtime execution, descriptor data model, or transport protocols.
 
-- command dispatch, flag parsing, and help generation
-- rooted compilation orchestration (`generate`, `build`)
-- workflow descriptor loading, entrypoint selection, and
-  environment validation (`run`, `check`)
-- module loading with first-class TypeScript support
-  for descriptor modules and transport binding modules,
-  plus pre-compiled workflow modules (`run`, `check`)
-- workflow invocation input parsing from CLI flags (`run`)
-- startup lifecycle orchestration (`run`)
-- diagnostics formatting and process lifecycle (all commands)
+### Relationship to the Config Specification
 
-The CLI is NOT responsible for:
+Invocation inputs flow through the workflow function's parameters. Resolved workflow config flows through `Config.useConfig()`. These are separate channels.
 
-- import resolution, graph construction, module
-  classification, or IR lowering (compiler)
-- IR execution, replay, or transport management (runtime)
-- descriptor data model, constructor vocabulary, or
-  `Config.useConfig()` semantics (config specification)
-- transport protocols (transport specification)
+### Normative Language
 
-### 1.3 Relationship to the Config Specification
+The key words MUST, MUST NOT, SHOULD, SHOULD NOT, and MAY are used as defined in RFC 2119.
 
-The config specification defines `WorkflowDescriptor` shapes,
-`EnvDescriptor` semantics, entrypoint overlay rules, and the
-`Config.useConfig()` contract.
-
-This CLI specification defines how the CLI loads, validates,
-and acts on those structures. In particular:
-
-- **Invocation inputs** (CLI-derived, user-facing) flow
-  through the workflow function's parameters.
-- **Resolved workflow config** (descriptor-derived,
-  deployment-facing) flows through `Config.useConfig()`.
+## Commands
 
-These are separate channels. This specification governs
-invocation inputs. The config specification governs
-`Config.useConfig()`.
+The CLI surface consists of four commands.
 
-### 1.4 Normative Language
+### tsn generate
 
-The key words MUST, MUST NOT, SHOULD, SHOULD NOT, and MAY
-are used as defined in RFC 2119.
-
----
+Compile the workflow module graph rooted at one or more source files. Options include `--output/-o`, `--format` (default `printed`, also `json`), `--no-validate`, `--verbose`, `--help/-h`, `--version/-v`.
 
-## 2. Commands
+- [CLI-2.1-R1] [must-not] The CLI assembles source text, strips imports, or injects stubs for `tsn generate`; those are compiler responsibilities.
+- [CLI-2.1-R2] [must] `tsn generate` supports `--format printed` (default) and `--format json` output formats.
+- [CLI-2.1-R3] [must] `tsn generate` writes generated source to the `--output` path when specified, else to stdout.
 
-### 2.1 `tsn generate`
+### tsn build
 
-Compile the workflow module graph rooted at one or more
-source files.
+Config-driven multi-pass generation. Reads a build config file, infers pass ordering from import dependencies, and executes passes in dependency order. Options include `--config/-c`, `--filter`, `--verbose`, `--help`.
 
-```
-tsn generate <root> [<root>...] [options]
-```
+- [CLI-2.2-R1] [must] If `--config` is not specified, `tsn build` walks from the current working directory toward the filesystem root and stops at the first `tisyn.config.ts` or `tisyn.config.json`.
+- [CLI-2.2-R2] [must] If no config is found, `tsn build` fails with exit code 2.
+- [CLI-2.2-R3] [must] `tsn build` with `--filter <name>` executes the named pass and its dependencies.
+- [CLI-2.2-R4] [must] `tsn build --filter` with an unknown name fails with exit code 2.
 
-**Arguments:**
+### tsn run
 
-| Argument | Required | Description |
-| --- | --- | --- |
-| `root` | YES (1+) | Root workflow source file(s) |
+Load a workflow descriptor, validate readiness, parse invocation inputs, and execute the workflow. Built-in options: `--entrypoint/-e`, `--verbose`, `--help/-h`. Additional workflow-derived flags come from the workflow's invocation input schema.
 
-**Options:**
+### tsn check
 
-| Flag | Alias | Default | Description |
-| --- | --- | --- | --- |
-| `--output <path>` | `-o` | stdout | Output file path |
-| `--format <type>` | | `printed` | Output format: `printed` or `json` |
-| `--no-validate` | | validate | Skip IR validation |
-| `--verbose` | | false | Show detailed diagnostics |
-| `--help` | `-h` | | Show help |
-| `--version` | `-v` | | Show version |
+Validate a workflow descriptor's readiness without executing. Validates descriptor validity and environment readiness. Options: `--entrypoint/-e`, `--env-example`, `--help/-h`.
 
-**Behavior:**
+- [CLI-2.4-R1] [must-not] `tsn check` validates specific invocation input values.
+- [CLI-2.4-R2] [must-not] `tsn check` starts transports, servers, or executes the workflow.
+- [CLI-2.4-R3] [must] `tsn check --env-example` prints an environment variable template to stdout and exits 0.
+- [CLI-2.4-R4] [must] `tsn check --entrypoint <name>` applies the named entrypoint overlay before validation.
+- [CLI-2.4-R5] [may] `tsn check` may report an advisory invocation input schema when derivation succeeds.
+- [CLI-2.4-R6] [must] Schema derivation failure does not cause `tsn check` to fail; it is reported as a warning.
 
-1. Parse and validate options.
-2. Call `compileGraph()` with the specified roots, output
-   format, and validation settings.
-3. If `--output` is specified, write the generated source to
-   the file. Otherwise, write to stdout.
-4. Exit with code 0 on success.
+## Process Lifecycle
 
-The `--include` flag is removed. The CLI MUST NOT assemble
-source text, strip imports, or inject stubs for
-`tsn generate`; those are compiler responsibilities.
+Process lifecycle and exit code semantics for all commands (§3).
 
-### 2.2 `tsn build`
+### Effection Entrypoint
 
-Config-driven multi-pass generation. Reads a build config
-file, infers pass ordering from import dependencies, and
-executes passes in dependency order.
+The CLI entrypoint uses Effection's `main()` for structured signal handling and scope boundaries.
 
-```
-tsn build [options]
-```
-
-**Options:**
+### Compilation Is Synchronous
 
-| Flag | Alias | Default | Description |
-| --- | --- | --- | --- |
-| `--config <path>` | `-c` | auto-discover | Build config file path |
-| `--filter <n>` | | | Run only the named pass |
-| `--verbose` | | false | Show detailed diagnostics |
-| `--help` | `-h` | | Show help |
-
-**Config auto-discovery:** If `--config` is not specified, the
-CLI MUST walk from the current working directory toward the
-filesystem root, stopping at the first directory that contains
-a file named `tisyn.config.ts` or `tisyn.config.json`. If
-none is found, the CLI MUST fail with exit code 2.
-
-**Behavior:**
-
-1. Locate and load the build config file (§4).
-2. Validate the config against the schema (§4.3).
-3. Resolve all paths relative to the config file's directory.
-4. Build the pass dependency graph (§5).
-5. Topological-sort passes. If a cycle is detected, fail with
-   exit code 2.
-6. If `--filter` is specified, execute only the named pass
-   (and its dependencies). Unknown name → exit code 2.
-7. For each pass in dependency order:
-   a. Call `compileGraph()` with the pass's `roots`, format,
-      validation setting, and `generatedModulePaths` derived
-      from prior pass outputs.
-   b. Write generated output.
-8. Exit with code 0 on success.
-
-### 2.3 `tsn run`
+For `tsn generate` and `tsn build`, rooted compilation via `compileGraph()` is synchronous. The CLI does not introduce unnecessary async boundaries.
 
-Load a workflow descriptor, validate readiness, parse
-invocation inputs, and execute the workflow.
+### tsn run Is Long-Lived
 
-```
-tsn run <module> [options]
-```
+For `tsn run`, the process remains alive after startup completes. It exits when the workflow completes, errors, or the process receives an interrupt signal.
 
-**Arguments:**
+### Exit Codes
 
-| Argument | Required | Description |
-| --- | --- | --- |
-| `module` | YES | Path to a module exporting a `WorkflowDescriptor` as its default export |
+Exit code 0 is success. Code 1 is a compilation error (generate/build). Code 2 is a structural descriptor, schema, or configuration error. Code 3 is an I/O error (module not found, file unreadable). Code 4 is an invocation input error (missing required input, type mismatch, unknown flag) for `run`. Code 5 is an environment validation error (missing required or secret env vars). Code 6 is a runtime execution error. This is the §3.4 exit code table.
 
-**Built-in options:**
+- [CLI-3.4-R1] [must] The CLI exits with the appropriate exit code and does not exit with code 0 when an error occurred.
+- [CLI-3.4-R2] [must] Unrecognized built-in CLI flags for `generate`, `build`, or `check` fail with exit code 2.
+- [CLI-3.4-R3] [must] Unknown top-level commands (e.g. `tsn foo`) and nonexistent root files for `tsn generate` are reported with exit codes 2 and 3 respectively.
+- [CLI-3.4-R4] [must] Code 2 applies to loaded-but-structurally-invalid content; code 3 applies when the CLI cannot locate or read a file or module at the filesystem level.
+- [CLI-3.4-R5] [must] Missing required invocation inputs, coercion failures, and unknown invocation flags for `tsn run` fail with exit code 4.
+- [CLI-3.4-R6] [must] Missing required or secret environment variables fail with exit code 5.
+- [CLI-3.4-R7] [may] Runtime execution errors during workflow execution are reported with exit code 6.
+- [CLI-3.4-R8] [must] A successful `tsn generate` or `tsn run` exits with code 0.
+- [CLI-3.4-R9] [must] Compilation errors during `tsn generate`/`tsn build` fail with exit code 1.
 
-| Flag | Alias | Description |
-| --- | --- | --- |
-| `--entrypoint <n>` | `-e` | Apply a named entrypoint overlay |
-| `--verbose` | | Show detailed diagnostics |
-| `--help` | `-h` | Show help (includes workflow-derived flags) |
+- [CLI-E0] Success
+- [CLI-E1] Compilation error during `tsn generate` or `tsn build`
+- [CLI-E2] Descriptor, schema, or configuration structural error
+- [CLI-E3] I/O error — module not found, file not readable, permission denied
+- [CLI-E4] Invocation input error — missing required input, type mismatch, unknown flag
+- [CLI-E5] Environment validation error — missing required or secret env vars
+- [CLI-E6] Runtime execution error — workflow failure, transport error
 
-**Workflow-derived flags:** Additional flags are derived from
-the workflow's invocation input schema (§8). These appear in
-`--help` output alongside built-in options.
+## Build Configuration
 
-**Behavior:** See §10 (Startup Lifecycle).
+Build config file format and schema for `tsn build` (§4).
 
-**Examples:**
+### Build Config File
 
-```bash
-tsn run workflow.ts
-tsn run workflow.ts --entrypoint dev
-tsn run workflow.ts --max-turns 10 --model claude-sonnet
-tsn run workflow.ts --help
-```
+The build config file (`tisyn.config.ts` or `tisyn.config.json`) declares generation passes for `tsn build`. It is distinct from the workflow descriptor used by `tsn run`.
 
-### 2.4 `tsn check`
+### Config File Format
 
-Validate a workflow descriptor's readiness without executing.
+TypeScript format uses `defineConfig()` (a passthrough identity). JSON format uses the same schema without the wrapper function.
 
-```
-tsn check <module> [options]
-```
+### Config Schema
 
-**Arguments:**
+A `TsynConfig` has a `generates` array of `GeneratePass` entries with `name`, `roots`, `output`, optional `format`, `noValidate`, `dependsOn`. The CLI validates the config against this schema (§4.3).
 
-| Argument | Required | Description |
-| --- | --- | --- |
-| `module` | YES | Path to a module exporting a `WorkflowDescriptor` as its default export |
+- [CLI-4.3-R1] [must] Build config validation: `generates` contains at least one entry; each `name` is unique and matches `[a-z][a-z0-9-]*`; each `roots` is non-empty; each root resolves to an existing file; each `output` is writable; `dependsOn` references name passes in `generates`.
+- [CLI-4.3-R2] [must] Legacy fields (e.g. `input`) on the build config are rejected as unknown with exit code 2.
 
-**Options:**
+## Multi-Pass Ordering
 
-| Flag | Alias | Description |
-| --- | --- | --- |
-| `--entrypoint <n>` | `-e` | Apply a named entrypoint overlay |
-| `--env-example` | | Print environment variable template to stdout |
-| `--help` | `-h` | Show help |
+Ordering and cross-pass-boundary handling for multi-pass builds (§5 pass dependency graph).
 
-**Scope.** `tsn check` validates two categories of
-deployment readiness:
-
-1. **Descriptor validity.** The merged descriptor conforms
-   to config-owned validation rules.
-2. **Environment readiness.** All required and secret
-   environment variables referenced by the descriptor are
-   set in the current environment.
+### Import-Graph Inference
 
-`tsn check` MAY additionally report whether a well-formed
-invocation input schema can be derived from the workflow
-entrypoint. This is an **advisory diagnostic only**. Schema
-derivation failure does not cause `tsn check` to fail —
-it is reported as a warning.
+The CLI infers pass dependencies from declared roots and output paths. If a root's import graph references another pass's declared output, that pass runs first.
 
-`tsn check` MUST NOT validate specific invocation input
-values. It does not parse `--max-turns 10` or check
-whether required inputs are supplied. That is `tsn run`'s
-responsibility.
+- [CLI-5.1-R1] [must] The CLI infers pass dependencies from the declared roots' import graph and orders passes topologically.
+- [CLI-5.1-R2] [must] A dependency cycle detected during topological sorting fails with exit code 2 and a diagnostic.
 
-`tsn check` MUST NOT start transports, servers, or execute
-the workflow.
+### dependsOn Escape Hatch
 
-**Output example** (when schema derivation succeeds):
+Explicit ordering for cases where dependencies are not visible in imports. Inferred and explicit edges are equivalent.
 
-```
-Workflow: chat (from ./workflow.ts)
-Entrypoint: dev
+### Cross-Pass Boundary Handling
 
-Environment variables:
-  JOURNAL_PATH    optional    default: "./data/chat.journal"
-  PORT            optional    default: 3000
+Cross-pass boundaries are handled by the compiler during graph traversal. The CLI communicates prior pass output paths via `generatedModulePaths`.
 
-Invocation inputs (advisory):
-  --max-turns <n>     number (required)
-  --model <s>         string (optional)
+- [CLI-5.3-R1] [must] Cross-pass boundaries are communicated by passing prior pass output paths as `generatedModulePaths`. The CLI does not perform source-level stub injection or import stripping.
 
-✓ All checks passed.
-```
-
-If schema derivation fails or is not attempted, the
-invocation inputs section is omitted and a warning MAY
-be shown instead.
-
-**Exit codes:** Per §3 (exit code table).
-
----
-
-## 3. Process Lifecycle
-
-### 3.1 Effection Entrypoint
-
-The CLI entrypoint MUST use Effection's `main()` function.
-This provides structured SIGINT/SIGTERM handling, clean
-process exit, and a scope boundary for async operations.
-
-### 3.2 Compilation Is Synchronous
-
-For `tsn generate` and `tsn build`, rooted compilation via
-`compileGraph()` is synchronous. The CLI MUST NOT introduce
-unnecessary async boundaries around it.
-
-### 3.3 `tsn run` Is Long-Lived
-
-For `tsn run`, the process remains alive after startup
-completes. It exits when the workflow completes, errors, or
-the process receives SIGINT/SIGTERM. The runtime owns
-structured shutdown. The CLI owns exit code mapping.
-
-### 3.4 Exit Codes
-
-| Code | Category | Applies to |
-| --- | --- | --- |
-| 0 | Success | all |
-| 1 | Compilation error | generate, build |
-| 2 | Descriptor, schema, or configuration error (structural) | all |
-| 3 | I/O error (module not found, file not readable, permission denied) | all |
-| 4 | Invocation input error (missing required input, type mismatch, unknown flag) | run |
-| 5 | Environment validation error (missing required or secret env vars) | run, check |
-| 6 | Runtime execution error (workflow failure, transport error) | run |
-
-The CLI MUST exit with the appropriate code. It MUST NOT
-exit with code 0 when an error occurred.
-
-**Boundary between code 2 and code 3.** Code 3 applies when
-the CLI cannot locate or read a file or module at the
-filesystem level — the path does not resolve, the file does
-not exist, or the OS denies access. Code 2 applies when a
-file or module was successfully loaded but its contents are
-structurally invalid — the default export is not a valid
-`WorkflowDescriptor`, a named entrypoint does not exist, or
-the invocation input schema is unsupported.
-
-**Exit code 2 covers:**
-
-- Unrecognized built-in CLI flags (for `generate`, `build`,
-  `check`; for `tsn run` unknown flags are code 4 — see §9.4)
-- Default export is not a valid `WorkflowDescriptor`
-- Named entrypoint not found in descriptor
-- Descriptor fails config-owned validation
-- Invocation input schema unavailable or contains
-  unsupported shapes (§8.1 IS1, IS2)
-
-These are **structural errors** discoverable after loading.
-They contrast with code 3 (cannot load at all), code 4
-(user-provided invocation values are wrong), and code 5
-(deployment environment is misconfigured).
-
----
-
-## 4. Build Configuration
-
-### 4.1 Build Config File
-
-The build config file (`tisyn.config.ts` or
-`tisyn.config.json`) declares generation passes for
-`tsn build`. It is distinct from the workflow descriptor
-used by `tsn run`.
-
-### 4.2 Config File Format
-
-**TypeScript format:**
-
-```typescript
-import { defineConfig } from "@tisyn/cli";
-
-export default defineConfig({
-  generates: [
-    {
-      name: "dom-workflows",
-      roots: ["workflows/dom/main.workflow.ts"],
-      output: "dom-workflows.generated.ts",
-      format: "json",
-    },
-  ],
-});
-```
-
-`defineConfig()` is a passthrough identity function for
-TypeScript type inference.
-
-**JSON format** (`tisyn.config.json`) uses the same schema
-without the wrapper function.
-
-### 4.3 Config Schema
-
-```typescript
-interface TsynConfig {
-  generates: GeneratePass[];
-}
-
-interface GeneratePass {
-  name: string;
-  roots: string[];
-  output: string;
-  format?: "printed" | "json";
-  noValidate?: boolean;
-  dependsOn?: string[];
-}
-```
-
-**Validation rules:**
-
-- `generates` MUST contain at least one entry.
-- Each `name` MUST be unique and match `[a-z][a-z0-9-]*`.
-- Each `roots` array MUST contain at least one path.
-- Each root path MUST resolve to an existing file.
-- Each `output` MUST be writable.
-- `dependsOn` references MUST name passes in `generates`.
-
----
-
-## 5. Multi-Pass Ordering
-
-### 5.1 Import-Graph Inference
-
-The CLI MUST infer pass dependencies from the declared
-roots and output paths. For each pass `P`, if any root
-module's import graph would encounter a resolved import path
-matching another pass's declared output, that other pass
-MUST run first.
-
-The CLI MAY approximate this by scanning root files'
-relative import declarations for specifiers that resolve to
-other passes' output paths.
-
-### 5.2 `dependsOn` Escape Hatch
-
-Explicit ordering for cases where dependencies are not
-visible in imports. Inferred and explicit edges are
-equivalent.
-
-### 5.3 Cross-Pass Boundary Handling
-
-Cross-pass boundaries are handled by the compiler during
-graph traversal. The CLI communicates prior pass output
-paths via `generatedModulePaths`. The CLI MUST NOT perform
-source-level stub injection or import stripping.
-
-### 5.4 Single-Pass Shortcut
+### Single-Pass Shortcut
 
 A single pass with no dependencies skips dependency analysis.
 
----
+## Source Assembly
 
-## 6. Source Assembly
+Reserved section. Source assembly is no longer a CLI concern.
 
-### 6.1 Reserved
+### Reserved
 
-This section is reserved. Source assembly, concatenation,
-deduplication, and filename derivation are no longer CLI
-concerns. The compiler owns file reading, import
-resolution, and module classification.
+This section is reserved. Source assembly, concatenation, deduplication, and filename derivation are compiler responsibilities.
 
----
+## Diagnostics
 
-## 7. Diagnostics
+Error formatting and verbosity conventions.
 
-### 7.1 Error Formatting
+### Error Formatting
 
-Compilation errors MUST be formatted for terminal display
-with error code, message, and source location if available.
+Compilation errors are formatted for terminal display with error code, message, and source location if available.
 
-### 7.2 Verbose Output
+- [CLI-7.1-R1] [must] Compilation errors are formatted for terminal display with error code, message, and source location if available.
 
-When `--verbose` is active, the CLI MUST display command-
-relevant details: config provenance, pass names and inputs,
-discovered contracts/workflows, elapsed time, and for
-`tsn run`, descriptor loading and environment resolution
-details.
+### Verbose Output
 
-### 7.3 Quiet Success
+When `--verbose` is active, the CLI displays command-relevant details such as config provenance, pass inputs, and elapsed time.
 
-On success without `--verbose`, compilation commands MUST
-print a single confirmation line to stderr when writing to
-a file, or no non-output content when writing to stdout.
+### Quiet Success
 
----
+On success without `--verbose`, compilation commands print a single confirmation line to stderr when writing to a file, or no non-output content when writing to stdout.
 
-## 8. Workflow Invocation Input Model
+## Workflow Invocation Input Model
 
-### 8.1 Input Schema Contract
+Schema contract and supported shapes for the workflow invocation input schema (§8).
 
-`tsn run` MUST have access to a **workflow invocation input
-schema** in order to parse invocation flags. The input schema
-describes the fields the workflow function accepts as its
-invocation-time parameter: their names, types, optionality,
-and descriptions.
+### Input Schema Contract
 
-IS1. The CLI MUST obtain a conforming input schema before
-     parsing invocation flags. If no schema is available,
-     the CLI MUST fail with exit code 2.
+`tsn run` has access to a workflow invocation input schema (IS1, §8.1). Unsupported shapes in the schema fail with exit code 2 (IS2). Zero-parameter workflows produce no derived flags and are not a failure (IS3).
 
-IS2. If the obtained schema contains unsupported shapes
-     (§8.4), the CLI MUST fail with exit code 2 and a
-     diagnostic identifying the unsupported construct.
+- [CLI-8.1-R1] [must] IS1: The CLI must obtain a conforming workflow invocation input schema before parsing invocation flags; if no schema is available, it fails with exit code 2.
+- [CLI-8.1-R2] [must] IS2: If the obtained schema contains unsupported shapes, the CLI fails with exit code 2 and a diagnostic identifying the unsupported construct.
+- [CLI-8.1-R3] [must] IS3: A zero-parameter workflow has an empty schema, produces no derived invocation flags, and is not a failure.
 
-IS3. If the workflow function accepts zero parameters, the
-     schema is empty. No invocation flags are derived.
-     This is not a failure.
+### Supported Shapes (v1)
 
-The input schema is separate from the `WorkflowDescriptor`.
-It describes what the user provides at invocation time. The
-descriptor describes deployment-time configuration. How the
-schema is obtained — whether extracted from source, emitted
-as metadata, or provided by other means — is an
-implementation concern (§16.2), not a normative requirement
-of this specification.
+S1: no inputs. S2: a single flat object parameter whose fields become derived invocation inputs. Supported field types: string, number, boolean, and their optional counterparts.
 
-### 8.2 Supported Shapes (v1)
+- [CLI-8.2-R1] [must] S2: A flat object parameter is supported; each field of the object becomes a derived invocation input.
 
-In this version of the specification, the input schema
-supports two shapes:
+### Boolean Semantics (v1 Design Choice)
 
-**S1. No inputs.** The workflow function accepts zero
-parameters. No invocation flags are derived.
+Boolean fields follow a presence-flag model (§8.3). `boolean` and `boolean?` are equivalent in CLI mapping (B1). Presence sets `true`, absence sets `false` — never `undefined` (B2). `--no-flag` is unsupported in v1 (B3). These are owned design choices for v1 (B4).
 
-**S2. Flat object parameter.** The workflow function accepts
-exactly one parameter of object type. Each field of the
-object becomes a derived invocation input.
+- [CLI-8.3-R1] [must] B1: `boolean` and `boolean?` are equivalent in CLI mapping — both produce an optional presence flag.
+- [CLI-8.3-R2] [must] B2: Supplying `--flag` sets the value to `true`; omitting it sets the value to `false`. The CLI always provides a concrete `boolean`, never `undefined`.
+- [CLI-8.3-R3] [must] B3: `--no-flag` negation syntax is unsupported in v1 and yields exit code 4.
 
-Supported field types:
+### Unsupported Shapes
 
-| Field type | CLI behavior |
-| --- | --- |
-| `string` | `--flag <value>` (required) |
-| `number` | `--flag <n>` (required, coerced) |
-| `boolean` | `--flag` (optional presence flag) |
-| `string?` | `--flag <value>` (optional) |
-| `number?` | `--flag <n>` (optional) |
-| `boolean?` | `--flag` (optional presence flag) |
+Rejected shapes (§8.4) include multiple parameters, non-object parameters, array-typed fields, nested object fields, union-typed fields other than `T | undefined`, enums, tuples, mapped types, and `EnvDescriptor` or config-node-typed fields.
 
-### 8.3 Boolean Semantics (v1 Design Choice)
+- [CLI-8.4-R1] [must] Schema derivation rejects multiple parameters, non-object parameter types, array-typed fields, nested object fields, union-typed fields (other than `T | undefined`), enum/tuple/mapped types, and fields typed as `EnvDescriptor` or any config-node type.
 
-Boolean fields follow a presence-flag model. This is a
-**deliberate v1 simplification** that trades expressiveness
-for predictability.
+### JSDoc Descriptions
 
-B1. `boolean` and `boolean?` are **equivalent** in CLI
-    mapping. Both produce an optional presence flag. This
-    intentional collapse means required boolean fields in
-    TypeScript are not represented as required CLI flags.
+If a field has a JSDoc comment or `@param` annotation, the description should be included in help output.
 
-B2. Supplying `--flag` sets the value to `true`.
-    Omitting `--flag` sets the value to `false`.
-    The CLI always provides a concrete `boolean` value to
-    the workflow function, never `undefined`.
+- [CLI-8.5-R1] [should] If a field has a JSDoc or `@param` annotation, its description is included in help output.
 
-B3. Negation syntax (`--no-flag`) is intentionally
-    unsupported in v1. Explicit `false` is representable
-    only by omitting the flag.
+## CLI Flag Mapping and Help
 
-B4. These rules are owned design choices for v1, not
-    accidental limitations. Future versions MAY introduce
-    `--no-flag` negation, required boolean semantics, or
-    `--flag=true`/`--flag=false` value syntax.
+Flag derivation, mapping, coercion, and help generation for `tsn run` (§9).
 
-### 8.4 Unsupported Shapes
+### Name Conversion
 
-The following shapes MUST be rejected at schema derivation
-time with a diagnostic identifying the unsupported
-construct:
+Field names are converted from `camelCase` to `--kebab-case` (§9.1) by splitting on uppercase boundaries.
 
-- Multiple parameters
-- Non-object parameter types
-- Array-typed fields
-- Nested object fields
-- Union-typed fields (other than `T | undefined`)
-- Enum, tuple, or mapped types
-- Fields typed as `EnvDescriptor` or any config node type
+- [CLI-9.1-R1] [must] Field names are converted from `camelCase` to `--kebab-case` by splitting on uppercase boundaries, lowercasing, and joining with hyphens.
 
-### 8.5 JSDoc Descriptions
+### Required vs. Optional
 
-If a field has a JSDoc comment or `@param` annotation, the
-description SHOULD be included in help output (§9). Fields
-without JSDoc appear in help without a description.
+Non-boolean non-optional fields must be supplied via their CLI flag. Missing required fields cause exit code 4 with a diagnostic listing all missing inputs. Optional fields may be omitted; omitted values are `undefined` in the workflow parameter object.
 
----
+- [CLI-9.2-R1] [must] Non-boolean non-optional fields are supplied via their CLI flag; missing required fields cause exit code 4 with a diagnostic listing all missing inputs.
+- [CLI-9.2-R2] [must] Optional fields may be omitted; omitted values are `undefined`.
 
-## 9. CLI Flag Mapping and Help
+### Value Coercion
 
-### 9.1 Name Conversion
+`string` uses the value verbatim. `number` uses `parseFloat`; `NaN` yields exit code 4. `boolean` follows presence semantics.
 
-Field names MUST be converted from `camelCase` to
-`--kebab-case`:
+- [CLI-9.3-R1] [must] Value coercion: `string` is verbatim; `number` uses `parseFloat`, and `NaN` causes exit code 4.
 
-| Field | Flag |
-| --- | --- |
-| `maxTurns` | `--max-turns` |
-| `model` | `--model` |
-| `outputDir` | `--output-dir` |
+### Unknown Flags
 
-The conversion splits on uppercase boundaries, lowercases
-all segments, and joins with hyphens.
+During `tsn run` input parsing (§9.4), any CLI token in the workflow-input remainder that does not match a derived invocation input causes exit code 4. This includes unknown long flags, short flags, and bare positional arguments.
 
-### 9.2 Required vs. Optional
+- [CLI-9.4-R1] [must] During `tsn run` input parsing, any CLI token in the workflow-input remainder that does not match a derived input (including unknown long flags, short flags, and bare positionals) causes exit code 4.
 
-Non-boolean, non-optional fields MUST be supplied via their
-CLI flag. Missing required fields cause exit code 4 with a
-diagnostic listing all missing inputs.
+### Flag Collision
 
-Optional fields MAY be omitted. Omitted values are
-`undefined` in the workflow parameter object. Boolean fields
-follow §8.3.
+Collision is checked on the derived kebab-case flag names. If a derived flag collides with a built-in option, the built-in takes precedence; the workflow parameter must be renamed. The CLI should emit an advisory diagnostic noting the collision.
 
-### 9.3 Value Coercion
+- [CLI-9.5-R1] [must] Collision is checked on derived kebab-case flag names. If a derived flag collides with a built-in option, the built-in takes precedence and the workflow parameter must be renamed.
+- [CLI-9.5-R2] [should] The CLI emits an advisory diagnostic noting a flag collision.
 
-| Type | Rule |
-| --- | --- |
-| `string` | Value used verbatim |
-| `number` | `parseFloat(value)`. `NaN` → exit code 4. |
-| `boolean` | Presence → `true`. Absence → `false`. |
-
-### 9.4 Unknown Flags
+### Help Generation
 
-During `tsn run` input parsing (§10.1 step 6), any CLI
-token in the workflow-input remainder that does not match a
-derived invocation input MUST cause exit code 4 with a
-diagnostic. This includes unknown `--` flags, short flags
-(`-x`), and bare positional arguments. The v1 invocation
-surface is long flags only; no short-flag aliases or
-positional workflow arguments are supported.
+Static help (`tsn run --help` with no module) shows built-in options. Dynamic help (`tsn run <module> --help`) loads the descriptor and shows usage, built-in options, workflow-derived flags, and entrypoints. On help-path failure, the CLI shows built-in options and a diagnostic explaining why workflow-derived flags cannot be shown, then exits with the appropriate error code (§9.6).
 
-### 9.5 Flag Collision
+- [CLI-9.6-R1] [must] Dynamic help for `tsn run <module> --help` produces a usage line, built-in options, workflow-derived flags with type and required/optional status and descriptions, and named entrypoints from the descriptor.
+- [CLI-9.6-R2] [must] Help describes invocation inputs only and must not describe resolved workflow config or `Config.useConfig()` internals.
+- [CLI-9.6-R3] [must] If module loading, descriptor validation, or schema derivation fails during dynamic help, the CLI displays built-in options and a diagnostic explaining why workflow-derived flags cannot be shown, then exits with the appropriate error code.
+- [CLI-9.6-R4] [must-not] Help silently omits the workflow inputs section without explanation.
+- [CLI-9.6-R5] [must] Static help (`tsn run --help` with no module argument) displays the command's built-in options and usage and exits 0 without loading any descriptor or workflow metadata.
 
-Collision is checked on the **derived kebab-case flag
-names** (after §9.1 name conversion), not on raw parameter
-identifiers. For example, a workflow parameter named
-`verbose` produces `--verbose`, which collides with the
-built-in `--verbose` option.
+## Startup Lifecycle (`tsn run`)
 
-If a derived flag name collides with a built-in option, the
-built-in takes precedence. The CLI SHOULD emit an advisory
-diagnostic noting the collision. The workflow parameter MUST
-be renamed to avoid the conflict.
+Lifecycle orchestration for `tsn run` (§10).
 
-### 9.6 Help Generation
+### End-to-End Sequence
 
-Help for `tsn run` has two modes:
+Phase A (load/validate descriptor) precedes Phase B (derive/validate inputs) precedes Phase C (resolve environment) precedes Phase D (execute). Steps 1–12 are performed in order.
 
-**Static help.** `tsn run --help` (no module argument)
-displays the command's built-in options and usage, then
-exits 0. No descriptor or workflow metadata is loaded.
+- [CLI-10.1-R1] [must] `tsn run <module>` performs the steps of §10.1 in order: module loading, run-target resolution, entrypoint overlay, descriptor validation, schema derivation, input parsing, environment collection, environment resolution, environment validation, resource startup, workflow execution, and process lifecycle.
+- [CLI-10.1-R2] [must] If `--entrypoint` is specified, the named entrypoint overlay is applied; an unknown name fails with exit code 2.
+- [CLI-10.1-R3] [must] The workflow receives validated invocation arguments, and resolved workflow config is accessed via `yield* Config.useConfig(Token)`. Invocation arguments and `Config.useConfig()` return values are separate channels.
 
-**Dynamic help.** `tsn run <module> --help` MUST produce:
+### Module Contracts
 
-1. **Usage line.**
-2. **Built-in options.** `--entrypoint`, `--verbose`,
-   `--help`.
-3. **Workflow inputs.** Derived flags with type, required/
-   optional status, and descriptions.
-4. **Entrypoints.** Named entrypoints from the descriptor,
-   if any.
-
-Dynamic help requires loading the descriptor module and
-deriving the input schema. Help describes invocation inputs
-only. It MUST NOT describe resolved workflow config or
-`Config.useConfig()` internals.
-
-**Help failure behavior.** If module loading, descriptor
-validation, or schema derivation fails during dynamic help,
-the CLI MUST display built-in options and a diagnostic
-explaining why workflow-derived flags cannot be shown, then
-exit with the appropriate error code (§3.4). It MUST NOT
-silently omit the workflow inputs section without
-explanation.
-
----
-
-## 10. Startup Lifecycle (`tsn run`)
-
-### 10.1 End-to-End Sequence
-
-When `tsn run <module>` is invoked, the CLI MUST perform
-the following steps in order:
-
-**Phase A: Load and Validate Descriptor**
-
-1. **Module loading.** Load the module at `<module>` via
-   the bootstrap loading path (§10.5) and extract its
-   `default` export. Both TypeScript (`.ts`, `.mts`,
-   `.cts`) and JavaScript (`.js`, `.mjs`, `.cjs`)
-   descriptor modules are first-class inputs.
-
-   If the module cannot be located or read, fail with
-   exit code 3. If the file extension is not supported,
-   fail with exit code 3. If the default export is not a
-   valid `WorkflowDescriptor`, fail with exit code 2.
-
-2. **Run target resolution.** Resolve the descriptor's
-   `run` field to a workflow function. The descriptor
-   module itself is always runtime-loaded; it is never a
-   compilation root.
-
-   If `run.module` is omitted, locate the named export in
-   the same module that produced the descriptor (§10.2).
-   If the export does not exist, fail with exit code 2.
-
-   If `run.module` is specified, dispatch by the resolved
-   workflow module:
-
-   - If it points to a pre-compiled generated module, load
-     the module at runtime and extract the named export.
-     The compiler is not invoked.
-   - If it points to authored workflow source, compile that
-     source module using `compileGraphForRuntime()` (§13.4
-     of the compiler specification), passing the export name.
-     This returns per-export compiled IR and runtime bindings.
-
-3. **Entrypoint overlay.** If `--entrypoint` is specified,
-   look up the named entrypoint and apply the overlay per the
-   config specification. Unknown name → exit code 2.
-
-4. **Descriptor validation.** Validate the merged descriptor
-   against config-owned validation rules. Failure →
-   exit code 2.
-
-**Phase B: Derive and Validate Inputs**
-
-5. **Input schema derivation.** Obtain the invocation input
-   schema for the workflow function per §8. If the schema
-   contains unsupported shapes, fail with exit code 2.
-
-6. **Input parsing.** Parse CLI flags against the derived
-   schema per §9. Missing required inputs, coercion
-   failures, or unknown flags → exit code 4.
-
-**Phase C: Resolve Environment**
-
-7. **Environment collection.** Walk the merged descriptor
-   and collect all `EnvDescriptor` nodes.
-
-8. **Environment resolution.** Resolve each node per the
-   config specification. Record missing required/secret
-   variables.
-
-9. **Environment validation.** If any required or secret
-   variables are missing, report ALL missing variables in
-   a single diagnostic and fail with exit code 5.
-
-**Phase D: Execute**
-
-10. **Resource startup.** Create journal. Start server if the
-    merged descriptor includes one, producing a
-    `LocalServerBinding` (address and accepted-connection
-    stream). Load local/inprocess module bindings via the
-    bootstrap loading path (§10.5). Both TypeScript and
-    JavaScript transport binding modules are supported.
-    For each binding that provides a `bindServer` hook,
-    call it with the server binding. `bindServer` is a
-    setup-only hook: it
-    MUST spawn any long-lived work (e.g., connection
-    acceptance loops) and return promptly. Install all agent
-    transports.
-
-    The ordering MUST be: server start, then bind, then
-    transport installation, then workflow execution. This
-    ensures browser connection handling is ready before
-    any workflow can trigger connections.
-
-    `LocalAgentBinding` and `LocalServerBinding` are defined
-    in `@tisyn/transport`. Local/inprocess modules export
-    `createBinding()` (preferred) or `createTransport()`
-    (backward-compatible fallback). See the config
-    specification §10 Q1 for module contract details.
-
-11. **Workflow execution.** Build the execution environment by
-    merging compiler-provided `runtimeBindings` (if present)
-    with invocation input bindings. Runtime binding keys use
-    synthetic or mangled prefixes (`__rtexport_`, `__m{idx}_`)
-    that cannot collide with user parameter names. If an
-    adversarial collision occurs, runtime bindings take
-    precedence. Invoke the workflow function with validated
-    invocation arguments. Make resolved workflow config
-    available through `yield* Config.useConfig(Token)`.
-
-12. **Process lifecycle.** Remain alive until the workflow
-    completes, errors, or SIGINT/SIGTERM. Map outcome to
-    exit code per §3.4.
-
-### 10.2 Module Contracts
-
-`tsn run` loads two artifacts, which MAY or MAY NOT reside
-in the same module:
-
-| Artifact | Role | How identified |
-| --- | --- | --- |
-| **Descriptor module** | The module loaded by the CLI | `<module>` argument to `tsn run` |
-| **Workflow function module** | The module containing the executable workflow function | `run` field of the descriptor |
-
-When `run.module` is omitted, the workflow function is
-resolved from the descriptor module itself. When
-`run.module` is specified, the CLI resolves it relative to
-the descriptor module and then dispatches based on whether
-the target is authored source or a generated workflow
-module.
-
-The contract is:
-
-M1. The descriptor module MUST have a `default` export
-    that is a valid `WorkflowDescriptor`.
-
-M2. The workflow function module MUST export the workflow
-    entrypoint under the name specified by `run.export`.
-    Generated modules are loaded at runtime. Authored source
-    modules are compilation roots.
-
-M3. `run.module`, if specified, is resolved relative to
-    the descriptor module's location.
-
-### 10.3 Fail-Before-Execute
-
-Phases A–C (steps 1–9) MUST succeed before any transport
-starts (step 10) or any workflow executes (step 11).
-
-### 10.4 Combined Error Reporting
-
-When both invocation input errors and environment errors
-exist, the CLI SHOULD report both before exiting, rather
-than failing on the first category and hiding the second.
-
-To support this, the CLI MAY continue collecting pre-
-execution validation diagnostics after detecting an initial
-validation failure in steps 6–9, solely to improve the
-quality of the error report. This does not change the
-sequencing of §10.1 — the steps remain ordered — but the
-CLI is not required to abort immediately on the first
-validation error within the pre-execution phases.
-
-### 10.5 Module Loading
-
-#### 10.5.1 Supported Module Inputs
-
-`tsn run` and `tsn check` accept both TypeScript and
-JavaScript descriptor modules as the `<module>` argument:
-
-| Extension | Status |
-|-----------|--------|
-| `.ts`     | Supported |
-| `.mts`    | Supported |
-| `.cts`    | Supported |
-| `.js`     | Supported |
-| `.mjs`    | Supported |
-| `.cjs`    | Supported |
-
-The same extensions are supported for all module-loading
-sites: descriptor modules, workflow modules (when
-`run.module` points to a pre-compiled `.js` file), and
-transport binding modules (referenced by
-`transport.local()` and `transport.inprocess()`).
-
-`.tsx` is NOT supported. Descriptor modules, workflow
-modules, and transport binding modules have no use case
-for JSX syntax. This MAY be revised if a use case emerges.
-
-#### 10.5.2 Bootstrap Loading
-
-Module loading for `tsn run` and `tsn check` occurs
-before any Effection scope exists (steps 1–5 of §10.1
-precede scope creation in step 10). The CLI uses a
-bootstrap loading path — a plain async function — for
-all pre-scope module loading.
-
-The bootstrap loading path determines the loading
-strategy based on the resolved file extension:
-
-- TypeScript-family extensions (`.ts`, `.mts`, `.cts`)
-  are loaded using the `tsImport()` API from the `tsx`
-  package. This is a scoped loading mechanism: it does
-  not register global Node.js loader hooks and does not
-  affect how other code loads modules. Caching behavior
-  is an implementation detail of `tsx` and is not part
-  of this contract.
-
-- JavaScript-family extensions (`.js`, `.mjs`, `.cjs`)
-  are loaded using Node.js native `import()`.
-
-The extension-to-strategy mapping is internal default
-behavior. It is not a public contract and is not
-configurable via CLI flags.
-
-`@tisyn/runtime` MUST declare `tsx` as a direct dependency
-(not peer or optional). `tsx` is imported lazily: the
-`tsx/esm/api` module is loaded only when a TypeScript-
-family file is encountered. If the user only provides
-JavaScript modules, `tsx` is never loaded.
-
-#### 10.5.3 Shared Default Implementation
-
-The default module-loading logic — extension-dispatched
-loading via `tsImport()` (TypeScript) or `import()`
-(JavaScript) — is owned by `@tisyn/runtime` and exported
-as `loadModule()`.
-
-The CLI bootstrap path calls this function directly for
-pre-scope module loading. The `Runtime.loadModule` core
-handler (§10.5.6) delegates to the same function. This
-ensures that pre-scope and in-scope module loading behave
-identically by default.
-
-#### 10.5.4 Module Loading vs. Workflow Source Compilation
-
-The CLI has two distinct paths for obtaining workflow IR.
-These are architecturally separate:
-
-**Module loading** (this section). When `run.module`
-points to a `.js` file, the CLI loads the pre-compiled
-module and extracts the named IR export. The module was
-produced by `tsn generate` or `tsn build`. Module loading
-evaluates the module and returns its exports.
-
-**Source compilation** (compiler specification). When
-`run.module` points to authored workflow source, the CLI
-invokes `compileGraph()` using the workflow module as a
-root. The compiler reads source through its `readFile`
-path, resolves imports, classifies generated-module
-boundaries, and produces the compiled artifact.
-
-Module loading MUST NOT replace workflow source
-compilation. When `run.module` is authored workflow source,
-the CLI MUST use the Tisyn compiler to produce IR. Loading
-that file as a runtime module would produce JavaScript
-values, not inspectable workflow IR.
-
-Module loading (via `tsImport()` or `import()`) is for
-descriptor modules and transport binding modules —
-modules that produce runtime JavaScript values (descriptor
-objects, transport factories).
-
-#### 10.5.5 Module Loading Errors
-
-Module loading introduces the following error categories.
-All are reported with exit code 3 (I/O error) unless
-otherwise noted.
-
-**Unsupported extension.** The file extension is not
-recognized. Diagnostic: "Unsupported file extension
-'{ext}'. Supported: .ts, .mts, .cts, .js, .mjs, .cjs".
-
-**Module not found.** The file does not exist at the
-resolved path. Diagnostic: "Module not found: '{path}'".
-
-**Syntax error.** The TypeScript or JavaScript source
-contains a parse error. For TypeScript files, the
-esbuild error includes file path, line, column, and
-source text. The CLI SHOULD format a readable diagnostic
-with source context:
-
-    Syntax error in './descriptor.ts':
-      12 |   agents: [
-      13 |     agent("coder" {
-         |                   ^ Expected ',' or ')'
-      14 |       transport: transport.local("./coder.ts"),
-
-**Loader initialization failure.** The `tsx` package
-cannot be loaded. Diagnostic: "TypeScript loader failed
-to initialize. Ensure @tisyn/cli dependencies are
-installed."
-
-**Module evaluation failure.** The module loads but
-throws during evaluation. Diagnostic: "Failed to load
-module '{path}': {error.message}".
-
-After a module loads successfully, export validation
-errors (missing default export, invalid
-`WorkflowDescriptor`, missing named export) are
-reported with exit code 2 per existing rules (§3.4).
-
-#### 10.5.6 Runtime Context API
-
-`Runtime` is a context API exported from `@tisyn/runtime`,
-created via `createApi()` following the same pattern as
-`Effects` (from `@tisyn/agent`). `Runtime` exposes
-`loadModule` as a middleware-interceptable capability:
-
-    yield* Runtime.loadModule(specifier, parentURL);
-
-`specifier` may be an absolute filesystem path, a `file:`
-URL, or a relative path (starting with `./` or `../`).
-Relative specifiers are resolved against `parentURL`
-(a `file:` URL, typically `import.meta.url`). Bare
-specifiers are not supported.
+Module contracts (§10.2). M1: the descriptor module must have a `default` export that is a valid `WorkflowDescriptor`. M2: the workflow function module must export the entrypoint under the `run.export` name. M3: `run.module`, if specified, is resolved relative to the descriptor module.
 
-Middleware is installed via `Runtime.around()`:
-
-    yield* Runtime.around({
-      *loadModule([specifier, parentURL], next) {
-        // intercept, constrain, redirect, or delegate
-        return yield* next(specifier, parentURL);
-      },
-    });
-
-`Runtime` and `Effects` are independent peer context
-APIs. `Runtime.around()` follows the same semantics as
-`Effects.around()`: middleware is stored in Effection
-context, scoped to the current scope, inherited by
-children, and child installations do not affect the
-parent.
-
-The core handler for `Runtime.loadModule` resolves the
-specifier against parentURL to produce an absolute file
-path, then delegates to the shared `loadModule()`
-function (§10.5.3).
-
-The CLI bootstrap loading path (§10.5.2) remains a
-pre-scope analogue of this capability. It exists because
-descriptor loading occurs before any Effection scope
-exists. It calls the shared loader directly, not through
-`Runtime.loadModule`.
-
----
-
-## 11. Validation Summary
-
-### 11.1 Validation Categories
+- [CLI-10.2-R1] [must] M1: The descriptor module has a `default` export that is a valid `WorkflowDescriptor`.
+- [CLI-10.2-R2] [must] M2: The workflow function module exports the workflow entrypoint under the name specified by `run.export`.
+- [CLI-10.2-R3] [must] M3: `run.module`, if specified, is resolved relative to the descriptor module's location.
+- [CLI-10.2-R4] [must] When `run.module` points to a generated workflow module, the CLI loads it at runtime and the compiler is not invoked. The descriptor module itself is runtime-loaded and is not treated as a workflow compilation root.
 
-| Category | What it checks | When it runs | Failure code |
-| --- | --- | --- | --- |
-| **Descriptor validation** | Descriptor structure, agent uniqueness, transport requirements | §10.1 step 4 | 2 |
-| **Input schema validation** | Supported parameter shapes | §10.1 step 5 | 2 |
-| **Input value validation** | Required inputs present, coercion succeeds, no unknown flags | §10.1 step 6 | 4 |
-| **Environment validation** | Required/secret env vars set | §10.1 step 9 | 5 |
+### Fail-Before-Execute
 
-### 11.2 Independence
+Phases A–C must succeed before any transport starts or any workflow executes.
 
-Descriptor validation, input validation, and environment
-validation are independent concerns. Passing one does not
-imply passing another. All three MUST succeed before
-execution starts.
+- [CLI-10.3-R1] [must] Phases A–C (steps 1–9) must succeed before any transport starts (step 10) or any workflow executes (step 11).
 
----
+### Combined Error Reporting
 
-## 12. Compiler API
+When both invocation input errors and environment errors exist, the CLI should report both before exiting.
 
-### 12.1 `compileGraph()` Is the Core
+- [CLI-10.4-R1] [should] When both invocation input errors and environment errors exist, the CLI reports both before exiting.
 
-The CLI invokes `compileGraph()` for rooted compilation. It
-MUST NOT read workflow source files, resolve imports,
-classify modules, concatenate source, strip imports, or
-inject stubs itself.
+### Module Loading
 
-### 12.2 What the CLI Adds
+Module loading for descriptor, workflow, and transport binding modules (§10.5).
 
-Beyond compilation, the CLI provides file I/O, multi-pass
-orchestration, generated-module path handoff, diagnostics
-formatting, and workflow invocation lifecycle.
+#### Supported Module Inputs
 
----
+`tsn run` and `tsn check` accept both TypeScript (`.ts`, `.mts`, `.cts`) and JavaScript (`.js`, `.mjs`, `.cjs`) descriptor modules. `.tsx` is not supported.
 
-## 13. Migration Path
+- [CLI-10.5.1-R1] [must] `tsn run` and `tsn check` accept TypeScript (`.ts`, `.mts`, `.cts`) and JavaScript (`.js`, `.mjs`, `.cjs`) descriptor modules.
+- [CLI-10.5.1-R2] [must] `.tsx` is not a supported module extension; unsupported extensions fail with exit code 3 and an unsupported-extension diagnostic.
 
-### 13.1 `tsn generate` Replaces `build-workflow.ts`
+#### Bootstrap Loading
 
-```json
-{ "build:workflow": "tsn generate src/workflow.ts -o src/workflow.generated.ts" }
-```
+Module loading for `tsn run` and `tsn check` occurs before any Effection scope exists. The CLI uses a bootstrap loading path (§10.5.2) — a plain async function — for all pre-scope module loading.
 
-### 13.2 `tsn build` Replaces `build-test-workflows.ts`
+#### Shared Default Implementation
 
-```json
-{ "build:test-workflows": "tsn build -c tisyn.config.ts" }
-```
+The default module-loading logic is owned by `@tisyn/runtime` and exported as `loadModule()` (§10.5.3).
 
-### 13.3 `tsn run` Replaces `host.ts`
+#### Module Loading vs. Workflow Source Compilation
 
-```json
-{ "dev": "tsn run workflow.ts --entrypoint dev" }
-```
+When `run.module` points to authored workflow source, the CLI uses the Tisyn compiler via `compileGraphForRuntime()` — not module loading — to produce IR.
 
-The bespoke `host.ts` is deleted. Transport wiring, journal
-setup, and connection management move to the runtime.
+- [CLI-10.5.4-R1] [must] When `run.module` points to authored workflow source, the CLI uses the Tisyn compiler to produce IR. Module loading must not replace workflow source compilation.
 
-### 13.4 Remove Legacy Compiler Binary
+#### Module Loading Errors
 
-`tisyn-compile` MUST be removed once `tsn` is established.
+Module-loading errors (unsupported extension, module not found, syntax error, loader init failure, evaluation failure) are reported with exit code 3.
 
----
+#### Runtime Context API
 
-## 14. Explicit Non-Goals
+`Runtime` is a context API exported from `@tisyn/runtime` via `createApi()` (§10.5.6). It exposes `loadModule` as a middleware-interceptable capability via `Runtime.around()`.
 
-- **Watch mode.** Deferred.
-- **Plugin system.**
-- **Incremental generation.**
-- **IDE integration.**
-- **Remote inputs.**
-- **Parallel pass execution.**
-- **`tsn validate`, `tsn print`.** May be added later.
-- **Advanced input shapes.** Arrays, nested objects, enums,
-  unions deferred (§8.4).
-- **Boolean negation syntax.** `--no-flag` deferred (§8.3).
-- **Input defaults from descriptors.** Invocation input
-  defaults use TypeScript optional-field semantics only.
+## Validation Summary
 
----
+Validation categories and their independence.
 
-## 15. Risks
+### Validation Categories
 
-### 15.1 Compiler API Stability
+Descriptor validation (exit 2), input schema validation (exit 2), input value validation (exit 4), and environment validation (exit 5) are distinct.
 
-The CLI depends on `compileGraph()` and its public result
-shape. The rooted compiler entry point, generated-module
-boundary behavior, and public graph metadata MUST be treated
-as stable public API.
+### Independence
 
-### 15.2 Rooted Graph Boundary Drift
+Descriptor validation, input validation, and environment validation are independent concerns. All must succeed before execution starts.
 
-The highest-risk drift area is responsibility leakage
-between CLI and compiler. The CLI MUST NOT reintroduce
-source assembly, stub injection, or its own import
-classification logic; those belong to the compiler's rooted
-graph model.
+## Compiler API
 
-### 15.3 Input Derivation Scope
+The CLI's relationship to the compiler's public API.
 
-The v1 input model supports only flat primitive-field
-objects. Complex shapes require alternative input mechanisms.
-This is deliberate.
+### compileGraph() Is the Core
 
----
+The CLI invokes `compileGraph()` for rooted compilation. It does not read workflow source files, resolve imports, classify modules, concatenate source, strip imports, or inject stubs.
 
-## 16. Non-Normative Implementation Notes
+### What the CLI Adds
 
-### 16.1 CLI Parsing Backend
+Beyond compilation, the CLI provides file I/O, multi-pass orchestration, generated-module path handoff, diagnostics, and workflow invocation lifecycle.
 
-The CLI MAY use Configliere, or any other parsing library,
-as a backend for flag parsing, coercion, help generation,
-provenance tracking, and environment variable handling.
+## Migration Path
 
-For `tsn run`, workflow-derived flags require dynamic schema
-construction. The implementation MAY use a library that
-supports programmatic parser construction or MAY implement
-derived flag parsing independently.
+Migration from legacy build scripts to `tsn` commands.
 
-No normative concept in this specification depends on any
-particular parsing library.
+### tsn generate Replaces build-workflow.ts
 
-### 16.2 Two-Phase Parsing Model for `tsn run`
+`tsn generate` replaces legacy `build-workflow.ts` scripts.
 
-The current implementation uses a two-phase parsing model
-for `tsn run`:
+### tsn build Replaces build-test-workflows.ts
 
-**Phase 1 (Configliere).** The CLI parsing library parses
-built-in command options (`module`, `--entrypoint`,
-`--verbose`) and detects `--help`/`--version`. Flags not
-recognized by the library remain in its **remainder** — the
-unconsumed portion of the input after parsing.
+`tsn build` replaces `build-test-workflows.ts`.
 
-**Phase 2 (application-owned).** The CLI loads the
-descriptor module, resolves the workflow export, derives the
-invocation input schema (§8), and parses the remainder
-against the derived flags (§9). This phase is also
-responsible for assembling dynamic help (§9.6) when
-`--help` appears in the remainder.
+### tsn run Replaces host.ts
 
-The remainder is the sole source of workflow invocation
-flags. The CLI MUST NOT derive workflow flags from raw
-`process.argv` or any other source that includes
-already-consumed built-in options.
+`tsn run` replaces bespoke host.ts drivers.
 
-This two-phase model is an implementation choice, not a
-normative requirement. Any implementation that correctly
-separates built-in options from workflow-derived flags and
-produces the specified behavior is conforming.
+### Remove Legacy Compiler Binary
 
-### 16.3 Input Schema Derivation Mechanism
+`tisyn-compile` is removed once `tsn` is established (§13.4).
 
-The normative requirement (§8.1) is that the CLI has access
-to a workflow invocation input schema conforming to the
-supported shapes. How this schema is obtained is an
-implementation choice. Options include:
+## Explicit Non-Goals
 
-- Extracting parameter types from the workflow source via
-  the TypeScript compiler API
-- Emitting schema metadata as a colocated artifact during
-  `tsn generate` / `tsn build`
-- Reading type information from declaration files
+Watch mode, plugin system, incremental generation, IDE integration, remote inputs, parallel pass execution, `tsn validate`/`tsn print`, advanced input shapes, boolean negation syntax, and input defaults from descriptors are deferred.
 
-The mechanism is not prescribed. The requirement is that the
-schema accurately reflects the authored parameter shape.
+## Risks
 
-The invocation input schema is not part of the
-`WorkflowDescriptor` as defined by the config specification.
-Whether future tooling chooses to colocate schema metadata
-alongside the descriptor is an implementation decision
-outside the scope of both specifications.
+Known risks.
 
-### 16.4 Provenance
+### Compiler API Stability
 
-When `--verbose` is active, the CLI SHOULD display the
-resolved value and origin of each built-in CLI flag,
-invocation input flag, and environment variable.
+The CLI depends on `compileGraph()` and its public result shape. The rooted compiler entry point must be treated as stable public API.
 
----
+### Rooted Graph Boundary Drift
+
+The CLI must not reintroduce source assembly, stub injection, or its own import classification logic.
+
+### Input Derivation Scope
+
+The v1 input model supports only flat primitive-field objects. Complex shapes require alternative input mechanisms.
+
+## Non-Normative Implementation Notes
+
+Implementation guidance that is not a normative requirement.
+
+### CLI Parsing Backend
+
+The CLI may use Configliere or any other parsing library. No normative concept depends on a particular library.
+
+### Two-Phase Parsing Model for tsn run
+
+Phase 1 parses built-in command options into a consumed set, leaving the remainder. Phase 2 loads the descriptor and parses the remainder against derived flags. The remainder is the sole source of workflow invocation flags — built-in options like `--verbose` and `--entrypoint` must not leak into workflow flag parsing. This two-phase model (§16.2) is an implementation concern, not a normative requirement.
+
+- [CLI-16.2-R1] [must] The CLI must not derive workflow flags from raw `process.argv`; built-in options such as `--verbose` and `--entrypoint` are consumed in Phase 1 and must not leak into workflow-derived flag parsing.
+
+### Input Schema Derivation Mechanism
+
+How the schema is obtained is an implementation choice. Options include extracting from source, emitting metadata, or reading declaration files.
+
+### Provenance
+
+When `--verbose` is active, the CLI should display the resolved value and origin of each flag and environment variable.
 
 ## Final Consistency Changes
 

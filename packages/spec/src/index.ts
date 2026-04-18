@@ -1,18 +1,34 @@
-// Public surface of @tisyn/spec per §11 of spec-system-specification.source.md.
+// Public surface of @tisyn/spec per §4–§11 of
+// specs/tisyn-spec-system-specification.md. Exports grow as each phase lands;
+// this barrel re-exports only modules that exist at this point in the v2
+// realignment track.
 
 export {
-  Ambiguity,
-  Amendment,
-  Amends,
-  ChangedSection,
-  Complements,
+  COVERAGE_STATUS,
+  OPEN_QUESTION_STATUS,
+  RELATIONSHIP_TYPES,
+  RULE_LEVELS,
+  SPEC_STATUS,
+  TEST_PRIORITY,
+  TEST_TYPE,
+} from "./enums.ts";
+export type {
+  CoverageStatus,
+  OpenQuestionStatus,
+  RelationshipType,
+  RuleLevel,
+  SpecStatus,
+  TestPriority,
+  TestType,
+} from "./enums.ts";
+
+export {
   Concept,
-  Covers,
-  DependsOn,
+  CoverageEntry,
   ErrorCode,
-  ImplementsSpec,
   Invariant,
-  NonTest,
+  OpenQuestion,
+  Relationship,
   Rule,
   Section,
   Spec,
@@ -21,53 +37,92 @@ export {
   TestCategory,
   TestPlan,
   TestPlanSection,
-  UnchangedSection,
 } from "./constructors.ts";
-
-export { ChangeType, EvidenceTier, Resolution, Status, Strength, Tier } from "./enums.ts";
 
 export { normalizeSpec, normalizeTestPlan } from "./normalize.ts";
 
 export { buildRegistry } from "./registry.ts";
 
-export { checkCoverage, isReady, validateCorpus } from "./validate.ts";
+export { acquireCorpusRegistry, createAcquire } from "./acquire.ts";
+export type { AcquireAPI, AcquireOptions } from "./acquire.ts";
 
-export { collectErrorCodes, collectRules, collectTerms, walkSections } from "./walk.ts";
+export { manifest } from "./manifest.ts";
+export type { ManifestEntry } from "./manifest.ts";
 
+export * from "./queries/index.ts";
+
+export * from "./context/index.ts";
+
+export {
+  GENERATED_BANNER,
+  stripBanner,
+  renderSpecMarkdown,
+  renderTestPlanMarkdown,
+  compareMarkdown,
+  renderDiscoveryPackText,
+} from "./markdown/index.ts";
+export type { RenderSpecOptions, RenderTestPlanOptions } from "./markdown/index.ts";
+
+export { AcquisitionError } from "./types.ts";
+
+// Nine names (CoverageEntry, ErrorCode, OpenQuestion, Relationship, Rule,
+// Section, TestCase, TestCategory, TestPlanSection) are intentionally omitted
+// from this re-export block — their interfaces are re-exported by
+// ./constructors.ts as type aliases that declaration-merge with the matching
+// PascalCase constructor functions, giving consumers a single name that
+// resolves to the function in value position and the interface in type
+// position.
 export type {
-  AmbiguityFinding,
-  AmendmentDetail,
-  AmendmentRef,
+  AcquisitionFailureEntry,
+  AcquisitionFailureKind,
+  AcquisitionScope,
+  AmendmentContext,
+  AuthoringContext,
+  CompareResult,
   ConceptExport,
   ConceptLocation,
-  CoverageEntry,
-  CoverageReport,
-  ErrorCodeDeclaration,
+  ConsistencyContext,
+  ConsistencySummaryCoverage,
+  ConsistencySummaryReadiness,
+  ConstraintDocument,
+  CorpusRegistry,
+  CoverageResult,
+  CoveredRule,
+  DeferredRule,
+  DependencyEntry,
+  DependentEntry,
+  DiscoveryPack,
+  DiscoveryPackConsistency,
+  DiscoveryPackOQ,
+  DiscoveryPackSpec,
+  DiscoveryPackTerm,
+  DuplicateRule,
+  ErrorCodeCollision,
   ErrorCodeLocation,
+  ImpactEntry,
   InvariantDeclaration,
-  NonTestEntry,
+  MarkdownDifference,
+  MarkdownDifferenceKind,
+  NormalizationError,
   NormalizeResult,
   NormalizedSpecModule,
   NormalizedTestPlanModule,
-  RuleDeclaration,
+  OpenQuestionLocation,
+  Operation,
+  ReadinessResult,
+  RelationshipEdge,
+  ReviewContext,
   RuleLocation,
-  SectionChange,
-  SectionPreservation,
+  Scope,
   SpecModule,
-  SpecRef,
-  SpecRegistry,
-  SpecSection,
-  StructuralError,
+  StaleReference,
+  TaskContext,
+  TaskContextQuery,
+  TermConflict,
   TermDefinition,
+  TermLocation,
+  TestCaseLocation,
+  TestPlanContext,
   TestPlanModule,
-  ValidationError,
-  ValidationReport,
+  UncoveredRule,
 } from "./types.ts";
-
-// TestCase and TestCategory public types ship through the constructors module.
-// constructors.ts declares `interface TestCase extends TestCaseType {}` (and
-// similarly for TestCategory) so that the value constructor and the interface
-// are declaration-merged under one name. The single `export { TestCase,
-// TestCategory } from "./constructors.ts"` above therefore carries both the
-// value and the interface type to downstream consumers — a separate `export
-// type` would collide with the already-merged re-export.

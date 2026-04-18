@@ -1,227 +1,98 @@
-// Deterministic structural comparison between an "original" Markdown
-// document and a "generated" one. This is NOT a semantic equivalence
-// check — that's Claude's job in the verify pipeline. compareMarkdown
-// catches missing/extra sections, test IDs, coverage refs, and
-// relationship lines; it does NOT compare prose wording.
+// §11.2 compareMarkdown — coarse structural gate.
+//
+// Extracts four categories of tokens from each document and diffs them as
+// multisets: section headings, relationship lines, test ids, and §-coverage
+// references. Prose wording, H3 structure, divider placement, and table
+// formatting are deliberately out of scope (see §11.2 NOTE).
 
-import { GENERATED_BANNER } from "./render-spec.ts";
+import type { CompareResult, MarkdownDifference } from "../types.ts";
+import { stripBanner } from "./banner.ts";
 
-export interface ComparisonReport {
-  readonly ok: boolean;
-  readonly differences: readonly ComparisonDifference[];
-  readonly summary: {
-    readonly missingSections: readonly string[];
-    readonly extraSections: readonly string[];
-    readonly missingTestIds: readonly string[];
-    readonly extraTestIds: readonly string[];
-    readonly missingRelationships: readonly string[];
-    readonly extraRelationships: readonly string[];
-    readonly missingCoverageRefs: readonly string[];
-    readonly extraCoverageRefs: readonly string[];
-  };
+const HEADING_RE = /^(#{1,6})\s+(.+?)\s*$/;
+const RELATIONSHIP_RE = /^-\s+([a-z-]+):\s+([a-zA-Z0-9_-]+)(?:\s+—\s+(.+))?$/;
+const TEST_ID_RE = /\b([A-Z][A-Z0-9]+-[A-Z0-9]+(?:-[A-Z0-9]+)*)\b/g;
+const SECTION_REF_RE = /§(\d+(?:\.\d+)*)/g;
+
+interface Tokens {
+  readonly headings: readonly string[];
+  readonly relationships: readonly string[];
+  readonly testIds: readonly string[];
+  readonly coverageRefs: readonly string[];
 }
 
-export interface ComparisonDifference {
-  readonly kind: "title" | "section" | "test-id" | "coverage-ref" | "relationship";
-  readonly original: string;
-  readonly generated: string;
-  readonly detail: string;
-}
+function extract(text: string): Tokens {
+  const cleaned = stripBanner(text);
+  const lines = cleaned.split("\n");
+  const headings: string[] = [];
+  const relationships: string[] = [];
+  const testIds = new Set<string>();
+  const coverageRefs = new Set<string>();
 
-export function stripBanner(markdown: string): string {
-  // Remove a leading generator banner (exact or same prefix) followed
-  // by an optional blank line. Anything else passes through unchanged.
-  const lines = markdown.split("\n");
-  if (lines.length === 0) {
-    return markdown;
-  }
-  const first = lines[0] ?? "";
-  if (first === GENERATED_BANNER || /^<!-- Generated from .* -->$/.test(first)) {
-    lines.shift();
-    if (lines.length > 0 && lines[0] === "") {
-      lines.shift();
+  for (const line of lines) {
+    const h = HEADING_RE.exec(line);
+    if (h !== null) {
+      headings.push(`${h[1]} ${h[2]}`);
+      continue;
     }
-    return lines.join("\n");
-  }
-  return markdown;
-}
-
-export function compareMarkdown(original: string, generated: string): ComparisonReport {
-  const origText = stripBanner(original);
-  const genText = stripBanner(generated);
-
-  const differences: ComparisonDifference[] = [];
-
-  const origTitle = extractTitle(origText);
-  const genTitle = extractTitle(genText);
-  if (origTitle !== genTitle) {
-    differences.push({
-      kind: "title",
-      original: origTitle,
-      generated: genTitle,
-      detail: `Document titles differ`,
-    });
-  }
-
-  const origSections = extractSectionHeadings(origText);
-  const genSections = extractSectionHeadings(genText);
-  const missingSections = diff(origSections, genSections);
-  const extraSections = diff(genSections, origSections);
-  for (const s of missingSections) {
-    differences.push({
-      kind: "section",
-      original: s,
-      generated: "",
-      detail: `Section "${s}" is present in original but missing from generated`,
-    });
-  }
-  for (const s of extraSections) {
-    differences.push({
-      kind: "section",
-      original: "",
-      generated: s,
-      detail: `Section "${s}" is present in generated but not in original`,
-    });
-  }
-
-  const origTestIds = extractTestIds(origText);
-  const genTestIds = extractTestIds(genText);
-  const missingTestIds = diff(origTestIds, genTestIds);
-  const extraTestIds = diff(genTestIds, origTestIds);
-  for (const id of missingTestIds) {
-    differences.push({
-      kind: "test-id",
-      original: id,
-      generated: "",
-      detail: `Test ID "${id}" is present in original but missing from generated`,
-    });
-  }
-  for (const id of extraTestIds) {
-    differences.push({
-      kind: "test-id",
-      original: "",
-      generated: id,
-      detail: `Test ID "${id}" is present in generated but not in original`,
-    });
-  }
-
-  const origRefs = extractCoverageRefs(origText);
-  const genRefs = extractCoverageRefs(genText);
-  const missingCoverageRefs = diff(origRefs, genRefs);
-  const extraCoverageRefs = diff(genRefs, origRefs);
-  for (const ref of missingCoverageRefs) {
-    differences.push({
-      kind: "coverage-ref",
-      original: ref,
-      generated: "",
-      detail: `Coverage ref "${ref}" is present in original but missing from generated`,
-    });
-  }
-  for (const ref of extraCoverageRefs) {
-    differences.push({
-      kind: "coverage-ref",
-      original: "",
-      generated: ref,
-      detail: `Coverage ref "${ref}" is present in generated but not in original`,
-    });
-  }
-
-  const origRels = extractRelationshipLines(origText);
-  const genRels = extractRelationshipLines(genText);
-  const missingRelationships = diff(origRels, genRels);
-  const extraRelationships = diff(genRels, origRels);
-  for (const rel of missingRelationships) {
-    differences.push({
-      kind: "relationship",
-      original: rel,
-      generated: "",
-      detail: `Relationship line "${rel}" missing from generated`,
-    });
-  }
-  for (const rel of extraRelationships) {
-    differences.push({
-      kind: "relationship",
-      original: "",
-      generated: rel,
-      detail: `Relationship line "${rel}" not in original`,
-    });
+    const r = RELATIONSHIP_RE.exec(line);
+    if (r !== null) {
+      const qualifier = r[3] !== undefined ? ` — ${r[3]}` : "";
+      relationships.push(`${r[1]}: ${r[2]}${qualifier}`);
+    }
+    for (const m of line.matchAll(TEST_ID_RE)) {
+      testIds.add(m[1]);
+    }
+    for (const m of line.matchAll(SECTION_REF_RE)) {
+      coverageRefs.add(`§${m[1]}`);
+    }
   }
 
   return {
-    ok: differences.length === 0,
-    differences,
-    summary: {
-      missingSections,
-      extraSections,
-      missingTestIds,
-      extraTestIds,
-      missingRelationships,
-      extraRelationships,
-      missingCoverageRefs,
-      extraCoverageRefs,
-    },
+    headings: [...headings].sort(),
+    relationships: [...relationships].sort(),
+    testIds: [...testIds].sort(),
+    coverageRefs: [...coverageRefs].sort(),
   };
 }
 
-function extractTitle(markdown: string): string {
-  for (const line of markdown.split("\n")) {
-    const match = line.match(/^#\s+(.*)$/);
-    if (match != null) {
-      return normalize(match[1]!);
-    }
+function diff(
+  kind: MarkdownDifference["kind"],
+  generated: readonly string[],
+  reference: readonly string[],
+): MarkdownDifference[] {
+  const out: MarkdownDifference[] = [];
+  const g = new Map<string, number>();
+  const r = new Map<string, number>();
+  for (const v of generated) {
+    g.set(v, (g.get(v) ?? 0) + 1);
   }
-  return "";
-}
-
-function extractSectionHeadings(markdown: string): string[] {
-  const out: string[] = [];
-  for (const line of markdown.split("\n")) {
-    const match = line.match(/^##\s+(.*)$/);
-    if (match != null) {
-      out.push(normalize(match[1]!));
+  for (const v of reference) {
+    r.set(v, (r.get(v) ?? 0) + 1);
+  }
+  const keys = new Set<string>([...g.keys(), ...r.keys()]);
+  for (const key of [...keys].sort()) {
+    const gc = g.get(key) ?? 0;
+    const rc = r.get(key) ?? 0;
+    if (gc === rc) {
+      continue;
     }
+    out.push({
+      kind,
+      expected: rc > 0 ? key : "",
+      actual: gc > 0 ? key : "",
+    });
   }
   return out;
 }
 
-function extractTestIds(markdown: string): string[] {
-  const ids = new Set<string>();
-  const re = /\b[A-Z]+(?:-[A-Z]+)+-\d{3}[a-z]?\b/g;
-  let m: RegExpExecArray | null;
-  while ((m = re.exec(markdown)) != null) {
-    ids.add(m[0]);
-  }
-  return [...ids].sort();
-}
-
-function extractCoverageRefs(markdown: string): string[] {
-  const refs = new Set<string>();
-  const re = /§\d+(?:\.\d+)*/g;
-  let m: RegExpExecArray | null;
-  while ((m = re.exec(markdown)) != null) {
-    refs.add(m[0]);
-  }
-  return [...refs].sort();
-}
-
-function extractRelationshipLines(markdown: string): string[] {
-  const out = new Set<string>();
-  for (const line of markdown.split("\n")) {
-    const match = line.match(
-      /^\*\*(Depends on|Complements|Implements|Amends|Validates):\*\*\s*(.*)$/,
-    );
-    if (match != null) {
-      out.add(`${match[1]}:${normalize(match[2]!)}`);
-    }
-  }
-  return [...out].sort();
-}
-
-function normalize(text: string): string {
-  return text.trim().replace(/\s+/g, " ");
-}
-
-function diff(a: readonly string[], b: readonly string[]): string[] {
-  const bSet = new Set(b);
-  return a.filter((x) => !bSet.has(x));
+export function compareMarkdown(generated: string, reference: string): CompareResult {
+  const g = extract(generated);
+  const r = extract(reference);
+  const differences: MarkdownDifference[] = [
+    ...diff("section-heading", g.headings, r.headings),
+    ...diff("relationship-line", g.relationships, r.relationships),
+    ...diff("test-id", g.testIds, r.testIds),
+    ...diff("coverage-ref", g.coverageRefs, r.coverageRefs),
+  ];
+  return { match: differences.length === 0, differences };
 }
