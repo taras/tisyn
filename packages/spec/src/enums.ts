@@ -1,4 +1,4 @@
-// v2 enum const arrays per §4 of tisyn-spec-system-specification.source.md.
+// v2 enum const arrays per §4 of specs/tisyn-spec-system-specification.md.
 // Exposed as `as const` readonly tuples; their element types are the canonical
 // union types used across the type surface.
 

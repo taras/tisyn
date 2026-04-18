@@ -1,5 +1,5 @@
 // Static corpus manifest per §7.3 of
-// tisyn-spec-system-specification.source.md (I10). Acquisition discovers
+// specs/tisyn-spec-system-specification.md (I10). Acquisition discovers
 // registered corpus modules from this explicit list, not from directory
 // scanning. Each entry names a single registered id and the loaders for its
 // spec and (optional) companion test plan.

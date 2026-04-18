@@ -1,5 +1,5 @@
 // v2 structural validation per §5.3 V1–V9 + §12 I8 of
-// tisyn-spec-system-specification.source.md.
+// specs/tisyn-spec-system-specification.md.
 //
 // Every check names the violated rule verbatim in `constraint` ("V1", "V2",
 // "V3", "D27", "V5", "V6", "V7", "V8", "V9", "I8") so callers can map back to

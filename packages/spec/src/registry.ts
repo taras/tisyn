@@ -1,4 +1,4 @@
-// buildRegistry per §6.1–§6.3 of tisyn-spec-system-specification.source.md.
+// buildRegistry per §6.1–§6.3 of specs/tisyn-spec-system-specification.md.
 //
 // buildRegistry is a pure function: it takes a mixed superset of normalized
 // modules plus an explicit Scope and owns all filtered-scope semantics. It

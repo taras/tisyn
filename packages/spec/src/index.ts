@@ -1,5 +1,5 @@
 // Public surface of @tisyn/spec per §4–§11 of
-// tisyn-spec-system-specification.source.md. Exports grow as each phase lands;
+// specs/tisyn-spec-system-specification.md. Exports grow as each phase lands;
 // this barrel re-exports only modules that exist at this point in the v2
 // realignment track.
 

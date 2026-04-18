@@ -1,4 +1,4 @@
-// v2 Spec data model per §4–§12 of tisyn-spec-system-specification.source.md.
+// v2 Spec data model per §4–§12 of specs/tisyn-spec-system-specification.md.
 // All authored values live in the portable serializable data domain (§4.2):
 // null, boolean, finite number, string, plain objects and arrays thereof.
 // ReadonlyMap values on CorpusRegistry are the one documented exception.

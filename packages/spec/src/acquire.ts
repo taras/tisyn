@@ -1,4 +1,4 @@
-// Corpus acquisition per §7 of tisyn-spec-system-specification.source.md.
+// Corpus acquisition per §7 of specs/tisyn-spec-system-specification.md.
 //
 // Acquisition is the sole effectful boundary between the corpus and the
 // workflow (§7.1, §7.4). It is all-or-nothing: a partial registry is never

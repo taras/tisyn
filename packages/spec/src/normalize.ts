@@ -1,5 +1,5 @@
 // normalizeSpec / normalizeTestPlan per §5.1 / §5.2 of
-// tisyn-spec-system-specification.source.md.
+// specs/tisyn-spec-system-specification.md.
 //
 // Both entry points return a NormalizeResult<T> rather than throwing
 // (§5.1 "Normalization MUST NOT throw on structural failure. It MUST return an
