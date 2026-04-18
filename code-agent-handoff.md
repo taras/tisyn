@@ -178,17 +178,20 @@ Match that pattern. `CodeAgent` should be another transport-bound contract at th
 
 Reuse that shape where practical instead of designing a brand-new adapter style for Codex.
 
-### 4. Do not fake the Codex SDK
+### 4. Keep SDK claims honest
 
-The Codex profile repeatedly marks the SDK mapping as provisional.
+The core-tier Codex SDK mappings (`newSession`, `prompt`,
+`closeSession`, cancellation) are now validated against
+`@openai/codex-sdk` and documented in the codex
+specification §5.1/§7.3. Fork and resume remain unverified
+and are tracked by OQ-CX-1, OQ-CX-2, and OQ-CX-3; the
+adapter MUST throw `"NotSupported"` for `fork`/`openFork`
+until those questions are resolved.
 
-If the actual `@openai/codex-sdk` API cannot be verified:
-
-- do not invent method names
-- do not claim core-tier conformance for the SDK path
-- keep the implementation honest about what is validated versus still blocked
-
-If necessary, land the shared contract plus the explicit non-conforming exec utility and leave the SDK path clearly marked as blocked by real API verification. Do not blur that line.
+Baseline rule: do not invent SDK method names and do not
+promote fork/resume mappings from provisional to validated
+without actual verification. Keep the implementation honest
+about what is validated versus still open.
 
 ## Test Bar
 

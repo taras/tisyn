@@ -17,11 +17,11 @@ import type {
  *   2. Forward Claude's response to Codex
  *   3. Log both responses
  *
- * The Claude side uses the conforming SDK adapter.
- * The Codex side uses the non-conforming exec adapter — each
- * prompt spawns an independent `codex exec` subprocess. This
- * is suitable here because the handoff only requires a single
- * self-contained Codex prompt.
+ * Both sides use their respective conforming SDK adapters —
+ * `@tisyn/claude-code`'s `createSdkBinding` for Claude and
+ * `@tisyn/codex`'s `createSdkBinding` for Codex. Codex
+ * conversation history is maintained per thread by
+ * `@openai/codex-sdk`.
  */
 
 declare function Claude(): {

@@ -12,11 +12,13 @@ Specification
 ### Changelog
 
 **v1.0.0** — Initial release. Defines the Codex adapter
-profile under the `CodeAgent` contract: candidate conforming
-SDK adapter path (pending validation), non-conforming exec
-utility, validated backend facts, config fields, headless
-constraints, provisional SDK operation mappings, and open
-questions.
+profile under the `CodeAgent` contract: conforming SDK
+adapter path at the core tier (`newSession`, `prompt`,
+`closeSession`, cancellation validated against
+`@openai/codex-sdk`), non-conforming exec utility, validated
+backend facts, config fields, headless constraints, verified
+SDK operation mappings for core-tier operations, and remaining
+open questions for fork/resume.
 
 ---
 
@@ -32,8 +34,9 @@ The profile specifies:
   contract and which do not
 - Codex-specific configuration fields and accepted values
 - headless constraint validation rules
-- operation mapping guidance (provisional pending SDK
-  validation)
+- operation mapping guidance for core-tier operations
+  (validated against `@openai/codex-sdk`), with fork/resume
+  mappings remaining provisional
 - the non-conforming `codex exec` convenience utility
 
 This profile is subordinate to the Tisyn Code Agent
@@ -56,7 +59,8 @@ are used as defined in RFC 2119.
 - Conformance classification of Codex adapter paths
 - Headless constraint values
 - Validated Codex backend facts
-- Provisional SDK operation mapping guidance
+- SDK operation mapping guidance (validated for core-tier;
+  provisional for fork/resume)
 - Non-conforming exec utility documentation
 - Profile-specific replay and stale-handle notes
 - Profile-specific open questions
@@ -186,33 +190,25 @@ fields defined in §6.
 
 ## 5. Conformance Classification
 
-### 5.1 Candidate Conforming Path: SDK Adapter
+### 5.1 Conforming Path: SDK Adapter
 
 **Entry point:** `createSdkBinding(config?)`
 
-**Conformance tier:** Core (candidate, pending SDK
-validation).
+**Conformance tier:** Core.
 
-**Basis:** The SDK adapter is designed to wrap the
-`@openai/codex-sdk` TypeScript API. Based on the SDK's
-documented thread API, the adapter is expected to maintain
-conversation history across prompts within a thread,
-satisfying the base contract's sequential-prompt requirement
-(§10.2). However, this capability has not been verified
-against the actual SDK. If the SDK does not maintain
-per-thread conversation history, the adapter cannot conform
-at any tier.
+**Basis:** The SDK adapter wraps the `@openai/codex-sdk`
+TypeScript API. Thread creation via `codex.startThread()`,
+per-thread conversation history across prompts, NDJSON
+streaming event shape (`item.started` / `item.completed` /
+`turn.completed`), and cancellation via task halt are
+verified against the SDK. The adapter satisfies the base
+contract's sequential-prompt requirement (§10.2) through the
+SDK's per-thread history.
 
-**Provisional status.** The core-tier conformance
-classification is a design assessment, not a validated claim.
-The exact SDK method signatures and thread lifecycle
-semantics are unverified (§7). The conformance claim becomes
-validated only after SDK integration testing resolves the
-open questions in §11.
-
-**Extended tier:** Unknown. Fork support depends on whether
-the SDK exposes session forking or resume capabilities. If
-the SDK does not support forking, the adapter MUST throw
+**Extended tier:** Unknown. Fork and resume support depend
+on whether the SDK exposes session forking or resume
+capabilities (OQ-CX-1, OQ-CX-2, OQ-CX-3). Until those open
+questions are resolved, the adapter MUST throw
 `"NotSupported"` for `fork` and `openFork` per base contract
 §8.2. The adapter MUST NOT fabricate fork semantics that the
 backend does not support.
@@ -236,8 +232,8 @@ The exec adapter is **NOT a conforming `CodeAgent` adapter**.
 
 | Path | Classification | Tier | Status |
 |---|---|---|---|
-| `createSdkBinding` | Candidate conforming | Core | Pending SDK validation |
-| `createSdkBinding` | Unknown | Extended | Pending SDK validation |
+| `createSdkBinding` | Conforming | Core | Validated |
+| `createSdkBinding` | Unknown | Extended | Pending fork/resume SDK verification (OQ-CX-1/2/3) |
 | `createExecBinding` | Non-conforming | — | Final |
 
 ---
@@ -349,61 +345,67 @@ semantics that the backend does not support.
 
 ### 7.2 Validation Status
 
-**All SDK mapping guidance in §7.3 is provisional
-implementation guidance, not validated normative claims.**
-The mappings reflect the expected `@openai/codex-sdk` API
-surface. After SDK validation, §7.3 MUST be updated to
-reflect verified mappings with their status changed to
-"Validated."
+**Core-tier SDK mappings in §7.3 (`newSession`, `prompt`,
+`closeSession`, cancellation) are validated against
+`@openai/codex-sdk`.** Fork and resume mappings remain
+provisional pending the remaining open questions in §11.
 
 The normative obligations in §7.1 are not affected by SDK
 validation. They apply regardless of which SDK methods are
 used.
 
-### 7.3 SDK Adapter Mappings (Provisional)
+### 7.3 SDK Adapter Mappings
 
-**newSession**
+**newSession** (Validated)
 
 | Attribute | Value |
 |---|---|
 | Contract op | `newSession` |
-| Expected SDK approach | Create a thread via the SDK's thread API |
-| Verified? | No |
+| SDK call | `codex.startThread(options)` returns a thread handle whose `id` becomes the adapter's backend session identifier |
+| Verified? | Yes |
 
-**closeSession**
+**closeSession** (Validated)
 
 | Attribute | Value |
 |---|---|
 | Contract op | `closeSession` |
-| Expected SDK approach | Release thread reference; remove from internal handle map |
-| Verified? | No |
+| SDK call | Release the thread reference; remove from the adapter's internal handle map |
+| Verified? | Yes |
 
-**prompt**
+**prompt** (Validated)
 
 | Attribute | Value |
 |---|---|
 | Contract op | `prompt` |
-| Expected SDK approach | Submit prompt to thread via SDK streaming API; collect streamed events; forward progress; return final response as `PromptResult.response` |
-| Verified? | No |
-| Notes | The SDK must maintain conversation history within the thread for the adapter to satisfy O-CX-2. If it does not, the SDK path cannot conform |
+| SDK call | Submit the prompt via the thread's streaming run API; consume NDJSON events (`item.started`, `item.completed`, `turn.completed`); forward intermediate items as progress; extract the assistant's final text from `item.completed` and return it as `PromptResult.response` |
+| Verified? | Yes |
+| Notes | Per-thread conversation history is maintained by the SDK, satisfying O-CX-2 |
 
-**fork**
+**cancellation** (Validated)
+
+| Attribute | Value |
+|---|---|
+| Contract op | Host-initiated cancel during `prompt` |
+| SDK call | Halt the in-flight streaming task tracked in the adapter's `inflight` map; the SDK-side thread is released |
+| Verified? | Yes |
+
+**fork** (Provisional)
 
 | Attribute | Value |
 |---|---|
 | Contract op | `fork` |
 | Expected SDK approach | Read the parent thread's session identifier; create `ForkData` with `parentSessionId` and `forkId` |
 | Verified? | No |
-| Notes | Whether the SDK exposes fork as a first-class operation is unknown (OQ-CX-3) |
+| Notes | Whether the SDK exposes fork as a first-class operation is unknown (OQ-CX-1, OQ-CX-3) |
 
-**openFork**
+**openFork** (Provisional)
 
 | Attribute | Value |
 |---|---|
 | Contract op | `openFork` |
 | Expected SDK approach | Resume the forked session as a new thread; allocate a new adapter handle |
 | Verified? | No |
-| Notes | Depends on SDK fork/resume support (OQ-CX-3) |
+| Notes | Depends on SDK fork/resume support (OQ-CX-1, OQ-CX-3) |
 
 ### 7.4 Exec Adapter Mappings (Final)
 
@@ -566,26 +568,29 @@ with the exec adapter's non-conforming status.
 
 ## 11. Profile-Specific Open Questions
 
-**OQ-CX-1. SDK API verification.**
+**OQ-CX-1. SDK fork/resume API shape.**
 
-The `@openai/codex-sdk` method names, signatures, and thread
-lifecycle semantics in §7.3 are unverified. Specific
-questions:
+Core-tier SDK mappings (thread creation via
+`codex.startThread()`, per-thread conversation history,
+NDJSON streaming event shape, and cancellation via in-flight
+task halt) are verified and documented in §7.3. The
+remaining open question is whether `@openai/codex-sdk`
+exposes session forking or resume, and — if so — what shape
+the API takes.
 
-- What is the exact method for creating a thread?
-- Does the SDK maintain conversation history across prompts
-  within a single thread? (Required for core-tier
-  conformance.)
-- Does the SDK expose session forking or resume? (Required
-  for extended-tier conformance.)
-- What is the streaming event shape?
-- How does the SDK handle cancellation?
+Specifically:
 
-**Requires:** Prototype against the real `@openai/codex-sdk`
-package.
+- Does the SDK expose a first-class fork operation, or must
+  it be synthesized from session identifiers and thread
+  re-creation?
+- Does the SDK expose session resume from a persisted
+  session identifier?
 
-**Blocks:** §7.3 status promotion from "Provisional" to
-"Validated." Core-tier conformance claim finalization.
+**Requires:** Prototype fork/resume against the real
+`@openai/codex-sdk` package.
+
+**Blocks:** Extended-tier conformance determination for the
+SDK adapter.
 
 **OQ-CX-2. Session resume reliability.**
 
@@ -607,7 +612,8 @@ session opening (two-step, matching the base contract's
 adapter must implement the two-step model regardless, but
 the internal mapping depends on the SDK's API.
 
-**Requires:** SDK API verification (part of OQ-CX-1).
+**Requires:** Fork/resume SDK API verification (shared with
+OQ-CX-1).
 
 **Blocks:** Extended-tier conformance determination.
 
@@ -690,7 +696,7 @@ The `@tisyn/codex` package MUST export:
 
 | Export | Kind | Description |
 |---|---|---|
-| `createSdkBinding` | function | Candidate conforming SDK adapter (pending validation) |
+| `createSdkBinding` | function | Conforming SDK adapter (core tier) |
 | `createExecBinding` | function | Non-conforming exec utility |
 | `CodexSdkConfig` | type | SDK adapter config |
 | `CodexExecConfig` | type | Exec adapter config |
