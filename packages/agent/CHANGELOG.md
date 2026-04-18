@@ -1,5 +1,26 @@
 # @tisyn/agent
 
+## 0.13.0
+
+### Minor Changes
+
+- db46668: Host-side JS dispatch middleware can invoke a compiled Fn as a journaled child coroutine via the new `invoke(fn, args, opts?)` helper from `@tisyn/agent`. Must be called from inside an active `Effects.around({ dispatch })` middleware body — agent handlers (reached through `impl.install()`, `Agents.use(...)`, or direct `impl.call(...)`), `resolve` middleware, and facade `.around(...)` middleware all throw `InvalidInvokeCallSiteError`. `opts` is `{ overlay?: { kind, id }, label?: string }`. Replay, cancellation, and abnormal-close propagation flow through the existing kernel machinery. No change to `Effects.around(middleware, options?)` or facade `.around(middleware, options?)` signatures. Compiler-authored middleware does not yet expose `invoke`; that path is deferred pending a spec amendment. The public `@tisyn/agent` surface is **only** `invoke` plus the error classes (`InvalidInvokeCallSiteError`, `InvalidInvokeInputError`, `InvalidInvokeOptionError`). The `DispatchContext` that `invoke` reads internally is a package-internal seam and is not exported from any public import path — `@tisyn/agent` publishes only the `.` subpath, so user code cannot install a synthetic ambient context to make `invoke(...)` succeed outside a live dispatch middleware. Workspace peers that need the same scope slot (e.g. `@tisyn/runtime`) declare a matching name-keyed Effection context locally.
+- 12f992d: Removed the `invoke(invocation)` helper and the `Invocation` public type
+  export. Call sites that previously wrote `yield* invoke(agent.op(args))`
+  should now pass the call descriptor straight to `dispatch`, which accepts
+  either a `(effectId, data)` pair or a `{ effectId, data }` object:
+
+      const result = yield* dispatch(agent.op(args));
+
+  The descriptor shape returned by `agent().op(args)` is unchanged; only the
+  public `Invocation` type name and the `invoke` function are removed. The
+  `invoke` name is freed for a future nested-invocation helper.
+
+### Patch Changes
+
+- @tisyn/ir@0.13.0
+- @tisyn/kernel@0.13.0
+
 ## 0.12.0
 
 ### Minor Changes

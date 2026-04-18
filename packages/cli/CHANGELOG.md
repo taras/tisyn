@@ -1,5 +1,21 @@
 # @tisyn/cli
 
+## 0.6.0
+
+### Minor Changes
+
+- a779cb7: Support `journal.file(...)` at runtime. `tsn` now opens a file-backed journal instead of failing when a descriptor configures file journaling, and it reports a configuration error only when the resolved file path is empty.
+
+### Patch Changes
+
+- Updated dependencies [a779cb7]
+- Updated dependencies [db46668]
+  - @tisyn/durable-streams@0.13.0
+  - @tisyn/runtime@0.13.0
+  - @tisyn/compiler@0.13.0
+  - @tisyn/transport@0.13.0
+  - @tisyn/ir@0.13.0
+
 ## 0.5.0
 
 ### Minor Changes

@@ -1,5 +1,23 @@
 # @tisyn/runtime
 
+## 0.13.0
+
+### Minor Changes
+
+- db46668: Host-side JS dispatch middleware can now invoke compiled Fns as journaled child coroutines via `invoke(fn, args, opts?)` (exported from `@tisyn/agent`). Child coroutineIds come from the parent's unified `childSpawnCount` allocator (`${parent}.${k}`, no namespace, no `.n`). Overlay frames pushed via `opts.overlay: { kind, id }` are visible only to the child subtree via `currentScopedEffectFrames()` and are not journaled. Abnormal child close — including cancelled — throws at the `yield* invoke(...)` await site in both live execution and replay; cancellation surfaces as `InvocationCancelledError`.
+
+### Patch Changes
+
+- Updated dependencies [db46668]
+- Updated dependencies [a779cb7]
+- Updated dependencies [12f992d]
+  - @tisyn/agent@0.13.0
+  - @tisyn/durable-streams@0.13.0
+  - @tisyn/transport@0.13.0
+  - @tisyn/ir@0.13.0
+  - @tisyn/kernel@0.13.0
+  - @tisyn/validate@0.13.0
+
 ## 0.12.0
 
 ### Patch Changes
