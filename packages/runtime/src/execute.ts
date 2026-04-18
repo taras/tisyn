@@ -39,7 +39,7 @@ import {
   InvalidInvokeOptionError,
   type InvokeOpts,
 } from "@tisyn/agent";
-import { DispatchContext } from "@tisyn/agent/internal";
+import { DispatchContext } from "./dispatch-context.js";
 import {
   installAgentTransport,
   type AgentTransportFactory,

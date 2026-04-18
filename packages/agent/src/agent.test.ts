@@ -1,3 +1,4 @@
+import { readFileSync } from "node:fs";
 import { describe, it } from "@effectionx/vitest";
 import { expect } from "vitest";
 import {
@@ -124,6 +125,15 @@ describe("@tisyn/agent", () => {
       caughtErr = err as Error;
     }
     expect(caughtErr).toBeInstanceOf(InvalidInvokeCallSiteError);
+
+    // There must be no supported package-import path exposing
+    // DispatchContext — @tisyn/agent's package.json must publish only
+    // the "." subpath.
+    const pkgPath = new URL("../package.json", import.meta.url);
+    const pkg = JSON.parse(readFileSync(pkgPath, "utf8")) as {
+      exports: Record<string, unknown>;
+    };
+    expect(Object.keys(pkg.exports)).toEqual(["."]);
   });
 
   it("fails cleanly for unknown operation", function* () {

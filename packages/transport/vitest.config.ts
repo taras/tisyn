@@ -6,7 +6,6 @@ export default defineConfig({
     alias: {
       "@tisyn/ir": resolve(__dirname, "../ir/src/index.ts"),
       "@tisyn/kernel": resolve(__dirname, "../kernel/src/index.ts"),
-      "@tisyn/agent/internal": resolve(__dirname, "../agent/src/internal.ts"),
       "@tisyn/agent": resolve(__dirname, "../agent/src/index.ts"),
       "@tisyn/protocol": resolve(__dirname, "../protocol/src/index.ts"),
       "@tisyn/runtime": resolve(__dirname, "../runtime/src/index.ts"),
