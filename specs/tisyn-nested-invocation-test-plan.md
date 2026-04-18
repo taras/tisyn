@@ -12,9 +12,9 @@ This test plan validates the settled semantics defined by `tisyn-nested-invocati
 
 A runtime implementation is conformant with respect to nested invocation if and only if it passes all Tier 1 tests in this plan. Tier 2 tests are diagnostic; they strengthen confidence in the implementation and catch anti-patterns but do not by themselves determine conformance.
 
-**Scope of this plan.** Local nested invocation — a middleware body on the runtime-controlled dispatch boundary calling `ctx.invoke(fn, args, opts)` to execute a compiled `Fn` as a child coroutine.
+**Scope of this plan.** Local nested invocation — an `Effects.around({ dispatch })` middleware body on the runtime-controlled dispatch boundary calling `invoke(fn, args, opts?)` (exported from `@tisyn/agent`) to execute a compiled `Fn` as a child coroutine. `invoke` from any other site — agent operation handlers, `resolve` middleware, agent-facade `.around(...)` middleware, IR middleware, compiler-authored middleware — is a rejected surface and is covered only by negative tests (T16, T-IMPL-CALL).
 
-**Out of scope.** Subordinate remote execution (the non-normative forward-compatibility note in spec §14 is not a conformance target); concurrent `ctx.invoke` composition within one middleware body (deferred per spec §15); per-invocation narrower timebox or agent rebinding (deferred per spec §15).
+**Out of scope.** Subordinate remote execution (the non-normative forward-compatibility note in spec §14 is not a conformance target); concurrent `invoke` composition within one middleware body (deferred per spec §15); per-invocation narrower timebox or agent rebinding (deferred per spec §15).
 
 ---
 
@@ -74,10 +74,10 @@ Tier 2 failure is informative. It is not, by itself, a conformance failure. Tier
 #### T01 — `invoke_writes_child_events_to_journal`
 
 - **Tier.** 1.
-- **Purpose.** Verify the basic journal shape of a single nested invocation: child events under the child coroutineId, no parent event for `ctx.invoke` itself, child close ordered before parent close.
+- **Purpose.** Verify the basic journal shape of a single nested invocation: child events under the child coroutineId, no parent event for `invoke` itself, child close ordered before parent close.
 - **Setup.**
   - A root parent coroutine with `coroutineId = "root"`.
-  - One `Effects.around()` middleware that, when dispatched, calls `yield* ctx.invoke(body, [state])`.
+  - One `Effects.around()` middleware that, when dispatched, calls `yield* invoke(body, [state])`.
   - `body` is a compiled `Fn` that yields two trivial agent effects `E1`, `E2` and returns `42`.
   - `state` is a literal `Val`.
 - **Execution.** Run parent to completion with a fresh journal.
@@ -85,7 +85,7 @@ Tier 2 failure is informative. It is not, by itself, a conformance failure. Tier
   - The parent's outer host-effect `YieldEvent` appears under `coroutineId = "root"`.
   - Exactly two `YieldEvent` entries appear under `coroutineId = "root.0"` corresponding to `E1`, `E2`, in order.
   - Exactly one `CloseEvent` appears under `coroutineId = "root.0"` with normal close reason and value `42`.
-  - No `YieldEvent` or `CloseEvent` is written under `"root"` that represents the `ctx.invoke` call itself.
+  - No `YieldEvent` or `CloseEvent` is written under `"root"` that represents the `invoke` call itself.
   - The parent outer host-effect `CloseEvent` follows `"root.0"`'s `CloseEvent` in journal order.
 - **Validates.** Spec §6.2, §6.6, §7.5, §7.6, §12.2; H1, H2, H7.
 - **Harness.** H-A1, H-A2.
@@ -128,7 +128,7 @@ Tier 2 failure is informative. It is not, by itself, a conformance failure. Tier
 #### T04 — `child_error_propagates_as_invoke_throw`
 
 - **Tier.** 1.
-- **Purpose.** Verify abnormal child close surfaces as an Effection-level exception at the `yield* ctx.invoke(...)` await site, and that overlay is popped before throw.
+- **Purpose.** Verify abnormal child close surfaces as an Effection-level exception at the `yield* invoke(...)` await site, and that overlay is popped before throw.
 - **Setup.**
   - `body` first yields one effect `E1` (succeeds), then yields effect `E2` which is configured to throw a reified error `{ name: "E2Err", message: "boom" }` via H-A7.
   - `opts.overlay = { kind: "test-overlay", id: "ov1" }`.
@@ -137,7 +137,7 @@ Tier 2 failure is informative. It is not, by itself, a conformance failure. Tier
 - **Assertions.**
   - The invoking middleware catches an Effection-level exception whose payload matches the reified error from `E2`.
   - The child's `CloseEvent` under `"root.0"` carries the abnormal close reason reflecting `E2Err`.
-  - An observing scoped-effect probe yielded from the parent scope after `ctx.invoke` returns does NOT see the `test-overlay` frame (pop executed before throw).
+  - An observing scoped-effect probe yielded from the parent scope after `invoke` returns does NOT see the `test-overlay` frame (pop executed before throw).
   - Replay reproduces the identical caught-value content and identical journal.
 - **Validates.** Spec §7.7, §10.1, §10.2, §10.3; H4.
 - **Harness.** H-A1, H-A3, H-A5, H-A7.
@@ -150,12 +150,12 @@ Tier 2 failure is informative. It is not, by itself, a conformance failure. Tier
 - **Purpose.** Verify parent cancellation reaches the invoked child, teardown runs, child emits cancelled close, and the invoking middleware observes cancelled propagation.
 - **Setup.**
   - `body` yields a blocking effect (H-A8) wrapped in a `try { ... } finally { yield* trace("B-teardown"); }`.
-  - Invoking middleware wraps the `yield* ctx.invoke(...)` in `try { ... } finally { observe("M-teardown"); }`.
+  - Invoking middleware wraps the `yield* invoke(...)` in `try { ... } finally { observe("M-teardown"); }`.
 - **Execution.** Start parent; wait until the blocking effect is pending; deliver cancellation to the parent via H-A6.
 - **Assertions.**
   - The child's `finally` trace effect `"B-teardown"` is journaled under `"root.0"` before the child's `CloseEvent`.
   - The child's `CloseEvent` under `"root.0"` carries close reason `cancelled`.
-  - The invoking middleware's `M-teardown` probe fires after `ctx.invoke` rejects with cancelled.
+  - The invoking middleware's `M-teardown` probe fires after `invoke` rejects with cancelled.
   - The parent's own `CloseEvent` follows all child events.
   - Replay reproduces the same journal in the same order.
 - **Validates.** Spec §11.1, §11.2, §11.3; H5.
@@ -166,9 +166,9 @@ Tier 2 failure is informative. It is not, by itself, a conformance failure. Tier
 #### T06 — `multiple_sequential_invocations_in_one_middleware`
 
 - **Tier.** 1.
-- **Purpose.** Verify sequential `ctx.invoke` calls in one middleware body allocate consecutive child IDs with strict event serialization.
+- **Purpose.** Verify sequential `invoke` calls in one middleware body allocate consecutive child IDs with strict event serialization.
 - **Setup.**
-  - Invoking middleware performs three sequential `yield* ctx.invoke(Fi, [])` calls for `F1`, `F2`, `F3`, each yielding one distinct effect and returning a distinct value.
+  - Invoking middleware performs three sequential `yield* invoke(Fi, [])` calls for `F1`, `F2`, `F3`, each yielding one distinct effect and returning a distinct value.
   - No overlay.
 - **Execution.** Run; persist; replay.
 - **Assertions.**
@@ -184,14 +184,14 @@ Tier 2 failure is informative. It is not, by itself, a conformance failure. Tier
 #### T07 — `state_flows_into_child_and_result_flows_out`
 
 - **Tier.** 1.
-- **Purpose.** Verify argument and result pass-through round-trips faithfully across the `ctx.invoke` boundary.
+- **Purpose.** Verify argument and result pass-through round-trips faithfully across the `invoke` boundary.
 - **Setup.**
   - `body` takes `state` and returns `f(state)` where `f` is a deterministic kernel-level transform (e.g., `state.x * 2 + 1`).
   - Multiple test inputs: primitive, structured object, nested array.
 - **Execution.** For each input, run and inspect the invoking middleware's returned value and the child's `CloseEvent` value.
 - **Assertions.**
   - For each input, child observes exactly the passed `state` as its argument (verified via an echo probe inside `body`).
-  - Invoking middleware receives exactly `f(state)` from `yield* ctx.invoke(...)`.
+  - Invoking middleware receives exactly `f(state)` from `yield* invoke(...)`.
   - No hidden reference leakage: mutating the input after the call has no effect on the journaled value (serializability).
 - **Validates.** Spec §5.5, §7.2, §7.8.
 - **Harness.** H-A1.
@@ -221,7 +221,7 @@ Tier 2 failure is informative. It is not, by itself, a conformance failure. Tier
 - **Purpose.** Verify per-coroutineId sub-stream contiguity when parent-level siblings each perform nested invocations.
 - **Setup.**
   - Parent invokes `all([hostOpA, hostOpB])` at IR level.
-  - `hostOpA`'s host-effect middleware calls `ctx.invoke(F_A, [])`; `hostOpB`'s host-effect middleware calls `ctx.invoke(F_B, [])`.
+  - `hostOpA`'s host-effect middleware calls `invoke(F_A, [])`; `hostOpB`'s host-effect middleware calls `invoke(F_B, [])`.
   - Given compound concurrency §4.2 allocation order, expected child IDs: `hostOpA = "root.0"`, `hostOpB = "root.1"`, `F_A` is a child of `"root.0"` at ID `"root.0.0"`, `F_B` is a child of `"root.1"` at ID `"root.1.0"`.
 - **Execution.** Run; persist; replay.
 - **Assertions.**
@@ -271,12 +271,12 @@ Tier 2 failure is informative. It is not, by itself, a conformance failure. Tier
 #### T12 — `overlay_scope_is_child_subtree_only`
 
 - **Tier.** 1.
-- **Purpose.** Verify `opts.overlay` is visible only within the child's subtree and is popped strictly when `ctx.invoke` returns or throws.
+- **Purpose.** Verify `opts.overlay` is visible only within the child's subtree and is popped strictly when `invoke` returns or throws.
 - **Setup.**
   - Parent scope has no prior `test-overlay` frame.
-  - Invoking middleware calls `ctx.invoke(body, [], { overlay: { kind: "test-overlay", id: "ov1" } })`.
+  - Invoking middleware calls `invoke(body, [], { overlay: { kind: "test-overlay", id: "ov1" } })`.
   - `body` yields a scoped-effect-observing probe that returns the current scoped-effect stack.
-  - Parent then yields a second scoped-effect-observing probe after `ctx.invoke` returns.
+  - Parent then yields a second scoped-effect-observing probe after `invoke` returns.
 - **Execution.** Run.
 - **Assertions.**
   - Child probe observes `test-overlay` frame `ov1` present in its stack.
@@ -297,7 +297,7 @@ Tier 2 failure is informative. It is not, by itself, a conformance failure. Tier
 - **Assertions.**
   - Middleware-entry probe records at least one entry on the original run and at least one entry on the replay pass (middleware re-executes per MR-002).
   - Agent side-effect counter increments by 2 on the original run and by 0 on the replay.
-  - `yield* ctx.invoke(...)` returns the same value on the original run and on replay.
+  - `yield* invoke(...)` returns the same value on the original run and on replay.
 - **Validates.** Spec §8.2, §8.5; H6.
 - **Harness.** H-A1, H-A3, H-A4, H-A5.
 
@@ -325,9 +325,9 @@ Tier 2 failure is informative. It is not, by itself, a conformance failure. Tier
 - **Purpose.** Verify the unified parent-owned allocator advances monotonically across mixed kernel-origin and middleware-origin allocations. A namespaced-allocator implementation MUST fail this test.
 - **Setup.**
   - Parent coroutine with the following program-order sequence:
-    1. Middleware calls `ctx.invoke(F1, [])` inside the host operation serving the first parent-level effect.
+    1. Middleware calls `invoke(F1, [])` inside the host operation serving the first parent-level effect.
     2. Parent IR evaluates `all([A, B])`.
-    3. Middleware calls `ctx.invoke(F2, [])` inside the host operation serving the next parent-level effect after `all` completes.
+    3. Middleware calls `invoke(F2, [])` inside the host operation serving the next parent-level effect after `all` completes.
 - **Execution.** Run; persist; replay.
 - **Assertions.**
   - Expected child coroutineIds in allocation order: `F1 = "root.0"`, `A = "root.1"`, `B = "root.2"`, `F2 = "root.3"`.
@@ -340,21 +340,45 @@ Tier 2 failure is informative. It is not, by itself, a conformance failure. Tier
 
 ---
 
-#### T16 — `invoke_from_non_middleware_is_error`
+#### T16 — `invoke_from_non_dispatch_middleware_is_error`
 
 - **Tier.** 1.
-- **Purpose.** Verify `ctx.invoke` called outside an active dispatch-boundary middleware produces a runtime error and allocates no child coroutineId.
-- **Setup.** Two sub-fixtures:
-  1. A synthesized call site in a leaf agent operation handler attempting `ctx.invoke`.
-  2. A synthesized call site outside any dispatch context, with an attempted reach into a stale `ctx`.
+- **Purpose.** Verify `invoke` called outside an active `Effects.around({ dispatch })` middleware body produces `InvalidInvokeCallSiteError`, allocates no child coroutineId, and does not advance the unified child allocator. This is a negative test covering the full set of non-invoking surfaces enumerated in spec §5.3.1.
+- **Setup.** Five sub-fixtures (**T-FACADE-NEG**, **T-RESOLVE-NEG**, **T-HANDLER-NEG**, **T-OUTSIDE-NEG**, and **T-COMPILER-NEG** for deferred compiler middleware if/when exposed) covering, respectively:
+  1. Call from an agent-facade `.around(...)` per-operation middleware body. (T-FACADE-NEG)
+  2. Call from an `Effects.around({ resolve })` body. (T-RESOLVE-NEG)
+  3. Call from an agent operation handler reached through `impl.install()`'s dispatch branch. (T-HANDLER-NEG)
+  4. Call from outside any active middleware body. (T-OUTSIDE-NEG)
+  5. Call from compiler-authored / IR-evaluated middleware. (T-COMPILER-NEG — deferred; listed for completeness.)
 - **Execution.** Run each sub-fixture.
 - **Assertions.**
-  - Each sub-fixture surfaces a runtime error.
+  - Each sub-fixture surfaces `InvalidInvokeCallSiteError`.
   - Parent's `childSpawnCount` is unchanged after each failed attempt.
   - No `coroutineId` of the form `parentId.{k}` for the expected `k` appears in the journal.
+  - No journal entry is written as a result of the rejected call.
   - Replay reproduces the same error condition when applicable.
-- **Validates.** Spec §3, §5.3.1, §5.3.2, §5.3.3.
+- **Validates.** Spec §3, §4, §5.3.1, §5.3.3.
 - **Harness.** H-A1. Straw-site probes may live in the test harness; they are not exposed to user code.
+
+---
+
+#### T-IMPL-CALL — `invoke_from_handler_reached_via_impl_call_is_error`
+
+- **Tier.** 1. **Regression.**
+- **Purpose.** Verify `invoke` called from inside an agent operation handler reached through `impl.call(...)` raises `InvalidInvokeCallSiteError`, even when the `impl.call(...)` site is itself inside an active `Effects.around({ dispatch })` middleware body (i.e., a live parent `DispatchContext` is installed on the scope stack). Without the handler-isolation wrap required by spec §5.3.2, the handler body would observe the caller's `DispatchContext` and `invoke` would proceed — this test exists to close that specific regression surface.
+- **Setup.**
+  - An agent `helper` is declared with one operation `run`.
+  - `implementAgent(helper, { *run() { yield* invoke(bodyFn, []); return null; } })` produces an `impl` object.
+  - An `Effects.around({ dispatch })` middleware is registered; its `dispatch` body, on receipt of a designated parent-effect id, calls `yield* impl.call("run", null)`.
+  - The fixture drives the designated parent effect through `execute(...)`, so the runtime installs the parent's `DispatchContext` before the middleware body runs.
+- **Execution.** Run once; observe the error surfaced at the `invoke` await site inside the handler.
+- **Assertions.**
+  - The handler body's `invoke` call throws an instance of `InvalidInvokeCallSiteError`.
+  - Parent's `childSpawnCount` is unchanged.
+  - No `coroutineId` of the form `parentId.{k}` for the handler-attempted `k` appears in the journal.
+  - No journal entry is written as a result of the rejected call.
+- **Validates.** Spec §5.3.2, §5.3.3.
+- **Harness.** H-A1.
 
 ---
 
@@ -364,9 +388,9 @@ Tier 2 failure is informative. It is not, by itself, a conformance failure. Tier
 - **Purpose.** Verify mixed-origin counter accounting with a timebox (which advances by +2) correctly interleaved between nested invocations (which advance by +1 each). A namespaced-allocator implementation MUST fail this test.
 - **Setup.**
   - Parent coroutine with the following program-order sequence:
-    1. Middleware calls `ctx.invoke(F1, [])`.
+    1. Middleware calls `invoke(F1, [])`.
     2. Parent IR evaluates `timebox(1000, bodyT)` where `bodyT` yields a single effect and returns before timeout.
-    3. Middleware calls `ctx.invoke(F2, [])`.
+    3. Middleware calls `invoke(F2, [])`.
 - **Execution.** Run; persist; replay.
 - **Assertions.**
   - Expected child coroutineIds in allocation order: `F1 = "root.0"`, `timebox body = "root.1"`, `timebox timeout = "root.2"`, `F2 = "root.3"` (per `tisyn-timebox-specification.md` §8.2 TB-R2a–TB-R2d consumed indices).
@@ -384,7 +408,7 @@ Tier 2 failure is informative. It is not, by itself, a conformance failure. Tier
 #### T18 — `negative_raw_kernel_bypass_is_non_conformant`
 
 - **Tier.** 2. **Diagnostic.**
-- **Purpose.** Demonstrate that a straw implementation which drives a child kernel directly from middleware (bypassing `ctx.invoke`) produces either journal gaps or agent side-effect duplication on replay. This is a negative test against a non-conformant fixture, used to reinforce that the runtime must own journal writes and child allocation.
+- **Purpose.** Demonstrate that a straw implementation which drives a child kernel directly from middleware (bypassing `invoke`) produces either journal gaps or agent side-effect duplication on replay. This is a negative test against a non-conformant fixture, used to reinforce that the runtime must own journal writes and child allocation.
 - **Setup.**
   - A non-conformant middleware body that instantiates a kernel directly for `body`, drives it locally, and either (a) does not journal child events, or (b) routes yielded effects through the runtime dispatch without the runtime observing a child allocation.
 - **Execution.** Run to completion; persist whatever was written; attempt replay.
@@ -416,13 +440,13 @@ Tier 2 failure is informative. It is not, by itself, a conformance failure. Tier
 
 This plan explicitly treats the following as load-bearing requirements validated by Tier 1 tests:
 
-- **No parent event for the `ctx.invoke` call itself.** Covered by T01 (positive) and T16 (negative non-advance on error). Spec §7.6, H7.
+- **No parent event for the `invoke` call itself.** Covered by T01 (positive) and T16 (negative non-advance on error). Spec §7.6, H7.
 - **Child writes its own `YieldEvent` / `CloseEvent` stream.** Covered by T01, T03, T11. Spec §7.5, §7.6.
 - **Replay does not re-dispatch durable child yields.** Covered by T02, T13. Spec §8.5 (Durable Yield Rule inherited).
 - **Invoking middleware re-executes on replay under MR-002 inheritance.** Covered by T13. Spec §8.2; H6.
 - **Unified allocator across mixed origins.** Covered by T15 (mixed kernel + invoke), T17 (mixed timebox + invoke). Spec §6.3; H2.
 - **No `.n` namespace or alternate separator.** Covered by T15, T17 explicit scan assertions. Spec §6.6.
-- **Invalid non-middleware call allocates no child coroutineId.** Covered by T16. Spec §5.3.3.
+- **Invalid non-dispatch-middleware call allocates no child coroutineId.** Covered by T16 (facade/resolve/handler/outside sub-fixtures) and T-IMPL-CALL (handler reached through `impl.call(...)` under a live parent `DispatchContext`). Spec §5.3.1, §5.3.2, §5.3.3.
 - **Timebox mixed-accounting uses the same unified allocator.** Covered by T17. Spec §6.3 against `tisyn-timebox-specification.md` §8.2.
 - **Overlay push/pop is child-scoped and replay-equivalent.** Covered by T12 (scope), T14 (replay equivalence), T04 (pop on throw). Spec §7.4, §7.7, §9.2.
 
@@ -432,7 +456,7 @@ This plan explicitly treats the following as load-bearing requirements validated
 
 Two ambiguities were surfaced during test derivation. Both are resolved in the settled spec text and are validated here:
 
-- **Overlay pop ordering on exception.** Resolved in spec §7.4, §7.7: the runtime owns the push/pop bracket and pop MUST occur before `ctx.invoke` returns or throws. Validated by T04 (pop on throw) and T12 (scope correctness on normal return).
+- **Overlay pop ordering on exception.** Resolved in spec §7.4, §7.7: the runtime owns the push/pop bracket and pop MUST occur before `invoke` returns or throws. Validated by T04 (pop on throw) and T12 (scope correctness on normal return).
 - **Counter advancement point on runtime error.** Resolved in spec §5.3.3: a call that is rejected as invalid MUST NOT advance the unified allocator. Validated by T16 (`invoke_from_non_middleware_is_error`).
 
 No other ambiguities remained at the time of this plan's derivation.
@@ -441,7 +465,7 @@ No other ambiguities remained at the time of this plan's derivation.
 
 ## 8. Tier discipline audit
 
-- **T13 (`middleware_reexecutes_on_replay_with_invoke`) is Tier 1.** It is the direct operationalization of MR-002 (Core tier in the scoped-effects companion test plan) applied to middleware that contains `ctx.invoke`. The underlying property is already Core-tier normative; the inheritance is explicit in nested-invocation spec §8.2. Classifying T13 as Tier 2 would under-state the conformance requirement.
+- **T13 (`middleware_reexecutes_on_replay_with_invoke`) is Tier 1.** It is the direct operationalization of MR-002 (Core tier in the scoped-effects companion test plan) applied to middleware that contains `invoke`. The underlying property is already Core-tier normative; the inheritance is explicit in nested-invocation spec §8.2. Classifying T13 as Tier 2 would under-state the conformance requirement.
 - **T18 (`negative_raw_kernel_bypass_is_non_conformant`) is Tier 2.** The subject of the test is a deliberately non-conformant straw implementation, not the production runtime. A Tier 1 test cannot assert conformance properties of an implementation designed to violate conformance. The test remains valuable as a diagnostic and documents the anti-pattern.
 - **T15 (`mixed_kernel_and_invoke_unified_counter`) and T17 (`timebox_and_invoke_counter_accounting`) are Tier 1 and load-bearing.** They are the primary conformance evidence for the allocator model (spec §6). A namespaced-allocator implementation would observably fail these tests. Demoting them to Tier 2 would eliminate the ability to detect the most consequential design regression.
 - **T19 (`fn_identity_stability_gate`) is Tier 2.** It reinforces an assumption the nested-invocation spec relies on (invariant I-ID survives compiler builds) but does not itself specify. The content-hash-stability requirement is a compiler-spec concern; promotion depends on that spec carrying the requirement normatively.
@@ -455,7 +479,7 @@ This plan does not claim coverage for:
 
 - **Subordinate remote execution.** §14 of the nested-invocation spec is a non-normative forward-compatibility note. No test in this plan exercises remote execution behavior.
 - **Wire protocol, network failure semantics, transport format, partition/retry behavior.** Out of scope per spec §14.
-- **Concurrent `ctx.invoke` composition within a single invoking middleware body.** Deferred per spec §15.
+- **Concurrent `invoke` composition within a single invoking middleware body.** Deferred per spec §15.
 - **Per-invocation narrower timebox applied to the invoked child.** Deferred per spec §15.
 - **Per-invocation agent rebinding.** Deferred per spec §15.
 - **Detached-lifetime nested invocation.** Out of scope per spec §15; `spawn` at the workflow layer is the correct mechanism.

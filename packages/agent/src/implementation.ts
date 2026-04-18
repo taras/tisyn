@@ -55,7 +55,9 @@ export function implementAgent<Ops extends Record<string, OperationSpec>>(
       if (!handler) {
         throw new Error(`Agent "${id}" has no handler for operation: ${name}`);
       }
-      return (yield* handler(args as Val)) as ResultOf<Ops[K]>;
+      return (yield* DispatchContext.with(undefined, () => handler(args as Val))) as ResultOf<
+        Ops[K]
+      >;
     },
   };
 }

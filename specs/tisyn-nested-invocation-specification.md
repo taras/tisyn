@@ -11,7 +11,7 @@
 
 **Nested invocation** is a runtime-controlled mechanism by which dispatch-boundary middleware MAY execute a compiled `Fn` as a child coroutine of the current parent coroutine. The child participates in the parent's journal, middleware chain, agent binding, transport bindings, scoped-effect stack, and residual lifetime, with deterministic child identity drawn from the parent's existing unified `childSpawnCount` allocator.
 
-Nested invocation is a **runtime-internal primitive**, initiated from middleware executing on the runtime-controlled dispatch boundary — outside kernel IR evaluation — through the public API `ctx.invoke(...)`. It is not a kernel descriptor, not a compound external, and not a new durable event kind. The durable event algebra `YieldEvent | CloseEvent` is unmodified. The kernel is unmodified. The compiler is unmodified.
+Nested invocation is a **runtime-internal primitive**, initiated from host-side JavaScript middleware executing on the runtime-controlled dispatch boundary — outside kernel IR evaluation — through the public API `invoke(fn, args, opts?)`, exported as a free helper from `@tisyn/agent`. The supported call site is the body of an `Effects.around({ dispatch })` middleware registered against the runtime's dispatch chain. It is not a kernel descriptor, not a compound external, and not a new durable event kind. The durable event algebra `YieldEvent | CloseEvent` is unmodified. The kernel is unmodified. The compiler is unmodified.
 
 The child produced by a nested invocation participates in the same journal, the same dispatch routing, the same middleware chain, and the same lifetime model as any other child of its parent.
 
@@ -21,7 +21,7 @@ The child produced by a nested invocation participates in the same journal, the 
 
 This specification defines:
 
-- The public API `ctx.invoke` and its call-site preconditions.
+- The public API `invoke(fn, args, opts?)` — a free helper exported from `@tisyn/agent` — and its call-site preconditions.
 - How the runtime allocates child identity for nested invocations.
 - How the runtime constructs, drives, and tears down the invoked child.
 - How nested invocation participates in journal ordering, replay, error propagation, and cancellation.
@@ -32,7 +32,7 @@ This specification defines:
 This specification does not define:
 
 - Any new kernel descriptor, any change to kernel classification, or any change to the kernel SUSPEND/resume contract.
-- Any compiler-visible form of nested invocation. `ctx.invoke` has no IR form.
+- Any compiler-visible form of nested invocation. `invoke` has no IR form. Compiler-authored middleware is not an invoking surface in this revision.
 - Any new durable event kind.
 - Any new child-ID counter or namespace.
 - The behavior of concurrent nested invocations from a single invoking middleware body (see §15).
@@ -42,11 +42,11 @@ This specification does not define:
 
 ## 3. Relationship to existing specs
 
-**Kernel specification.** Unmodified. `ctx.invoke` does not produce a kernel descriptor, does not invoke SUSPEND, is not classified, and does not execute inside kernel IR evaluation. The kernel has no knowledge of `ctx.invoke`.
+**Kernel specification.** Unmodified. `invoke` does not produce a kernel descriptor, does not invoke SUSPEND, is not classified, and does not execute inside kernel IR evaluation. The kernel has no knowledge of `invoke`. The `DispatchContext` that `invoke` reads to discover the parent coroutine is runtime-scoped state installed by the runtime around each standard-effect dispatch; it is not a kernel construct.
 
-**Scoped-effects specification.** The replay property on which this specification relies is §9 ("Durability and Replay"), enforced by the Core-tier companion test MR-002. This specification does not alter any scoped-effects semantics. One synchronized cross-reference paragraph is added under scoped-effects §3 (Dispatch Boundary) to name `ctx.invoke` and point to this specification (see §16.1 of this specification).
+**Scoped-effects specification.** The replay property on which this specification relies is §9 ("Durability and Replay"), enforced by the Core-tier companion test MR-002. This specification does not alter any scoped-effects semantics. One synchronized cross-reference paragraph is added under scoped-effects §3 (Dispatch Boundary) to name `invoke` and point to this specification (see §16.1 of this specification).
 
-**Compound concurrency specification.** The unified child allocator (§4.2) and the per-coroutineId replay cursor model (§10) are reused by reference. This specification does not alter any compound concurrency semantics. One synchronized cross-reference paragraph is added under compound concurrency §4.2 to note that `ctx.invoke` advances the unified allocator (see §16.2 of this specification). Ordering invariants (§9), replay rules (§10.1, §10.3), and the Durable Yield Rule (§10.6.2) apply without modification.
+**Compound concurrency specification.** The unified child allocator (§4.2) and the per-coroutineId replay cursor model (§10) are reused by reference. This specification does not alter any compound concurrency semantics. One synchronized cross-reference paragraph is added under compound concurrency §4.2 to note that `invoke` advances the unified allocator (see §16.2 of this specification). Ordering invariants (§9), replay rules (§10.1, §10.3), and the Durable Yield Rule (§10.6.2) apply without modification.
 
 **Spawn specification.** Operational precedent for participation in the unified `childSpawnCount` (§8.3, §A.1, §A.4) and for fresh-instance-on-replay of ephemeral runtime-side values.
 
@@ -56,17 +56,17 @@ This specification does not define:
 
 **Stream iteration specification.** Unmodified. The durable event algebra `YieldEvent | CloseEvent` is closed.
 
-**Agent specification.** Unmodified. `ctx.invoke` is callable from the dispatch-boundary middleware surface already defined there. Agent operation handlers MUST NOT call `ctx.invoke` (§4).
+**Agent specification.** Unmodified. `invoke` is callable from the dispatch-boundary middleware surface already defined there — specifically, from the body of an `Effects.around({ dispatch })` middleware. Agent operation handlers, `resolve` middleware, and agent-facade `.around(...)` per-operation middleware are **not** invoking surfaces in this revision; calls to `invoke` from those sites throw `InvalidInvokeCallSiteError` (§5.3).
 
 ---
 
 ## 4. Terminology
 
-**Nested invocation.** The act of executing a compiled `Fn` as a child coroutine by calling `ctx.invoke` from dispatch-boundary code.
+**Nested invocation.** The act of executing a compiled `Fn` as a child coroutine by calling `invoke(fn, args, opts?)` from dispatch-boundary code.
 
-**Invoking middleware.** Dispatch-boundary code that calls `ctx.invoke`. This includes `Effects.around()` bodies, agent-facade per-operation middleware bodies, and any other code executing on the runtime-controlled dispatch boundary — outside kernel IR evaluation — that is re-executed on replay per scoped-effects §9. The term "host operation" as used informally elsewhere is equivalent to *invoking middleware* for the purposes of this specification and is not introduced as a distinct term.
+**Invoking middleware.** The body of an `Effects.around({ dispatch })` middleware registered against the runtime's dispatch chain, during the dynamic extent of a standard-effect dispatch. This is the sole invoking surface in this revision. Specifically **not** invoking surfaces: agent operation handlers, `Effects.around({ resolve })` bodies, agent-facade `.around(...)` per-operation middleware, IR-evaluated middleware, and compiler-authored middleware. Calls to `invoke` from those sites throw `InvalidInvokeCallSiteError` and do not advance the unified child allocator (§5.3). The term "host operation" as used informally elsewhere is equivalent to *invoking middleware* for the purposes of this specification and is not introduced as a distinct term.
 
-**Invoked child.** The child coroutine allocated and driven as a consequence of a `ctx.invoke` call.
+**Invoked child.** The child coroutine allocated and driven as a consequence of an `invoke` call.
 
 **Unified child allocator.** The parent coroutine's single `childSpawnCount` counter defined by compound concurrency §4.2, shared by all mechanisms that allocate children under the parent.
 
@@ -78,33 +78,35 @@ This specification does not define:
 
 ### 5.1 Signature
 
-The runtime MUST expose an operation `invoke` on the dispatch-boundary context `ctx` with the following signature:
+The runtime MUST expose `invoke` as a free helper exported from `@tisyn/agent` with the following signature:
 
 ```
-ctx.invoke<T>(
+invoke<T>(
   fn: Fn<T>,
   args: ReadonlyArray<Val>,
   opts?: { overlay?: ScopedEffectOverlay; label?: string }
 ): Operation<T>
 ```
 
+`invoke` is a free function, not a method on any context value. Internally it reads the active runtime-scoped `DispatchContext` installed by the runtime around each standard-effect dispatch (§3). When no such context is active, or when the call site is not an `Effects.around({ dispatch })` body, `invoke` MUST throw `InvalidInvokeCallSiteError` (§5.3).
+
 ### 5.2 Naming
 
-The public name of this operation MUST be `invoke`. The spec term for the semantic concept MUST be *nested invocation*. Implementations MAY use additional internal helper names; such names are not part of the normative surface.
+The public name of this operation MUST be `invoke`, exported from `@tisyn/agent`. The spec term for the semantic concept MUST be *nested invocation*. Implementations MAY use additional internal helper names; such names are not part of the normative surface.
 
 ### 5.3 Call-site preconditions
 
-5.3.1. `ctx.invoke` MUST be called only from within the dynamic extent of an active dispatch-boundary middleware call.
+5.3.1. `invoke` MUST be called only from within the dynamic extent of an active `Effects.around({ dispatch })` middleware body. Calls from any other site — including `Effects.around({ resolve })` bodies, agent operation handlers, agent-facade `.around(...)` per-operation middleware, IR-evaluated middleware, compiler-authored middleware, and code outside any middleware — MUST produce a runtime error (`InvalidInvokeCallSiteError`) and MUST NOT advance the unified child allocator.
 
-5.3.2. Calls from code that is not re-executed on replay — in particular, calls from agent operation handlers — MUST NOT occur. The runtime SHOULD surface such calls as a runtime error when detectable.
+5.3.2. Isolation: the runtime MUST ensure that code paths not on the dispatch boundary do not observe a non-`undefined` `DispatchContext`. In particular, agent operation handlers reached through any binding surface (`impl.install()`, `Agents.use(...)`, or direct `impl.call(...)`) MUST run with `DispatchContext` cleared to `undefined`, so that an `invoke` call from within a handler body deterministically raises `InvalidInvokeCallSiteError` even when the handler is reached from inside an `Effects.around({ dispatch })` body.
 
-5.3.3. A call to `ctx.invoke` made outside the dynamic extent of active dispatch-boundary middleware MUST produce a runtime error and MUST NOT advance the unified child allocator.
+5.3.3. A call to `invoke` that is rejected under 5.3.1 or 5.3.2 MUST NOT advance the unified child allocator, MUST NOT allocate a child coroutineId, and MUST NOT write any journal entry.
 
 ### 5.4 Suspension model
 
-5.4.1. `ctx.invoke` returns an Effection `Operation<T>`. The invoking middleware MUST compose it using ordinary generator delegation (`yield* ctx.invoke(...)`).
+5.4.1. `invoke` returns an Effection `Operation<T>`. The invoking middleware MUST compose it using ordinary generator delegation (`yield* invoke(...)`).
 
-5.4.2. The suspension produced by `yield* ctx.invoke(...)` is an Effection suspension on the runtime-controlled dispatch boundary. It MUST NOT be a kernel SUSPEND and MUST NOT occur inside kernel IR evaluation.
+5.4.2. The suspension produced by `yield* invoke(...)` is an Effection suspension on the runtime-controlled dispatch boundary. It MUST NOT be a kernel SUSPEND and MUST NOT occur inside kernel IR evaluation.
 
 ### 5.5 Input validity
 
@@ -128,7 +130,7 @@ Each parent coroutine MUST have exactly one child allocator. That allocator MUST
 
 ### 6.2 Advancement on nested invocation
 
-A `ctx.invoke` call MUST advance the unified child allocator by exactly `+1` atomically at the moment the runtime begins processing the call. The allocated child coroutineId MUST be `parentId.{k}`, where `k` is the pre-increment value of the allocator.
+A `invoke` call MUST advance the unified child allocator by exactly `+1` atomically at the moment the runtime begins processing the call. The allocated child coroutineId MUST be `parentId.{k}`, where `k` is the pre-increment value of the allocator.
 
 ### 6.3 Mixed-origin allocation
 
@@ -150,7 +152,7 @@ All child coroutineIds under a parent MUST use the `parentId.{k}` format defined
 
 ## 7. Execution semantics (original run)
 
-On each call to `ctx.invoke(fn, args, opts)`, the runtime MUST perform the following in order:
+On each call to `invoke(fn, args, opts)`, the runtime MUST perform the following in order:
 
 ### 7.1 Allocator advancement
 
@@ -172,17 +174,17 @@ If `opts.overlay` is present, the runtime MUST push it as an additional scoped-e
 
 The runtime MUST drive the child via the same `driveKernel` loop that drives every coroutine. Child yields MUST flow through the same dispatch boundary as any other coroutine's yields. The child's `YieldEvent` entries and terminal `CloseEvent` MUST be written under coroutineId `C` through the ordinary runtime journal writer.
 
-### 7.6 No journal event under parent for `ctx.invoke`
+### 7.6 No journal event under parent for `invoke`
 
-The `ctx.invoke` call itself MUST NOT write a `YieldEvent` or `CloseEvent` under the parent coroutineId. The parent's journal is unchanged by `ctx.invoke`; only the child's own journal entries under `C` are produced.
+The `invoke` call itself MUST NOT write a `YieldEvent` or `CloseEvent` under the parent coroutineId. The parent's journal is unchanged by `invoke`; only the child's own journal entries under `C` are produced.
 
 ### 7.7 Overlay pop
 
-If an overlay was pushed per §7.4, the runtime MUST pop it before `ctx.invoke` returns or throws. The pop MUST NOT outlive the child's execution.
+If an overlay was pushed per §7.4, the runtime MUST pop it before `invoke` returns or throws. The pop MUST NOT outlive the child's execution.
 
 ### 7.8 Resumption of the invoking middleware
 
-On the child's terminal `CloseEvent`, the runtime MUST resolve the Operation returned by `ctx.invoke`:
+On the child's terminal `CloseEvent`, the runtime MUST resolve the Operation returned by `invoke`:
 
 - On normal close (child terminated with a value), the Operation MUST resolve with the child's terminal value.
 - On abnormal close (error, cancelled, diverged, bug), the Operation MUST throw an Effection-level exception carrying the reified close reason.
@@ -203,7 +205,7 @@ On replay, the invoking middleware MUST re-execute identically per scoped-effect
 
 ### 8.3 Allocator advancement on replay
 
-On replay, the unified child allocator MUST advance through the same sequence of advancements in the same order as on the original run. This follows from §6.4. For each `ctx.invoke` call, the child coroutineId allocated on replay MUST equal the child coroutineId allocated on the original run. Invariant I-ID MUST hold.
+On replay, the unified child allocator MUST advance through the same sequence of advancements in the same order as on the original run. This follows from §6.4. For each `invoke` call, the child coroutineId allocated on replay MUST equal the child coroutineId allocated on the original run. Invariant I-ID MUST hold.
 
 ### 8.4 Child replay
 
@@ -235,9 +237,9 @@ Divergence conditions defined by kernel spec §10.4 (parent) and compound concur
 
 ## 10. Error propagation
 
-10.1. Normal child close MUST resolve the Operation returned by `ctx.invoke` with the child's terminal value. The invoking middleware observes this as the value returned from `yield* ctx.invoke(...)`.
+10.1. Normal child close MUST resolve the Operation returned by `invoke` with the child's terminal value. The invoking middleware observes this as the value returned from `yield* invoke(...)`.
 
-10.2. Abnormal child close (error, cancelled, diverged, bug) MUST cause the Operation returned by `ctx.invoke` to throw an Effection-level exception carrying the reified close reason. The invoking middleware observes this as an exception thrown at the `yield* ctx.invoke(...)` await site.
+10.2. Abnormal child close (error, cancelled, diverged, bug) MUST cause the Operation returned by `invoke` to throw an Effection-level exception carrying the reified close reason. The invoking middleware observes this as an exception thrown at the `yield* invoke(...)` await site.
 
 10.3. Effect failures originating inside the invoked child MUST first pass through the child's own try/catch/finally stack before becoming the child's close reason. If not caught within the child, they become the child's abnormal close per §10.2.
 
@@ -253,7 +255,7 @@ Divergence conditions defined by kernel spec §10.4 (parent) and compound concur
 
 11.3. A cancellation arriving while the invoked child is already in teardown MUST be absorbed per the idempotent-halt rule of compound concurrency §4.3.
 
-11.4. Nested invocation MUST NOT provide detached-lifetime semantics. The child's lifetime is strictly bounded by the `yield* ctx.invoke(...)` await in the invoking middleware. For detached-lifetime execution, `spawn` at the workflow layer is the correct mechanism.
+11.4. Nested invocation MUST NOT provide detached-lifetime semantics. The child's lifetime is strictly bounded by the `yield* invoke(...)` await in the invoking middleware. For detached-lifetime execution, `spawn` at the workflow layer is the correct mechanism.
 
 ---
 
@@ -263,23 +265,23 @@ Divergence conditions defined by kernel spec §10.4 (parent) and compound concur
 
 12.2. The parent's outer `CloseEvent` MUST NOT be journaled before the invoked child's terminal `CloseEvent`. This follows from §9.3 of compound concurrency applied recursively.
 
-12.3. Multiple sequential `ctx.invoke` calls within a single invoking middleware body MUST produce strictly serialized children: child *i*'s terminal `CloseEvent` MUST precede child *i+1*'s first journaled event. Serialization follows from the middleware awaiting each Operation before initiating the next.
+12.3. Multiple sequential `invoke` calls within a single invoking middleware body MUST produce strictly serialized children: child *i*'s terminal `CloseEvent` MUST precede child *i+1*'s first journaled event. Serialization follows from the middleware awaiting each Operation before initiating the next.
 
-12.4. Concurrent `ctx.invoke` composition from a single invoking middleware body is out of scope for MVP per §15 and MUST NOT be relied upon.
+12.4. Concurrent `invoke` composition from a single invoking middleware body is out of scope for MVP per §15 and MUST NOT be relied upon.
 
 ---
 
 ## 13. Conformance hooks
 
-An implementation is conformant with this specification if and only if it satisfies each of the following for every program exercising `ctx.invoke`:
+An implementation is conformant with this specification if and only if it satisfies each of the following for every program exercising `invoke`:
 
 - **H1.** The journal satisfies compound concurrency §9 ordering rules with invoked children treated as ordinary children of the parent.
 - **H2.** Child coroutineIds are produced by the unified `childSpawnCount` allocator of compound concurrency §4.2 and use the `parentId.{k}` format; no alternate separator, prefix, or namespace is used for nested invocation.
 - **H3.** Replay from the produced journal reaches the same terminal state with no divergence; per-coroutineId replay cursors operate independently; effects with durable recorded yields are not re-dispatched to agents on replay.
-- **H4.** Abnormal child close produces an Effection-level exception thrown at the invoking middleware's `yield* ctx.invoke(...)` await site, carrying the reified close reason.
+- **H4.** Abnormal child close produces an Effection-level exception thrown at the invoking middleware's `yield* invoke(...)` await site, carrying the reified close reason.
 - **H5.** Parent cancellation during an active invoked child results in child teardown and propagated close reason.
-- **H6.** Invoking middleware containing `ctx.invoke` calls re-executes on replay with no observable difference (direct application of scoped-effects MR-002, Core tier).
-- **H7.** A `ctx.invoke` call writes no event under the parent coroutineId on its own account; only the child's own journal entries under its coroutineId are produced.
+- **H6.** Invoking middleware containing `invoke` calls re-executes on replay with no observable difference (direct application of scoped-effects MR-002, Core tier).
+- **H7.** A `invoke` call writes no event under the parent coroutineId on its own account; only the child's own journal entries under its coroutineId are produced.
 
 ---
 
@@ -306,13 +308,14 @@ Explicitly out of scope for this specification — to be addressed, if at all, b
 
 The following are explicitly out of scope for this specification version and MUST NOT be relied upon:
 
-- Concurrent `ctx.invoke` composition within a single invoking middleware body.
+- Concurrent `invoke` composition within a single invoking middleware body.
 - Per-invocation narrower timebox applied to the invoked child.
 - Per-invocation agent rebinding applied to the invoked child.
 - Detached-lifetime nested invocation. For detached-lifetime execution, use `spawn` at the workflow layer.
 - Any kernel-visible descriptor form of nested invocation.
 - Any namespaced or `.n`-prefixed child-ID format for nested invocation.
-- Any non-public spelling of the API other than the normative public name `invoke`.
+- Any non-public spelling of the API other than the normative public name `invoke` exported from `@tisyn/agent`.
+- `invoke` from any site other than an `Effects.around({ dispatch })` body. Facade `.around(...)` middleware, `resolve` middleware, agent operation handlers, IR middleware, and compiler-authored middleware are **not** invoking surfaces in this revision; calls from those sites MUST throw `InvalidInvokeCallSiteError`.
 - Subordinate remote execution as a feature. §14 records only compatibility anchors.
 
 ---
@@ -325,12 +328,12 @@ This specification is accompanied by two narrow amendments to existing specs. Th
 
 Add one paragraph:
 
-> The runtime MAY expose an `invoke` operation on the dispatch-boundary context accessible to middleware. The operation is a runtime-controlled dispatch-boundary `Operation<T>` — it is initiated and resolved outside kernel IR evaluation — and it is not a compound external and does not produce a kernel descriptor. Semantics are defined by `tisyn-nested-invocation-specification.md`. Invoking middleware remains subject to the determinism expectation of §9; the replay property stated in MR-002 extends to middleware that calls `ctx.invoke` without modification.
+> The runtime MAY expose an `invoke(fn, args, opts?)` free helper (exported from `@tisyn/agent`) accessible from the body of an `Effects.around({ dispatch })` middleware. The operation is a runtime-controlled dispatch-boundary `Operation<T>` — it is initiated and resolved outside kernel IR evaluation — and it is not a compound external and does not produce a kernel descriptor. Semantics are defined by `tisyn-nested-invocation-specification.md`. Invoking middleware remains subject to the determinism expectation of §9; the replay property stated in MR-002 extends to middleware that calls `invoke` without modification.
 
 ### 16.2 `tisyn-compound-concurrency-specification.md` — §4.2 (Child Task IDs)
 
 Add one paragraph:
 
-> The unified `childSpawnCount` is also advanced by nested invocation (`ctx.invoke`, per `tisyn-nested-invocation-specification.md`). Each `ctx.invoke` call advances the counter by exactly `+1` and allocates a child coroutineId of the form `parentId.{k}` using the standard format. Invariant I-ID applies uniformly across all allocation origins.
+> The unified `childSpawnCount` is also advanced by nested invocation (`invoke(fn, args, opts?)` exported from `@tisyn/agent`, per `tisyn-nested-invocation-specification.md`). Each accepted `invoke` call advances the counter by exactly `+1` and allocates a child coroutineId of the form `parentId.{k}` using the standard format. Invariant I-ID applies uniformly across all allocation origins. Calls rejected by the nested-invocation spec §5.3 do not advance the counter.
 
 No other spec files are amended by this specification.
