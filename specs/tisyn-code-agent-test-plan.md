@@ -49,7 +49,7 @@ requirements.
 - Core and extended conformance tiers
 - Stale-handle behavior per operation
 - Session lifecycle invariants
-- Parameter unwrapping and name resolution
+- Direct-payload contract verification and name resolution
 - Progress forwarding
 - Cancellation semantics
 - Transport-level protocol (initialize, shutdown, diagnostics)
@@ -163,7 +163,7 @@ Backend-agnostic.
 - Operation shape and result shape tests
 - Session lifecycle tests
 - Stale-handle tests
-- Parameter unwrapping tests
+- Direct-payload contract tests
 - Name resolution tests
 - Progress forwarding tests
 - Cancellation tests
@@ -191,7 +191,7 @@ conformance test plan (separate document).
 **Contains:**
 - Initialize handshake synthesis (not forwarded to ACP)
 - ACP method mapping per operation
-- ACP parameter envelope stripping
+- ACP parameter forwarding (direct payload as top-level params)
 - ACP success/error/notification translation
 - ACP progress forwarding
 - ACP cancellation request mapping
@@ -446,66 +446,72 @@ Tests MUST NOT assert on:
 | Expected | If an adapter resolves stale ForkData, this is classified as a non-portable optimization. The base suite does not require success |
 | Portability | Non-portable (adapter optimization) |
 
-### 7.4 Parameter Unwrapping Tests
+### 7.4 Direct-Payload Contract Tests
 
-**CA-UNWRAP-01: newSession envelope**
+The compiler emits each single-parameter ambient operation's
+argument directly as the effect payload (spec §7.2). The
+adapter MUST forward that payload to the operation handler
+unchanged — there is no compiler-added wrapper to strip and
+no compatibility shim that accepts a wrapped shape.
+
+**CA-PAYLOAD-01: newSession direct payload**
 
 | Field | Value |
 |---|---|
-| Spec ref | §7.2 |
+| Spec ref | §7.2, §7.4 |
 | Tier | Core |
-| Scenario | Args arrive as `{ config: { model: "test" } }` |
-| Expected | Adapter unwraps to `{ model: "test" }` before dispatch. newSession succeeds |
+| Scenario | Dispatch with payload `{ model: "test" }` |
+| Expected | Handler receives `{ model: "test" }` verbatim; newSession succeeds and returns a `SessionHandle` |
 | Portability | Portable |
 
-**CA-UNWRAP-02: closeSession envelope**
+**CA-PAYLOAD-02: closeSession direct payload**
 
 | Field | Value |
 |---|---|
-| Spec ref | §7.2 |
+| Spec ref | §7.2, §7.5 |
 | Tier | Core |
-| Scenario | Args arrive as `{ handle: { sessionId: "cx-1" } }` |
-| Expected | Adapter unwraps to `{ sessionId: "cx-1" }`. closeSession succeeds |
+| Scenario | Dispatch with payload `{ sessionId: "cx-1" }` |
+| Expected | Handler receives `{ sessionId: "cx-1" }` verbatim; closeSession succeeds and returns `null` |
 | Portability | Portable |
 
-**CA-UNWRAP-03: prompt envelope**
+**CA-PAYLOAD-03: prompt direct payload**
 
 | Field | Value |
 |---|---|
-| Spec ref | §7.2 |
+| Spec ref | §7.2, §7.6 |
 | Tier | Core |
-| Scenario | Args arrive as `{ args: { session: {...}, prompt: "hello" } }` |
-| Expected | Adapter unwraps to `{ session: {...}, prompt: "hello" }`. prompt succeeds |
+| Scenario | Dispatch with payload `{ session: { sessionId: "cx-1" }, prompt: "hello" }` |
+| Expected | Handler receives `{ session: { sessionId: "cx-1" }, prompt: "hello" }` verbatim; prompt succeeds and returns a `PromptResult` |
 | Portability | Portable |
 
-**CA-UNWRAP-04: fork envelope**
+**CA-PAYLOAD-04: fork direct payload**
 
 | Field | Value |
 |---|---|
-| Spec ref | §7.2 |
+| Spec ref | §7.2, §7.7 |
 | Tier | Extended |
-| Scenario | Args arrive as `{ session: { sessionId: "cx-1" } }` |
-| Expected | Adapter unwraps to `{ sessionId: "cx-1" }`. fork succeeds |
+| Scenario | Dispatch with payload `{ sessionId: "cx-1" }` |
+| Expected | Handler receives `{ sessionId: "cx-1" }` verbatim; fork succeeds and returns `ForkData` |
 | Portability | Portable (extended tier) |
 
-**CA-UNWRAP-05: openFork envelope**
+**CA-PAYLOAD-05: openFork direct payload**
 
 | Field | Value |
 |---|---|
-| Spec ref | §7.2 |
+| Spec ref | §7.2, §7.8 |
 | Tier | Extended |
-| Scenario | Args arrive as `{ data: { parentSessionId: "cx-1", forkId: "f-1" } }` |
-| Expected | Adapter unwraps to `{ parentSessionId: "cx-1", forkId: "f-1" }`. openFork succeeds |
+| Scenario | Dispatch with payload `{ parentSessionId: "cx-1", forkId: "f-1" }` |
+| Expected | Handler receives `{ parentSessionId: "cx-1", forkId: "f-1" }` verbatim; openFork succeeds and returns a `SessionHandle` |
 | Portability | Portable (extended tier) |
 
-**CA-UNWRAP-06: Already-unwrapped passthrough**
+**CA-PAYLOAD-06: No legacy wrapper accepted**
 
 | Field | Value |
 |---|---|
 | Spec ref | §7.2 |
 | Tier | Core |
-| Scenario | Args arrive without the unwrap key (e.g., `{ session: {...}, prompt: "hello" }` directly for prompt) |
-| Expected | Adapter passes through unchanged. Operation succeeds |
+| Scenario | Dispatch with a legacy single-key wrapper (e.g., `{ args: { session, prompt } }` for `prompt`, or `{ config: { model } }` for `newSession`) |
+| Expected | The handler observes the wrapper as-is — there is no compatibility unwrapping. Required-field reads (e.g., `payload.prompt`, `payload.model`) MUST resolve from the direct payload only; supplying a wrapper produces the natural failure mode for the missing required field (e.g., a stale-handle error or a missing-prompt error). No adapter MAY accept the wrapped shape as equivalent to the direct shape. |
 | Portability | Portable |
 
 ### 7.5 Name Resolution Tests
@@ -703,7 +709,7 @@ translation, not contract semantics.
 |---|---|---|
 | Initialize synthesis | 1 | §13.1 |
 | Name resolution over ACP | 2 | §7.3 |
-| Envelope unwrap over ACP | 6 | §7.2 |
+| Direct payload over ACP | 6 | §7.2 |
 | ACP method mapping | 5 | profile-dependent |
 | Success translation | 1 | §6.2, §6.3 |
 | Error translation | 3 | §12, §13.3 |
@@ -1004,12 +1010,12 @@ conformance.
 | CA-STALE-04 | Stale | Ext | fork strict | Fails | P(E) |
 | CA-STALE-05 | Stale | Ext | openFork strict | Fails | P(E) |
 | CA-STALE-06 | Stale | Ext | openFork optim | Non-portable | N/A |
-| CA-UNWRAP-01 | Unwrap | Core | newSession | Unwraps config | P |
-| CA-UNWRAP-02 | Unwrap | Core | closeSession | Unwraps handle | P |
-| CA-UNWRAP-03 | Unwrap | Core | prompt | Unwraps args | P |
-| CA-UNWRAP-04 | Unwrap | Ext | fork | Unwraps session | P(E) |
-| CA-UNWRAP-05 | Unwrap | Ext | openFork | Unwraps data | P(E) |
-| CA-UNWRAP-06 | Unwrap | Core | Passthrough | No unwrap key | P |
+| CA-PAYLOAD-01 | Payload | Core | newSession | Direct payload forwarded | P |
+| CA-PAYLOAD-02 | Payload | Core | closeSession | Direct payload forwarded | P |
+| CA-PAYLOAD-03 | Payload | Core | prompt | Direct payload forwarded | P |
+| CA-PAYLOAD-04 | Payload | Ext | fork | Direct payload forwarded | P(E) |
+| CA-PAYLOAD-05 | Payload | Ext | openFork | Direct payload forwarded | P(E) |
+| CA-PAYLOAD-06 | Payload | Core | No legacy wrapper accepted | No compat shim | P |
 | CA-NAME-01 | Name | Core | Bare name | Resolves | P |
 | CA-NAME-02 | Name | Core | Qualified name | Strips prefix | P |
 | CA-NAME-03 | Name | Core | Unknown name | Descriptive error | P |
@@ -1149,7 +1155,7 @@ Implementation artifacts:
 | §6.2 PromptResult | CA-SHAPE-03, CA-EXT-01 |
 | §6.3 ForkData | CA-SHAPE-04 |
 | §6.4 Extension Rules | CA-EXT-01, CA-EXT-02 |
-| §7.2 Unwrapping | CA-UNWRAP-01 through CA-UNWRAP-06 |
+| §7.2 Direct payload | CA-PAYLOAD-01 through CA-PAYLOAD-06 |
 | §7.3 Name Resolution | CA-NAME-01 through CA-NAME-03 |
 | §7.4 newSession | CA-SHAPE-01, CA-LIFE-01 |
 | §7.5 closeSession | CA-SHAPE-02, CA-LIFE-01, CA-LIFE-04 |
