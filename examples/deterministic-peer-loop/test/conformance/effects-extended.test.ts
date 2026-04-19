@@ -10,19 +10,10 @@
 import { describe, it } from "@effectionx/vitest";
 import { expect } from "vitest";
 import { runHarness, opusTurn, effect } from "./helpers/harness.js";
-import type { EffectRequestRecord } from "../../src/types.js";
 
 describe("DPL-EXEC extended", () => {
   it("EXEC-06/08: one record per request; dispositionAt >= turnIndex", function* () {
     const effects = [effect("e1", 1), effect("e2", 2), effect("e3", 3)];
-    const records: EffectRequestRecord[] = effects.map((e, i) => ({
-      turnIndex: 1,
-      requestor: "opus",
-      effect: e,
-      disposition: "executed",
-      dispositionAt: 1 + i,
-      result: { index: i },
-    }));
 
     const result = yield* runHarness({
       tarasMessages: ["go"],
@@ -34,28 +25,25 @@ describe("DPL-EXEC extended", () => {
         }),
       ],
       gptScript: [],
-      effectsScript: [records],
+      policyScript: [
+        { kind: "executed" },
+        { kind: "executed" },
+        { kind: "executed" },
+      ],
+      dispatchScript: [
+        { ok: true, result: { index: 0 } },
+        { ok: true, result: { index: 1 } },
+        { ok: true, result: { index: 2 } },
+      ],
     });
 
-    // Exactly one appended record per requested effect.
     expect(result.appendedEffectRequests).toHaveLength(effects.length);
-    // dispositionAt >= turnIndex on every record.
     for (const r of result.appendedEffectRequests) {
       expect(r.dispositionAt).toBeGreaterThanOrEqual(r.turnIndex);
     }
   });
 
-  it("EXEC-02: deferred disposition produces record without result/error", function* () {
-    const records: EffectRequestRecord[] = [
-      {
-        turnIndex: 1,
-        requestor: "opus",
-        effect: effect("e-def", null),
-        disposition: "deferred",
-        dispositionAt: 1,
-      },
-    ];
-
+  it("EXEC-02: deferred disposition produces record without result/error, no dispatch", function* () {
     const result = yield* runHarness({
       tarasMessages: ["go"],
       opusScript: [
@@ -66,7 +54,7 @@ describe("DPL-EXEC extended", () => {
         }),
       ],
       gptScript: [],
-      effectsScript: [records],
+      policyScript: [{ kind: "deferred", reason: "wait" }],
     });
 
     expect(result.appendedEffectRequests).toHaveLength(1);
@@ -74,19 +62,15 @@ describe("DPL-EXEC extended", () => {
     expect(rec.disposition).toBe("deferred");
     expect(rec.result).toBeUndefined();
     expect(rec.error).toBeUndefined();
+
+    // No EffectHandler.invoke for deferred.
+    const invokeCalls = result.operations.filter(
+      (op) => op.agent === "EffectHandler" && op.op === "invoke",
+    );
+    expect(invokeCalls).toHaveLength(0);
   });
 
   it("EXEC-10: surfaced_to_taras appends record with that disposition and no execution", function* () {
-    const records: EffectRequestRecord[] = [
-      {
-        turnIndex: 1,
-        requestor: "opus",
-        effect: effect("e-surf", null),
-        disposition: "surfaced_to_taras",
-        dispositionAt: 1,
-      },
-    ];
-
     const result = yield* runHarness({
       tarasMessages: ["go"],
       opusScript: [
@@ -97,12 +81,17 @@ describe("DPL-EXEC extended", () => {
         }),
       ],
       gptScript: [],
-      effectsScript: [records],
+      policyScript: [{ kind: "surfaced_to_taras" }],
     });
 
     expect(result.appendedEffectRequests).toHaveLength(1);
     expect(result.appendedEffectRequests[0].disposition).toBe(
       "surfaced_to_taras",
     );
+
+    const invokeCalls = result.operations.filter(
+      (op) => op.agent === "EffectHandler" && op.op === "invoke",
+    );
+    expect(invokeCalls).toHaveLength(0);
   });
 });

@@ -1,3 +1,5 @@
+import type { Val } from "./schemas.js";
+
 export type {
   UsageSummary,
   Speaker,
@@ -17,6 +19,7 @@ export type {
   BrowserControlPatch,
   BrowserToHost,
   HostToBrowser,
+  Val,
 } from "./schemas.js";
 
 export interface RecursiveState {
@@ -30,3 +33,7 @@ export type PolicyDecision =
   | { kind: "deferred"; reason?: string }
   | { kind: "rejected"; reason: string }
   | { kind: "surfaced_to_taras"; reason?: string };
+
+export type InvokeOutcome =
+  | { ok: true; result: Val }
+  | { ok: false; error: { name: string; message: string } };

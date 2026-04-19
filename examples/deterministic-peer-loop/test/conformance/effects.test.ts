@@ -1,58 +1,25 @@
 /**
- * DPL-EXEC category tests.
+ * DPL-EXEC category tests (per-effect dispatch through Policy + EffectHandler).
  *
  *   - EXEC-01: executed effect result is captured on the EffectRequestRecord
  *   - EXEC-03: rejected effect records error/disposition
  *   - EXEC-05: deferred effect records disposition without dispatch
  *   - EXEC-07: surfaced_to_taras effect records disposition without dispatch
- *   - EXEC-09: EffectsProcessor.processAll is called even for empty effects arrays
- *   - EXEC-11: appendEffectRequests preserves record order
+ *   - EXEC-09: no EffectHandler calls when the queue is empty
+ *   - EXEC-11: per-effect appendEffectRequest preserves order
  */
 
 import { describe, it } from "@effectionx/vitest";
 import { expect } from "vitest";
 import { runHarness, opusTurn, effect } from "./helpers/harness.js";
-import type { EffectRequestRecord } from "../../src/types.js";
 
 describe("DPL-EXEC", () => {
-  it("EXEC-01/03/05/07: all four dispositions round-trip through appendEffectRequests", function* () {
+  it("EXEC-01/03/05/07/11: all four dispositions round-trip through per-effect appendEffectRequest", function* () {
     const effects = [
       effect("e-exec", { foo: 1 }),
       effect("e-rej", null),
       effect("e-def", null),
       effect("e-surf", null),
-    ];
-    const records: EffectRequestRecord[] = [
-      {
-        turnIndex: 1,
-        requestor: "opus",
-        effect: effects[0],
-        disposition: "executed",
-        dispositionAt: 1,
-        result: { ok: true },
-      },
-      {
-        turnIndex: 1,
-        requestor: "opus",
-        effect: effects[1],
-        disposition: "rejected",
-        dispositionAt: 1,
-        error: { name: "PolicyRejected", message: "blocked" },
-      },
-      {
-        turnIndex: 1,
-        requestor: "opus",
-        effect: effects[2],
-        disposition: "deferred",
-        dispositionAt: 1,
-      },
-      {
-        turnIndex: 1,
-        requestor: "opus",
-        effect: effects[3],
-        disposition: "surfaced_to_taras",
-        dispositionAt: 1,
-      },
     ];
 
     const result = yield* runHarness({
@@ -65,24 +32,31 @@ describe("DPL-EXEC", () => {
         }),
       ],
       gptScript: [],
-      effectsScript: [records],
+      policyScript: [
+        { kind: "executed" },
+        { kind: "rejected", reason: "blocked" },
+        { kind: "deferred", reason: "later" },
+        { kind: "surfaced_to_taras", reason: "ask taras" },
+      ],
+      dispatchScript: [{ ok: true, result: { ok: true } }],
     });
 
-    // processAll was invoked once with the 4 effects.
-    const processAll = result.operations.find(
-      (op) => op.agent === "EffectsProcessor" && op.op === "processAll",
+    // Policy.decide called once per effect.
+    const policyCalls = result.operations.filter(
+      (op) => op.agent === "Policy" && op.op === "decide",
     );
-    expect(processAll).toBeDefined();
-    const processArgs = processAll!.args as {
-      effects: unknown[];
-      turnIndex: number;
-      requestor: string;
-    };
-    expect(processArgs.effects).toHaveLength(4);
-    expect(processArgs.turnIndex).toBe(1);
-    expect(processArgs.requestor).toBe("opus");
+    expect(policyCalls).toHaveLength(4);
 
-    // appendEffectRequests received all 4 records in order.
+    // EffectHandler.invoke called only for the executed entry.
+    const invokeCalls = result.operations.filter(
+      (op) => op.agent === "EffectHandler" && op.op === "invoke",
+    );
+    expect(invokeCalls).toHaveLength(1);
+    expect(
+      (invokeCalls[0].args as { effectId: string; data: unknown }).effectId,
+    ).toBe("e-exec");
+
+    // appendEffectRequest fired four times in order.
     expect(result.appendedEffectRequests).toHaveLength(4);
     expect(result.appendedEffectRequests.map((r) => r.disposition)).toEqual([
       "executed",
@@ -90,24 +64,42 @@ describe("DPL-EXEC", () => {
       "deferred",
       "surfaced_to_taras",
     ]);
+
+    // Executed record carries the dispatch result.
+    expect(result.appendedEffectRequests[0].result).toEqual({ ok: true });
+    // Rejected record carries the policy error.
+    expect(result.appendedEffectRequests[1].error).toEqual({
+      name: "PolicyRejected",
+      message: "blocked",
+    });
   });
 
-  it("EXEC-09: processAll is called even when requestedEffects is missing", function* () {
+  it("EXEC-09: no EffectHandler.invoke calls when requestedEffects is absent", function* () {
     const result = yield* runHarness({
       tarasMessages: ["go"],
-      opusScript: [
-        opusTurn({ display: "no effects", status: "done" }),
-      ],
+      opusScript: [opusTurn({ display: "no effects", status: "done" })],
       gptScript: [],
-      effectsScript: [[]],
     });
 
-    const processAllCalls = result.operations.filter(
-      (op) => op.agent === "EffectsProcessor" && op.op === "processAll",
+    // EffectsQueue.seed was still called (workflow always seeds).
+    const seedCalls = result.operations.filter(
+      (op) => op.agent === "EffectsQueue" && op.op === "seed",
     );
-    expect(processAllCalls).toHaveLength(1);
+    expect(seedCalls).toHaveLength(1);
     expect(
-      (processAllCalls[0].args as { effects: unknown[] }).effects,
+      (seedCalls[0].args as { effects: unknown[] }).effects,
     ).toEqual([]);
+
+    // No policy or handler invocations.
+    const policyCalls = result.operations.filter(
+      (op) => op.agent === "Policy" && op.op === "decide",
+    );
+    expect(policyCalls).toHaveLength(0);
+    const invokeCalls = result.operations.filter(
+      (op) => op.agent === "EffectHandler" && op.op === "invoke",
+    );
+    expect(invokeCalls).toHaveLength(0);
+    // No records appended.
+    expect(result.appendedEffectRequests).toHaveLength(0);
   });
 });
