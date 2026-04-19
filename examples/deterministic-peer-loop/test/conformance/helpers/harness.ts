@@ -211,9 +211,7 @@ export function* runHarness(options: HarnessOptions): Operation<HarnessResult> {
       }
       const script = opusScript.shift();
       if (!script) {
-        throw new Error(
-          `Opus script exhausted at peer turn ${peerTurnIndex}`,
-        );
+        throw new Error(`Opus script exhausted at peer turn ${peerTurnIndex}`);
       }
       const mutation = options.controlMutationsAfterTurn?.[peerTurnIndex];
       if (mutation) {
@@ -239,9 +237,7 @@ export function* runHarness(options: HarnessOptions): Operation<HarnessResult> {
       }
       const script = gptScript.shift();
       if (!script) {
-        throw new Error(
-          `GPT script exhausted at peer turn ${peerTurnIndex}`,
-        );
+        throw new Error(`GPT script exhausted at peer turn ${peerTurnIndex}`);
       }
       const mutation = options.controlMutationsAfterTurn?.[peerTurnIndex];
       if (mutation) {
@@ -330,10 +326,7 @@ export function* runHarness(options: HarnessOptions): Operation<HarnessResult> {
       });
     } catch (err) {
       const e = err as Error;
-      if (
-        e.message !== "TARAS_SCRIPT_EXHAUSTED" &&
-        e.message !== "MAX_TURNS_EXCEEDED"
-      ) {
+      if (e.message !== "TARAS_SCRIPT_EXHAUSTED" && e.message !== "MAX_TURNS_EXCEEDED") {
         if (exitReason === undefined) {
           exitReason = `error: ${e.message}`;
         }
@@ -388,14 +381,8 @@ export function taras(content: string): TurnEntry {
   return { speaker: "taras", content };
 }
 
-export function peer(
-  speaker: PeerSpeaker,
-  content: string,
-  usage?: TurnEntry["usage"],
-): TurnEntry {
-  return usage !== undefined
-    ? { speaker, content, usage }
-    : { speaker, content };
+export function peer(speaker: PeerSpeaker, content: string, usage?: TurnEntry["usage"]): TurnEntry {
+  return usage !== undefined ? { speaker, content, usage } : { speaker, content };
 }
 
 export function effect(id: string, input: Val = null): RequestedEffect {

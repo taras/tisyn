@@ -56,7 +56,9 @@ export function createBinding(config?: Record<string, unknown>): LocalAgentBindi
           let result = "";
           for (;;) {
             const { value: event, done } = await streamed.events.next();
-            if (done) break;
+            if (done) {
+              break;
+            }
             if (event.type === "turn.failed") {
               throw new Error(
                 `Codex turn failed: ${(event as { error?: { message: string } }).error?.message ?? "unknown"}`,

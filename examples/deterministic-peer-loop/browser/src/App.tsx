@@ -6,15 +6,8 @@ import { ControlPanel } from "./components/ControlPanel.tsx";
 import "./App.css";
 
 export function App() {
-  const {
-    status,
-    messages,
-    inputEnabled,
-    control,
-    readOnlyReason,
-    sendMessage,
-    updateControl,
-  } = useChat();
+  const { status, messages, inputEnabled, control, readOnlyReason, sendMessage, updateControl } =
+    useChat();
 
   return (
     <>

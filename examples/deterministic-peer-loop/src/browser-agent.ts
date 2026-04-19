@@ -137,4 +137,3 @@ function waitForFirstMessage(ws: import("ws").WebSocket): Operation<BrowserToHos
   ws.on("message", handler);
   return operation;
 }
-

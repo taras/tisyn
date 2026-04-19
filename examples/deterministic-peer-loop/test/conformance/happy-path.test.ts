@@ -12,12 +12,7 @@
 
 import { describe, it } from "@effectionx/vitest";
 import { expect } from "vitest";
-import {
-  runHarness,
-  opusTurn,
-  gptTurn,
-  taras,
-} from "./helpers/harness.js";
+import { runHarness, opusTurn, gptTurn, taras } from "./helpers/harness.js";
 
 describe("DPL happy path", () => {
   it("warm-starts with loadChat then runs opus → gpt → done", function* () {
@@ -30,9 +25,7 @@ describe("DPL happy path", () => {
     });
 
     // INIT-04: loadChat came first and carried the initial transcript.
-    const loadChat = result.operations.find(
-      (op) => op.agent === "App" && op.op === "loadChat",
-    );
+    const loadChat = result.operations.find((op) => op.agent === "App" && op.op === "loadChat");
     expect(loadChat).toBeDefined();
     expect((loadChat!.args as { messages: unknown[] }).messages).toEqual(initial);
 
@@ -63,14 +56,8 @@ describe("DPL happy path", () => {
 
     // PER: PeerRecord appended per peer step with incremented turnIndex.
     expect(result.appendedPeerRecords.map((r) => r.turnIndex)).toEqual([1, 2]);
-    expect(result.appendedPeerRecords.map((r) => r.speaker)).toEqual([
-      "opus",
-      "gpt",
-    ]);
-    expect(result.appendedPeerRecords.map((r) => r.status)).toEqual([
-      "continue",
-      "done",
-    ]);
+    expect(result.appendedPeerRecords.map((r) => r.speaker)).toEqual(["opus", "gpt"]);
+    expect(result.appendedPeerRecords.map((r) => r.status)).toEqual(["continue", "done"]);
 
     // DONE-01/03: terminal setReadOnly("done") fired.
     const setReadOnly = result.operations.find(

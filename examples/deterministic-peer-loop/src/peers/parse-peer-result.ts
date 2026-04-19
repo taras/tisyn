@@ -5,7 +5,10 @@ const FENCED = /^\s*```(?:json)?\s*\n([\s\S]*?)\n```\s*$/;
 
 export class PeerResultParseError extends Error {
   readonly name = "PeerResultParseError";
-  constructor(message: string, public readonly raw: string) {
+  constructor(
+    message: string,
+    public readonly raw: string,
+  ) {
     super(message);
   }
 }
@@ -48,7 +51,9 @@ export function buildPeerPrompt(input: {
   peerName: "opus" | "gpt";
 }): string {
   const lines: string[] = [];
-  lines.push(`You are ${input.peerName.toUpperCase()}, one of two AI peers collaborating with Taras.`);
+  lines.push(
+    `You are ${input.peerName.toUpperCase()}, one of two AI peers collaborating with Taras.`,
+  );
   lines.push("");
   lines.push("You will receive the full transcript so far. Your job is to take one turn.");
   lines.push("");
@@ -64,7 +69,7 @@ export function buildPeerPrompt(input: {
     `The next Taras gate is "${input.tarasMode}". If "optional", you may choose to continue without input; if "required", Taras will be asked before the next peer step.`,
   );
   lines.push("");
-  lines.push("Use status = \"needs_taras\" to require Taras input next cycle.");
+  lines.push('Use status = "needs_taras" to require Taras input next cycle.');
   lines.push('Use status = "done" only if the collaboration is finished.');
   lines.push('Use status = "continue" to keep the loop running.');
   lines.push("");
