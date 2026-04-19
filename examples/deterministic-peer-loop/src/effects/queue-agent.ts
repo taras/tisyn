@@ -4,8 +4,5 @@ import type { RequestedEffect } from "../types.js";
 export const EffectsQueue = () =>
   agent("effects-queue", {
     seed: operation<{ effects: RequestedEffect[] }, void>(),
-    shift: operation<
-      Record<string, never>,
-      { effect: RequestedEffect | null }
-    >(),
+    shift: operation<Record<string, never>, { effect: RequestedEffect | null }>(),
   });

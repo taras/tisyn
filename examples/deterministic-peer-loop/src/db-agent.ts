@@ -8,12 +8,7 @@ import { agent, operation } from "@tisyn/agent";
 import { inprocessTransport } from "@tisyn/transport";
 import type { LocalAgentBinding } from "@tisyn/transport";
 import { getOrCreateStore, type Store } from "./store.js";
-import type {
-  EffectRequestRecord,
-  LoopControl,
-  PeerRecord,
-  TurnEntry,
-} from "./schemas.js";
+import type { EffectRequestRecord, LoopControl, PeerRecord, TurnEntry } from "./schemas.js";
 
 export const DB = () =>
   agent("d-b", {

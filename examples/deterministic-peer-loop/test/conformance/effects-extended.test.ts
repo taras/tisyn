@@ -25,11 +25,7 @@ describe("DPL-EXEC extended", () => {
         }),
       ],
       gptScript: [],
-      policyScript: [
-        { kind: "executed" },
-        { kind: "executed" },
-        { kind: "executed" },
-      ],
+      policyScript: [{ kind: "executed" }, { kind: "executed" }, { kind: "executed" }],
       dispatchScript: [
         { ok: true, result: { index: 0 } },
         { ok: true, result: { index: 1 } },
@@ -85,9 +81,7 @@ describe("DPL-EXEC extended", () => {
     });
 
     expect(result.appendedEffectRequests).toHaveLength(1);
-    expect(result.appendedEffectRequests[0].disposition).toBe(
-      "surfaced_to_taras",
-    );
+    expect(result.appendedEffectRequests[0].disposition).toBe("surfaced_to_taras");
 
     const invokeCalls = result.operations.filter(
       (op) => op.agent === "EffectHandler" && op.op === "invoke",

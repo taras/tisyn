@@ -1,12 +1,6 @@
 import { Type, type Static } from "@sinclair/typebox";
 
-export type Val =
-  | string
-  | number
-  | boolean
-  | null
-  | Val[]
-  | { [key: string]: Val };
+export type Val = string | number | boolean | null | Val[] | { [key: string]: Val };
 
 export const ValSchema = Type.Unsafe<Val>(
   Type.Recursive(
@@ -50,10 +44,7 @@ export const PeerStatusSchema = Type.Union([
 ]);
 export type PeerStatus = Static<typeof PeerStatusSchema>;
 
-export const TarasModeSchema = Type.Union([
-  Type.Literal("optional"),
-  Type.Literal("required"),
-]);
+export const TarasModeSchema = Type.Union([Type.Literal("optional"), Type.Literal("required")]);
 export type TarasMode = Static<typeof TarasModeSchema>;
 
 export const TurnEntrySchema = Type.Object({
@@ -159,9 +150,7 @@ export const BrowserUserMessageSchema = Type.Object({
 export const BrowserControlPatchSchema = Type.Object({
   paused: Type.Optional(Type.Boolean()),
   stopRequested: Type.Optional(Type.Boolean()),
-  nextSpeakerOverride: Type.Optional(
-    Type.Union([PeerSpeakerSchema, Type.Null()]),
-  ),
+  nextSpeakerOverride: Type.Optional(Type.Union([PeerSpeakerSchema, Type.Null()])),
 });
 export type BrowserControlPatch = Static<typeof BrowserControlPatchSchema>;
 

@@ -8,8 +8,7 @@ export interface PolicyBindingConfig {
 }
 
 export function createBinding(config?: Record<string, unknown>): LocalAgentBinding {
-  const raw =
-    (config?.policyMap as PolicyBindingConfig["policyMap"] | undefined) ?? [];
+  const raw = (config?.policyMap as PolicyBindingConfig["policyMap"] | undefined) ?? [];
   const policyMap: PolicyMap = new Map(raw);
   const policy = createPolicy(policyMap);
 

@@ -17,8 +17,7 @@ export interface HandlerBindingConfig {
 }
 
 export function createBinding(config?: Record<string, unknown>): LocalAgentBinding {
-  const raw =
-    (config?.handlers as HandlerBindingConfig["handlers"] | undefined) ?? [];
+  const raw = (config?.handlers as HandlerBindingConfig["handlers"] | undefined) ?? [];
   const registry = new Map<string, SyncEffectHandler>(raw);
 
   return {
