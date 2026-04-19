@@ -26,7 +26,6 @@ import {
   dispatchEffect,
   dispatchExecuted,
 } from "../../../src/workflow.generated.js";
-import type { Val } from "@tisyn/ir";
 import type {
   EffectRequestRecord,
   LoopControl,
