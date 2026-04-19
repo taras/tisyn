@@ -43,5 +43,3 @@ export { InvalidInvokeInputError } from "@tisyn/effects";
 export { InvalidInvokeOptionError } from "@tisyn/effects";
 /** @deprecated Import from `@tisyn/effects`. */
 export type { InvokeOpts, ScopedEffectFrame } from "@tisyn/effects";
-/** @deprecated Import from `@tisyn/effects/internal`. */
-export { evaluateMiddlewareFn } from "@tisyn/effects/internal";

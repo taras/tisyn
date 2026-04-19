@@ -106,13 +106,16 @@ describe("@tisyn/agent", () => {
     expect(caughtErr).toBeInstanceOf(InvalidInvokeCallSiteError);
   });
 
-  it("public surface: DispatchContext is not exported and invoke() cannot be smuggled through public API", function* () {
-    // DispatchContext is a package-internal runtime/agent seam. User
-    // code importing from `@tisyn/agent` must not see it on the public
+  it("public surface: workspace-only seam (DispatchContext, evaluateMiddlewareFn) is absent and invoke() cannot be smuggled through public API", function* () {
+    // `DispatchContext` and `evaluateMiddlewareFn` are workspace-only
+    // seam symbols that live on `@tisyn/effects/internal`. User code
+    // importing from `@tisyn/agent` must not see either on the public
     // barrel — otherwise user code could install a synthetic ambient
-    // context and make `invoke(...)` succeed from a non-dispatch-
-    // boundary call site.
+    // DispatchContext and make `invoke(...)` succeed from a non-
+    // dispatch-boundary call site, or reach the middleware-evaluation
+    // primitive that the spec treats as internal.
     expect((agentPublicBarrel as Record<string, unknown>).DispatchContext).toBeUndefined();
+    expect((agentPublicBarrel as Record<string, unknown>).evaluateMiddlewareFn).toBeUndefined();
 
     // With no public way to install a DispatchContext and no active
     // Effects.around({ dispatch }) body, invoke() called from plain

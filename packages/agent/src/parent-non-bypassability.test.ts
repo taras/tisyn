@@ -5,7 +5,8 @@ import { scoped, spawn } from "effection";
 import type { Val } from "@tisyn/ir";
 import type { FnNode } from "@tisyn/ir";
 import { Fn, Eval, Ref, Arr, If, Eq, Q, Throw } from "@tisyn/ir";
-import { Effects, dispatch, evaluateMiddlewareFn } from "./index.js";
+import { Effects, dispatch } from "./index.js";
+import { evaluateMiddlewareFn } from "@tisyn/effects/internal";
 import { ProhibitedEffectError } from "@tisyn/kernel";
 
 // ---------------------------------------------------------------------------
