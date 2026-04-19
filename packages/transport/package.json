@@ -80,6 +80,7 @@
     "@effectionx/websocket": "^2.3.3",
     "@effectionx/worker": "^0.5.2",
     "@tisyn/agent": "workspace:*",
+    "@tisyn/effects": "workspace:*",
     "@tisyn/ir": "workspace:*",
     "@tisyn/kernel": "workspace:*",
     "@tisyn/protocol": "workspace:*",

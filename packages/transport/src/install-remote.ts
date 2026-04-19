@@ -3,7 +3,7 @@ import type { Val } from "@tisyn/ir";
 import type { OperationSpec, AgentDeclaration } from "@tisyn/agent";
 import type { AgentTransportFactory } from "./transport.js";
 import { parseEffectId } from "@tisyn/kernel";
-import { Effects, getCrossBoundaryMiddleware } from "@tisyn/agent";
+import { Effects, getCrossBoundaryMiddleware } from "@tisyn/effects";
 import { executeRequest } from "@tisyn/protocol";
 import { createSession } from "./session.js";
 import { ProgressContext, CoroutineContext } from "./progress.js";

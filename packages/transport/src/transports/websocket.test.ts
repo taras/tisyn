@@ -6,7 +6,8 @@ import { resource, useScope, withResolvers, createQueue, scoped, spawn } from "e
 import { WebSocketServer } from "ws";
 import type { HostMessage } from "@tisyn/protocol";
 import { parseHostMessage } from "@tisyn/protocol";
-import { agent, operation, dispatch, implementAgent } from "@tisyn/agent";
+import { agent, operation, implementAgent } from "@tisyn/agent";
+import { dispatch } from "@tisyn/effects";
 import { installRemoteAgent } from "../install-remote.js";
 import { createProtocolServer } from "../protocol-server.js";
 import { transportComplianceSuite } from "../transport-compliance.js";

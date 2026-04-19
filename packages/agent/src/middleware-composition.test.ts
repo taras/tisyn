@@ -2,7 +2,7 @@ import { describe, it } from "@effectionx/vitest";
 import { expect } from "vitest";
 import { scoped } from "effection";
 import type { Val } from "@tisyn/ir";
-import { Effects, dispatch } from "./index.js";
+import { Effects, dispatch } from "@tisyn/effects";
 
 // Shared helper: install a catch-all core handler at min priority.
 // Using { at: "min" } ensures it runs AFTER any interceptors installed

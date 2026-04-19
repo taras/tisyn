@@ -33,13 +33,12 @@ import { type DurableStream, InMemoryStream, ReplayIndex } from "@tisyn/durable-
 import {
   dispatch,
   Effects,
-  evaluateMiddlewareFn,
   InvalidInvokeCallSiteError,
   InvalidInvokeInputError,
   InvalidInvokeOptionError,
   type InvokeOpts,
-} from "@tisyn/agent";
-import { DispatchContext } from "./dispatch-context.js";
+} from "@tisyn/effects";
+import { DispatchContext, evaluateMiddlewareFn } from "@tisyn/effects/internal";
 import {
   installAgentTransport,
   type AgentTransportFactory,

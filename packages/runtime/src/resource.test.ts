@@ -8,7 +8,7 @@ import { describe, it } from "@effectionx/vitest";
 import { expect } from "vitest";
 import { suspend, ensure, withResolvers } from "effection";
 import { execute } from "./execute.js";
-import { Effects } from "@tisyn/agent";
+import { Effects } from "@tisyn/effects";
 import { Seq, Try, Throw, Ref } from "@tisyn/ir";
 import type { IrInput } from "@tisyn/ir";
 import { InMemoryStream } from "@tisyn/durable-streams";

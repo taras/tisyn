@@ -11,6 +11,7 @@
     { "path": "../kernel" },
     { "path": "../durable-streams" },
     { "path": "../agent" },
+    { "path": "../effects" },
     { "path": "../validate" },
     { "path": "../transport" }
   ]

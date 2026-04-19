@@ -3,7 +3,7 @@ import { expect, vi } from "vitest";
 import { scoped, spawn, sleep } from "effection";
 import { resolve } from "node:path";
 import type { Val } from "@tisyn/ir";
-import { dispatch } from "@tisyn/agent";
+import { dispatch } from "@tisyn/effects";
 import { installRemoteAgent } from "@tisyn/transport";
 import { ProgressContext, CoroutineContext } from "@tisyn/transport";
 import type { ProgressEvent } from "@tisyn/transport";

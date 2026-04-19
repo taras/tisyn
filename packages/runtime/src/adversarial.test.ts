@@ -14,8 +14,9 @@
 import { describe, it } from "@effectionx/vitest";
 import { expect } from "vitest";
 import type { Val } from "@tisyn/ir";
-import { Effects, dispatch, useAgent, Agents, agent, operation } from "@tisyn/agent";
+import { useAgent, Agents, agent, operation } from "@tisyn/agent";
 import type { AgentDeclaration, OperationSpec } from "@tisyn/agent";
+import { Effects, dispatch } from "@tisyn/effects";
 
 describe("Adversarial / edge cases", () => {
   // NEG-1

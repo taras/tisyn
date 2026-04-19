@@ -18,6 +18,7 @@
   "dependencies": {
     "@tisyn/agent": "workspace:*",
     "@tisyn/durable-streams": "workspace:*",
+    "@tisyn/effects": "workspace:*",
     "@tisyn/ir": "workspace:*",
     "@tisyn/kernel": "workspace:*",
     "@tisyn/runtime": "workspace:*"

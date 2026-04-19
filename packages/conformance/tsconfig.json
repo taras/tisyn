@@ -10,6 +10,7 @@
     { "path": "../kernel" },
     { "path": "../runtime" },
     { "path": "../durable-streams" },
-    { "path": "../agent" }
+    { "path": "../agent" },
+    { "path": "../effects" }
   ]
 }

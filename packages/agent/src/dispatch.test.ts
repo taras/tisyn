@@ -1,6 +1,7 @@
 import { describe, it } from "@effectionx/vitest";
 import { expect } from "vitest";
-import { agent, operation, implementAgent, dispatch } from "./index.js";
+import { agent, operation, implementAgent } from "./index.js";
+import { dispatch } from "@tisyn/effects";
 
 describe("dispatch", () => {
   it("routes a call descriptor through installed middleware", function* () {

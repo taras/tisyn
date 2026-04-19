@@ -2,7 +2,7 @@ import { describe, it } from "@effectionx/vitest";
 import { expect } from "vitest";
 import { execute } from "./execute.js";
 import { InMemoryStream } from "@tisyn/durable-streams";
-import { Effects } from "@tisyn/agent";
+import { Effects } from "@tisyn/effects";
 import { ProgressContext } from "@tisyn/transport";
 import type { YieldEvent, DurableEvent } from "@tisyn/kernel";
 import { Ref, Get } from "@tisyn/ir";

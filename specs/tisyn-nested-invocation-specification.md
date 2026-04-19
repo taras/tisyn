@@ -11,7 +11,7 @@
 
 **Nested invocation** is a runtime-controlled mechanism by which dispatch-boundary middleware MAY execute a compiled `Fn` as a child coroutine of the current parent coroutine. The child participates in the parent's journal, middleware chain, agent binding, transport bindings, scoped-effect stack, and residual lifetime, with deterministic child identity drawn from the parent's existing unified `childSpawnCount` allocator.
 
-Nested invocation is a **runtime-internal primitive**, initiated from host-side JavaScript middleware executing on the runtime-controlled dispatch boundary — outside kernel IR evaluation — through the public API `invoke(fn, args, opts?)`, exported as a free helper from `@tisyn/agent`. The supported call site is the body of an `Effects.around({ dispatch })` middleware registered against the runtime's dispatch chain. It is not a kernel descriptor, not a compound external, and not a new durable event kind. The durable event algebra `YieldEvent | CloseEvent` is unmodified. The kernel is unmodified. The compiler is unmodified.
+Nested invocation is a **runtime-internal primitive**, initiated from host-side JavaScript middleware executing on the runtime-controlled dispatch boundary — outside kernel IR evaluation — through the public API `invoke(fn, args, opts?)`, exposed as a free helper. The identity of the package that exports `invoke` is non-normative. The supported call site is the body of an `Effects.around({ dispatch })` middleware registered against the runtime's dispatch chain. It is not a kernel descriptor, not a compound external, and not a new durable event kind. The durable event algebra `YieldEvent | CloseEvent` is unmodified. The kernel is unmodified. The compiler is unmodified.
 
 The child produced by a nested invocation participates in the same journal, the same dispatch routing, the same middleware chain, and the same lifetime model as any other child of its parent.
 
@@ -21,7 +21,7 @@ The child produced by a nested invocation participates in the same journal, the 
 
 This specification defines:
 
-- The public API `invoke(fn, args, opts?)` — a free helper exported from `@tisyn/agent` — and its call-site preconditions.
+- The public API `invoke(fn, args, opts?)` — a free helper of the reference implementation; the export package is non-normative — and its call-site preconditions.
 - How the runtime allocates child identity for nested invocations.
 - How the runtime constructs, drives, and tears down the invoked child.
 - How nested invocation participates in journal ordering, replay, error propagation, and cancellation.
@@ -78,7 +78,7 @@ This specification does not define:
 
 ### 5.1 Signature
 
-The runtime MUST expose `invoke` as a free helper exported from `@tisyn/agent` with the following signature:
+The runtime MUST expose `invoke` as a free helper with the following signature:
 
 ```
 invoke<T>(
@@ -88,11 +88,13 @@ invoke<T>(
 ): Operation<T>
 ```
 
-`invoke` is a free function, not a method on any context value. Internally it reads the active runtime-scoped `DispatchContext` installed by the runtime around each standard-effect dispatch (§3). `DispatchContext` itself is **not part of the public `@tisyn/agent` surface**: it is a runtime/agent seam and MUST NOT be exported from the package's public barrel. User code therefore has no supported way to install a synthetic ambient context; the only way to reach a non-`undefined` `DispatchContext` is to be inside the dynamic extent of an `Effects.around({ dispatch })` middleware body that the runtime has wrapped around a standard-effect dispatch. When no such context is active, or when the call site is not an `Effects.around({ dispatch })` body, `invoke` MUST throw `InvalidInvokeCallSiteError` (§5.3).
+The identity of the package that exports `invoke` is non-normative.
+
+`invoke` is a free function, not a method on any context value. Internally it reads the active runtime-scoped `DispatchContext` installed by the runtime around each standard-effect dispatch (§3). `DispatchContext` is an internal cross-package seam. No `package.json#exports` entry intended for user consumption in any package of the reference implementation MAY expose a runtime value named `DispatchContext`. An implementation MAY declare `DispatchContext` on a dedicated subpath documented as non-stable and workspace-intended (not for user code); such a subpath is not considered "intended for user consumption" for the purposes of this clause. The normative property is that user code has no supported way to install a synthetic ambient `DispatchContext`; the only way to reach a non-`undefined` `DispatchContext` is to be inside the dynamic extent of an `Effects.around({ dispatch })` middleware body that the runtime has wrapped around a standard-effect dispatch. When no such context is active, or when the call site is not an `Effects.around({ dispatch })` body, `invoke` MUST throw `InvalidInvokeCallSiteError` (§5.3).
 
 ### 5.2 Naming
 
-The public name of this operation MUST be `invoke`, exported from `@tisyn/agent`. The spec term for the semantic concept MUST be *nested invocation*. Implementations MAY use additional internal helper names; such names are not part of the normative surface.
+The public name of this operation MUST be `invoke`. Its export package is non-normative. The spec term for the semantic concept MUST be *nested invocation*. Implementations MAY use additional internal helper names; such names are not part of the normative surface.
 
 ### 5.3 Call-site preconditions
 
@@ -314,7 +316,7 @@ The following are explicitly out of scope for this specification version and MUS
 - Detached-lifetime nested invocation. For detached-lifetime execution, use `spawn` at the workflow layer.
 - Any kernel-visible descriptor form of nested invocation.
 - Any namespaced or `.n`-prefixed child-ID format for nested invocation.
-- Any non-public spelling of the API other than the normative public name `invoke` exported from `@tisyn/agent`.
+- Any non-public spelling of the API other than the normative public name `invoke` (the export package of which is non-normative).
 - `invoke` from any site other than an `Effects.around({ dispatch })` body. Facade `.around(...)` middleware, `resolve` middleware, agent operation handlers, IR middleware, and compiler-authored middleware are **not** invoking surfaces in this revision; calls from those sites MUST throw `InvalidInvokeCallSiteError`.
 - Subordinate remote execution as a feature. §14 records only compatibility anchors.
 
@@ -328,12 +330,12 @@ This specification is accompanied by two narrow amendments to existing specs. Th
 
 Add one paragraph:
 
-> The runtime MAY expose an `invoke(fn, args, opts?)` free helper (exported from `@tisyn/agent`) accessible from the body of an `Effects.around({ dispatch })` middleware. The operation is a runtime-controlled dispatch-boundary `Operation<T>` — it is initiated and resolved outside kernel IR evaluation — and it is not a compound external and does not produce a kernel descriptor. Semantics are defined by `tisyn-nested-invocation-specification.md`. Invoking middleware remains subject to the determinism expectation of §9; the replay property stated in MR-002 extends to middleware that calls `invoke` without modification.
+> The runtime MAY expose an `invoke(fn, args, opts?)` free helper (exported by an implementation-chosen package; the export path is not part of the normative surface) accessible from the body of an `Effects.around({ dispatch })` middleware. The operation is a runtime-controlled dispatch-boundary `Operation<T>` — it is initiated and resolved outside kernel IR evaluation — and it is not a compound external and does not produce a kernel descriptor. Semantics are defined by `tisyn-nested-invocation-specification.md`. Invoking middleware remains subject to the determinism expectation of §9; the replay property stated in MR-002 extends to middleware that calls `invoke` without modification.
 
 ### 16.2 `tisyn-compound-concurrency-specification.md` — §4.2 (Child Task IDs)
 
 Add one paragraph:
 
-> The unified `childSpawnCount` is also advanced by nested invocation (`invoke(fn, args, opts?)` exported from `@tisyn/agent`, per `tisyn-nested-invocation-specification.md`). Each accepted `invoke` call advances the counter by exactly `+1` and allocates a child coroutineId of the form `parentId.{k}` using the standard format. Invariant I-ID applies uniformly across all allocation origins. Calls rejected by the nested-invocation spec §5.3 do not advance the counter.
+> The unified `childSpawnCount` is also advanced by nested invocation (`invoke(fn, args, opts?)` as defined by `tisyn-nested-invocation-specification.md`; its export package is non-normative). Each accepted `invoke` call advances the counter by exactly `+1` and allocates a child coroutineId of the form `parentId.{k}` using the standard format. Invariant I-ID applies uniformly across all allocation origins. Calls rejected by the nested-invocation spec §5.3 do not advance the counter.
 
 No other spec files are amended by this specification.

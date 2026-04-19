@@ -7,7 +7,7 @@
 import { describe, it } from "@effectionx/vitest";
 import { expect } from "vitest";
 import { execute } from "./execute.js";
-import { Effects } from "@tisyn/agent";
+import { Effects } from "@tisyn/effects";
 import { Seq, Ref, Try, Throw } from "@tisyn/ir";
 import type { IrInput } from "@tisyn/ir";
 

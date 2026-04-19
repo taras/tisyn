@@ -28,6 +28,7 @@
   },
   "dependencies": {
     "@tisyn/agent": "workspace:*",
+    "@tisyn/effects": "workspace:*",
     "@tisyn/ir": "workspace:*",
     "@tisyn/protocol": "workspace:*",
     "@tisyn/transport": "workspace:*",

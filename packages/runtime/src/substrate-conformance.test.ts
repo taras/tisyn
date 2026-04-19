@@ -11,7 +11,7 @@ import { describe, it } from "@effectionx/vitest";
 import { expect } from "vitest";
 import { spawn, ensure, suspend, scoped, sleep } from "effection";
 import { execute } from "./execute.js";
-import { Effects } from "@tisyn/agent";
+import { Effects } from "@tisyn/effects";
 import type { YieldEvent } from "@tisyn/kernel";
 
 describe("Substrate Conformance", () => {

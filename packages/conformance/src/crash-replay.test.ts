@@ -15,7 +15,7 @@ import { expect } from "vitest";
 import { scoped } from "effection";
 import { execute } from "@tisyn/runtime";
 import { InMemoryStream } from "@tisyn/durable-streams";
-import { Effects } from "@tisyn/agent";
+import { Effects } from "@tisyn/effects";
 
 describe("End-to-end crash/replay", () => {
   it("should replay stored effects and continue with live dispatch", function* () {

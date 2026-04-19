@@ -103,7 +103,8 @@ On the remote side, adapters such as `createProtocolServer()` and `createStdioAg
 ## Example
 
 ```ts
-import { agent, operation, dispatch } from "@tisyn/agent";
+import { agent, operation } from "@tisyn/agent";
+import { dispatch } from "@tisyn/effects";
 import { installRemoteAgent } from "@tisyn/transport";
 import { websocketTransport } from "@tisyn/transport/websocket";
 

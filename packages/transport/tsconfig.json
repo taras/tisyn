@@ -8,6 +8,7 @@
   "exclude": ["src/**/*.test.ts", "src/**/test-assets/**", "src/transports/browser-executor.ts"],
   "references": [
     { "path": "../agent" },
+    { "path": "../effects" },
     { "path": "../ir" },
     { "path": "../kernel" },
     { "path": "../protocol" }

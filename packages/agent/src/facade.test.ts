@@ -2,7 +2,8 @@ import { describe, it } from "@effectionx/vitest";
 import { expect } from "vitest";
 import { scoped } from "effection";
 import type { Val } from "@tisyn/ir";
-import { agent, operation, Agents, Effects, useAgent } from "./index.js";
+import { agent, operation, Agents, useAgent } from "./index.js";
+import { Effects } from "@tisyn/effects";
 
 describe("agent facade", () => {
   // F-1: useAgent() returns object with direct methods AND .around()

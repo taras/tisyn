@@ -9,7 +9,8 @@ import type {
   ResultOf,
 } from "./types.js";
 import { parseEffectId } from "@tisyn/kernel";
-import { DispatchContext, Effects } from "./dispatch.js";
+import { Effects } from "@tisyn/effects";
+import { DispatchContext } from "@tisyn/effects/internal";
 
 /**
  * Bind implementations to an agent declaration.
