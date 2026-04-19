@@ -74,14 +74,8 @@ describe("@tisyn/effects — package exports", () => {
     });
 
     it("source files carry @internal JSDoc tags", () => {
-      const dcSource = readFileSync(
-        resolve(pkgRoot, "src/internal/dispatch-context.ts"),
-        "utf8",
-      );
-      const mwSource = readFileSync(
-        resolve(pkgRoot, "src/internal/middleware-eval.ts"),
-        "utf8",
-      );
+      const dcSource = readFileSync(resolve(pkgRoot, "src/internal/dispatch-context.ts"), "utf8");
+      const mwSource = readFileSync(resolve(pkgRoot, "src/internal/middleware-eval.ts"), "utf8");
       expect(dcSource).toMatch(/@internal/);
       expect(mwSource).toMatch(/@internal/);
     });

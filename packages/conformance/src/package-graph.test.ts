@@ -36,25 +36,10 @@ const ALLOWED_EDGES: Record<string, ReadonlyArray<string>> = {
   "claude-code": ["agent", "code-agent", "effects", "ir", "protocol", "transport"],
   "code-agent": ["agent", "effects", "ir", "protocol", "transport"],
   codex: ["agent", "code-agent", "effects", "ir", "protocol", "transport"],
-  cli: [
-    "compiler",
-    "config",
-    "durable-streams",
-    "effects",
-    "ir",
-    "runtime",
-    "transport",
-  ],
+  cli: ["compiler", "config", "durable-streams", "effects", "ir", "runtime", "transport"],
   compiler: ["ir", "validate"],
   config: [],
-  conformance: [
-    "agent",
-    "durable-streams",
-    "effects",
-    "ir",
-    "kernel",
-    "runtime",
-  ],
+  conformance: ["agent", "durable-streams", "effects", "ir", "kernel", "runtime"],
   dsl: ["ir"],
   "durable-streams": ["kernel"],
   effects: ["ir", "kernel"],
@@ -72,14 +57,7 @@ const ALLOWED_EDGES: Record<string, ReadonlyArray<string>> = {
     "validate",
   ],
   spec: [],
-  "spec-workflows": [
-    "agent",
-    "claude-code",
-    "config",
-    "ir",
-    "spec",
-    "transport",
-  ],
+  "spec-workflows": ["agent", "claude-code", "config", "ir", "spec", "transport"],
   transport: [
     "agent",
     "durable-streams",
@@ -129,7 +107,9 @@ const KNOWN_CYCLES: ReadonlyArray<ReadonlyArray<string>> = [["runtime", "transpo
 
 function findAllCycles(graph: Edges): string[][] {
   const cycles: string[][] = [];
-  const WHITE = 0, GRAY = 1, BLACK = 2;
+  const WHITE = 0,
+    GRAY = 1,
+    BLACK = 2;
   const color: Record<string, number> = {};
   const stack: string[] = [];
   for (const node of Object.keys(graph)) {

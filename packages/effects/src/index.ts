@@ -1,8 +1,4 @@
-export {
-  Effects,
-  dispatch,
-  resolve,
-} from "./dispatch.js";
+export { Effects, dispatch, resolve } from "./dispatch.js";
 export type { InvokeOpts, ScopedEffectFrame } from "./dispatch.js";
 export { invoke } from "./invoke.js";
 export {
@@ -10,7 +6,4 @@ export {
   InvalidInvokeInputError,
   InvalidInvokeOptionError,
 } from "./errors.js";
-export {
-  installCrossBoundaryMiddleware,
-  getCrossBoundaryMiddleware,
-} from "./cross-boundary.js";
+export { installCrossBoundaryMiddleware, getCrossBoundaryMiddleware } from "./cross-boundary.js";
