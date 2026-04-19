@@ -11,6 +11,7 @@ export function App() {
     messages,
     inputEnabled,
     control,
+    readOnlyReason,
     sendMessage,
     updateControl,
   } = useChat();
@@ -18,7 +19,10 @@ export function App() {
   return (
     <>
       <h1>Deterministic Peer Loop</h1>
-      <StatusBanner text={status.text} level={status.level} />
+      <StatusBanner
+        text={readOnlyReason ?? status.text}
+        level={readOnlyReason ? "disconnected" : status.level}
+      />
       <div className="layout">
         <div className="main">
           <Transcript messages={messages} />
@@ -27,7 +31,7 @@ export function App() {
         <aside className="sidebar">
           <ControlPanel
             control={control}
-            disabled={status.level === "disconnected"}
+            disabled={readOnlyReason !== null}
             onUpdate={updateControl}
           />
         </aside>
