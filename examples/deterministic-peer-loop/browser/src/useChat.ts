@@ -76,7 +76,10 @@ export function useChat(url = `ws://${window.location.host}`) {
             break;
 
           case "showMessage":
-            setMessages((prev) => [...prev, msg.entry as TurnEntry]);
+            setMessages((prev) => [
+              ...prev,
+              { speaker: msg.speaker, content: msg.content } as TurnEntry,
+            ]);
             setStatus({ text: "Loop running", level: "pending" });
             break;
 
