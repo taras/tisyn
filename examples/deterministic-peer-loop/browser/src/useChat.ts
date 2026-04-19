@@ -49,6 +49,7 @@ export function useChat(url = `ws://${window.location.host}`) {
   const [messages, setMessages] = useState<TurnEntry[]>([]);
   const [inputEnabled, setInputEnabled] = useState(false);
   const [control, setControl] = useState<LoopControl>(DEFAULT_CONTROL);
+  const [readOnlyReason, setReadOnlyReason] = useState<string | null>(null);
   const wsRef = useRef<{ send: (data: string) => void } | null>(null);
 
   useEffect(() => {
@@ -84,7 +85,7 @@ export function useChat(url = `ws://${window.location.host}`) {
             break;
 
           case "setReadOnly":
-            setStatus({ text: msg.reason, level: "disconnected" });
+            setReadOnlyReason(msg.reason);
             setInputEnabled(false);
             break;
 
@@ -120,5 +121,13 @@ export function useChat(url = `ws://${window.location.host}`) {
     }
   };
 
-  return { status, messages, inputEnabled, control, sendMessage, updateControl };
+  return {
+    status,
+    messages,
+    inputEnabled,
+    control,
+    readOnlyReason,
+    sendMessage,
+    updateControl,
+  };
 }
