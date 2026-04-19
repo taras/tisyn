@@ -36,8 +36,8 @@ rl.on("line", (line: string) => {
       result = { sessionId: "test-session-1" };
       break;
     case "session/prompt":
-      // The adapter unwraps Tisyn parameter envelopes before writing ACP
-      // params, so prompt arrives at top level.
+      // The adapter forwards the effect payload directly as ACP params,
+      // so prompt arrives at top level.
       result = {
         response: `mock plan result for: ${(msg.params as Record<string, unknown>).prompt ?? "unknown"}`,
       };

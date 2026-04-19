@@ -84,7 +84,7 @@ describe("Codex SDK Adapter", () => {
         yield* installRemoteAgent(CodeAgent, binding.transport);
 
         const result = yield* dispatch("code-agent.closeSession", {
-          handle: { sessionId: "nonexistent-handle" },
+          sessionId: "nonexistent-handle",
         } as unknown as Val);
 
         expect(result).toBeNull();
@@ -100,7 +100,7 @@ describe("Codex SDK Adapter", () => {
 
         try {
           yield* dispatch("code-agent.fork", {
-            session: { sessionId: "s-1" },
+            sessionId: "s-1",
           } as unknown as Val);
         } catch (e) {
           caughtError = e as Error;
@@ -120,7 +120,8 @@ describe("Codex SDK Adapter", () => {
 
         try {
           yield* dispatch("code-agent.openFork", {
-            data: { parentSessionId: "s-1", forkId: "f-1" },
+            parentSessionId: "s-1",
+            forkId: "f-1",
           } as unknown as Val);
         } catch (e) {
           caughtError = e as Error;
@@ -141,9 +142,7 @@ describe("Codex SDK Adapter", () => {
       yield* scoped(function* () {
         yield* installRemoteAgent(CodeAgent, binding.transport);
 
-        const handle = yield* dispatch("code-agent.newSession", {
-          config: {},
-        } as unknown as Val);
+        const handle = yield* dispatch("code-agent.newSession", {} as unknown as Val);
 
         expect((handle as any).sessionId).toMatch(/^cx-\d+$/);
         expect(startThreadCallCount).toBe(1);
@@ -166,11 +165,9 @@ describe("Codex SDK Adapter", () => {
       yield* scoped(function* () {
         yield* installRemoteAgent(CodeAgent, binding.transport);
 
-        const handle = yield* dispatch("code-agent.newSession", {
-          config: {},
-        } as unknown as Val);
+        const handle = yield* dispatch("code-agent.newSession", {} as unknown as Val);
         const result = yield* dispatch("code-agent.prompt", {
-          args: { session: handle, prompt: "hello" },
+          session: handle, prompt: "hello",
         } as unknown as Val);
 
         expect((result as any).response).toBe("mock: hello");
@@ -200,11 +197,9 @@ describe("Codex SDK Adapter", () => {
       yield* scoped(function* () {
         yield* installRemoteAgent(CodeAgent, binding.transport);
 
-        const handle = yield* dispatch("code-agent.newSession", {
-          config: {},
-        } as unknown as Val);
+        const handle = yield* dispatch("code-agent.newSession", {} as unknown as Val);
         yield* dispatch("code-agent.prompt", {
-          args: { session: handle, prompt: "hello" },
+          session: handle, prompt: "hello",
         } as unknown as Val);
       });
 
@@ -228,14 +223,12 @@ describe("Codex SDK Adapter", () => {
       yield* scoped(function* () {
         yield* installRemoteAgent(CodeAgent, binding.transport);
 
-        const handle = yield* dispatch("code-agent.newSession", {
-          config: {},
+        const handle = yield* dispatch("code-agent.newSession", {} as unknown as Val);
+        yield* dispatch("code-agent.prompt", {
+          session: handle, prompt: "first",
         } as unknown as Val);
         yield* dispatch("code-agent.prompt", {
-          args: { session: handle, prompt: "first" },
-        } as unknown as Val);
-        yield* dispatch("code-agent.prompt", {
-          args: { session: handle, prompt: "second" },
+          session: handle, prompt: "second",
         } as unknown as Val);
 
         // startThread called once at newSession, not per-prompt
@@ -253,7 +246,7 @@ describe("Codex SDK Adapter", () => {
 
         try {
           yield* dispatch("code-agent.prompt", {
-            args: { session: { sessionId: "stale-handle" }, prompt: "hello" },
+            session: { sessionId: "stale-handle" }, prompt: "hello",
           } as unknown as Val);
         } catch (e) {
           caughtError = e as Error;
@@ -279,14 +272,12 @@ describe("Codex SDK Adapter", () => {
       yield* scoped(function* () {
         yield* installRemoteAgent(CodeAgent, binding.transport);
 
-        const handle = yield* dispatch("code-agent.newSession", {
-          config: {},
-        } as unknown as Val);
+        const handle = yield* dispatch("code-agent.newSession", {} as unknown as Val);
 
         let resultReceived = false;
         const task = yield* spawn(function* () {
           yield* dispatch("code-agent.prompt", {
-            args: { session: handle, prompt: "hang" },
+            session: handle, prompt: "hang",
           } as unknown as Val);
           resultReceived = true;
         });
@@ -348,17 +339,13 @@ describe("Codex Exec Adapter", () => {
       yield* scoped(function* () {
         yield* installRemoteAgent(CodeAgent, binding.transport);
 
-        const handle = yield* dispatch("code-agent.newSession", {
-          config: {},
-        } as unknown as Val);
+        const handle = yield* dispatch("code-agent.newSession", {} as unknown as Val);
 
         expect((handle as any).sessionId).toMatch(/^cx-\d+$/);
 
         const result = yield* dispatch("code-agent.prompt", {
-          args: {
-            session: handle,
-            prompt: "Analyze the code",
-          },
+          session: handle,
+          prompt: "Analyze the code",
         } as unknown as Val);
 
         expect((result as any).response).toContain("mock result for: Analyze the code");
@@ -378,7 +365,7 @@ describe("Codex Exec Adapter", () => {
 
         try {
           yield* dispatch("code-agent.newSession", {
-            config: { model: "o3-mini" },
+            model: "o3-mini",
           } as unknown as Val);
         } catch (e) {
           caughtError = e as Error;
@@ -398,13 +385,9 @@ describe("Codex Exec Adapter", () => {
       yield* scoped(function* () {
         yield* installRemoteAgent(CodeAgent, binding.transport);
 
-        const handle = yield* dispatch("code-agent.newSession", {
-          config: {},
-        } as unknown as Val);
+        const handle = yield* dispatch("code-agent.newSession", {} as unknown as Val);
 
-        const result = yield* dispatch("code-agent.closeSession", {
-          handle,
-        } as unknown as Val);
+        const result = yield* dispatch("code-agent.closeSession", handle as unknown as Val);
 
         expect(result).toBeNull();
       });
@@ -420,7 +403,7 @@ describe("Codex Exec Adapter", () => {
         yield* installRemoteAgent(CodeAgent, binding.transport);
 
         const result = yield* dispatch("code-agent.closeSession", {
-          handle: { sessionId: "nonexistent" },
+          sessionId: "nonexistent",
         } as unknown as Val);
 
         expect(result).toBeNull();
@@ -442,10 +425,8 @@ describe("Codex Exec Adapter", () => {
 
         try {
           yield* dispatch("code-agent.prompt", {
-            args: {
-              session: { sessionId: "stale-handle" },
-              prompt: "hello",
-            },
+            session: { sessionId: "stale-handle" },
+            prompt: "hello",
           } as unknown as Val);
         } catch (e) {
           caughtError = e as Error;
@@ -467,7 +448,7 @@ describe("Codex Exec Adapter", () => {
 
         try {
           yield* dispatch("code-agent.fork", {
-            session: { sessionId: "s-1" },
+            sessionId: "s-1",
           } as unknown as Val);
         } catch (e) {
           caughtError = e as Error;
@@ -487,7 +468,8 @@ describe("Codex Exec Adapter", () => {
 
         try {
           yield* dispatch("code-agent.openFork", {
-            data: { parentSessionId: "s-1", forkId: "f-1" },
+            parentSessionId: "s-1",
+            forkId: "f-1",
           } as unknown as Val);
         } catch (e) {
           caughtError = e as Error;
@@ -515,15 +497,11 @@ describe("Codex Exec Adapter", () => {
       yield* scoped(function* () {
         yield* installRemoteAgent(CodeAgent, binding.transport);
 
-        const handle = yield* dispatch("code-agent.newSession", {
-          config: {},
-        } as unknown as Val);
+        const handle = yield* dispatch("code-agent.newSession", {} as unknown as Val);
 
         yield* dispatch("code-agent.prompt", {
-          args: {
-            session: handle,
-            prompt: "MULTI_PROGRESS",
-          },
+          session: handle,
+          prompt: "MULTI_PROGRESS",
         } as unknown as Val);
       });
 
@@ -543,16 +521,12 @@ describe("Codex Exec Adapter", () => {
       yield* scoped(function* () {
         yield* installRemoteAgent(CodeAgent, binding.transport);
 
-        const handle = yield* dispatch("code-agent.newSession", {
-          config: {},
-        } as unknown as Val);
+        const handle = yield* dispatch("code-agent.newSession", {} as unknown as Val);
 
         try {
           yield* dispatch("code-agent.prompt", {
-            args: {
-              session: handle,
-              prompt: "EXIT_ERROR",
-            },
+            session: handle,
+            prompt: "EXIT_ERROR",
           } as unknown as Val);
         } catch (e) {
           caughtError = e as Error;
@@ -575,17 +549,13 @@ describe("Codex Exec Adapter", () => {
       yield* scoped(function* () {
         yield* installRemoteAgent(CodeAgent, binding.transport);
 
-        const handle = yield* dispatch("code-agent.newSession", {
-          config: {},
-        } as unknown as Val);
+        const handle = yield* dispatch("code-agent.newSession", {} as unknown as Val);
 
         let resultReceived = false;
         const task = yield* spawn(function* () {
           yield* dispatch("code-agent.prompt", {
-            args: {
-              session: handle,
-              prompt: "NEVER_COMPLETE",
-            },
+            session: handle,
+            prompt: "NEVER_COMPLETE",
           } as unknown as Val);
           resultReceived = true;
         });

@@ -20,14 +20,6 @@ import type { Val } from "@tisyn/ir";
 import type { CodexSdkConfig } from "./types.js";
 import { validateApproval, validateSandbox, validateModel } from "./validate-config.js";
 
-const UNWRAP: Record<string, string> = {
-  newSession: "config",
-  closeSession: "handle",
-  prompt: "args",
-  fork: "session",
-  openFork: "data",
-};
-
 export function createSdkBinding(config?: CodexSdkConfig): LocalAgentBinding {
   validateApproval(config?.approval);
   validateSandbox(config?.sandbox);
@@ -77,17 +69,12 @@ export function createSdkBinding(config?: CodexSdkConfig): LocalAgentBinding {
               const args = params.args[0] as Record<string, unknown> | undefined;
               const token = String(params.progressToken ?? id);
 
-              const unwrapKey = UNWRAP[opName];
-              let unwrapped: Record<string, unknown>;
-              if (unwrapKey && args && unwrapKey in args) {
-                unwrapped = args[unwrapKey] as Record<string, unknown>;
-              } else {
-                unwrapped = (args as Record<string, unknown>) ?? {};
-              }
+              const payload: Record<string, unknown> =
+                (args as Record<string, unknown>) ?? {};
 
               const task = yield* spawn(function* () {
                 try {
-                  const result: Val = yield* handleOperation(opName, unwrapped, token, agentToHost);
+                  const result: Val = yield* handleOperation(opName, payload, token, agentToHost);
                   yield* agentToHost.send(executeSuccess(String(id), result));
                 } catch (e) {
                   const err = e instanceof Error ? e : new Error(String(e));
