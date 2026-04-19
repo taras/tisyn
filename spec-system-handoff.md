@@ -12,15 +12,14 @@ Branch:
 
 Read these first:
 
-- `spec-system-specification.source.md` — normative draft for the `@tisyn/spec` package
-- `spec-system-test-plan.source.md` — conformance test plan for the same package
+- `specs/tisyn-spec-system-specification.md` — canonical v2 specification for the `@tisyn/spec` package
+- `specs/tisyn-spec-system-test-plan.md` — canonical v2 conformance test plan for the same package
 
 The main prep has already been done:
 
 - `origin` was fetched before creating this worktree.
 - Local `main` matched `origin/main` at `14917df`.
 - This branch was created from that updated `main` tip.
-- The two draft docs were imported from `/Users/tarasmankovski/Downloads`.
 
 ## What This Track Is
 

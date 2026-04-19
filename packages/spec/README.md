@@ -74,7 +74,7 @@ pnpm --filter @tisyn/spec test
 ```
 
 Every test name carries its `SS-*` identifier from
-`spec-system-test-plan.source.md` so conformance is visible in test output.
+`specs/tisyn-spec-system-test-plan.md` so conformance is visible in test output.
 
 ## Deviation from §7.7 — auxiliary acquisition operations
 
