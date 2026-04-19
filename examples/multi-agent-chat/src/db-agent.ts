@@ -13,11 +13,8 @@ import type { LocalAgentBinding } from "@tisyn/transport";
 
 const DB = () =>
   agent("d-b", {
-    loadMessages: operation<
-      { input: Record<string, never> },
-      Array<{ role: string; content: string }>
-    >(),
-    appendMessage: operation<{ input: { role: string; content: string } }, void>(),
+    loadMessages: operation<Record<string, never>, Array<{ role: string; content: string }>>(),
+    appendMessage: operation<{ role: string; content: string }, void>(),
   });
 
 type Message = { role: string; content: string };
@@ -45,8 +42,8 @@ export function createBinding(config?: Record<string, unknown>): LocalAgentBindi
       *loadMessages() {
         return readMessages(dbPath);
       },
-      *appendMessage({ input }) {
-        appendMessage(dbPath, input);
+      *appendMessage(msg) {
+        appendMessage(dbPath, msg);
       },
     }),
   };

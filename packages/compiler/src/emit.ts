@@ -3502,8 +3502,10 @@ function emitAgentEffect(
         );
       }
 
-      // Build Construct node with named parameters
       const effectId = `${agentId}.${methodName}`;
+      if (method.params.length === 1) {
+        return ExternalEval(effectId, emitExpression(args[0]!, ctx));
+      }
       const fields: Record<string, Expr> = {};
       for (let i = 0; i < method.params.length; i++) {
         fields[method.params[i]!.name] = emitExpression(args[i]!, ctx);
@@ -4011,7 +4013,9 @@ function emitProvide(callExpr: ts.CallExpression, ctx: EmitContext): Expr {
 // ── Handle method call (inside scoped body) ──
 
 /**
- * Lower `yield* handle.method(args)` → ExternalEval(`${prefix}.${method}`, Construct({...})).
+ * Lower `yield* handle.method(args)` → ExternalEval(`${prefix}.${method}`, payload).
+ * Single-arg methods pass the bare argument expression as the payload.
+ * Multi-arg methods build a Construct keyed by the authored parameter names.
  * Only called when `handle` is known to be a useAgent binding.
  */
 function emitHandleCall(
@@ -4034,6 +4038,9 @@ function emitHandleCall(
       callee,
       ctx,
     );
+  }
+  if (method.params.length === 1) {
+    return ExternalEval(`${prefix}.${methodName}`, emitExpression(args[0]!, ctx));
   }
   const fields: Record<string, Expr> = {};
   for (let i = 0; i < method.params.length; i++) {

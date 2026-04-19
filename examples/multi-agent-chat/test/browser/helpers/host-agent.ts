@@ -99,14 +99,14 @@ export function createHostAgentHandlers(state: HostAgentState): HostHandlers {
         state.hostHandle = null;
       }
     },
-    *restart({ input }) {
+    *restart({ journalPath }) {
       // Stop existing
       if (state.hostHandle) {
         yield* state.hostHandle.task.halt();
         state.hostHandle = null;
       }
       // Start new
-      const jp = input.journalPath ?? state.journalPath;
+      const jp = journalPath ?? state.journalPath;
       const handle = yield* startHost(state.cwd, jp);
       state.hostHandle = handle;
       state.retargetProxy(handle.wsUrl);

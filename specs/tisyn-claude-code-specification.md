@@ -13,8 +13,8 @@ Specification, Tisyn Protocol Specification
 **v0.1.0** — Initial release documenting the transport adapter
 layer. Covers `createBinding` and `createSdkBinding` public
 API, five declared agent operations (newSession, closeSession,
-plan, fork, openFork), ACP protocol translation, parameter
-unwrapping, progress forwarding, transport-level protocol
+plan, fork, openFork), ACP protocol translation, operation
+payload shape, progress forwarding, transport-level protocol
 handling, transport lifecycle, subprocess diagnostics, SDK
 adapter handle model, and error handling.
 
@@ -53,7 +53,7 @@ This specification covers:
 - the `createBinding` and `createSdkBinding` public API
 - the five declared agent operations and their behavior in
   both adapters
-- operation name resolution and parameter unwrapping
+- operation name resolution and operation payload shape
 - ACP protocol translation (pure translation functions)
 - transport-level protocol handling (initialize, shutdown,
   cancel)
@@ -105,15 +105,6 @@ to operate on.
 **Adapter-internal handle** — In the SDK adapter, an opaque
 string like `"cc-1"`, `"cc-2"` that the workflow sees. The
 real SDK session ID is never exposed.
-
-**Parameter envelope** — The Tisyn compiler wraps each
-operation's single parameter under the authored parameter name
-(e.g. `plan(args: {...})` compiles to `{ args: { session,
-prompt } }`). The adapter strips this envelope before sending
-to ACP or dispatching to the SDK.
-
-**Unwrap key** — The per-operation key used to strip the
-parameter envelope. See §4.2.
 
 ## 3. Public API
 
@@ -185,45 +176,31 @@ adapters.
 
 ### 4.1 Operation Table
 
-| Operation | ACP wire method | Unwrap key | Returns |
-|-----------|-----------------|------------|---------|
-| newSession | session/new | config | SessionHandle |
-| closeSession | session/close | handle | null |
-| plan | session/prompt | args | PlanResult |
-| fork | session/fork | session | ForkData |
-| openFork | session/fork | data | SessionHandle |
+| Operation | ACP wire method | Returns |
+|-----------|-----------------|---------|
+| newSession | session/new | SessionHandle |
+| closeSession | session/close | null |
+| plan | session/prompt | PlanResult |
+| fork | session/fork | ForkData |
+| openFork | session/fork | SessionHandle |
 
 Note: `fork` and `openFork` both map to the ACP wire method
-`session/fork`. They are distinguished by their unwrap key and
-the shape of their parameters.
+`session/fork`. They are distinguished by the shape of their
+parameters.
 
-### 4.2 Parameter Unwrapping
+### 4.2 Operation Payload Shape
 
-The Tisyn compiler wraps each operation's single parameter
-under the authored parameter name. For example,
-`plan(args: {...})` compiles to `{ args: { session, prompt } }`.
-ACP expects unwrapped top-level params, so the adapter MUST
-strip the envelope before writing to the wire.
+Per the base `CodeAgent` contract §7.2, the Tisyn compiler
+passes each single-parameter ambient operation's argument
+through directly as the effect payload. All five operations in
+this contract take a single parameter, so the adapter receives
+the operation input as the effect payload directly with no
+compiler-added wrapper to strip.
 
-The per-operation unwrap keys are:
-
-| Operation | Unwrap key |
-|-----------|------------|
-| newSession | config |
-| closeSession | handle |
-| plan | args |
-| fork | session |
-| openFork | data |
-
-**Unwrap rule:** If the unwrap key is present as a property of
-the args object, its value MUST be used as the ACP params (or
-SDK operation input). Otherwise the args object MUST be passed
-through as-is. This keeps the adapter resilient to
-already-unwrapped payloads.
-
-Both adapters implement this unwrap logic independently: the
-ACP adapter uses the `OPERATION_UNWRAP_KEY` lookup table, and
-the SDK adapter uses an inline `UNWRAP` table.
+ACP expects unwrapped top-level params on the wire and the SDK
+expects the operation input directly, so both adapters forward
+the effect payload without further transformation beyond the
+per-operation translation defined in §4.4–§4.8.
 
 ### 4.3 Operation Name Resolution
 
@@ -319,10 +296,10 @@ between Tisyn protocol messages and ACP JSON-RPC messages.
 `ExecuteRequest` into an `AcpRequest`:
 
 1. Strips the agent prefix from the operation name.
-2. Looks up the unwrap key and unwraps the parameter envelope.
-3. Resolves the ACP wire method via the operation table (§4.1).
-4. Returns an `AcpRequest` with `jsonrpc: "2.0"`, the request
-   `id`, the resolved `method`, and the unwrapped `params`.
+2. Resolves the ACP wire method via the operation table (§4.1).
+3. Returns an `AcpRequest` with `jsonrpc: "2.0"`, the request
+   `id`, the resolved `method`, and the effect payload as
+   `params` (per §4.2, no envelope to strip).
 
 ### 5.2 ACP-to-Tisyn Translation
 

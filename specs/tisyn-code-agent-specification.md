@@ -160,11 +160,6 @@ extensions (operation aliases, extended result fields). Such
 workflows are tied to a specific adapter profile and are not
 portable.
 
-**Parameter envelope.** The wrapper the compiler places
-around each operation's single parameter, keyed by the
-authored parameter name. Adapters strip this envelope before
-dispatching to the backend.
-
 **Configuration category.** A named class of adapter
 configuration. The contract defines the categories; adapter
 profiles define the concrete values.
@@ -322,26 +317,26 @@ conformance tiers.
 
 ### 7.1 Operation Table
 
-| Operation | Tier | Unwrap Key | Input Shape | Returns |
-|-----------|------|------------|-------------|---------|
-| newSession | Core | config | `{ model?: string }` | `SessionHandle` |
-| closeSession | Core | handle | `SessionHandle` | `null` |
-| prompt | Core | args | `{ session: SessionHandle; prompt: string }` | `PromptResult` |
-| fork | Extended | session | `SessionHandle` | `ForkData` |
-| openFork | Extended | data | `ForkData` | `SessionHandle` |
+| Operation | Tier | Input Shape | Returns |
+|-----------|------|-------------|---------|
+| newSession | Core | `{ model?: string }` | `SessionHandle` |
+| closeSession | Core | `SessionHandle` | `null` |
+| prompt | Core | `{ session: SessionHandle; prompt: string }` | `PromptResult` |
+| fork | Extended | `SessionHandle` | `ForkData` |
+| openFork | Extended | `ForkData` | `SessionHandle` |
 
-### 7.2 Parameter Unwrapping
+### 7.2 Operation Payload Shape
 
-The Tisyn compiler wraps each operation's single parameter
-under the authored parameter name. For example,
-`prompt(args: { session, prompt })` compiles to
-`{ args: { session: {...}, prompt: "..." } }`.
+The Tisyn compiler passes each single-parameter ambient
+operation's argument through directly as the effect payload.
+For example, `prompt(args: { session, prompt })` compiles to
+the effect payload `{ session: {...}, prompt: "..." }` —
+there is no compiler-added wrapper keyed by the authored
+parameter name.
 
-**Unwrap rule.** If the unwrap key is present as a property
-of the args object, the adapter MUST use its value as the
-operation input. Otherwise the adapter MUST pass the args
-object through as-is. This keeps the adapter resilient to
-already-unwrapped payloads.
+Multi-parameter ambient operations are still lowered to a
+named object keyed by the authored parameter names, but no
+operation in this contract has more than one parameter.
 
 ### 7.3 Operation Name Resolution
 
@@ -487,7 +482,7 @@ adapter MUST satisfy all of the following:
 2. The binding's transport implements `newSession`,
    `closeSession`, and `prompt` per §7.4–§7.6.
 3. It synthesizes the Tisyn initialize handshake (§13.1).
-4. It implements parameter unwrapping per §7.2.
+4. It accepts the operation payload shape defined in §7.2.
 5. It implements operation name resolution per §7.3.
 6. It forwards progress events per §11.
 7. It handles cancellation per §12.
@@ -984,7 +979,7 @@ specification MUST be updated after SDK validation.
 - §4.1 Operation Table: Annotate each operation with its
   contract equivalent. Note `plan` as a profile alias for
   `prompt`.
-- §4.2 Parameter Unwrapping: Note conformance to §7.2.
+- §4.2 Operation Payload Shape: Note conformance to §7.2.
 - New section: Define `PlanResult` as an extension type.
   State that `toolResults` is a non-portable extension
   field per §6.4.

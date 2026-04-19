@@ -48,32 +48,32 @@ export function createBrowserAgentHandlers(state: BrowserAgentState): BrowserHan
       yield* call(() => page.reload());
       yield* injectExecutor(page);
     },
-    *openSession({ input }) {
+    *openSession({ sessionId }) {
       const context = yield* call(() => state.browser.newContext());
       const page = yield* call(() => context.newPage());
-      state.sessions.set(input.sessionId, { context, page });
-      state.activeSessionId = input.sessionId;
+      state.sessions.set(sessionId, { context, page });
+      state.activeSessionId = sessionId;
       yield* call(() => page.goto(state.appUrl));
       yield* injectExecutor(page);
     },
-    *switchSession({ input }) {
-      if (!state.sessions.has(input.sessionId)) {
-        throw new Error(`No session "${input.sessionId}"`);
+    *switchSession({ sessionId }) {
+      if (!state.sessions.has(sessionId)) {
+        throw new Error(`No session "${sessionId}"`);
       }
-      state.activeSessionId = input.sessionId;
+      state.activeSessionId = sessionId;
     },
-    *closeSession({ input }) {
-      const session = state.sessions.get(input.sessionId);
+    *closeSession({ sessionId }) {
+      const session = state.sessions.get(sessionId);
       if (session) {
         yield* call(() => session.page.close());
         yield* call(() => session.context.close());
-        state.sessions.delete(input.sessionId);
+        state.sessions.delete(sessionId);
       }
     },
-    *execute({ input }) {
+    *execute({ workflow }) {
       const page = activePage(state);
       const result: any = yield* call(() =>
-        page.evaluate((ir) => (window as any).__tisyn_execute(ir), input.workflow as unknown),
+        page.evaluate((ir) => (window as any).__tisyn_execute(ir), workflow as unknown),
       );
       if (result.status === "err") {
         throw new Error(result.error?.message ?? "Browser workflow failed");

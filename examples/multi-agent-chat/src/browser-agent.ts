@@ -20,10 +20,10 @@ import { logInfo } from "./logger.js";
 
 const App = () =>
   agent("app", {
-    elicit: operation<{ input: { message: string } }, { message: string }>(),
-    showAssistantMessage: operation<{ input: { message: string } }, void>(),
-    loadChat: operation<{ messages: Array<{ role: string; content: string }> }, void>(),
-    setReadOnly: operation<{ input: { reason: string } }, void>(),
+    elicit: operation<{ message: string }, { message: string }>(),
+    showAssistantMessage: operation<{ message: string }, void>(),
+    loadChat: operation<Array<{ role: string; content: string }>, void>(),
+    setReadOnly: operation<{ reason: string }, void>(),
   });
 
 export function createBinding(): LocalAgentBinding {
@@ -32,10 +32,10 @@ export function createBinding(): LocalAgentBinding {
 
   return {
     transport: inprocessTransport(App(), {
-      *elicit({ input }) {
+      *elicit({ message }) {
         // Subscribe BEFORE setting the prompt — signal does not buffer
         const sub = yield* userInput;
-        session.beginElicit(input.message);
+        session.beginElicit(message);
         try {
           const item = yield* sub.next();
           return { message: item.value };
@@ -43,14 +43,14 @@ export function createBinding(): LocalAgentBinding {
           session.endElicit();
         }
       },
-      *showAssistantMessage({ input }) {
-        session.showAssistantMessage(input.message);
+      *showAssistantMessage({ message }) {
+        session.showAssistantMessage(message);
       },
-      *loadChat({ messages }) {
+      *loadChat(messages) {
         session.loadChat(messages);
       },
-      *setReadOnly({ input }) {
-        session.setReadOnly(input.reason);
+      *setReadOnly({ reason }) {
+        session.setReadOnly(reason);
       },
     }),
 

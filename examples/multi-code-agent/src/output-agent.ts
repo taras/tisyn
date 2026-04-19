@@ -4,14 +4,14 @@ import type { LocalAgentBinding } from "@tisyn/transport";
 
 const Output = () =>
   agent("output", {
-    log: operation<{ input: { label: string; text: string } }, void>(),
+    log: operation<{ label: string; text: string }, void>(),
   });
 
 export function createBinding(): LocalAgentBinding {
   return {
     transport: inprocessTransport(Output(), {
-      *log({ input }) {
-        console.log(`\n── ${input.label} ──\n${input.text}\n`);
+      *log({ label, text }) {
+        console.log(`\n── ${label} ──\n${text}\n`);
       },
     }),
   };
