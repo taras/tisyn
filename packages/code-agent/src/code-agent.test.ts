@@ -2,7 +2,7 @@ import { describe, it } from "@effectionx/vitest";
 import { expect } from "vitest";
 import { scoped, sleep, spawn } from "effection";
 import type { Val } from "@tisyn/ir";
-import { dispatch } from "@tisyn/agent";
+import { dispatch } from "@tisyn/effects";
 import { installRemoteAgent } from "@tisyn/transport";
 import { ProgressContext, CoroutineContext } from "@tisyn/transport";
 import type { ProgressEvent, HostMessage, AgentTransportFactory } from "@tisyn/transport";

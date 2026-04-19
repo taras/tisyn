@@ -33,7 +33,9 @@ const packagesDir = join(repoRoot, "packages");
  */
 const ALLOWED_EDGES: Record<string, ReadonlyArray<string>> = {
   agent: ["effects", "ir", "kernel"],
-  "claude-code": ["agent", "effects", "ir", "protocol", "transport"],
+  "claude-code": ["agent", "code-agent", "effects", "ir", "protocol", "transport"],
+  "code-agent": ["agent", "effects", "ir", "protocol", "transport"],
+  codex: ["agent", "code-agent", "effects", "ir", "protocol", "transport"],
   cli: [
     "compiler",
     "config",

@@ -292,6 +292,9 @@ importers:
       '@tisyn/agent':
         specifier: workspace:*
         version: link:../agent
+      '@tisyn/effects':
+        specifier: workspace:*
+        version: link:../effects
       '@tisyn/ir':
         specifier: workspace:*
         version: link:../ir
@@ -329,6 +332,9 @@ importers:
       '@tisyn/code-agent':
         specifier: workspace:*
         version: link:../code-agent
+      '@tisyn/effects':
+        specifier: workspace:*
+        version: link:../effects
       '@tisyn/ir':
         specifier: workspace:*
         version: link:../ir
