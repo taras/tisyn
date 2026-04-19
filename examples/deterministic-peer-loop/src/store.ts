@@ -62,7 +62,9 @@ const storeCache = new Map<string, Store>();
 
 export function getOrCreateStore(dbPath: string): Store {
   const existing = storeCache.get(dbPath);
-  if (existing) return existing;
+  if (existing) {
+    return existing;
+  }
   const fresh = createStore(dbPath);
   storeCache.set(dbPath, fresh);
   return fresh;
@@ -128,34 +130,46 @@ export function createStore(dbPath: string): Store {
 export function createMemoryStore(initial?: Partial<StoreDocument>): Store {
   let doc: StoreDocument = {
     ...structuredClone(EMPTY_STORE),
-    ...(initial ?? {}),
+    ...initial,
   };
   const listeners = new Set<StoreListener>();
   function emit(event: StoreEvent): void {
-    for (const listener of listeners) listener(event);
+    for (const listener of listeners) {
+      listener(event);
+    }
   }
   return {
-    loadMessages() { return [...doc.messages]; },
+    loadMessages() {
+      return [...doc.messages];
+    },
     appendMessage(entry) {
       doc = { ...doc, messages: [...doc.messages, entry] };
       emit({ kind: "message", entry });
     },
-    loadControl() { return { ...doc.control }; },
+    loadControl() {
+      return { ...doc.control };
+    },
     writeControl(control) {
       doc = { ...doc, control };
       emit({ kind: "control", control });
     },
-    loadPeerRecords() { return [...doc.peerRecords]; },
+    loadPeerRecords() {
+      return [...doc.peerRecords];
+    },
     appendPeerRecord(record) {
       doc = { ...doc, peerRecords: [...doc.peerRecords, record] };
       emit({ kind: "peerRecord", record });
     },
-    loadEffectRequests() { return [...doc.effectRequests]; },
+    loadEffectRequests() {
+      return [...doc.effectRequests];
+    },
     appendEffectRequest(record) {
       doc = { ...doc, effectRequests: [...doc.effectRequests, record] };
       emit({ kind: "effectRequest", record });
     },
-    snapshot() { return structuredClone(doc); },
+    snapshot() {
+      return structuredClone(doc);
+    },
     subscribe(listener) {
       listeners.add(listener);
       return () => listeners.delete(listener);

@@ -52,9 +52,7 @@ describe("DPL-EXEC", () => {
       (op) => op.agent === "EffectHandler" && op.op === "invoke",
     );
     expect(invokeCalls).toHaveLength(1);
-    expect(
-      (invokeCalls[0].args as { effectId: string; data: unknown }).effectId,
-    ).toBe("e-exec");
+    expect((invokeCalls[0].args as { effectId: string; data: unknown }).effectId).toBe("e-exec");
 
     // appendEffectRequest fired four times in order.
     expect(result.appendedEffectRequests).toHaveLength(4);
@@ -86,9 +84,7 @@ describe("DPL-EXEC", () => {
       (op) => op.agent === "EffectsQueue" && op.op === "seed",
     );
     expect(seedCalls).toHaveLength(1);
-    expect(
-      (seedCalls[0].args as { effects: unknown[] }).effects,
-    ).toEqual([]);
+    expect((seedCalls[0].args as { effects: unknown[] }).effects).toEqual([]);
 
     // No policy or handler invocations.
     const policyCalls = result.operations.filter(

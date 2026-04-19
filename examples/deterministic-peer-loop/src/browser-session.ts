@@ -175,9 +175,7 @@ export class BrowserSessionManager {
   private hydrateObserver(ws: WebSocket): void {
     this.safeSend(ws, { type: "loadChat", messages: [...this.chatMessages] });
     this.safeSend(ws, { type: "controlSnapshot", control: { ...this.control } });
-    const reason = this.readOnly
-      ? this.readOnly.reason
-      : "Session owned by another browser";
+    const reason = this.readOnly ? this.readOnly.reason : "Session owned by another browser";
     this.safeSend(ws, { type: "setReadOnly", reason });
   }
 
@@ -194,7 +192,9 @@ export class BrowserSessionManager {
   }
 
   private handleMessage(ws: WebSocket, msg: BrowserToHost): void {
-    if (this.ownerSocket !== ws) return;
+    if (this.ownerSocket !== ws) {
+      return;
+    }
     if (msg.type === "userMessage" && this.pendingPrompt) {
       logInfo("session", "userMessage received", { message: msg.message });
       this.pendingPrompt = null;

@@ -17,15 +17,11 @@ describe("DPL-MODE / DPL-DONE", () => {
   it("MODE-01: needs_taras status makes next elicit mode 'required'", function* () {
     const result = yield* runHarness({
       tarasMessages: ["first", "second"],
-      opusScript: [
-        opusTurn({ display: "opus-needs-taras", status: "needs_taras" }),
-      ],
+      opusScript: [opusTurn({ display: "opus-needs-taras", status: "needs_taras" })],
       gptScript: [gptTurn({ display: "gpt-done", status: "done" })],
     });
 
-    const elicits = result.operations.filter(
-      (op) => op.agent === "App" && op.op === "elicit",
-    );
+    const elicits = result.operations.filter((op) => op.agent === "App" && op.op === "elicit");
     expect(elicits).toHaveLength(2);
     // First cycle is optional mode. Second cycle is required (after needs_taras).
     expect((elicits[0].args as { message: string }).message).toMatch(/Optional/);
@@ -39,9 +35,7 @@ describe("DPL-MODE / DPL-DONE", () => {
       gptScript: [gptTurn({ display: "g1", status: "done" })],
     });
 
-    const elicits = result.operations.filter(
-      (op) => op.agent === "App" && op.op === "elicit",
-    );
+    const elicits = result.operations.filter((op) => op.agent === "App" && op.op === "elicit");
     expect(elicits).toHaveLength(2);
     expect((elicits[0].args as { message: string }).message).toMatch(/Optional/);
     expect((elicits[1].args as { message: string }).message).toMatch(/Optional/);

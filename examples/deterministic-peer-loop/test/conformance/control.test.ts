@@ -11,11 +11,7 @@
 
 import { describe, it } from "@effectionx/vitest";
 import { expect } from "vitest";
-import {
-  runHarness,
-  opusTurn,
-  gptTurn,
-} from "./helpers/harness.js";
+import { runHarness, opusTurn, gptTurn } from "./helpers/harness.js";
 
 describe("DPL-CTRL / DPL-OVR / DPL-RES", () => {
   it("CTRL-01: stopRequested before first peer step exits with setReadOnly('stopped')", function* () {
@@ -92,9 +88,11 @@ describe("DPL-CTRL / DPL-OVR / DPL-RES", () => {
       (op) => op.agent === "DB" && op.op === "writeControl",
     );
     expect(writeControl).toBeDefined();
-    const writtenControl = (writeControl!.args as {
-      control: { paused: boolean; stopRequested: boolean; nextSpeakerOverride?: string };
-    }).control;
+    const writtenControl = (
+      writeControl!.args as {
+        control: { paused: boolean; stopRequested: boolean; nextSpeakerOverride?: string };
+      }
+    ).control;
     expect(writtenControl.paused).toBe(false);
     expect(writtenControl.stopRequested).toBe(false);
     expect(writtenControl.nextSpeakerOverride).toBeUndefined();
@@ -103,9 +101,7 @@ describe("DPL-CTRL / DPL-OVR / DPL-RES", () => {
   it("RES-01: readControl is called in each cycle (not cached)", function* () {
     const result = yield* runHarness({
       tarasMessages: ["a", "b"],
-      opusScript: [
-        opusTurn({ display: "o1", status: "continue" }),
-      ],
+      opusScript: [opusTurn({ display: "o1", status: "continue" })],
       gptScript: [gptTurn({ display: "g1", status: "done" })],
     });
 

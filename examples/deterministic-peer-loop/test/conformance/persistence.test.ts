@@ -22,9 +22,7 @@ describe("DPL-PER / DPL-RES / DPL-INIT extended", () => {
     });
 
     // Taras message appended with speaker "taras".
-    const tarasAppends = result.appendedMessages.filter(
-      (m) => m.speaker === "taras",
-    );
+    const tarasAppends = result.appendedMessages.filter((m) => m.speaker === "taras");
     expect(tarasAppends).toHaveLength(1);
     expect(tarasAppends[0].content).toBe("hello from taras");
 
@@ -60,9 +58,7 @@ describe("DPL-PER / DPL-RES / DPL-INIT extended", () => {
     // display contains "done" but status is "continue" — workflow MUST NOT terminate.
     const result = yield* runHarness({
       tarasMessages: ["a", "b"],
-      opusScript: [
-        opusTurn({ display: "task is done-ish but not really", status: "continue" }),
-      ],
+      opusScript: [opusTurn({ display: "task is done-ish but not really", status: "continue" })],
       gptScript: [gptTurn({ display: "ok stopping", status: "done" })],
     });
 

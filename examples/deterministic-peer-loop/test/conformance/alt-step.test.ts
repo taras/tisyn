@@ -31,10 +31,7 @@ describe("DPL-ALT / DPL-STEP / DPL-OVR extended", () => {
     const peerCalls = result.operations.filter(
       (op) => op.agent === "OpusAgent" || op.agent === "GptAgent",
     );
-    expect(peerCalls.map((op) => op.agent)).toEqual([
-      "GptAgent",
-      "OpusAgent",
-    ]);
+    expect(peerCalls.map((op) => op.agent)).toEqual(["GptAgent", "OpusAgent"]);
   });
 
   it("STEP-02: paused + stopRequested eventually → zero peer steps, exit stopped", function* () {
@@ -86,9 +83,11 @@ describe("DPL-ALT / DPL-STEP / DPL-OVR extended", () => {
       (op) => op.agent === "DB" && op.op === "writeControl",
     );
     expect(writeControl).toBeDefined();
-    const written = (writeControl!.args as {
-      control: { nextSpeakerOverride?: string };
-    }).control;
+    const written = (
+      writeControl!.args as {
+        control: { nextSpeakerOverride?: string };
+      }
+    ).control;
     expect(written.nextSpeakerOverride).toBeUndefined();
   });
 });
