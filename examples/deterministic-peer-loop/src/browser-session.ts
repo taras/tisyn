@@ -175,9 +175,10 @@ export class BrowserSessionManager {
   private hydrateObserver(ws: WebSocket): void {
     this.safeSend(ws, { type: "loadChat", messages: [...this.chatMessages] });
     this.safeSend(ws, { type: "controlSnapshot", control: { ...this.control } });
-    if (this.readOnly) {
-      this.safeSend(ws, { type: "setReadOnly", reason: this.readOnly.reason });
-    }
+    const reason = this.readOnly
+      ? this.readOnly.reason
+      : "Session owned by another browser";
+    this.safeSend(ws, { type: "setReadOnly", reason });
   }
 
   private sendToOwner(payload: HostToBrowser): void {
