@@ -2,7 +2,7 @@ import type { Operation } from "effection";
 import type { AgentDeclaration, OperationSpec } from "./types.js";
 import type { AgentFacade } from "./facade.js";
 import { getOrCreateAgentApi, buildFacade } from "./facade.js";
-import { resolve } from "./dispatch.js";
+import { resolve } from "@tisyn/effects";
 
 /** @deprecated Use AgentFacade instead. */
 export type AgentHandle<Ops extends Record<string, OperationSpec>> = AgentFacade<Ops>;

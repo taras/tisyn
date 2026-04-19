@@ -13,7 +13,7 @@ import type { DurableEvent, EventResult, EffectDescriptor } from "@tisyn/kernel"
 import { canonical } from "@tisyn/kernel";
 import { execute } from "@tisyn/runtime";
 import { InMemoryStream } from "@tisyn/durable-streams";
-import { Effects } from "@tisyn/agent";
+import { Effects } from "@tisyn/effects";
 
 // ── Fixture types ──
 

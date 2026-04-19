@@ -1,6 +1,8 @@
 import type { Operation } from "effection";
 import type { Val, FnNode } from "@tisyn/ir";
-import { DispatchContext, InvalidInvokeCallSiteError, type InvokeOpts } from "./dispatch.js";
+import { DispatchContext } from "./internal/dispatch-context.js";
+import { InvalidInvokeCallSiteError } from "./errors.js";
+import type { InvokeOpts } from "./dispatch.js";
 
 /**
  * Invoke a compiled Fn as a journaled child coroutine under the active

@@ -28,19 +28,25 @@ Agent declarations are typed metadata plus call helpers. They describe invocatio
 
 ## Public API
 
-The public surface exported from `src/index.ts` includes:
+The authoring surface exported from `src/index.ts` includes:
 
 - `agent` — declare a named agent boundary and its available operations
 - `operation` — declare the typed input/output contract for one operation
 - `Agents` — setup namespace; `Agents.use(declaration, handlers)` binds handlers directly in the current scope
 - `implementAgent` — create an `AgentImplementation` object for use by protocol servers and transports (internal/advanced)
+- `useAgent` — retrieve a typed facade for an agent previously bound via `Agents.use()` or `useTransport()`; returns an object with one method per operation plus `.around()`
+
+The dispatch-boundary surface lives in [`@tisyn/effects`](../effects/README.md):
+
 - `Effects` — the Effection middleware context for invocation routing; use `Effects.around()` to install intercept layers
 - `dispatch` — perform an effect call through the current `Effects` middleware boundary. Accepts either `(effectId, data)` or a `{ effectId, data }` descriptor returned by `agent().op(args)`
 - `resolve` — query the Effects middleware chain to check if an agent is bound
-- `useAgent` — retrieve a typed facade for an agent previously bound via `Agents.use()` or `useTransport()`; returns an object with one method per operation plus `.around()`
+- `invoke` — invoke another declared operation from inside a handler, with nested-invocation guarantees
 - `installCrossBoundaryMiddleware` — install an IR function node as the cross-boundary middleware carrier for further remote delegation
 - `getCrossBoundaryMiddleware` — read the current cross-boundary middleware carrier from scope (returns `null` if not set)
-- `evaluateMiddlewareFn` — drive an IR function node as a middleware function with scope-local dispatch semantics
+- `InvalidInvokeCallSiteError`, `InvalidInvokeInputError`, `InvalidInvokeOptionError` — error classes thrown by `invoke` on misuse
+
+For the duration of one release cycle, `@tisyn/agent` re-exports these symbols with `@deprecated` JSDoc so existing imports continue to work. Migrate imports to `@tisyn/effects` before the shim window closes.
 
 Important exported types:
 
@@ -121,7 +127,7 @@ Multiple `useAgent()` calls with the same declaration in the same scope share mi
 ## Dispatch an Operation
 
 ```ts
-import { dispatch } from "@tisyn/agent";
+import { dispatch } from "@tisyn/effects";
 
 const order = yield* dispatch(
   orders.fetch({ input: { orderId: "ord-1" } }),

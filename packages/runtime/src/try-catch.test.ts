@@ -9,7 +9,7 @@ import { describe, it } from "@effectionx/vitest";
 import { expect } from "vitest";
 import { execute } from "./execute.js";
 import { EffectError } from "./index.js";
-import { Effects } from "@tisyn/agent";
+import { Effects } from "@tisyn/effects";
 import { Try, Ref, Let } from "@tisyn/ir";
 
 // ── IR helpers ──

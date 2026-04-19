@@ -1,6 +1,7 @@
 import { describe, it } from "@effectionx/vitest";
 import { expect } from "vitest";
-import { agent, operation, implementAgent, dispatch } from "@tisyn/agent";
+import { agent, operation, implementAgent } from "@tisyn/agent";
+import { dispatch } from "@tisyn/effects";
 import { executeRemote } from "./execute-remote.js";
 import type { Json } from "@tisyn/ir";
 

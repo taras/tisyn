@@ -7,7 +7,7 @@
  * guaranteed by deterministic middleware re-execution.
  */
 import { createContext, type Operation } from "effection";
-import type { ScopedEffectFrame } from "@tisyn/agent";
+import type { ScopedEffectFrame } from "@tisyn/effects";
 
 const ScopedEffectStack = createContext<readonly ScopedEffectFrame[]>(
   "$tisyn-scoped-effect-stack",

@@ -7,7 +7,7 @@
 import { describe, it } from "@effectionx/vitest";
 import { expect } from "vitest";
 import { execute } from "./execute.js";
-import { Effects } from "@tisyn/agent";
+import { Effects } from "@tisyn/effects";
 import { parseEffectId } from "@tisyn/kernel";
 import type { CloseEvent } from "@tisyn/kernel";
 

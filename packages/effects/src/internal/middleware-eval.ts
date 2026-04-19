@@ -4,12 +4,16 @@
  * Drives the kernel evaluator for an IR function node, routing only
  * 'dispatch' effects to the provided next continuation. Any other effect
  * throws ProhibitedEffectError (§10.2 constraint).
+ *
+ * @internal — workspace seam, not part of the stable public surface.
  */
 import type { Operation } from "effection";
 import type { TisynExpr, Val } from "@tisyn/ir";
 import { evaluate, EMPTY_ENV, extendMulti, ProhibitedEffectError } from "@tisyn/kernel";
 
 /**
+ * @internal
+ *
  * Evaluate an IR middleware function with the given effect arguments.
  *
  * The function body is driven as a kernel generator. When it suspends

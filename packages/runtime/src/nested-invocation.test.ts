@@ -19,18 +19,15 @@ import { InMemoryStream } from "@tisyn/durable-streams";
 import type { DurableEvent, YieldEvent, CloseEvent } from "@tisyn/kernel";
 import { Fn, Eval, Ref, Q } from "@tisyn/ir";
 import type { FnNode, TisynFn, Val } from "@tisyn/ir";
+import { agent, Agents, operation, useAgent } from "@tisyn/agent";
 import {
-  agent,
-  Agents,
   Effects,
   InvalidInvokeCallSiteError,
   InvalidInvokeInputError,
   InvalidInvokeOptionError,
   invoke,
-  operation,
   resolve,
-  useAgent,
-} from "@tisyn/agent";
+} from "@tisyn/effects";
 import { execute } from "./execute.js";
 import { currentScopedEffectFrames } from "./scoped-effect-stack.js";
 import { InvocationCancelledError } from "./errors.js";

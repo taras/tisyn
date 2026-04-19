@@ -16,7 +16,7 @@ import { expect } from "vitest";
 import type { Operation } from "effection";
 import type { Val } from "@tisyn/ir";
 import { Fn, Eval, Ref, Arr, If, Eq, Q, Throw } from "@tisyn/ir";
-import { evaluateMiddlewareFn } from "@tisyn/agent";
+import { evaluateMiddlewareFn } from "@tisyn/effects/internal";
 
 // ── Shared middleware fixtures ──
 

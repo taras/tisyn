@@ -6,7 +6,8 @@ import type { Operation } from "effection";
 import type { Val } from "@tisyn/ir";
 import type { AgentDeclaration, OperationSpec, ImplementationHandlers } from "@tisyn/agent";
 import type { AgentTransportFactory, HostMessage } from "./transport.js";
-import { agent, operation, Effects, dispatch } from "@tisyn/agent";
+import { agent, operation } from "@tisyn/agent";
+import { Effects, dispatch } from "@tisyn/effects";
 import { installRemoteAgent } from "./install-remote.js";
 import { parseEffectId } from "@tisyn/kernel";
 

@@ -15,14 +15,8 @@ import { expect } from "vitest";
 import { scoped } from "effection";
 import type { Val } from "@tisyn/ir";
 import { Fn, Throw } from "@tisyn/ir";
-import {
-  agent,
-  operation,
-  Effects,
-  installCrossBoundaryMiddleware,
-  dispatch,
-  useAgent,
-} from "@tisyn/agent";
+import { agent, operation, useAgent } from "@tisyn/agent";
+import { Effects, installCrossBoundaryMiddleware, dispatch } from "@tisyn/effects";
 import { installRemoteAgent } from "./install-remote.js";
 import { inprocessTransport } from "./transports/inprocess.js";
 import { useTransport } from "./index.js";

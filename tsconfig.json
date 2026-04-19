@@ -20,6 +20,7 @@
     { "path": "packages/dsl" },
     { "path": "packages/kernel" },
     { "path": "packages/durable-streams" },
+    { "path": "packages/effects" },
     { "path": "packages/runtime" },
     { "path": "packages/agent" },
     { "path": "packages/conformance" },

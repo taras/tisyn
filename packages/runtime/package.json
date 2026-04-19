@@ -31,6 +31,7 @@
     "@tisyn/agent": "workspace:*",
     "@tisyn/config": "workspace:*",
     "@tisyn/durable-streams": "workspace:*",
+    "@tisyn/effects": "workspace:*",
     "@tisyn/ir": "workspace:*",
     "@tisyn/kernel": "workspace:*",
     "@tisyn/transport": "workspace:*",

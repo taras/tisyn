@@ -15,7 +15,7 @@ import type { Val } from "@tisyn/ir";
 import type { Api } from "@effectionx/context-api";
 import { createApi } from "@effectionx/context-api";
 import type { AgentDeclaration, OperationSpec, ArgsOf, ResultOf } from "./types.js";
-import { dispatch } from "./dispatch.js";
+import { dispatch } from "@tisyn/effects";
 
 // ---------------------------------------------------------------------------
 // AgentFacade type

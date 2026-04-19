@@ -2,7 +2,8 @@ import type { Operation } from "effection";
 import type { Val } from "@tisyn/ir";
 import type { AgentDeclaration, ImplementationHandlers, OperationSpec } from "./types.js";
 import { parseEffectId } from "@tisyn/kernel";
-import { DispatchContext, Effects } from "./dispatch.js";
+import { Effects } from "@tisyn/effects";
+import { DispatchContext } from "@tisyn/effects/internal";
 
 /**
  * Local binding primitive.

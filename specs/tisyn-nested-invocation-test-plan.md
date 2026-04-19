@@ -12,7 +12,7 @@ This test plan validates the settled semantics defined by `tisyn-nested-invocati
 
 A runtime implementation is conformant with respect to nested invocation if and only if it passes all Tier 1 tests in this plan. Tier 2 tests are diagnostic; they strengthen confidence in the implementation and catch anti-patterns but do not by themselves determine conformance.
 
-**Scope of this plan.** Local nested invocation — an `Effects.around({ dispatch })` middleware body on the runtime-controlled dispatch boundary calling `invoke(fn, args, opts?)` (exported from `@tisyn/agent`) to execute a compiled `Fn` as a child coroutine. `invoke` from any other site — agent operation handlers, `resolve` middleware, agent-facade `.around(...)` middleware, IR middleware, compiler-authored middleware — is a rejected surface and is covered only by negative tests (T16, T-IMPL-CALL).
+**Scope of this plan.** Local nested invocation — an `Effects.around({ dispatch })` middleware body on the runtime-controlled dispatch boundary calling `invoke(fn, args, opts?)` to execute a compiled `Fn` as a child coroutine. The export package for `invoke` is a reference-implementation detail; conformance does not depend on any particular package path. `invoke` from any other site — agent operation handlers, `resolve` middleware, agent-facade `.around(...)` middleware, IR middleware, compiler-authored middleware — is a rejected surface and is covered only by negative tests (T16, T-IMPL-CALL).
 
 **Out of scope.** Subordinate remote execution (the non-normative forward-compatibility note in spec §14 is not a conformance target); concurrent `invoke` composition within one middleware body (deferred per spec §15); per-invocation narrower timebox or agent rebinding (deferred per spec §15).
 

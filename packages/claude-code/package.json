@@ -32,6 +32,7 @@
     "@effectionx/stream-helpers": "^0.8.2",
     "@tisyn/agent": "workspace:*",
     "@tisyn/code-agent": "workspace:*",
+    "@tisyn/effects": "workspace:*",
     "@tisyn/ir": "workspace:*",
     "@tisyn/protocol": "workspace:*",
     "@tisyn/transport": "workspace:*",

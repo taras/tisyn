@@ -1,7 +1,8 @@
 import { describe, it } from "@effectionx/vitest";
 import { expect, vi, beforeEach } from "vitest";
 import { scoped } from "effection";
-import { agent, operation, dispatch } from "@tisyn/agent";
+import { agent, operation } from "@tisyn/agent";
+import { dispatch } from "@tisyn/effects";
 import { Fn } from "@tisyn/ir";
 import type { IrInput } from "@tisyn/ir";
 import { installRemoteAgent } from "../install-remote.js";

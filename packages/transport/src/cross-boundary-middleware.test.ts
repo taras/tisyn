@@ -19,14 +19,8 @@ import { scoped } from "effection";
 import type { Operation } from "effection";
 import type { Val } from "@tisyn/ir";
 import { Fn, Q, Throw, If, Eq, Ref, Eval } from "@tisyn/ir";
-import {
-  agent,
-  operation,
-  implementAgent,
-  installCrossBoundaryMiddleware,
-  Effects,
-  dispatch,
-} from "@tisyn/agent";
+import { agent, operation, implementAgent } from "@tisyn/agent";
+import { installCrossBoundaryMiddleware, Effects, dispatch } from "@tisyn/effects";
 import { installRemoteAgent } from "./install-remote.js";
 import { createProtocolServer } from "./protocol-server.js";
 import { inprocessTransport } from "./transports/inprocess.js";

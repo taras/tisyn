@@ -1,7 +1,8 @@
 import { describe, it } from "@effectionx/vitest";
 import { expect } from "vitest";
 import { spawn, scoped, sleep } from "effection";
-import { agent, operation, dispatch } from "@tisyn/agent";
+import { agent, operation } from "@tisyn/agent";
+import { dispatch } from "@tisyn/effects";
 import { installRemoteAgent } from "../install-remote.js";
 import { stdioTransport } from "./stdio.js";
 import { resolve } from "node:path";

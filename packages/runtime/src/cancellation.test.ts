@@ -8,7 +8,7 @@ import { describe, it } from "@effectionx/vitest";
 import { expect } from "vitest";
 import { execute } from "./execute.js";
 import { InMemoryStream } from "@tisyn/durable-streams";
-import { Effects } from "@tisyn/agent";
+import { Effects } from "@tisyn/effects";
 import type { CloseEvent } from "@tisyn/kernel";
 
 // ── IR helpers ──
