@@ -1,5 +1,33 @@
 # @tisyn/runtime
 
+## 0.14.0
+
+### Minor Changes
+
+- c792d86: `@tisyn/runtime` no longer declares its own `DispatchContext`. The dispatch
+  boundary seam now has a single owner in `@tisyn/effects/internal`, eliminating
+  the silent name-keyed coupling between the two previous declarations.
+  `DispatchContext` is not and was not part of the runtime's public barrel;
+  users who imported it from a deep path must switch to
+  `@tisyn/effects/internal`, which is a workspace-intended subpath and is not
+  covered by public stability guarantees. Runtime consumers that previously
+  pulled `Effects`, `dispatch`, `resolve`, or `ScopedEffectFrame` through
+  `@tisyn/agent` must now import them from `@tisyn/effects` — `@tisyn/agent`
+  no longer exposes that surface.
+
+### Patch Changes
+
+- Updated dependencies [c792d86]
+- Updated dependencies [c792d86]
+- Updated dependencies [c792d86]
+  - @tisyn/agent@0.14.0
+  - @tisyn/effects@0.2.0
+  - @tisyn/transport@0.14.0
+  - @tisyn/ir@0.14.0
+  - @tisyn/kernel@0.14.0
+  - @tisyn/validate@0.14.0
+  - @tisyn/durable-streams@0.14.0
+
 ## 0.13.0
 
 ### Minor Changes

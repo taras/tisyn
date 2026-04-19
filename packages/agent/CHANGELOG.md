@@ -1,5 +1,25 @@
 # @tisyn/agent
 
+## 0.14.0
+
+### Minor Changes
+
+- c792d86: BREAKING: the dispatch-boundary surface has moved to `@tisyn/effects` as a
+  direct package move with no compat window. `Effects`, `dispatch`, `resolve`,
+  `invoke`, `installCrossBoundaryMiddleware`, `getCrossBoundaryMiddleware`,
+  `InvalidInvokeCallSiteError`, `InvalidInvokeInputError`,
+  `InvalidInvokeOptionError`, `InvokeOpts`, and `ScopedEffectFrame` are no
+  longer exported from `@tisyn/agent`; import them from `@tisyn/effects`
+  instead. The authoring surface (`agent`, `operation`, `implementAgent`,
+  `useAgent`, `Agents`, `resource`, `provide`, plus types) is unchanged.
+
+### Patch Changes
+
+- Updated dependencies [c792d86]
+  - @tisyn/effects@0.2.0
+  - @tisyn/ir@0.14.0
+  - @tisyn/kernel@0.14.0
+
 ## 0.13.0
 
 ### Minor Changes

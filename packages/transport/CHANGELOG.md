@@ -1,5 +1,28 @@
 # @tisyn/transport
 
+## 0.14.0
+
+### Minor Changes
+
+- c792d86: Transport implementations and their tests now import
+  `Effects`/`installCrossBoundaryMiddleware`/`getCrossBoundaryMiddleware` from
+  `@tisyn/effects` and `evaluateMiddlewareFn` from `@tisyn/effects/internal`.
+  Public transport surface (`installRemoteAgent`, `useTransport`,
+  `createProtocolServer`, transport factories) is unchanged. Users composing
+  transports with custom cross-boundary middleware must import those symbols
+  from `@tisyn/effects`; they are no longer reachable through `@tisyn/agent`.
+
+### Patch Changes
+
+- Updated dependencies [c792d86]
+- Updated dependencies [c792d86]
+  - @tisyn/agent@0.14.0
+  - @tisyn/effects@0.2.0
+  - @tisyn/ir@0.14.0
+  - @tisyn/kernel@0.14.0
+  - @tisyn/protocol@0.14.0
+  - @tisyn/validate@0.14.0
+
 ## 0.13.0
 
 ### Patch Changes
