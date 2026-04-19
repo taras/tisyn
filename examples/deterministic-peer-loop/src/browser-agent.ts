@@ -42,7 +42,9 @@ export function createBinding(config?: Record<string, unknown>): LocalAgentBindi
         paused: patch.paused ?? current.paused,
         stopRequested: patch.stopRequested ?? current.stopRequested,
       };
-      if (patch.nextSpeakerOverride !== undefined) {
+      if (patch.nextSpeakerOverride === null) {
+        // explicit clear — leave field absent on persisted record
+      } else if (patch.nextSpeakerOverride !== undefined) {
         next.nextSpeakerOverride = patch.nextSpeakerOverride;
       } else if (current.nextSpeakerOverride !== undefined) {
         next.nextSpeakerOverride = current.nextSpeakerOverride;
