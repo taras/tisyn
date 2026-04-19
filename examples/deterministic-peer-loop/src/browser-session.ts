@@ -3,6 +3,7 @@ import { Value } from "@sinclair/typebox/value";
 import {
   BrowserToHostSchema,
   BrowserControlPatchSchema,
+  type BrowserControlPatch,
   type BrowserToHost,
   type HostToBrowser,
   type LoopControl,
@@ -19,7 +20,7 @@ export interface BrowserSessionHooks {
    * Called when the owner submits a control-panel patch. The manager has already
    * validated the patch shape via TypeBox; the hook owns the persistence decision.
    */
-  onUpdateControl(patch: Partial<LoopControl>): void;
+  onUpdateControl(patch: BrowserControlPatch): void;
 }
 
 /**
@@ -32,7 +33,8 @@ export interface BrowserSessionHooks {
  */
 export class BrowserSessionManager {
   private ownerSessionId: string | null = null;
-  private socket: WebSocket | null = null;
+  private ownerSocket: WebSocket | null = null;
+  private observers: Set<WebSocket> = new Set();
   private pendingPrompt: string | null = null;
   private chatMessages: TurnEntry[] = [];
   private control: LoopControl = { paused: false, stopRequested: false };
@@ -47,13 +49,17 @@ export class BrowserSessionManager {
     }
 
     if (clientSessionId !== this.ownerSessionId) {
-      logInfo("session", "non-owner connection", { clientSessionId });
+      logInfo("session", "observer attached", { clientSessionId });
+      this.observers.add(ws);
+      ws.on("close", () => {
+        this.observers.delete(ws);
+      });
       this.hydrateObserver(ws);
       return;
     }
 
-    const oldSocket = this.socket;
-    this.socket = ws;
+    const oldSocket = this.ownerSocket;
+    this.ownerSocket = ws;
 
     ws.on("message", (data) => {
       let parsed: unknown;
@@ -75,7 +81,7 @@ export class BrowserSessionManager {
     });
 
     if (oldSocket) {
-      logInfo("session", "replacing old socket");
+      logInfo("session", "replacing old owner socket");
       oldSocket.close();
     }
 
@@ -83,26 +89,29 @@ export class BrowserSessionManager {
   }
 
   detach(ws: WebSocket): void {
-    if (this.socket === ws) {
+    if (this.ownerSocket === ws) {
       logInfo("session", "owner detached");
-      this.socket = null;
+      this.ownerSocket = null;
+      return;
     }
+    this.observers.delete(ws);
   }
 
   /** Called by the App binding after the workflow calls loadChat(messages). */
   loadChat(messages: TurnEntry[]): void {
     this.chatMessages = [...messages];
-    if (this.socket) {
-      this.safeSend(this.socket, { type: "loadChat", messages: [...this.chatMessages] });
-    }
+    const payload: HostToBrowser = {
+      type: "loadChat",
+      messages: [...this.chatMessages],
+    };
+    this.sendToOwner(payload);
+    this.sendToObservers(payload);
   }
 
   /** Push an elicit prompt and remember it for reconnect hydration. */
   beginElicit(message: string): void {
     this.pendingPrompt = message;
-    if (this.socket) {
-      this.safeSend(this.socket, { type: "elicit", message });
-    }
+    this.sendToOwner({ type: "elicit", message });
   }
 
   endElicit(): void {
@@ -112,28 +121,31 @@ export class BrowserSessionManager {
   /** Append a displayed message and broadcast to the attached owner socket. */
   showMessage(entry: TurnEntry): void {
     this.chatMessages.push(entry);
-    if (this.socket) {
-      this.safeSend(this.socket, {
-        type: "showMessage",
-        speaker: entry.speaker,
-        content: entry.content,
-      });
-    }
+    const payload: HostToBrowser = {
+      type: "showMessage",
+      speaker: entry.speaker,
+      content: entry.content,
+    };
+    this.sendToOwner(payload);
+    this.sendToObservers(payload);
   }
 
   setReadOnly(reason: string): void {
     this.readOnly = { reason };
-    if (this.socket) {
-      this.safeSend(this.socket, { type: "setReadOnly", reason });
-    }
+    const payload: HostToBrowser = { type: "setReadOnly", reason };
+    this.sendToOwner(payload);
+    this.sendToObservers(payload);
   }
 
   /** Called externally when the durable LoopControl changes (from store subscription). */
   publishControl(control: LoopControl): void {
     this.control = { ...control };
-    if (this.socket) {
-      this.safeSend(this.socket, { type: "controlSnapshot", control: this.control });
-    }
+    const payload: HostToBrowser = {
+      type: "controlSnapshot",
+      control: this.control,
+    };
+    this.sendToOwner(payload);
+    this.sendToObservers(payload);
   }
 
   getControlSnapshot(): LoopControl {
@@ -163,11 +175,25 @@ export class BrowserSessionManager {
   private hydrateObserver(ws: WebSocket): void {
     this.safeSend(ws, { type: "loadChat", messages: [...this.chatMessages] });
     this.safeSend(ws, { type: "controlSnapshot", control: { ...this.control } });
-    this.safeSend(ws, { type: "setReadOnly", reason: "Session owned by another browser" });
+    if (this.readOnly) {
+      this.safeSend(ws, { type: "setReadOnly", reason: this.readOnly.reason });
+    }
+  }
+
+  private sendToOwner(payload: HostToBrowser): void {
+    if (this.ownerSocket) {
+      this.safeSend(this.ownerSocket, payload);
+    }
+  }
+
+  private sendToObservers(payload: HostToBrowser): void {
+    for (const ws of this.observers) {
+      this.safeSend(ws, payload);
+    }
   }
 
   private handleMessage(ws: WebSocket, msg: BrowserToHost): void {
-    if (this.socket !== ws) return;
+    if (this.ownerSocket !== ws) return;
     if (msg.type === "userMessage" && this.pendingPrompt) {
       logInfo("session", "userMessage received", { message: msg.message });
       this.pendingPrompt = null;
