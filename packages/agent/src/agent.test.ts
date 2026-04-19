@@ -1,15 +1,9 @@
 import { readFileSync } from "node:fs";
 import { describe, it } from "@effectionx/vitest";
 import { expect } from "vitest";
-import {
-  agent,
-  operation,
-  implementAgent,
-  invoke,
-  Effects,
-  InvalidInvokeCallSiteError,
-} from "./index.js";
+import { agent, operation, implementAgent } from "./index.js";
 import * as agentPublicBarrel from "./index.js";
+import { invoke, Effects, InvalidInvokeCallSiteError } from "@tisyn/effects";
 import { Fn, Q } from "@tisyn/ir";
 import type { FnNode, Val } from "@tisyn/ir";
 import { execute } from "@tisyn/runtime";
@@ -106,16 +100,31 @@ describe("@tisyn/agent", () => {
     expect(caughtErr).toBeInstanceOf(InvalidInvokeCallSiteError);
   });
 
-  it("public surface: workspace-only seam (DispatchContext, evaluateMiddlewareFn) is absent and invoke() cannot be smuggled through public API", function* () {
-    // `DispatchContext` and `evaluateMiddlewareFn` are workspace-only
-    // seam symbols that live on `@tisyn/effects/internal`. User code
-    // importing from `@tisyn/agent` must not see either on the public
-    // barrel — otherwise user code could install a synthetic ambient
-    // DispatchContext and make `invoke(...)` succeed from a non-
-    // dispatch-boundary call site, or reach the middleware-evaluation
-    // primitive that the spec treats as internal.
-    expect((agentPublicBarrel as Record<string, unknown>).DispatchContext).toBeUndefined();
-    expect((agentPublicBarrel as Record<string, unknown>).evaluateMiddlewareFn).toBeUndefined();
+  it("public surface: @tisyn/agent exports only agent-domain APIs; dispatch-boundary symbols are not reachable through it", function* () {
+    // The dispatch-boundary surface lives on `@tisyn/effects`. The
+    // workspace-only seam (`DispatchContext`, `evaluateMiddlewareFn`)
+    // lives on `@tisyn/effects/internal`. Neither must be reachable
+    // through `@tisyn/agent` — otherwise user code could install a
+    // synthetic ambient DispatchContext and make `invoke(...)` succeed
+    // from a non-dispatch-boundary call site, or reach a middleware-
+    // evaluation primitive the spec treats as internal.
+    const barrel = agentPublicBarrel as Record<string, unknown>;
+    const absentFromAgent = [
+      "Effects",
+      "dispatch",
+      "resolve",
+      "invoke",
+      "installCrossBoundaryMiddleware",
+      "getCrossBoundaryMiddleware",
+      "InvalidInvokeCallSiteError",
+      "InvalidInvokeInputError",
+      "InvalidInvokeOptionError",
+      "DispatchContext",
+      "evaluateMiddlewareFn",
+    ];
+    for (const name of absentFromAgent) {
+      expect(barrel[name], `@tisyn/agent must not expose ${name}`).toBeUndefined();
+    }
 
     // With no public way to install a DispatchContext and no active
     // Effects.around({ dispatch }) body, invoke() called from plain

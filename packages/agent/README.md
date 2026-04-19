@@ -46,7 +46,7 @@ The dispatch-boundary surface lives in [`@tisyn/effects`](../effects/README.md):
 - `getCrossBoundaryMiddleware` — read the current cross-boundary middleware carrier from scope (returns `null` if not set)
 - `InvalidInvokeCallSiteError`, `InvalidInvokeInputError`, `InvalidInvokeOptionError` — error classes thrown by `invoke` on misuse
 
-For the duration of one release cycle, `@tisyn/agent` re-exports these symbols with `@deprecated` JSDoc so existing imports continue to work. Migrate imports to `@tisyn/effects` before the shim window closes.
+These symbols are published only by `@tisyn/effects`; `@tisyn/agent` does not re-export them. The workspace-only seam (`DispatchContext`, `evaluateMiddlewareFn`) lives on the non-stable `@tisyn/effects/internal` subpath and is not part of the stable public surface.
 
 Important exported types:
 

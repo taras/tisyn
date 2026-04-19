@@ -10,4 +10,5 @@ users who imported it from a deep path must switch to
 `@tisyn/effects/internal`, which is a workspace-intended subpath and is not
 covered by public stability guarantees. Runtime consumers that previously
 pulled `Effects`, `dispatch`, `resolve`, or `ScopedEffectFrame` through
-`@tisyn/agent` should migrate those imports to `@tisyn/effects`.
+`@tisyn/agent` must now import them from `@tisyn/effects` — `@tisyn/agent`
+no longer exposes that surface.

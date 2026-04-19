@@ -17,29 +17,3 @@ export type {
   ResultOf,
   Workflow,
 } from "./types.js";
-
-// ── Dispatch-boundary surface — moved to @tisyn/effects (Issue #113) ──
-// These re-exports preserve source-compatibility for one release cycle.
-// New code should import from `@tisyn/effects` directly. The re-exports
-// will be removed in a subsequent release.
-
-/** @deprecated Import from `@tisyn/effects`. */
-export { Effects } from "@tisyn/effects";
-/** @deprecated Import from `@tisyn/effects`. */
-export { dispatch } from "@tisyn/effects";
-/** @deprecated Import from `@tisyn/effects`. */
-export { resolve } from "@tisyn/effects";
-/** @deprecated Import from `@tisyn/effects`. */
-export { invoke } from "@tisyn/effects";
-/** @deprecated Import from `@tisyn/effects`. */
-export { installCrossBoundaryMiddleware } from "@tisyn/effects";
-/** @deprecated Import from `@tisyn/effects`. */
-export { getCrossBoundaryMiddleware } from "@tisyn/effects";
-/** @deprecated Import from `@tisyn/effects`. */
-export { InvalidInvokeCallSiteError } from "@tisyn/effects";
-/** @deprecated Import from `@tisyn/effects`. */
-export { InvalidInvokeInputError } from "@tisyn/effects";
-/** @deprecated Import from `@tisyn/effects`. */
-export { InvalidInvokeOptionError } from "@tisyn/effects";
-/** @deprecated Import from `@tisyn/effects`. */
-export type { InvokeOpts, ScopedEffectFrame } from "@tisyn/effects";
