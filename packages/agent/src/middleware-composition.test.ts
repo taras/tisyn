@@ -73,7 +73,7 @@ describe("middleware composition", () => {
       },
     });
 
-    yield* dispatch("test.op", { original: true } as unknown as Val);
+    yield* dispatch("test.op", { original: true });
     expect(receivedData).toEqual({ transformed: true });
   });
 

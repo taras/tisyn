@@ -325,7 +325,7 @@ describe("cross-boundary middleware", () => {
           { at: "min" },
         );
 
-        return yield* dispatch("cbp7.sentinel", { x } as unknown as Val);
+        return yield* dispatch("cbp7.sentinel", { x });
       },
     });
 

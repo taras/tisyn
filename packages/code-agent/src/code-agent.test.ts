@@ -1,7 +1,6 @@
 import { describe, it } from "@effectionx/vitest";
 import { expect } from "vitest";
 import { scoped, sleep, spawn } from "effection";
-import type { Val } from "@tisyn/ir";
 import { dispatch } from "@tisyn/effects";
 import { installRemoteAgent } from "@tisyn/transport";
 import { ProgressContext, CoroutineContext } from "@tisyn/transport";
@@ -18,9 +17,7 @@ describe("CodeAgent contract (mock harness)", () => {
     yield* scoped(function* () {
       yield* installRemoteAgent(CodeAgent, factory);
 
-      const handle = yield* dispatch("code-agent.newSession", {
-        model: "test",
-      } as unknown as Val);
+      const handle = yield* dispatch(CodeAgent.newSession({ model: "test" }));
 
       expect(handle).toEqual({ sessionId: "s-1" });
     });
@@ -37,13 +34,9 @@ describe("CodeAgent contract (mock harness)", () => {
     yield* scoped(function* () {
       yield* installRemoteAgent(CodeAgent, factory);
 
-      yield* dispatch("code-agent.newSession", {
-        model: "test",
-      } as unknown as Val);
+      yield* dispatch(CodeAgent.newSession({ model: "test" }));
 
-      const result = yield* dispatch("code-agent.closeSession", {
-        sessionId: "s-1",
-      } as unknown as Val);
+      const result = yield* dispatch(CodeAgent.closeSession({ sessionId: "s-1" }));
 
       expect(result).toBeNull();
     });
@@ -61,14 +54,14 @@ describe("CodeAgent contract (mock harness)", () => {
     yield* scoped(function* () {
       yield* installRemoteAgent(CodeAgent, factory);
 
-      yield* dispatch("code-agent.newSession", {
-        model: "test",
-      } as unknown as Val);
+      yield* dispatch(CodeAgent.newSession({ model: "test" }));
 
-      const result = yield* dispatch("code-agent.prompt", {
-        session: { sessionId: "s-1" },
-        prompt: "Analyze the code",
-      } as unknown as Val);
+      const result = yield* dispatch(
+        CodeAgent.prompt({
+          session: { sessionId: "s-1" },
+          prompt: "Analyze the code",
+        }),
+      );
 
       expect(result).toEqual({ response: "Analysis complete." });
     });
@@ -101,13 +94,13 @@ describe("CodeAgent contract (mock harness)", () => {
     yield* scoped(function* () {
       yield* installRemoteAgent(CodeAgent, factory);
 
-      yield* dispatch("code-agent.newSession", {
-        model: "test",
-      } as unknown as Val);
-      yield* dispatch("code-agent.prompt", {
-        session: { sessionId: "s-1" },
-        prompt: "Analyze",
-      } as unknown as Val);
+      yield* dispatch(CodeAgent.newSession({ model: "test" }));
+      yield* dispatch(
+        CodeAgent.prompt({
+          session: { sessionId: "s-1" },
+          prompt: "Analyze",
+        }),
+      );
     });
 
     expect(progressEvents).toHaveLength(2);
@@ -133,15 +126,15 @@ describe("CodeAgent contract (mock harness)", () => {
     yield* scoped(function* () {
       yield* installRemoteAgent(CodeAgent, factory);
 
-      yield* dispatch("code-agent.newSession", {
-        model: "test",
-      } as unknown as Val);
+      yield* dispatch(CodeAgent.newSession({ model: "test" }));
 
       try {
-        yield* dispatch("code-agent.prompt", {
-          session: { sessionId: "s-1" },
-          prompt: "Do something",
-        } as unknown as Val);
+        yield* dispatch(
+          CodeAgent.prompt({
+            session: { sessionId: "s-1" },
+            prompt: "Do something",
+          }),
+        );
       } catch (e) {
         caughtError = e as Error;
       }
@@ -174,15 +167,15 @@ describe("CodeAgent contract (mock harness)", () => {
     yield* scoped(function* () {
       yield* installRemoteAgent(CodeAgent, recordingFactory as AgentTransportFactory);
 
-      yield* dispatch("code-agent.newSession", {
-        model: "test",
-      } as unknown as Val);
+      yield* dispatch(CodeAgent.newSession({ model: "test" }));
 
       const task = yield* spawn(function* () {
-        yield* dispatch("code-agent.prompt", {
-          session: { sessionId: "s-1" },
-          prompt: "Long task",
-        } as unknown as Val);
+        yield* dispatch(
+          CodeAgent.prompt({
+            session: { sessionId: "s-1" },
+            prompt: "Long task",
+          }),
+        );
       });
 
       yield* sleep(10);
@@ -204,19 +197,12 @@ describe("CodeAgent contract (mock harness)", () => {
     yield* scoped(function* () {
       yield* installRemoteAgent(CodeAgent, factory);
 
-      yield* dispatch("code-agent.newSession", {
-        model: "test",
-      } as unknown as Val);
+      yield* dispatch(CodeAgent.newSession({ model: "test" }));
 
-      const forkData = yield* dispatch("code-agent.fork", {
-        sessionId: "s-parent",
-      } as unknown as Val);
+      const forkData = yield* dispatch(CodeAgent.fork({ sessionId: "s-parent" }));
       expect(forkData).toEqual({ parentSessionId: "s-parent", forkId: "f-1" });
 
-      const childHandle = yield* dispatch(
-        "code-agent.openFork",
-        forkData as unknown as Val,
-      );
+      const childHandle = yield* dispatch(CodeAgent.openFork(forkData));
       expect(childHandle).toEqual({ sessionId: "s-child" });
     });
 
@@ -239,14 +225,10 @@ describe("CodeAgent contract (mock harness)", () => {
     yield* scoped(function* () {
       yield* installRemoteAgent(CodeAgent, factory);
 
-      yield* dispatch("code-agent.newSession", {
-        model: "test",
-      } as unknown as Val);
+      yield* dispatch(CodeAgent.newSession({ model: "test" }));
 
       try {
-        yield* dispatch("code-agent.fork", {
-          sessionId: "s-1",
-        } as unknown as Val);
+        yield* dispatch(CodeAgent.fork({ sessionId: "s-1" }));
       } catch (e) {
         caughtError = e as Error;
       }
@@ -266,16 +248,14 @@ describe("CodeAgent contract (mock harness)", () => {
     yield* scoped(function* () {
       yield* installRemoteAgent(CodeAgent, factory);
 
-      yield* dispatch("code-agent.newSession", {
-        model: "test",
-      } as unknown as Val);
-      yield* dispatch("code-agent.prompt", {
-        session: { sessionId: "s-1" },
-        prompt: "task",
-      } as unknown as Val);
-      yield* dispatch("code-agent.closeSession", {
-        sessionId: "s-1",
-      } as unknown as Val);
+      yield* dispatch(CodeAgent.newSession({ model: "test" }));
+      yield* dispatch(
+        CodeAgent.prompt({
+          session: { sessionId: "s-1" },
+          prompt: "task",
+        }),
+      );
+      yield* dispatch(CodeAgent.closeSession({ sessionId: "s-1" }));
     });
 
     expect(calls).toEqual([
