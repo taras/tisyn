@@ -97,6 +97,7 @@ export function createSdkBinding(config?: SdkAdapterConfig): LocalAgentBinding {
                 newSession: "config",
                 closeSession: "handle",
                 plan: "args",
+                prompt: "args",
                 fork: "session",
                 openFork: "data",
               };
@@ -165,6 +166,7 @@ export function createSdkBinding(config?: SdkAdapterConfig): LocalAgentBinding {
               return null as unknown as Val;
             }
 
+            case "prompt":
             case "plan": {
               const sessionHandle = (params.session as Record<string, unknown>)
                 ?.sessionId as string;

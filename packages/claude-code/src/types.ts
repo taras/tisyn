@@ -1,24 +1,21 @@
 /**
  * Shared types for the Claude Code ACP transport binding.
  *
- * These are the serializable data shapes used in the agent contract
- * and protocol translation layer.
+ * Portable contract types (SessionHandle, PromptResult, ForkData) are
+ * imported from @tisyn/code-agent and re-exported. Claude-specific
+ * extensions (PlanResult) and ACP protocol types live here.
  */
 
-// ── Agent contract types (plain serializable data) ──
+import type { PromptResult } from "@tisyn/code-agent";
 
-export interface SessionHandle {
-  sessionId: string;
-}
+// ── Agent contract types (re-exported from portable contract) ──
 
-export interface PlanResult {
-  response: string;
+export type { SessionHandle, PromptResult, ForkData } from "@tisyn/code-agent";
+
+// ── Claude-specific extensions ──
+
+export interface PlanResult extends PromptResult {
   toolResults?: Array<{ tool: string; output: unknown }>;
-}
-
-export interface ForkData {
-  parentSessionId: string;
-  forkId: string;
 }
 
 // ── ACP protocol message types ──

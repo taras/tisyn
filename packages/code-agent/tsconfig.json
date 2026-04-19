@@ -5,10 +5,9 @@
     "rootDir": "./src"
   },
   "include": ["src"],
-  "exclude": ["src/**/*.test.ts", "src/**/test-assets/**"],
+  "exclude": ["src/**/*.test.ts"],
   "references": [
     { "path": "../agent" },
-    { "path": "../code-agent" },
     { "path": "../ir" },
     { "path": "../protocol" },
     { "path": "../transport" }
