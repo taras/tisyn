@@ -1,5 +1,5 @@
-// Deterministic content hash for normalized modules, per N6 of
-// spec-system-specification.source.md §6.2.
+// Deterministic content hash for normalized modules, per N1 of
+// specs/tisyn-spec-system-specification.md §5.2.
 //
 // Algorithm (D3 of the plan):
 //   1. Strip `_hash` and `_normalizedAt` from the top-level object before
