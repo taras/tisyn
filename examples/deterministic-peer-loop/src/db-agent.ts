@@ -25,7 +25,6 @@ export const DB = () =>
     appendPeerRecord: operation<{ record: PeerRecord }, void>(),
     loadEffectRequests: operation<Record<string, never>, EffectRequestRecord[]>(),
     appendEffectRequest: operation<{ record: EffectRequestRecord }, void>(),
-    appendEffectRequests: operation<{ records: EffectRequestRecord[] }, void>(),
   });
 
 export function createBinding(config?: Record<string, unknown>): LocalAgentBinding {
@@ -57,11 +56,6 @@ export function createBinding(config?: Record<string, unknown>): LocalAgentBindi
       },
       *appendEffectRequest({ record }) {
         store.appendEffectRequest(record);
-      },
-      *appendEffectRequests({ records }) {
-        for (const record of records) {
-          store.appendEffectRequest(record);
-        }
       },
     }),
   };

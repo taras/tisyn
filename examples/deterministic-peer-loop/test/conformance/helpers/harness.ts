@@ -16,11 +16,17 @@ import { Call } from "@tisyn/ir";
 import {
   App,
   DB,
-  EffectsProcessor,
+  EffectHandler,
+  EffectsQueue,
   GptAgent,
   OpusAgent,
+  Policy,
   peerLoop,
+  processEffects,
+  dispatchEffect,
+  dispatchExecuted,
 } from "../../../src/workflow.generated.js";
+import type { Val } from "@tisyn/ir";
 import type {
   EffectRequestRecord,
   LoopControl,
@@ -28,6 +34,7 @@ import type {
   PeerSpeaker,
   PeerTurnInput,
   PeerTurnResult,
+  PolicyDecision,
   RequestedEffect,
   TurnEntry,
 } from "../../../src/types.js";
@@ -44,15 +51,22 @@ export type OperationCall =
   | { agent: "DB"; op: string; args: unknown }
   | { agent: "OpusAgent"; op: "takeTurn"; args: { input: PeerTurnInput } }
   | { agent: "GptAgent"; op: "takeTurn"; args: { input: PeerTurnInput } }
+  | { agent: "Policy"; op: "decide"; args: { effect: RequestedEffect } }
+  | { agent: "EffectsQueue"; op: "seed"; args: { effects: RequestedEffect[] } }
+  | { agent: "EffectsQueue"; op: "shift"; args: Record<string, never> }
   | {
-      agent: "EffectsProcessor";
-      op: "processAll";
-      args: {
-        effects: RequestedEffect[];
-        turnIndex: number;
-        requestor: PeerSpeaker;
-      };
+      agent: "EffectHandler";
+      op: "invoke";
+      args: { effectId: string; data: Val };
     };
+
+/**
+ * Scripted dispatch result fed to the EffectHandler mock, in the same order
+ * as the workflow calls EffectHandler().invoke({effectId, data}).
+ */
+export type DispatchResult =
+  | { ok: true; result: Val }
+  | { ok: false; error: { name: string; message: string } };
 
 export interface HarnessOptions {
   /** Initial transcript for DB.loadMessages. */
@@ -66,10 +80,15 @@ export interface HarnessOptions {
   /** Scripted Gpt results consumed in order by GptAgent.takeTurn. */
   gptScript?: PeerTurnResult[];
   /**
-   * Scripted processAll output. One record array per invocation. Defaults to
-   * rejecting every effect with `unregistered` for unscripted calls.
+   * Scripted Policy.decide outputs. One decision per call, in order.
+   * Missing entries default to { kind: "rejected", reason: "unregistered" }.
    */
-  effectsScript?: EffectRequestRecord[][];
+  policyScript?: PolicyDecision[];
+  /**
+   * Scripted EffectHandler.invoke outputs. Consumed only when Policy returns
+   * { kind: "executed" }. Missing entries throw UnknownEffectError.
+   */
+  dispatchScript?: DispatchResult[];
   /**
    * Turn mutations applied to the internal control state immediately AFTER
    * a peer takeTurn (keyed by turnIndex that just completed). Useful to
@@ -103,11 +122,15 @@ export function* runHarness(options: HarnessOptions): Operation<HarnessResult> {
   const tarasMessages = [...(options.tarasMessages ?? [])];
   const opusScript = [...(options.opusScript ?? [])];
   const gptScript = [...(options.gptScript ?? [])];
-  const effectsScript = [...(options.effectsScript ?? [])];
+  const policyScript = [...(options.policyScript ?? [])];
+  const dispatchScript = [...(options.dispatchScript ?? [])];
   const maxTurns = options.maxTurns ?? 20;
   let peerTurnIndex = 0;
   let exitReason: string | undefined;
   let terminatedByMaxTurns = false;
+
+  // Per-cycle queue state — the EffectsQueue mock seeds/shifts this list.
+  let queue: RequestedEffect[] = [];
 
   const done = withResolvers<void>();
 
@@ -116,9 +139,6 @@ export function* runHarness(options: HarnessOptions): Operation<HarnessResult> {
     *elicit({ input }) {
       operations.push({ agent: "App", op: "elicit", args: input });
       if (tarasMessages.length === 0) {
-        // No more scripted messages — signal loop to terminate via setReadOnly.
-        // The harness can't actually inject a timeout here; the workflow
-        // awaits elicit, so we throw to unwind.
         done.resolve();
         throw new Error("TARAS_SCRIPT_EXHAUSTED");
       }
@@ -173,16 +193,6 @@ export function* runHarness(options: HarnessOptions): Operation<HarnessResult> {
     *appendEffectRequest({ input }) {
       operations.push({ agent: "DB", op: "appendEffectRequest", args: input });
       effectRequests.push(input.record);
-    },
-    *appendEffectRequests({ input }) {
-      operations.push({
-        agent: "DB",
-        op: "appendEffectRequests",
-        args: input,
-      });
-      for (const record of input.records) {
-        effectRequests.push(record);
-      }
     },
   });
 
@@ -242,45 +252,89 @@ export function* runHarness(options: HarnessOptions): Operation<HarnessResult> {
     },
   });
 
-  // Effects processor.
-  yield* Agents.use(EffectsProcessor(), {
-    *processAll({ input }) {
+  // Policy agent — per-effect decisions from the scripted queue.
+  yield* Agents.use(Policy(), {
+    *decide({ input }) {
       operations.push({
-        agent: "EffectsProcessor",
-        op: "processAll",
+        agent: "Policy",
+        op: "decide",
         args: input,
       });
-      const next = effectsScript.shift();
+      const next = policyScript.shift();
       if (next !== undefined) {
         return next;
       }
-      // Default: reject every effect as unregistered.
-      return input.effects.map((effect: RequestedEffect) => ({
-        turnIndex: input.turnIndex,
-        requestor: input.requestor,
-        effect,
-        disposition: "rejected" as const,
-        dispositionAt: input.turnIndex,
-        error: { name: "UnknownEffectError", message: "unregistered" },
-      }));
+      return { kind: "rejected", reason: "unregistered" };
+    },
+  });
+
+  // EffectsQueue agent — per-cycle FIFO of requested effects.
+  yield* Agents.use(EffectsQueue(), {
+    *seed({ input }) {
+      operations.push({
+        agent: "EffectsQueue",
+        op: "seed",
+        args: input,
+      });
+      queue = [...input.effects];
+    },
+    *shift() {
+      operations.push({
+        agent: "EffectsQueue",
+        op: "shift",
+        args: {},
+      });
+      if (queue.length === 0) {
+        return { effect: null };
+      }
+      const effect = queue[0];
+      queue = queue.slice(1);
+      return { effect };
+    },
+  });
+
+  // EffectHandler agent — scripted dispatch responses.
+  yield* Agents.use(EffectHandler(), {
+    *invoke({ input }) {
+      operations.push({
+        agent: "EffectHandler",
+        op: "invoke",
+        args: input,
+      });
+      const next = dispatchScript.shift();
+      if (next === undefined) {
+        return {
+          ok: false as const,
+          error: {
+            name: "UnknownEffectError",
+            message: `Unknown effect: ${input.effectId}`,
+          },
+        };
+      }
+      if (next.ok) {
+        return { ok: true as const, result: next.result };
+      }
+      return { ok: false as const, error: next.error };
     },
   });
 
   // Run the compiled workflow in a spawned task so we can cancel / catch exit.
   const task = yield* spawn(function* () {
     try {
-      yield* execute({ ir: Call(peerLoop) });
+      yield* execute({
+        ir: Call(peerLoop),
+        env: {
+          processEffects,
+          dispatchEffect,
+          dispatchExecuted,
+        } as unknown as Record<string, Val>,
+      });
     } catch (err) {
       const e = err as Error;
-      // Script-exhaustion and max-turn errors signal harness teardown.
-      // Any other error is treated the same (terminates the workflow) so
-      // we never hang on an unrelated propagation.
       if (
         e.message !== "TARAS_SCRIPT_EXHAUSTED" &&
         e.message !== "MAX_TURNS_EXCEEDED"
       ) {
-        // Any other error terminates the workflow. Surface it through
-        // exitReason so tests can assert on it instead of hanging.
         if (exitReason === undefined) {
           exitReason = `error: ${e.message}`;
         }
@@ -299,8 +353,8 @@ export function* runHarness(options: HarnessOptions): Operation<HarnessResult> {
     .filter((op) => op.agent === "DB" && op.op === "appendPeerRecord")
     .map((op) => (op.args as { record: PeerRecord }).record);
   const appendedEffectRequests = operations
-    .filter((op) => op.agent === "DB" && op.op === "appendEffectRequests")
-    .flatMap((op) => (op.args as { records: EffectRequestRecord[] }).records);
+    .filter((op) => op.agent === "DB" && op.op === "appendEffectRequest")
+    .map((op) => (op.args as { record: EffectRequestRecord }).record);
 
   return {
     operations,

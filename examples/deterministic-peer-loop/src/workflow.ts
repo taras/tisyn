@@ -2,11 +2,13 @@ import type { Workflow } from "@tisyn/agent";
 import { workflow, agent, transport, env, journal, entrypoint, server } from "@tisyn/config";
 import type {
   EffectRequestRecord,
+  InvokeOutcome,
   LoopControl,
   PeerRecord,
   PeerSpeaker,
   PeerTurnInput,
   PeerTurnResult,
+  PolicyDecision,
   RequestedEffect,
   TurnEntry,
 } from "./types.js";
@@ -31,7 +33,6 @@ declare function DB(): {
   appendPeerRecord(input: { record: PeerRecord }): Workflow<void>;
   loadEffectRequests(input: Record<string, never>): Workflow<EffectRequestRecord[]>;
   appendEffectRequest(input: { record: EffectRequestRecord }): Workflow<void>;
-  appendEffectRequests(input: { records: EffectRequestRecord[] }): Workflow<void>;
 };
 
 declare function OpusAgent(): {
@@ -42,13 +43,112 @@ declare function GptAgent(): {
   takeTurn(input: { input: PeerTurnInput }): Workflow<PeerTurnResult>;
 };
 
-declare function EffectsProcessor(): {
-  processAll(input: {
-    effects: RequestedEffect[];
-    turnIndex: number;
-    requestor: PeerSpeaker;
-  }): Workflow<EffectRequestRecord[]>;
+declare function Policy(): {
+  decide(input: { effect: RequestedEffect }): Workflow<PolicyDecision>;
 };
+
+declare function EffectsQueue(): {
+  seed(input: { effects: RequestedEffect[] }): Workflow<void>;
+  shift(input: Record<string, never>): Workflow<{ effect: RequestedEffect | null }>;
+};
+
+declare function EffectHandler(): {
+  invoke(input: { effectId: string; data: Val }): Workflow<InvokeOutcome>;
+};
+
+// -- Sub-workflow: dispatch a single effect (executed branch uses try/catch) --
+
+export function* dispatchExecuted(
+  effect: RequestedEffect,
+  turnCount: number,
+  speaker: "opus" | "gpt",
+): Workflow<void> {
+  const outcome = yield* EffectHandler().invoke({
+    effectId: effect.id,
+    data: effect.input,
+  });
+  if (outcome.ok) {
+    const record: EffectRequestRecord = {
+      turnIndex: turnCount,
+      requestor: speaker,
+      effect,
+      disposition: "executed",
+      dispositionAt: turnCount,
+      result: outcome.result,
+    };
+    yield* DB().appendEffectRequest({ record });
+  } else {
+    const record: EffectRequestRecord = {
+      turnIndex: turnCount,
+      requestor: speaker,
+      effect,
+      disposition: "executed",
+      dispositionAt: turnCount,
+      error: outcome.error,
+    };
+    yield* DB().appendEffectRequest({ record });
+  }
+}
+
+export function* dispatchEffect(
+  effect: RequestedEffect,
+  turnCount: number,
+  speaker: "opus" | "gpt",
+): Workflow<void> {
+  const decision = yield* Policy().decide({ effect });
+
+  if (decision.kind === "executed") {
+    yield* dispatchExecuted(effect, turnCount, speaker);
+  } else if (decision.kind === "deferred") {
+    const record: EffectRequestRecord = {
+      turnIndex: turnCount,
+      requestor: speaker,
+      effect,
+      disposition: "deferred",
+      dispositionAt: turnCount,
+    };
+    yield* DB().appendEffectRequest({ record });
+  } else if (decision.kind === "rejected") {
+    const record: EffectRequestRecord = {
+      turnIndex: turnCount,
+      requestor: speaker,
+      effect,
+      disposition: "rejected",
+      dispositionAt: turnCount,
+      error: { name: "PolicyRejected", message: decision.reason },
+    };
+    yield* DB().appendEffectRequest({ record });
+  } else {
+    const record: EffectRequestRecord = {
+      turnIndex: turnCount,
+      requestor: speaker,
+      effect,
+      disposition: "surfaced_to_taras",
+      dispositionAt: turnCount,
+    };
+    yield* DB().appendEffectRequest({ record });
+  }
+}
+
+// -- Sub-workflow: per-effect drain of EffectsQueue (§6.12) --
+
+export function* processEffects(
+  effects: RequestedEffect[],
+  turnCount: number,
+  speaker: "opus" | "gpt",
+): Workflow<void> {
+  yield* EffectsQueue().seed({ effects });
+
+  let draining = true;
+  while (draining) {
+    const head = yield* EffectsQueue().shift({});
+    if (head.effect === null) {
+      draining = false;
+    } else {
+      yield* dispatchEffect(head.effect, turnCount, speaker);
+    }
+  }
+}
 
 // -- Workflow body (§7.2 cycle with recursive state in a while-loop) --
 
@@ -137,16 +237,11 @@ export function* peerLoop(): Workflow<void> {
       };
       yield* DB().appendPeerRecord({ record: peerRecord });
 
-      // Step 7: effect disposition (§6.12).
+      // Step 7: per-effect disposition via helper agents (§6.12).
       const requestedEffects: RequestedEffect[] = result.requestedEffects
         ? result.requestedEffects
         : [];
-      const effectRecords = yield* EffectsProcessor().processAll({
-        effects: requestedEffects,
-        turnIndex: turnCount,
-        requestor: speaker,
-      });
-      yield* DB().appendEffectRequests({ records: effectRecords });
+      yield* processEffects(requestedEffects, turnCount, speaker);
 
       // Step 8: done handling before recurse.
       if (result.status === "done") {
@@ -172,7 +267,9 @@ export default workflow({
     }),
     agent("opus-agent", transport.inprocess("./peers/opus-binding.ts")),
     agent("gpt-agent", transport.inprocess("./peers/gpt-binding.ts")),
-    agent("effects-processor", transport.inprocess("./effects/processor-binding.ts")),
+    agent("effects-policy", transport.inprocess("./effects/policy-binding.ts")),
+    agent("effects-queue", transport.inprocess("./effects/queue-binding.ts")),
+    agent("effect-handler", transport.inprocess("./effects/handler-binding.ts")),
   ],
   journal: journal.memory(),
   entrypoints: {
