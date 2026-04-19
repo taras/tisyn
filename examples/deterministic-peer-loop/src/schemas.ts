@@ -156,7 +156,13 @@ export const BrowserUserMessageSchema = Type.Object({
   message: Type.String(),
 });
 
-export const BrowserControlPatchSchema = Type.Partial(LoopControlSchema);
+export const BrowserControlPatchSchema = Type.Object({
+  paused: Type.Optional(Type.Boolean()),
+  stopRequested: Type.Optional(Type.Boolean()),
+  nextSpeakerOverride: Type.Optional(
+    Type.Union([PeerSpeakerSchema, Type.Null()]),
+  ),
+});
 export type BrowserControlPatch = Static<typeof BrowserControlPatchSchema>;
 
 export const BrowserUpdateControlSchema = Type.Object({
