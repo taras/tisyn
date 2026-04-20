@@ -1,11 +1,11 @@
 /**
- * DPL-MODE / DPL-DONE / DPL-GATE category tests.
+ * DPL-MODE / DPL-DONE / DPL-GATE category tests (journal-only model).
  *
  *   - DPL-MODE-01: needs_taras → next cycle requires Taras input (required mode)
  *   - DPL-MODE-02: continue → next cycle is optional
  *   - DPL-MODE-03: done → no further cycles
- *   - DPL-DONE-01: status=done triggers setReadOnly("done")
- *   - DPL-DONE-02: done persists peer turn BEFORE setReadOnly
+ *   - DPL-DONE-01: status=done carries readOnlyReason="done" on terminal hydrate
+ *   - DPL-DONE-02: done persists peer turn BEFORE the terminal hydrate
  *   - DPL-GATE-01: required mode uses unbounded elicit (no timebox)
  */
 
@@ -41,29 +41,36 @@ describe("DPL-MODE / DPL-DONE", () => {
     expect((elicits[1].args as { message: string }).message).toMatch(/Optional/);
   });
 
-  it("DONE-01/02: done persists peer turn then setReadOnly('done')", function* () {
+  it("DONE-01/02: done persists peer turn then terminal hydrate carries 'done'", function* () {
     const result = yield* runHarness({
       tarasMessages: ["go"],
       opusScript: [opusTurn({ display: "final opus", status: "done" })],
       gptScript: [],
     });
 
-    // Check that appendMessage for the peer turn happened BEFORE setReadOnly.
-    const opIndex = (agent: string, op: string) =>
-      result.operations.findIndex((x) => x.agent === agent && x.op === op);
-    // Find the peer appendMessage — it's the opus one (index > the taras one).
-    const appends = result.operations
-      .map((o, i) => ({ o, i }))
-      .filter(
-        ({ o }) =>
-          o.agent === "DB" &&
-          o.op === "appendMessage" &&
-          (o.args as { entry: { speaker: string } }).entry.speaker === "opus",
-      );
-    expect(appends).toHaveLength(1);
-    const setReadOnlyIdx = opIndex("App", "setReadOnly");
-    expect(setReadOnlyIdx).toBeGreaterThan(appends[0].i);
+    // The opus peer-turn append fires before the terminal hydrate.
+    const peerAppendIdx = result.operations.findIndex(
+      (op) =>
+        op.agent === "Projection" &&
+        op.op === "appendMessage" &&
+        op.args.entry.speaker === "opus",
+    );
+    expect(peerAppendIdx).toBeGreaterThanOrEqual(0);
 
+    const terminalHydrateIdx = (() => {
+      for (let i = result.operations.length - 1; i >= 0; i = i - 1) {
+        const op = result.operations[i];
+        if (
+          op.agent === "App" &&
+          op.op === "hydrate" &&
+          op.args.readOnlyReason === "done"
+        ) {
+          return i;
+        }
+      }
+      return -1;
+    })();
+    expect(terminalHydrateIdx).toBeGreaterThan(peerAppendIdx);
     expect(result.exitReason).toBe("done");
   });
 });

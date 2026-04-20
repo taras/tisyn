@@ -9,9 +9,11 @@ It forks the earlier `multi-agent-chat` example into a three-speaker loop:
 - `opus` takes turns through the Claude-backed peer binding
 - `gpt` takes turns through the Codex-backed peer binding
 
-The example persists transcript, loop control, peer records, and effect request
-records to a single JSON file so reconnects and observer sessions can hydrate
-from durable state.
+The example persists durable state through the kernel journal only. Transcript,
+loop control, peer records, and effect request records all live in the
+workflow's locals and are rebuilt from the journal via runtime replay when the
+host restarts. The App binding receives per-iteration `hydrate` snapshots so
+attached browsers see the current state of the loop.
 
 ## Prerequisites
 
@@ -48,10 +50,11 @@ cd examples/deterministic-peer-loop
 Main entrypoints:
 
 - `src/workflow.ts` - authored workflow
+- `src/main.ts` - dev entrypoint (runs the descriptor and keeps the WS server alive)
 - `browser/` - React client
 - `src/browser-agent.ts` / `src/browser-session.ts` - browser transport and
-  session hydration
-- `src/db-agent.ts` / `src/store.ts` - JSON-backed persistence
+  session hydration (in-memory mirror of the replay-owned snapshot)
+- `src/projection-agent.ts` - pure reducer over workflow-threaded state
 - `src/peers/` - Opus and GPT bindings
 - `src/effects/` - effect policy, queue, and handler bindings
 
@@ -119,19 +122,14 @@ Supported environment variables:
 - `PORT`
   Default: `3000`
   Controls the workflow websocket server started by `pnpm dev`.
-- `PEER_LOOP_DB_PATH`
-  Default: `./data/peer-loop.json`
-  Controls the persisted JSON state file.
+- `JOURNAL_PATH`
+  Default: `./data/peer-loop.ndjson`
+  Controls the kernel journal (NDJSON) file. This is the sole durable artifact
+  — the runtime replays it on restart to rebuild workflow state.
 
-The persisted store contains:
-
-- `messages`
-- `control`
-- `peerRecords`
-- `effectRequests`
-
-To reset local state, stop the dev server and remove the JSON file at
-`PEER_LOOP_DB_PATH`.
+To reset local state, stop the dev server and remove the file at
+`JOURNAL_PATH`. Migrating from an earlier revision: delete any pre-existing
+`data/peer-loop.json`, it is no longer produced or consulted.
 
 ## Using the Example
 

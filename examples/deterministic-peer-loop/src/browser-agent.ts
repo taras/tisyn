@@ -1,9 +1,21 @@
 /**
  * App agent — local transport with WebSocket server binding.
  *
- * Shares the persistence store with the DB binding via getOrCreateStore.
- * The session manager mirrors transcript and LoopControl state so observers
- * and reconnects hydrate without workflow re-dispatch.
+ * Surface: `elicit` + `nextControlPatch` + `hydrate`.
+ * - `elicit` blocks on the owner-submitted user message (same pattern as before).
+ * - `nextControlPatch` blocks on a buffered queue of control patches submitted
+ *   by the owner; each call returns exactly one buffered patch (blocking until
+ *   one is available).
+ * - `hydrate({messages, control, readOnlyReason})` pushes the current
+ *   workflow-owned snapshot into the session-manager mirror and broadcasts to
+ *   attached browsers. Called once per main-loop iteration; during replay all
+ *   but the frontier `hydrate` are replayed from the journal and never reach
+ *   the binding.
+ *
+ * The binding owns no durable state. It does not read the journal. A
+ * non-agent `publishFinalSnapshot(snapshot)` method is exposed for the driver
+ * module (`main.ts`) to publish the replay-owned final snapshot after a
+ * completed journal replays end-to-end without live dispatch.
  */
 
 import { agent, operation } from "@tisyn/agent";
@@ -12,55 +24,81 @@ import type { LocalAgentBinding, LocalServerBinding } from "@tisyn/transport";
 import { createSignal, each, spawn, withResolvers } from "effection";
 import type { Operation } from "effection";
 import { Value } from "@sinclair/typebox/value";
-import { BrowserToHostSchema, type BrowserToHost } from "./schemas.js";
+import {
+  BrowserToHostSchema,
+  type BrowserControlPatch,
+  type BrowserToHost,
+  type LoopControl,
+  type TurnEntry,
+} from "./schemas.js";
 import { BrowserSessionManager } from "./browser-session.js";
-import { getOrCreateStore } from "./store.js";
-import type { LoopControl, TurnEntry } from "./schemas.js";
 import { logInfo } from "./logger.js";
 
 export const App = () =>
   agent("app", {
     elicit: operation<{ message: string }, { message: string }>(),
-    showMessage: operation<{ entry: TurnEntry }, void>(),
-    readControl: operation<Record<string, never>, LoopControl>(),
-    loadChat: operation<{ messages: TurnEntry[] }, void>(),
-    setReadOnly: operation<{ reason: string }, void>(),
+    nextControlPatch: operation<Record<string, never>, BrowserControlPatch>(),
+    hydrate: operation<
+      {
+        messages: TurnEntry[];
+        control: LoopControl;
+        readOnlyReason: string | null;
+      },
+      void
+    >(),
   });
 
-export function createBinding(config?: Record<string, unknown>): LocalAgentBinding {
-  const dbPath = (config?.dbPath as string) ?? "./data/peer-loop.json";
-  const store = getOrCreateStore(dbPath);
+/**
+ * Public handle returned by {@link createBinding}. The driver module holds a
+ * reference via {@link getCurrentAppBinding} and may call
+ * {@link publishFinalSnapshot} after `runtime.execute(...)` returns.
+ */
+export interface AppBindingHandle extends LocalAgentBinding {
+  publishFinalSnapshot(snapshot: {
+    messages: TurnEntry[];
+    control: LoopControl;
+    readOnlyReason: string | null;
+  }): void;
+}
 
+let currentAppBinding: AppBindingHandle | null = null;
+
+export function getCurrentAppBinding(): AppBindingHandle | null {
+  return currentAppBinding;
+}
+
+export function createBinding(_config?: Record<string, unknown>): AppBindingHandle {
   const userInput = createSignal<string, never>();
+
+  // Control-patch queue with a wake-up signal. Patches arrive via the
+  // session-manager hook (synchronous, from the WebSocket message handler);
+  // the agent operation drains one per call, blocking when empty.
+  const controlPatches: BrowserControlPatch[] = [];
+  const patchReady = createSignal<void, never>();
+
   const session = new BrowserSessionManager({
     onUserMessage(message) {
       userInput.send(message);
     },
     onUpdateControl(patch) {
-      const current = store.loadControl();
-      const next: LoopControl = {
-        paused: patch.paused ?? current.paused,
-        stopRequested: patch.stopRequested ?? current.stopRequested,
-      };
-      if (patch.nextSpeakerOverride === null) {
-        // explicit clear — leave field absent on persisted record
-      } else if (patch.nextSpeakerOverride !== undefined) {
-        next.nextSpeakerOverride = patch.nextSpeakerOverride;
-      } else if (current.nextSpeakerOverride !== undefined) {
-        next.nextSpeakerOverride = current.nextSpeakerOverride;
-      }
-      store.writeControl(next);
+      controlPatches.push(patch);
+      patchReady.send();
     },
   });
 
-  session.publishControl(store.loadControl());
-  store.subscribe((event) => {
-    if (event.kind === "control") {
-      session.publishControl(event.control);
+  const applySnapshot = (snapshot: {
+    messages: TurnEntry[];
+    control: LoopControl;
+    readOnlyReason: string | null;
+  }): void => {
+    session.loadChat(snapshot.messages);
+    session.publishControl(snapshot.control);
+    if (snapshot.readOnlyReason !== null) {
+      session.setReadOnly(snapshot.readOnlyReason);
     }
-  });
+  };
 
-  return {
+  const binding: AppBindingHandle = {
     transport: inprocessTransport(App(), {
       *elicit({ message }) {
         const sub = yield* userInput;
@@ -72,17 +110,15 @@ export function createBinding(config?: Record<string, unknown>): LocalAgentBindi
           session.endElicit();
         }
       },
-      *showMessage({ entry }) {
-        session.showMessage(entry);
+      *nextControlPatch() {
+        const sub = yield* patchReady;
+        while (controlPatches.length === 0) {
+          yield* sub.next();
+        }
+        return controlPatches.shift()!;
       },
-      *readControl() {
-        return store.loadControl();
-      },
-      *loadChat({ messages }) {
-        session.loadChat(messages);
-      },
-      *setReadOnly({ reason }) {
-        session.setReadOnly(reason);
+      *hydrate(snapshot) {
+        applySnapshot(snapshot);
       },
     }),
 
@@ -114,7 +150,14 @@ export function createBinding(config?: Record<string, unknown>): LocalAgentBindi
         }
       });
     },
+
+    publishFinalSnapshot(snapshot) {
+      applySnapshot(snapshot);
+    },
   };
+
+  currentAppBinding = binding;
+  return binding;
 }
 
 function waitForFirstMessage(ws: import("ws").WebSocket): Operation<BrowserToHost> {
