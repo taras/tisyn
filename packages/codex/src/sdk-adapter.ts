@@ -70,8 +70,7 @@ export function createSdkBinding(config?: CodexSdkConfig): LocalAgentBinding {
               const args = params.args[0] as Record<string, unknown> | undefined;
               const token = String(params.progressToken ?? id);
 
-              const payload: Record<string, unknown> =
-                (args as Record<string, unknown>) ?? {};
+              const payload: Record<string, unknown> = (args as Record<string, unknown>) ?? {};
 
               const task = yield* spawn(function* () {
                 try {

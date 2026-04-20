@@ -290,9 +290,7 @@ function generateFactory(contract: DiscoveredContract): string {
     const method = methods[i]!;
     const payloadType = methodPayloadType(method);
     const trailing = i < methods.length - 1 ? "," : ",";
-    lines.push(
-      `    ${method.name}: operation<${payloadType}, ${method.resultType}>()${trailing}`,
-    );
+    lines.push(`    ${method.name}: operation<${payloadType}, ${method.resultType}>()${trailing}`);
   }
 
   lines.push(`  });`);

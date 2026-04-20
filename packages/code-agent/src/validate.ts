@@ -15,7 +15,9 @@ const EXPECTED_SHAPE = `{ model?: string }`;
 const DISPATCH_HINT = `Dispatch the payload directly, for example { model: "..." }.`;
 
 function fail(reason: string): never {
-  const err = new Error(`newSession ${reason} Expected payload shape: ${EXPECTED_SHAPE}. ${DISPATCH_HINT}`);
+  const err = new Error(
+    `newSession ${reason} Expected payload shape: ${EXPECTED_SHAPE}. ${DISPATCH_HINT}`,
+  );
   err.name = "InvalidPayload";
   throw err;
 }

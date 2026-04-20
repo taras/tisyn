@@ -93,8 +93,7 @@ export function createSdkBinding(config?: SdkAdapterConfig): LocalAgentBinding {
               const args = params.args[0] as Record<string, unknown> | undefined;
               const progressToken = String(params.progressToken ?? id);
 
-              const payload: Record<string, unknown> =
-                (args as Record<string, unknown>) ?? {};
+              const payload: Record<string, unknown> = (args as Record<string, unknown>) ?? {};
 
               yield* spawn(function* () {
                 try {
