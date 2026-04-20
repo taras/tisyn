@@ -36,11 +36,11 @@ declare function DB(): {
 };
 
 declare function OpusAgent(): {
-  takeTurn(input: { input: PeerTurnInput }): Workflow<PeerTurnResult>;
+  takeTurn(input: PeerTurnInput): Workflow<PeerTurnResult>;
 };
 
 declare function GptAgent(): {
-  takeTurn(input: { input: PeerTurnInput }): Workflow<PeerTurnResult>;
+  takeTurn(input: PeerTurnInput): Workflow<PeerTurnResult>;
 };
 
 declare function Policy(): {
@@ -217,8 +217,8 @@ export function* peerLoop(): Workflow<void> {
       const peerInput: PeerTurnInput = { transcript, tarasMode };
       const result: PeerTurnResult =
         speaker === "opus"
-          ? yield* OpusAgent().takeTurn({ input: peerInput })
-          : yield* GptAgent().takeTurn({ input: peerInput });
+          ? yield* OpusAgent().takeTurn(peerInput)
+          : yield* GptAgent().takeTurn(peerInput);
       turnCount = turnCount + 1;
 
       // Step 6: persist peer turn.

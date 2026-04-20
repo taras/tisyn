@@ -26,7 +26,7 @@ export function createBinding(config?: Record<string, unknown>): LocalAgentBindi
 
   return {
     transport: inprocessTransport(OpusAgent(), {
-      *takeTurn({ input }) {
+      *takeTurn(input) {
         const response = yield* call(async () => {
           const sdk = await import("@anthropic-ai/claude-agent-sdk");
           const session = sdk.unstable_v2_createSession({
