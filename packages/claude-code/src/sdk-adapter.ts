@@ -20,6 +20,7 @@ import {
   progressNotification,
 } from "@tisyn/protocol";
 import type { Val } from "@tisyn/ir";
+import { validateNewSessionPayload } from "@tisyn/code-agent";
 
 export interface SdkAdapterConfig {
   /** Model to use (e.g. "claude-sonnet-4-6"). Defaults to "claude-sonnet-4-6". */
@@ -128,6 +129,7 @@ export function createSdkBinding(config?: SdkAdapterConfig): LocalAgentBinding {
         ): Operation<Val> {
           switch (opName) {
             case "newSession": {
+              validateNewSessionPayload(params);
               const model = (params.model as string) ?? currentModel;
               currentModel = model;
               const sdk = yield* call(() => import("@anthropic-ai/claude-agent-sdk"));

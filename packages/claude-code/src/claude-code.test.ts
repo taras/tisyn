@@ -418,6 +418,32 @@ describe("Claude Code ACP Binding Path", () => {
     });
   });
 
+  it("ACP binding rejects wrapped newSession payload with InvalidPayload", function* () {
+    const binding = createBinding({
+      command: "npx",
+      arguments: ["tsx", mockAcpServer],
+    });
+
+    let caughtError: Error | null = null;
+
+    yield* scoped(function* () {
+      yield* installRemoteAgent(claudeCodeDeclaration, binding.transport);
+
+      try {
+        yield* dispatch(
+          claudeCodeDeclaration.newSession({ config: { model: "opus-4" } } as unknown as Val),
+        );
+      } catch (e) {
+        caughtError = e as Error;
+      }
+    });
+
+    expect(caughtError).not.toBeNull();
+    expect(caughtError!.name).toBe("InvalidPayload");
+    expect(caughtError!.message).toContain("unexpected payload key 'config'");
+    expect(caughtError!.message).toContain("Expected payload shape: { model?: string }");
+  });
+
   it("surfaces subprocess diagnostic when ACP process exits immediately", function* () {
     const binding = createBinding({
       command: "node",
@@ -600,6 +626,35 @@ describe("Claude Code SDK Adapter", () => {
       yield* dispatch(claudeCodeDeclaration.closeSession( handle));
       expect(mock.closed).toBe(true);
     });
+
+    vi.doUnmock("@anthropic-ai/claude-agent-sdk");
+  });
+
+  it("newSession rejects wrapped payload with InvalidPayload", function* () {
+    const createSessionMock = vi.fn();
+    vi.doMock("@anthropic-ai/claude-agent-sdk", () => ({
+      unstable_v2_createSession: createSessionMock,
+    }));
+
+    const binding = createSdkBinding({ model: "test" });
+    let caughtError: Error | null = null;
+
+    yield* scoped(function* () {
+      yield* installRemoteAgent(claudeCodeDeclaration, binding.transport);
+      try {
+        yield* dispatch(
+          claudeCodeDeclaration.newSession({ config: { model: "test" } } as unknown as Val),
+        );
+      } catch (e) {
+        caughtError = e as Error;
+      }
+    });
+
+    expect(caughtError).not.toBeNull();
+    expect(caughtError!.name).toBe("InvalidPayload");
+    expect(caughtError!.message).toContain("unexpected payload key 'config'");
+    expect(caughtError!.message).toContain("Expected payload shape: { model?: string }");
+    expect(createSessionMock).not.toHaveBeenCalled();
 
     vi.doUnmock("@anthropic-ai/claude-agent-sdk");
   });

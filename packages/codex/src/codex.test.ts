@@ -255,6 +255,30 @@ describe("Codex SDK Adapter", () => {
       expect(caughtError).not.toBeNull();
       expect(caughtError!.message).toContain("Unknown session handle");
     });
+
+    it("newSession rejects wrapped payload with InvalidPayload", function* () {
+      startThreadCallCount = 0;
+      const binding = createSdkBinding();
+      let caughtError: Error | null = null;
+
+      yield* scoped(function* () {
+        yield* installRemoteAgent(CodeAgent, binding.transport);
+
+        try {
+          yield* dispatch(
+            CodeAgent.newSession({ config: { model: "test" } } as unknown as { model?: string }),
+          );
+        } catch (e) {
+          caughtError = e as Error;
+        }
+      });
+
+      expect(caughtError).not.toBeNull();
+      expect(caughtError!.name).toBe("InvalidPayload");
+      expect(caughtError!.message).toContain("unexpected payload key 'config'");
+      expect(caughtError!.message).toContain("Expected payload shape: { model?: string }");
+      expect(startThreadCallCount).toBe(0);
+    });
   });
 
   describe("cancellation", () => {
@@ -373,6 +397,32 @@ describe("Codex Exec Adapter", () => {
 
       expect(caughtError).not.toBeNull();
       expect(caughtError!.message).toContain("cannot honor 'model'");
+    });
+
+    it("newSession rejects wrapped payload with InvalidPayload", function* () {
+      const binding = createExecBinding({
+        command: "npx",
+        arguments: ["tsx", mockCodexExec],
+      });
+
+      let caughtError: Error | null = null;
+
+      yield* scoped(function* () {
+        yield* installRemoteAgent(CodeAgent, binding.transport);
+
+        try {
+          yield* dispatch(
+            CodeAgent.newSession({ config: { model: "test" } } as unknown as { model?: string }),
+          );
+        } catch (e) {
+          caughtError = e as Error;
+        }
+      });
+
+      expect(caughtError).not.toBeNull();
+      expect(caughtError!.name).toBe("InvalidPayload");
+      expect(caughtError!.message).toContain("unexpected payload key 'config'");
+      expect(caughtError!.message).toContain("Expected payload shape: { model?: string }");
     });
 
     it("closeSession returns null for live handle", function* () {

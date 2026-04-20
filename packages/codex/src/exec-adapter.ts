@@ -25,6 +25,7 @@ import {
 import type { Val } from "@tisyn/ir";
 import type { CodexExecConfig } from "./types.js";
 import { validateCommand } from "./validate-config.js";
+import { validateNewSessionPayload } from "@tisyn/code-agent";
 
 /**
  * Build the argument array for `codex exec`.
@@ -140,6 +141,7 @@ export function createExecBinding(config?: CodexExecConfig): LocalAgentBinding {
         ): Operation<Val> {
           switch (opName) {
             case "newSession": {
+              validateNewSessionPayload(params);
               if (params.model !== undefined) {
                 throw new Error(
                   "Codex exec adapter cannot honor 'model' in newSession config: " +

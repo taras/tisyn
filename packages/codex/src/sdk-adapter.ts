@@ -19,6 +19,7 @@ import {
 import type { Val } from "@tisyn/ir";
 import type { CodexSdkConfig } from "./types.js";
 import { validateApproval, validateSandbox, validateModel } from "./validate-config.js";
+import { validateNewSessionPayload } from "@tisyn/code-agent";
 
 export function createSdkBinding(config?: CodexSdkConfig): LocalAgentBinding {
   validateApproval(config?.approval);
@@ -102,6 +103,7 @@ export function createSdkBinding(config?: CodexSdkConfig): LocalAgentBinding {
         ): Operation<Val> {
           switch (opName) {
             case "newSession": {
+              validateNewSessionPayload(params);
               const sdk = yield* call(() => import("@openai/codex-sdk"));
               const codex = new sdk.Codex({
                 env: config?.env,

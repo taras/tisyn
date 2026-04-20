@@ -504,14 +504,14 @@ no compatibility shim that accepts a wrapped shape.
 | Expected | Handler receives `{ parentSessionId: "cx-1", forkId: "f-1" }` verbatim; openFork succeeds and returns a `SessionHandle` |
 | Portability | Portable (extended tier) |
 
-**CA-PAYLOAD-06: No legacy wrapper accepted**
+**CA-PAYLOAD-06: Wrapped payload rejected**
 
 | Field | Value |
 |---|---|
 | Spec ref | §7.2 |
 | Tier | Core |
-| Scenario | Dispatch with a legacy single-key wrapper (e.g., `{ args: { session, prompt } }` for `prompt`, or `{ config: { model } }` for `newSession`) |
-| Expected | The handler observes the wrapper as-is — there is no compatibility unwrapping. Required-field reads (e.g., `payload.prompt`, `payload.model`) MUST resolve from the direct payload only; supplying a wrapper produces the natural failure mode for the missing required field (e.g., a stale-handle error or a missing-prompt error). No adapter MAY accept the wrapped shape as equivalent to the direct shape. |
+| Scenario | Dispatch with a single-key wrapper around the declared payload (e.g., `{ args: { session, prompt } }` for `prompt`, or `{ config: { model } }` for `newSession`) |
+| Expected | The handler observes the wrapper as-is — there is no compatibility unwrapping. For operations whose declared payload has at least one required field (`prompt`, `closeSession`, `fork`, `openFork`), required-field reads MUST resolve from the direct payload only; supplying a wrapper produces the natural failure mode for the missing required field. For `newSession`, whose declared payload `{ model?: string }` has no required field, the adapter MUST reject any payload key other than `model` with an `InvalidPayload` error before applying defaults. No adapter MAY accept the wrapped shape as equivalent to the direct shape. |
 | Portability | Portable |
 
 ### 7.5 Name Resolution Tests
@@ -1015,7 +1015,7 @@ conformance.
 | CA-PAYLOAD-03 | Payload | Core | prompt | Direct payload forwarded | P |
 | CA-PAYLOAD-04 | Payload | Ext | fork | Direct payload forwarded | P(E) |
 | CA-PAYLOAD-05 | Payload | Ext | openFork | Direct payload forwarded | P(E) |
-| CA-PAYLOAD-06 | Payload | Core | No legacy wrapper accepted | No compat shim | P |
+| CA-PAYLOAD-06 | Payload | Core | Wrapped payload rejected | InvalidPayload + natural failure | P |
 | CA-NAME-01 | Name | Core | Bare name | Resolves | P |
 | CA-NAME-02 | Name | Core | Qualified name | Strips prefix | P |
 | CA-NAME-03 | Name | Core | Unknown name | Descriptive error | P |
