@@ -54,6 +54,31 @@ describe("DPL-PER / DPL-RES / DPL-INIT extended", () => {
     expect(opusMsg!.usage).toEqual({ inputTokens: 10, outputTokens: 20 });
   });
 
+  it("PER-07: peer TurnEntry omits the usage key when the result has no usage", function* () {
+    // Regression: previously the workflow built `{ ..., usage: result.usage }`
+    // unconditionally, producing a present-but-undefined `usage` that store
+    // validation rejected as "Expected object".
+    const result = yield* runHarness({
+      tarasMessages: ["go"],
+      opusScript: [opusTurn({ display: "no usage", status: "done" })],
+      gptScript: [],
+    });
+
+    const opusMsg = result.appendedMessages.find((m) => m.speaker === "opus");
+    expect(opusMsg).toBeDefined();
+    expect(Object.hasOwn(opusMsg!, "usage")).toBe(false);
+
+    const showCall = result.operations.find(
+      (op) =>
+        op.agent === "App" &&
+        op.op === "showMessage" &&
+        (op.args as { entry: { speaker: string } }).entry.speaker === "opus",
+    );
+    expect(showCall).toBeDefined();
+    const shownEntry = (showCall!.args as { entry: Record<string, unknown> }).entry;
+    expect(Object.hasOwn(shownEntry, "usage")).toBe(false);
+  });
+
   it("RES-02: status drives termination, not display containing literal 'done'", function* () {
     // display contains "done" but status is "continue" — workflow MUST NOT terminate.
     const result = yield* runHarness({
