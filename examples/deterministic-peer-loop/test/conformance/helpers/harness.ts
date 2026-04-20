@@ -48,8 +48,8 @@ export type OperationCall =
   | { agent: "App"; op: "readControl"; args: Record<string, never> }
   | { agent: "App"; op: "setReadOnly"; args: { reason: string } }
   | { agent: "DB"; op: string; args: unknown }
-  | { agent: "OpusAgent"; op: "takeTurn"; args: { input: PeerTurnInput } }
-  | { agent: "GptAgent"; op: "takeTurn"; args: { input: PeerTurnInput } }
+  | { agent: "OpusAgent"; op: "takeTurn"; args: PeerTurnInput }
+  | { agent: "GptAgent"; op: "takeTurn"; args: PeerTurnInput }
   | { agent: "Policy"; op: "decide"; args: { effect: RequestedEffect } }
   | { agent: "EffectsQueue"; op: "seed"; args: { effects: RequestedEffect[] } }
   | { agent: "EffectsQueue"; op: "shift"; args: Record<string, never> }

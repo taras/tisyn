@@ -29,7 +29,7 @@ export function createBinding(config?: Record<string, unknown>): LocalAgentBindi
 
   return {
     transport: inprocessTransport(GptAgent(), {
-      *takeTurn({ input }) {
+      *takeTurn(input) {
         const response = yield* call(async () => {
           const sdk = (await import("@openai/codex-sdk")) as {
             Codex: new (config?: Record<string, unknown>) => {
