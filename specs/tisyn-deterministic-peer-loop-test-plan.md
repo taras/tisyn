@@ -10,6 +10,22 @@ Scoped Effects Test Plan, Tisyn Timebox Test Plan
 
 ### Changelog
 
+**v0.1.1** — Journal-only durability amendment. Scopes
+DPL-PER and DPL-INIT categories to the Projection agent's
+pure-reducer surface (§4.2) and to `App.hydrate`
+snapshots (§4.1) instead of the prior file-backed DB agent
+and per-message App fan-out operations. Adds DPL-JNL
+category with DPL-JNL-01 (completed run's journal records
+the full agent-op trace and ends in Close) and DPL-JNL-02
+(replay from a journal prefix drives live dispatch with
+`App.hydrate` as the first post-frontier call). Rewrites
+the `OperationCall` union, the fixture schema
+(`seeded_initial_control` replaces `initial_control` /
+`initial_transcript`; `control_patches` replaces
+`control_mutations`), and updates DPL-CTRL / DPL-OVR /
+DPL-DONE / DPL-RPL assertions to the new agent surfaces.
+Test count 64/7 → 66/7 Core/Extended.
+
 **v0.1.0** — Initial release. Defines the conformance test
 plan for the deterministic peer-loop example. Covers all
 thirteen normative invariants (LOOP-CTRL-1, LOOP-GATE-1/2,
@@ -105,8 +121,12 @@ The conformance target is the forked example at
 `examples/deterministic-peer-loop`, specifically:
 
 - the workflow's compiled cycle body
-- the App agent's extended surface (§4.1 of the spec)
-- the DB agent's extended surface (§4.2)
+- the App agent's extended surface (§4.1 of the spec —
+  `elicit`, `nextControlPatch`, `hydrate`)
+- the Projection agent's pure-reducer surface (§4.2 —
+  `readInitialControl`, `applyControlPatch`,
+  `appendMessage`, `appendPeerRecord`,
+  `appendEffectRequest`)
 - the OpusAgent and GptAgent peer wrappers (§4.3, §4.4)
 
 The conformance target is **not** the Tisyn kernel,
@@ -147,8 +167,9 @@ profile. Those have their own conformance boundaries.
 - The baseline effect catalog accepted by `@tisyn/effects`
   (covered by the separate effects-spec test plan)
 - Browser UI rendering details (beyond observing
-  `showMessage` dispatches)
-- Concrete file format used by the DB agent's persistence
+  `App.hydrate` snapshots)
+- Concrete NDJSON encoding used by the kernel journal
+  (governed by the Kernel Specification, not this plan)
 - Custom-agent behavior beyond the two MVP peers
 - Track A `PromptResult.usage` end-to-end semantics
   (covered by the Code Agent test plan amendment when it
@@ -229,20 +250,25 @@ interface PeerLoopFixture {
   description: string;
   type: "peer_loop_workflow";
 
-  // Initial state
-  initial_transcript?: TurnEntry[];
-  initial_control?: LoopControl;
-  initial_peer_records?: PeerRecord[];
-  initial_effect_requests?: EffectRequestRecord[];
+  // Initial state — workflow-seeded via Projection
+  // readInitialControl override; no initial_transcript /
+  // peer_records / effect_requests are supplied, because
+  // the journal-only model has no pre-populated store to
+  // load from. A fresh run always starts from empty
+  // accumulators.
+  seeded_initial_control?: LoopControl;
 
   // Scripted inputs
   taras_inputs: Array<
     | { at_turn: number; message: string }
     | { at_turn: number; timeout: true }
   >;
-  control_mutations?: Array<{
+  // Browser-origin control patches fed through
+  // App.nextControlPatch. Each entry is a patch that the
+  // harness makes available for drain at the given turn.
+  control_patches?: Array<{
     at_turn: number;
-    patch: Partial<LoopControl>;
+    patch: BrowserControlPatch;
   }>;
   peer_scripts: {
     opus: PeerTurnResult[];
@@ -309,11 +335,20 @@ produce, not by inspecting reconstructed internal state.
 type OperationCall =
   | { agent: "App"; op: "elicit"; args: { message: string };
       wrapped_in_timebox?: { ms: number } }
-  | { agent: "App"; op: "showMessage"; args: { speaker; content } }
-  | { agent: "App"; op: "loadChat"; args: { messages } }
-  | { agent: "App"; op: "readControl"; args: Record<string, never> }
-  | { agent: "App"; op: "setReadOnly"; args: { reason } }
-  | { agent: "DB"; op: string; args: Val }
+  | { agent: "App"; op: "nextControlPatch"; args: Record<string, never> }
+  | { agent: "App"; op: "hydrate";
+      args: { messages: TurnEntry[]; control: LoopControl;
+              readOnlyReason: string | null } }
+  | { agent: "Projection"; op: "readInitialControl";
+      args: Record<string, never> }
+  | { agent: "Projection"; op: "applyControlPatch";
+      args: { current: LoopControl; patch: BrowserControlPatch } }
+  | { agent: "Projection"; op: "appendMessage";
+      args: { messages: TurnEntry[]; entry: TurnEntry } }
+  | { agent: "Projection"; op: "appendPeerRecord";
+      args: { records: PeerRecord[]; record: PeerRecord } }
+  | { agent: "Projection"; op: "appendEffectRequest";
+      args: { records: EffectRequestRecord[]; record: EffectRequestRecord } }
   | { agent: "OpusAgent" | "GptAgent"; op: "takeTurn";
       args: { input: PeerTurnInput } };
 ```
@@ -329,19 +364,20 @@ state.
 | ID prefix | Category | Spec section |
 |---|---|---|
 | DPL-GATE | Taras gate + timebox composition | §6.2, §6.3, §7.2 Step 1 |
-| DPL-CTRL | Control-state re-read and observation | §6.1, §7.2 Step 2–4 |
+| DPL-CTRL | Control-patch drain + gate checks | §6.1, §7.2 Step 2a–4 |
 | DPL-STEP | Single-peer-step-per-cycle | §6.4, §7.2 Step 6 |
 | DPL-OVR | One-shot speaker override | §6.5, §7.2 Step 5 |
 | DPL-ALT | Default speaker alternation | §6.6 |
 | DPL-RES | Structured peer-result requirement | §6.7, §7.2 Step 6 |
 | DPL-MODE | Deterministic `tarasMode` transition | §6.8 |
 | DPL-DONE | Loop termination on `done` | §6.9, §7.2 Step 9 |
-| DPL-PER | Per-turn persistence | §6.10, §7.2 Step 7 |
+| DPL-PER | Per-turn projection via Projection agent | §6.10, §7.2 Step 7 |
 | DPL-CAP | Capability baseline | §6.11, §4.3, §4.4 |
 | DPL-EXEC | `requestedEffects` disposition lifecycle | §6.12, §6.13, §7.2 Step 8 |
 | DPL-INIT | Initial-state reconstruction | §7.1 |
 | DPL-RPL | Replay semantics | §7.3 |
-| DPL-TYPE | Type-shape conformance for persisted records | §5 |
+| DPL-JNL | Journal-only durability + hydrate at frontier | §7.1, §7.3 |
+| DPL-TYPE | Type-shape conformance for projected records | §5 |
 
 ---
 
@@ -363,11 +399,11 @@ state.
 
 | ID | Tier | Spec ref | Assertion |
 |---|---|---|---|
-| DPL-CTRL-01 | Core | §6.1, §7.2 Step 2 | Before every non-Taras peer dispatch the workflow calls `App.readControl()` in the same cycle. |
-| DPL-CTRL-02 | Core | §6.1, §7.2 Step 3 | If `stopRequested === true`, the workflow calls `App.setReadOnly(...)` and returns without dispatching a peer step. |
-| DPL-CTRL-03 | Core | §6.1, §7.2 Step 4 | If `paused === true`, the workflow does not dispatch a peer step this cycle; it recurses with `tarasMode === "optional"`. |
-| DPL-CTRL-04 | Core | §6.1 | A control value read on an earlier cycle is NOT used to gate a later cycle. Each cycle re-reads. |
-| DPL-CTRL-05 | Extended | §6.1 | When both `paused` and `stopRequested` are true, `stopRequested` wins (stop precedes pause). |
+| DPL-CTRL-01 | Core | §6.1, §7.2 Step 2a | Before every non-Taras peer dispatch the workflow drains every buffered browser-origin control patch via `timebox(0, App.nextControlPatch)` and merges each pulled patch into `control` via `Projection.applyControlPatch` in the same cycle. |
+| DPL-CTRL-02 | Core | §6.1, §7.2 Step 3 | If the drained `control.stopRequested === true`, the workflow sets `readOnlyReason = "stopped"`, dispatches `App.hydrate(...)` with the terminal snapshot, and returns without dispatching a peer step. |
+| DPL-CTRL-03 | Core | §6.1, §7.2 Step 4 | If the drained `control.paused === true`, the workflow does not dispatch a peer step this cycle; it recurses with `tarasMode === "optional"`. |
+| DPL-CTRL-04 | Core | §6.1 | A `control` value computed on an earlier cycle is NOT used to gate a later cycle. Each cycle re-drains the patch queue. |
+| DPL-CTRL-05 | Extended | §6.1 | When both `paused` and `stopRequested` are true after drain, `stopRequested` wins (stop precedes pause). |
 
 ### 6.3 DPL-STEP — Single-peer-step-per-cycle
 
@@ -383,7 +419,7 @@ state.
 | ID | Tier | Spec ref | Assertion |
 |---|---|---|---|
 | DPL-OVR-01 | Core | §6.5, §7.2 Step 5 | When `LoopControl.nextSpeakerOverride === "gpt"` and default alternation would select `"opus"`, the peer dispatched is `GptAgent`. |
-| DPL-OVR-02 | Core | §6.5 | After an override is consumed, `LoopControl.nextSpeakerOverride` is cleared via `DB.writeControl(...)` in the same cycle. |
+| DPL-OVR-02 | Core | §6.5 | After an override is consumed, `control.nextSpeakerOverride` is cleared via `Projection.applyControlPatch({ current: control, patch: { nextSpeakerOverride: null } })` in the same cycle. |
 | DPL-OVR-03 | Core | §6.5 | A subsequent cycle (absent new override) selects the speaker per default alternation, not per the stale prior override. |
 | DPL-OVR-04 | Core | §6.5 | An override equal to the default alternation target still clears after consumption (no special case). |
 
@@ -418,22 +454,22 @@ state.
 
 | ID | Tier | Spec ref | Assertion |
 |---|---|---|---|
-| DPL-DONE-01 | Core | §6.9 | On `status === "done"`, the workflow persists the turn (both `TurnEntry` and `PeerRecord`) before exiting. |
+| DPL-DONE-01 | Core | §6.9 | On `status === "done"`, the workflow projects the turn (both `Projection.appendMessage` and `Projection.appendPeerRecord`) before exiting. |
 | DPL-DONE-02 | Core | §6.9 | On `status === "done"`, any `requestedEffects` on that turn are disposed per §6.12 before exit. |
-| DPL-DONE-03 | Core | §6.9 | On `status === "done"`, `App.setReadOnly("done")` is dispatched. |
-| DPL-DONE-04 | Core | §6.9 | No further cycles execute after a `done` termination. |
+| DPL-DONE-03 | Core | §6.9 | On `status === "done"`, the terminal `App.hydrate` call carries `readOnlyReason === "done"` and dispatches AFTER the peer turn's projection appends. |
+| DPL-DONE-04 | Core | §6.9 | No further cycles execute after a `done` termination. The workflow returns the final snapshot `{ messages, control, readOnlyReason }`. |
 
 ### 6.9 DPL-PER — Per-turn persistence
 
 | ID | Tier | Spec ref | Assertion |
 |---|---|---|---|
-| DPL-PER-01 | Core | §6.10, §7.2 Step 7 | Every peer step persists exactly one `TurnEntry` via `DB.appendMessage` with `speaker` matching the dispatched peer. |
-| DPL-PER-02 | Core | §6.10 | The persisted `TurnEntry.content` equals `PeerTurnResult.display`. |
-| DPL-PER-03 | Core | §6.10 | Every peer step persists exactly one `PeerRecord` via `DB.appendPeerRecord` with matching `turnIndex`, `speaker`, `status`, `data`. |
-| DPL-PER-04 | Core | §6.10 | Every Taras-origin message at the gate persists exactly one `TurnEntry` with `speaker: "taras"`. |
+| DPL-PER-01 | Core | §6.10, §7.2 Step 7 | Every peer step projects exactly one `TurnEntry` via `Projection.appendMessage` with `speaker` matching the dispatched peer. |
+| DPL-PER-02 | Core | §6.10 | The projected `TurnEntry.content` equals `PeerTurnResult.display`. |
+| DPL-PER-03 | Core | §6.10 | Every peer step projects exactly one `PeerRecord` via `Projection.appendPeerRecord` with matching `turnIndex`, `speaker`, `status`, `data`. |
+| DPL-PER-04 | Core | §6.10 | Every Taras-origin message at the gate projects exactly one `TurnEntry` with `speaker: "taras"`. |
 | DPL-PER-05 | Core | §6.10 | No `PeerRecord` is written for Taras-origin messages. |
-| DPL-PER-06 | Core | §5.1 | When `PeerTurnResult.usage` is absent, the persisted `TurnEntry.usage` is also absent. When present, it is copied through unchanged. |
-| DPL-PER-07 | Core | §6.10 | `App.showMessage({ speaker, content })` dispatches for every persisted message, both Taras-origin and peer-origin. |
+| DPL-PER-06 | Core | §5.1 | When `PeerTurnResult.usage` is present, it is copied through unchanged onto the projected `TurnEntry`. |
+| DPL-PER-07 | Core | §6.10, §5.1 | When `PeerTurnResult.usage` is absent, the projected peer `TurnEntry` MUST OMIT the `usage` key (not carry a present-but-undefined value). Verified on the final `App.hydrate` snapshot's `messages` entry. |
 
 ### 6.10 DPL-CAP — Capability baseline
 
@@ -464,9 +500,9 @@ state.
 | ID | Tier | Spec ref | Assertion |
 |---|---|---|---|
 | DPL-INIT-01 | Core | §7.1 | On very first launch (empty journal), initial `RecursiveState` equals `{ nextSpeaker: "opus", tarasMode: "optional", turnCount: 0 }`. |
-| DPL-INIT-02 | Core | §7.1 | DB reads at launch (`loadMessages`, `loadControl`, `loadPeerRecords`) are for hydration only. They do not contribute to `RecursiveState` reconstruction. |
-| DPL-INIT-03 | Core | §7.1 | Absent `LoopControl` is initialized to `{ paused: false, stopRequested: false }` and persisted via `DB.writeControl(...)`. |
-| DPL-INIT-04 | Core | §7.1 | `App.loadChat` is dispatched with the `TurnEntry` array returned by `DB.loadMessages`. |
+| DPL-INIT-02 | Core | §7.1 | No application-data store is consulted at launch. The workflow initializes `messages`, `peerRecords`, `effectRequests` to empty arrays and `readOnlyReason` to `null` without dispatching any load op. |
+| DPL-INIT-03 | Core | §7.1 | The workflow seeds `control` by invoking `Projection.readInitialControl({})` exactly once. In production the Projection binding returns `DEFAULT_LOOP_CONTROL = { paused: false, stopRequested: false }`. |
+| DPL-INIT-04 | Core | §7.1 | The first `App.hydrate` dispatch of the run carries the initial snapshot `{ messages: [], control: <readInitialControl result>, readOnlyReason: null }`. |
 
 ### 6.13 DPL-RPL — Replay semantics
 
@@ -475,10 +511,17 @@ state.
 | DPL-RPL-01 | Core | §7.3 | Given a captured journal prefix from a partial run, the next live dispatch after replay matches the dispatch an uninterrupted run would produce at the same frontier. Observed via the harness's captured `OperationCall` sequence; not via internal state inspection. |
 | DPL-RPL-02 | Core | §7.3 | After replay, the workflow's next live dispatch matches the dispatch it would have made in an uninterrupted run. |
 | DPL-RPL-03 | Core | §7.3 | Replay does not re-execute `@tisyn/effects` dispatches that are present in the journal; they resolve from journaled YieldEvent results. |
-| DPL-RPL-04 | Core | §7.1 + §7.3 | If DB-persisted data and journal-reconstructed state could disagree, a conforming workflow consults the journal for control state and the DB for application hydration; no reconciliation is attempted. Verified by a test where DB state is externally tampered after journal capture: the workflow continues per the journal. |
+| DPL-RPL-04 | Core | §7.1 + §7.3 | The kernel journal is the sole durable source. No secondary store is maintained or consulted. Verified by asserting that removing any non-journal file in the example's data directory before restart produces identical post-replay observable behavior (journal drives reconstruction). |
 | DPL-RPL-05 | Extended | §7.3 | Replay is deterministic: two replays of the same journal prefix produce identical next-dispatch observations. |
 
-### 6.14 DPL-TYPE — Persisted record type shapes
+### 6.14 DPL-JNL — Journal-only durability
+
+| ID | Tier | Spec ref | Assertion |
+|---|---|---|---|
+| DPL-JNL-01 | Core | §7.1, §7.3 | A completed first run's kernel journal records the full agent-op trace (including `Projection.readInitialControl`, per-iteration `App.hydrate`, `App.elicit`, peer `takeTurn`, and `Projection.appendMessage`) and ends in a Close event. No secondary persistence artifact exists. |
+| DPL-JNL-02 | Core | §7.3 | Replay from a captured journal prefix consumes the replayable events without dispatching to bindings and then proceeds live for everything past the frontier. The first live post-frontier dispatch is an `App.hydrate`, confirming that the workflow's "push state to the browser" step fires under live evaluation instead of being served from the stream. |
+
+### 6.15 DPL-TYPE — Projected record type shapes
 
 | ID | Tier | Spec ref | Assertion |
 |---|---|---|---|
@@ -511,8 +554,9 @@ one Core test.
 | M2-EXEC-1 | §6.12 | DPL-EXEC-01, DPL-EXEC-02, DPL-EXEC-03, DPL-EXEC-05, DPL-EXEC-09, DPL-EXEC-10 |
 | M2-EXEC-2 | §6.13 | DPL-EXEC-06, DPL-EXEC-07, DPL-EXEC-09 |
 | Cycle algorithm §7.2 | §7.2 | All DPL-* categories; end-to-end orchestration inferred from sequence-of-operations assertions |
-| Initial state §7.1 | §7.1 | DPL-INIT-01, DPL-INIT-02, DPL-INIT-03, DPL-INIT-04, DPL-RPL-04 |
-| Replay §7.3 | §7.3 | DPL-RPL-01, DPL-RPL-02, DPL-RPL-03, DPL-RPL-04 |
+| Initial state §7.1 | §7.1 | DPL-INIT-01, DPL-INIT-02, DPL-INIT-03, DPL-INIT-04, DPL-RPL-04, DPL-JNL-01 |
+| Replay §7.3 | §7.3 | DPL-RPL-01, DPL-RPL-02, DPL-RPL-03, DPL-RPL-04, DPL-JNL-02 |
+| Journal-only durability §7.1, §7.3 | §7.1, §7.3 | DPL-JNL-01, DPL-JNL-02 |
 | Type shapes §5 | §5 | DPL-TYPE-01 through DPL-TYPE-05 |
 | Preserved invariants §8.1 | §8.1 | Implicit; preserved by the above not probing kernel/runtime internals |
 
@@ -541,8 +585,9 @@ uncovered.
 | DPL-EXEC | 9 | 1 | 10 |
 | DPL-INIT | 4 | 0 | 4 |
 | DPL-RPL | 4 | 1 | 5 |
+| DPL-JNL | 2 | 0 | 2 |
 | DPL-TYPE | 5 | 0 | 5 |
-| **Total** | **64** | **7** | **71** |
+| **Total** | **66** | **7** | **73** |
 
 ---
 
@@ -578,10 +623,14 @@ conformance from effect-registry content.
 ### 9.4 Browser Substrate
 
 For Core tests the browser is replaced with a simulated
-WebSocket client that emits scripted `userMessage` events
-and observes `showMessage` / `loadChat` / `setReadOnly`
-dispatches. See `examples/multi-agent-chat/test/e2e.test.ts`
-for the pattern; the fork uses the same pattern.
+client realized at the App-binding seam. The harness
+scripts `App.elicit` to return queued Taras messages,
+feeds `App.nextControlPatch` from a
+`createSignal<BrowserControlPatch>` driven by fixture
+`control_patches` entries, and captures every `App.hydrate`
+snapshot. Assertions on transcript display, control
+fan-out, and read-only state are expressed against the
+captured `hydrate` snapshot sequence.
 
 ### 9.5 Replay Harness
 

@@ -1,5 +1,5 @@
 /**
- * DPL-ALT / DPL-STEP / DPL-OVR extended tests.
+ * DPL-ALT / DPL-STEP / DPL-OVR extended tests (journal-only model).
  *
  *   - DPL-ALT-03: after gpt step (no override), next speaker is opus
  *   - DPL-ALT-04: alternation toggles regardless of status
@@ -18,7 +18,7 @@ describe("DPL-ALT / DPL-STEP / DPL-OVR extended", () => {
   it("ALT-03/04: gpt→opus alternation toggles regardless of status", function* () {
     // Start with override to gpt so gpt goes first, then alternation swings to opus.
     const result = yield* runHarness({
-      initialControl: {
+      seededInitialControl: {
         paused: false,
         stopRequested: false,
         nextSpeakerOverride: "gpt",
@@ -35,10 +35,8 @@ describe("DPL-ALT / DPL-STEP / DPL-OVR extended", () => {
   });
 
   it("STEP-02: paused + stopRequested eventually → zero peer steps, exit stopped", function* () {
-    // Paused alone would loop forever; combine with stop so we exit cleanly.
-    // Still valid STEP-02 check: no peer step was dispatched.
     const result = yield* runHarness({
-      initialControl: { paused: true, stopRequested: true },
+      seededInitialControl: { paused: true, stopRequested: true },
       tarasMessages: ["one"],
       opusScript: [opusTurn({ display: "x", status: "continue" })],
       gptScript: [],
@@ -52,7 +50,6 @@ describe("DPL-ALT / DPL-STEP / DPL-OVR extended", () => {
   });
 
   it("STEP-04: a single cycle never dispatches two peer steps", function* () {
-    // Two cycles → two peer steps (one each). Verify no cycle doubles up.
     const result = yield* runHarness({
       tarasMessages: ["a", "b"],
       opusScript: [opusTurn({ display: "o1", status: "continue" })],
@@ -66,10 +63,10 @@ describe("DPL-ALT / DPL-STEP / DPL-OVR extended", () => {
     expect(peerCalls).toHaveLength(2);
   });
 
-  it("OVR-04: override equal to default target still clears via writeControl", function* () {
+  it("OVR-04: override equal to default target still clears via applyControlPatch", function* () {
     // Default first speaker is opus. Override to opus — still must be cleared.
     const result = yield* runHarness({
-      initialControl: {
+      seededInitialControl: {
         paused: false,
         stopRequested: false,
         nextSpeakerOverride: "opus",
@@ -79,15 +76,12 @@ describe("DPL-ALT / DPL-STEP / DPL-OVR extended", () => {
       gptScript: [],
     });
 
-    const writeControl = result.operations.find(
-      (op) => op.agent === "DB" && op.op === "writeControl",
+    const clearCall = result.operations.find(
+      (op) =>
+        op.agent === "Projection" &&
+        op.op === "applyControlPatch" &&
+        op.args.patch.nextSpeakerOverride === null,
     );
-    expect(writeControl).toBeDefined();
-    const written = (
-      writeControl!.args as {
-        control: { nextSpeakerOverride?: string };
-      }
-    ).control;
-    expect(written.nextSpeakerOverride).toBeUndefined();
+    expect(clearCall).toBeDefined();
   });
 });

@@ -28,6 +28,12 @@ export interface RecursiveState {
   turnCount: number;
 }
 
+export interface FinalSnapshot {
+  messages: import("./schemas.js").TurnEntry[];
+  control: import("./schemas.js").LoopControl;
+  readOnlyReason: string | null;
+}
+
 export type PolicyDecision =
   | { kind: "executed" }
   | { kind: "deferred"; reason?: string }

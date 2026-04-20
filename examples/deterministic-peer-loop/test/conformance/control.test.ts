@@ -1,12 +1,11 @@
 /**
- * DPL-CTRL / DPL-OVR / DPL-RES category tests.
+ * DPL-CTRL / DPL-OVR / DPL-RES category tests (journal-only model).
  *
- *   - DPL-CTRL-01: stopRequested → setReadOnly("stopped") + exit before peer step
- *   - DPL-CTRL-03: paused → skip peer step, recurse with tarasMode=optional
- *   - DPL-CTRL-04: paused then unpaused → peer step resumes
- *   - DPL-OVR-01: nextSpeakerOverride consumed + cleared via writeControl
+ *   - DPL-CTRL-01: stopRequested → final hydrate readOnlyReason="stopped", no peer step
+ *   - DPL-CTRL-03: paused + stopRequested → no peer step, readOnlyReason="stopped"
+ *   - DPL-OVR-01: nextSpeakerOverride consumed and cleared via Projection.applyControlPatch
  *   - DPL-OVR-02: override overrides default alternation for one cycle
- *   - DPL-RES-01: readControl called every cycle (not cached)
+ *   - DPL-RES-01: hydrate fires every cycle (state is re-observed each iteration)
  */
 
 import { describe, it } from "@effectionx/vitest";
@@ -14,9 +13,9 @@ import { expect } from "vitest";
 import { runHarness, opusTurn, gptTurn } from "./helpers/harness.js";
 
 describe("DPL-CTRL / DPL-OVR / DPL-RES", () => {
-  it("CTRL-01: stopRequested before first peer step exits with setReadOnly('stopped')", function* () {
+  it("CTRL-01: stopRequested before first peer step exits with readOnlyReason='stopped'", function* () {
     const result = yield* runHarness({
-      initialControl: { paused: false, stopRequested: true },
+      seededInitialControl: { paused: false, stopRequested: true },
       tarasMessages: ["go"],
       opusScript: [opusTurn({ display: "should-not-fire", status: "continue" })],
       gptScript: [],
@@ -28,28 +27,15 @@ describe("DPL-CTRL / DPL-OVR / DPL-RES", () => {
     );
     expect(peerCalls).toHaveLength(0);
 
-    // setReadOnly("stopped") fired.
-    const setReadOnly = result.operations.find(
-      (op) => op.agent === "App" && op.op === "setReadOnly",
-    );
-    expect(setReadOnly).toBeDefined();
-    expect((setReadOnly!.args as { reason: string }).reason).toBe("stopped");
+    // Final hydrate carries readOnlyReason="stopped".
+    const last = result.hydrateSnapshots[result.hydrateSnapshots.length - 1];
+    expect(last.readOnlyReason).toBe("stopped");
     expect(result.exitReason).toBe("stopped");
   });
 
-  it("CTRL-03: paused cycle skips peer step, stopRequested exits", function* () {
-    // First cycle: paused=true, stopRequested=false → skip peer step.
-    // Second cycle: in readControl, we observe the same state (still paused,
-    // but now we additionally ask to stop). We arrange this by flipping the
-    // initialControl between cycles: after exhausting the first scripted
-    // message, set stopRequested so the next cycle's stop check exits.
-    // Because the harness has no per-cycle hook, we use a single scripted
-    // message and mutate the stored control after the first readControl
-    // via a setTimeout-style trick: the DB.writeControl side-effect is
-    // workflow-driven, so we instead rely on stopRequested being set from
-    // the start in combination with paused — stop check is BEFORE pause.
+  it("CTRL-03: paused+stopRequested from the start exits via stop, skips peer", function* () {
     const result = yield* runHarness({
-      initialControl: { paused: true, stopRequested: true },
+      seededInitialControl: { paused: true, stopRequested: true },
       tarasMessages: ["only"],
       opusScript: [opusTurn({ display: "should-not-fire", status: "continue" })],
       gptScript: [],
@@ -63,10 +49,10 @@ describe("DPL-CTRL / DPL-OVR / DPL-RES", () => {
     expect(result.exitReason).toBe("stopped");
   });
 
-  it("OVR-01/02: nextSpeakerOverride routes and is cleared via writeControl", function* () {
+  it("OVR-01/02: nextSpeakerOverride routes and is cleared via applyControlPatch", function* () {
     // Default alternation would start with opus. Override to gpt for first turn.
     const result = yield* runHarness({
-      initialControl: {
+      seededInitialControl: {
         paused: false,
         stopRequested: false,
         nextSpeakerOverride: "gpt",
@@ -83,32 +69,27 @@ describe("DPL-CTRL / DPL-OVR / DPL-RES", () => {
     expect(peerCalls).toHaveLength(1);
     expect(peerCalls[0].agent).toBe("GptAgent");
 
-    // writeControl was called with the cleared control (no override).
-    const writeControl = result.operations.find(
-      (op) => op.agent === "DB" && op.op === "writeControl",
+    // Projection.applyControlPatch called with clear patch ({ nextSpeakerOverride: null }).
+    const clearCall = result.operations.find(
+      (op) =>
+        op.agent === "Projection" &&
+        op.op === "applyControlPatch" &&
+        op.args.patch.nextSpeakerOverride === null,
     );
-    expect(writeControl).toBeDefined();
-    const writtenControl = (
-      writeControl!.args as {
-        control: { paused: boolean; stopRequested: boolean; nextSpeakerOverride?: string };
-      }
-    ).control;
-    expect(writtenControl.paused).toBe(false);
-    expect(writtenControl.stopRequested).toBe(false);
-    expect(writtenControl.nextSpeakerOverride).toBeUndefined();
+    expect(clearCall).toBeDefined();
   });
 
-  it("RES-01: readControl is called in each cycle (not cached)", function* () {
+  it("RES-01: hydrate fires every cycle so browser observes live state", function* () {
     const result = yield* runHarness({
       tarasMessages: ["a", "b"],
       opusScript: [opusTurn({ display: "o1", status: "continue" })],
       gptScript: [gptTurn({ display: "g1", status: "done" })],
     });
 
-    const readControls = result.operations.filter(
-      (op) => op.agent === "App" && op.op === "readControl",
-    );
-    // Two cycles (opus then gpt), each with its own readControl.
-    expect(readControls).toHaveLength(2);
+    // Two peer cycles → at least two hydrate dispatches (one per iteration
+    // start) plus a terminal hydrate carrying readOnlyReason="done".
+    expect(result.hydrateSnapshots.length).toBeGreaterThanOrEqual(3);
+    const last = result.hydrateSnapshots[result.hydrateSnapshots.length - 1];
+    expect(last.readOnlyReason).toBe("done");
   });
 });

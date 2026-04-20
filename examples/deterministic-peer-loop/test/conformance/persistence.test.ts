@@ -1,12 +1,12 @@
 /**
- * DPL-PER / DPL-RES / DPL-INIT extended tests.
+ * DPL-PER / DPL-RES / DPL-INIT extended tests (journal-only model).
  *
  *   - DPL-PER-04: Taras-origin messages persist with speaker "taras"
  *   - DPL-PER-05: no PeerRecord for Taras-origin messages
  *   - DPL-PER-06: PeerTurnResult.usage passes through to TurnEntry
+ *   - DPL-PER-07: peer TurnEntry omits the `usage` key when the result has none
  *   - DPL-RES-02: status drives termination, not display text
  *   - DPL-INIT-03: absent LoopControl initializes defaults
- *   - DPL-INIT-04: App.loadChat dispatched with DB.loadMessages output (covered in happy-path)
  */
 
 import { describe, it } from "@effectionx/vitest";
@@ -31,7 +31,6 @@ describe("DPL-PER / DPL-RES / DPL-INIT extended", () => {
       (r) => (r.speaker as string) === "taras",
     );
     expect(tarasPeerRecords).toHaveLength(0);
-    // Exactly one peer record (the opus turn).
     expect(result.appendedPeerRecords).toHaveLength(1);
     expect(result.appendedPeerRecords[0].speaker).toBe("opus");
   });
@@ -55,9 +54,6 @@ describe("DPL-PER / DPL-RES / DPL-INIT extended", () => {
   });
 
   it("PER-07: peer TurnEntry omits the usage key when the result has no usage", function* () {
-    // Regression: previously the workflow built `{ ..., usage: result.usage }`
-    // unconditionally, producing a present-but-undefined `usage` that store
-    // validation rejected as "Expected object".
     const result = yield* runHarness({
       tarasMessages: ["go"],
       opusScript: [opusTurn({ display: "no usage", status: "done" })],
@@ -68,26 +64,20 @@ describe("DPL-PER / DPL-RES / DPL-INIT extended", () => {
     expect(opusMsg).toBeDefined();
     expect(Object.hasOwn(opusMsg!, "usage")).toBe(false);
 
-    const showCall = result.operations.find(
-      (op) =>
-        op.agent === "App" &&
-        op.op === "showMessage" &&
-        (op.args as { entry: { speaker: string } }).entry.speaker === "opus",
-    );
-    expect(showCall).toBeDefined();
-    const shownEntry = (showCall!.args as { entry: Record<string, unknown> }).entry;
-    expect(Object.hasOwn(shownEntry, "usage")).toBe(false);
+    // The final hydrate snapshot carries the same entry — no present-but-undefined usage.
+    const finalSnapshot = result.hydrateSnapshots[result.hydrateSnapshots.length - 1];
+    const opusEntry = finalSnapshot.messages.find((m) => m.speaker === "opus");
+    expect(opusEntry).toBeDefined();
+    expect(Object.hasOwn(opusEntry!, "usage")).toBe(false);
   });
 
   it("RES-02: status drives termination, not display containing literal 'done'", function* () {
-    // display contains "done" but status is "continue" — workflow MUST NOT terminate.
     const result = yield* runHarness({
       tarasMessages: ["a", "b"],
       opusScript: [opusTurn({ display: "task is done-ish but not really", status: "continue" })],
       gptScript: [gptTurn({ display: "ok stopping", status: "done" })],
     });
 
-    // Two peer calls occurred — the first's "done" text did not terminate.
     const peerCalls = result.operations.filter(
       (op) => op.agent === "OpusAgent" || op.agent === "GptAgent",
     );
@@ -96,18 +86,19 @@ describe("DPL-PER / DPL-RES / DPL-INIT extended", () => {
   });
 
   it("INIT-03: workflow runs with defaulted control when none supplied", function* () {
-    // No initialControl → harness defaults to { paused: false, stopRequested: false }.
-    // Verify the workflow reads it and proceeds normally.
+    // No seededInitialControl → harness defaults to DEFAULT_LOOP_CONTROL.
     const result = yield* runHarness({
       tarasMessages: ["go"],
       opusScript: [opusTurn({ display: "ok", status: "done" })],
       gptScript: [],
     });
 
-    const readControl = result.operations.find(
-      (op) => op.agent === "App" && op.op === "readControl",
+    // readInitialControl was invoked exactly once at workflow startup.
+    const inits = result.operations.filter(
+      (op) => op.agent === "Projection" && op.op === "readInitialControl",
     );
-    expect(readControl).toBeDefined();
+    expect(inits).toHaveLength(1);
+
     // A peer step ran, confirming defaults did not gate the loop off.
     const peerCalls = result.operations.filter(
       (op) => op.agent === "OpusAgent" || op.agent === "GptAgent",
