@@ -221,12 +221,11 @@ export function* peerLoop(): Workflow<void> {
           : yield* GptAgent().takeTurn(peerInput);
       turnCount = turnCount + 1;
 
-      // Step 6: persist peer turn.
-      const peerEntry: TurnEntry = {
-        speaker,
-        content: result.display,
-        usage: result.usage,
-      };
+      // Step 6: persist peer turn. Only include `usage` when the peer supplied
+      // one — store validation rejects a present-but-undefined field.
+      const peerEntry: TurnEntry = result.usage
+        ? { speaker, content: result.display, usage: result.usage }
+        : { speaker, content: result.display };
       yield* DB().appendMessage({ entry: peerEntry });
       yield* App().showMessage({ entry: peerEntry });
       const peerRecord: PeerRecord = {
