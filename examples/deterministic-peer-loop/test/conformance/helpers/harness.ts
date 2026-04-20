@@ -135,27 +135,27 @@ export function* runHarness(options: HarnessOptions): Operation<HarnessResult> {
 
   // App agent: Taras messages, transcript hydration, showMessage, readControl, setReadOnly.
   yield* Agents.use(App(), {
-    *elicit({ input }) {
-      operations.push({ agent: "App", op: "elicit", args: input });
+    *elicit(args) {
+      operations.push({ agent: "App", op: "elicit", args });
       if (tarasMessages.length === 0) {
         done.resolve();
         throw new Error("TARAS_SCRIPT_EXHAUSTED");
       }
       return { message: tarasMessages.shift()! };
     },
-    *showMessage({ input }) {
-      operations.push({ agent: "App", op: "showMessage", args: input });
+    *showMessage(args) {
+      operations.push({ agent: "App", op: "showMessage", args });
     },
-    *loadChat({ input }) {
-      operations.push({ agent: "App", op: "loadChat", args: input });
+    *loadChat(args) {
+      operations.push({ agent: "App", op: "loadChat", args });
     },
     *readControl() {
       operations.push({ agent: "App", op: "readControl", args: {} });
       return { ...control };
     },
-    *setReadOnly({ input }) {
-      operations.push({ agent: "App", op: "setReadOnly", args: input });
-      exitReason = input.reason;
+    *setReadOnly(args) {
+      operations.push({ agent: "App", op: "setReadOnly", args });
+      exitReason = args.reason;
     },
   });
 
@@ -165,43 +165,43 @@ export function* runHarness(options: HarnessOptions): Operation<HarnessResult> {
       operations.push({ agent: "DB", op: "loadMessages", args: {} });
       return [...transcript];
     },
-    *appendMessage({ input }) {
-      operations.push({ agent: "DB", op: "appendMessage", args: input });
-      transcript.push(input.entry);
+    *appendMessage(args) {
+      operations.push({ agent: "DB", op: "appendMessage", args });
+      transcript.push(args.entry);
     },
     *loadControl() {
       operations.push({ agent: "DB", op: "loadControl", args: {} });
       return { ...control };
     },
-    *writeControl({ input }) {
-      operations.push({ agent: "DB", op: "writeControl", args: input });
-      control = { ...input.control };
+    *writeControl(args) {
+      operations.push({ agent: "DB", op: "writeControl", args });
+      control = { ...args.control };
     },
     *loadPeerRecords() {
       operations.push({ agent: "DB", op: "loadPeerRecords", args: {} });
       return [...peerRecords];
     },
-    *appendPeerRecord({ input }) {
-      operations.push({ agent: "DB", op: "appendPeerRecord", args: input });
-      peerRecords.push(input.record);
+    *appendPeerRecord(args) {
+      operations.push({ agent: "DB", op: "appendPeerRecord", args });
+      peerRecords.push(args.record);
     },
     *loadEffectRequests() {
       operations.push({ agent: "DB", op: "loadEffectRequests", args: {} });
       return [...effectRequests];
     },
-    *appendEffectRequest({ input }) {
-      operations.push({ agent: "DB", op: "appendEffectRequest", args: input });
-      effectRequests.push(input.record);
+    *appendEffectRequest(args) {
+      operations.push({ agent: "DB", op: "appendEffectRequest", args });
+      effectRequests.push(args.record);
     },
   });
 
   // Opus peer.
   yield* Agents.use(OpusAgent(), {
-    *takeTurn({ input }) {
+    *takeTurn(args) {
       operations.push({
         agent: "OpusAgent",
         op: "takeTurn",
-        args: { input: input.input },
+        args,
       });
       peerTurnIndex = peerTurnIndex + 1;
       if (peerTurnIndex > maxTurns) {
@@ -223,11 +223,11 @@ export function* runHarness(options: HarnessOptions): Operation<HarnessResult> {
 
   // Gpt peer.
   yield* Agents.use(GptAgent(), {
-    *takeTurn({ input }) {
+    *takeTurn(args) {
       operations.push({
         agent: "GptAgent",
         op: "takeTurn",
-        args: { input: input.input },
+        args,
       });
       peerTurnIndex = peerTurnIndex + 1;
       if (peerTurnIndex > maxTurns) {
@@ -249,11 +249,11 @@ export function* runHarness(options: HarnessOptions): Operation<HarnessResult> {
 
   // Policy agent — per-effect decisions from the scripted queue.
   yield* Agents.use(Policy(), {
-    *decide({ input }) {
+    *decide(args) {
       operations.push({
         agent: "Policy",
         op: "decide",
-        args: input,
+        args,
       });
       const next = policyScript.shift();
       if (next !== undefined) {
@@ -265,13 +265,13 @@ export function* runHarness(options: HarnessOptions): Operation<HarnessResult> {
 
   // EffectsQueue agent — per-cycle FIFO of requested effects.
   yield* Agents.use(EffectsQueue(), {
-    *seed({ input }) {
+    *seed(args) {
       operations.push({
         agent: "EffectsQueue",
         op: "seed",
-        args: input,
+        args,
       });
-      queue = [...input.effects];
+      queue = [...args.effects];
     },
     *shift() {
       operations.push({
@@ -290,11 +290,11 @@ export function* runHarness(options: HarnessOptions): Operation<HarnessResult> {
 
   // EffectHandler agent — scripted dispatch responses.
   yield* Agents.use(EffectHandler(), {
-    *invoke({ input }) {
+    *invoke(args) {
       operations.push({
         agent: "EffectHandler",
         op: "invoke",
-        args: input,
+        args,
       });
       const next = dispatchScript.shift();
       if (next === undefined) {
@@ -302,7 +302,7 @@ export function* runHarness(options: HarnessOptions): Operation<HarnessResult> {
           ok: false as const,
           error: {
             name: "UnknownEffectError",
-            message: `Unknown effect: ${input.effectId}`,
+            message: `Unknown effect: ${args.effectId}`,
           },
         };
       }
