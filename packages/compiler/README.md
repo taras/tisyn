@@ -283,7 +283,7 @@ export function* run(factory: AgentTransportFactory) {
       },
     });
     const handle = yield* useAgent(MyService);
-    return yield* handle.doWork({ input: "hello" });
+    return yield* handle.doWork("hello");
   });
 }
 ```

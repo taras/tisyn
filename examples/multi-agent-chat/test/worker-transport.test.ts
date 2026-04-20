@@ -15,7 +15,7 @@ import { App, Llm, DB, chat } from "../src/workflow.generated.js";
 
 describe("Worker transport", () => {
   it("routes LLM.sample through a real worker thread", function* () {
-    const showCalls: Array<{ input: { message: string } }> = [];
+    const showCalls: Array<{ message: string }> = [];
     const userMessages = ["hello from worker test"];
     let userMessageIndex = 0;
     const done = withResolvers<void>();
@@ -59,6 +59,6 @@ describe("Worker transport", () => {
 
     // Assert: the echo reply came back through the Worker
     expect(showCalls).toHaveLength(1);
-    expect(showCalls[0]!.input.message).toBe("Echo: hello from worker test");
+    expect(showCalls[0]!.message).toBe("Echo: hello from worker test");
   });
 });

@@ -10,22 +10,20 @@ const Llm = () =>
   agent("llm", {
     sample: operation<
       {
-        input: {
-          history: Array<{ role: string; content: string }>;
-          message: string;
-        };
+        history: Array<{ role: string; content: string }>;
+        message: string;
       },
       { message: string }
     >(),
   });
 
 const impl = implementAgent(Llm(), {
-  *sample({ input }) {
+  *sample({ history, message }) {
     logInfo("llm", "sample request", {
-      message: input.message,
-      historyLength: input.history.length,
+      message,
+      historyLength: history.length,
     });
-    const result = { message: `Echo: ${input.message}` };
+    const result = { message: `Echo: ${message}` };
     logInfo("llm", "sample response", { message: result.message });
     return result;
   },

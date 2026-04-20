@@ -109,7 +109,7 @@ import { installRemoteAgent } from "@tisyn/transport";
 import { websocketTransport } from "@tisyn/transport/websocket";
 
 const math = agent("math", {
-  double: operation<{ input: { value: number } }, number>(),
+  double: operation<{ value: number }, number>(),
 });
 
 yield* installRemoteAgent(
@@ -117,7 +117,7 @@ yield* installRemoteAgent(
   websocketTransport({ url: "ws://localhost:8080" }),
 );
 
-const result = yield* dispatch(math.double({ input: { value: 21 } }));
+const result = yield* dispatch(math.double({ value: 21 }));
 ```
 
 ## Choosing a Transport

@@ -620,7 +620,7 @@ describe("generateWorkflowModule", () => {
   // ── Normalization ──
 
   describe("normalization", () => {
-    it("normalizes single positional arg to named payload Construct", () => {
+    it("lowers single scalar arg directly as effect payload", () => {
       const source = `
         import type { Order } from "./types.js";
         declare function OrderService(): {
@@ -636,16 +636,39 @@ describe("generateWorkflowModule", () => {
       const body = (ir as any).body;
       const evalNode = body.data.expr.value;
 
-      // Data should be a Construct node, not an array
+      // Single-parameter methods pass the bare argument expression as the
+      // effect payload — no Construct wrapper, no parameter-name envelope.
+      expect(evalNode).toHaveProperty("id", "order-service.fetchOrder");
+      expect(evalNode.data).toEqual({ tisyn: "ref", name: "orderId" });
+    });
+
+    it("lowers single object arg directly as effect payload", () => {
+      const source = `
+        declare function App(): {
+          loadChat(input: { messages: string[] }): Workflow<void>;
+        };
+        export function* run(prior: string[]) {
+          yield* App().loadChat({ messages: prior });
+        }
+      `;
+      const result = generateWorkflowModule(source, { validate: false });
+      const ir = result.workflows["run"]!;
+      const body = (ir as any).body;
+      // The body is the lone yield* expression; no Let wrapping.
+      const evalNode = body.data?.expr?.exprs
+        ? body.data.expr.exprs[body.data.expr.exprs.length - 1]
+        : body;
+
+      // Payload is the direct Construct from the object literal — fields keyed
+      // by the literal's properties, NOT nested under the authored "input"
+      // parameter name.
+      expect(evalNode).toHaveProperty("id", "app.loadChat");
       expect(evalNode.data).toHaveProperty("tisyn", "eval");
       expect(evalNode.data).toHaveProperty("id", "construct");
-      // The construct should have the named field
-      const constructFields = evalNode.data.data.expr;
-      expect(constructFields).toHaveProperty("orderId");
-      expect(constructFields.orderId).toEqual({
-        tisyn: "ref",
-        name: "orderId",
-      });
+      const fields = evalNode.data.data.expr;
+      expect(fields).toHaveProperty("messages");
+      expect(fields).not.toHaveProperty("input");
+      expect(fields.messages).toEqual({ tisyn: "ref", name: "prior" });
     });
 
     it("normalizes multi-arg to named payload Construct", () => {
@@ -774,10 +797,12 @@ describe("generateWorkflowModule", () => {
 
     it("generates operation<> with correct payload types", () => {
       const result = generateWorkflowModule(source, { validate: false });
+      // Multi-parameter method keeps named-object payload.
       expect(result.source).toContain(
         "operation<{ orderId: string; includeLines: boolean }, Order>()",
       );
-      expect(result.source).toContain("operation<{ payment: Payment }, Receipt>()");
+      // Single-parameter method emits the bare argument type — no wrapping.
+      expect(result.source).toContain("operation<Payment, Receipt>()");
     });
 
     it("generates named workflow IR export", () => {

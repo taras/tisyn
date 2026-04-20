@@ -146,7 +146,9 @@ describe("SS-WF workflow composition", () => {
     const originalSpec = yield* acquireFixture("tisyn-cli", "spec");
     const originalPlan = yield* acquireFixture("tisyn-cli", "plan");
     const payload = {
-      input: { target: "tisyn-cli", originalSpec, originalPlan },
+      target: "tisyn-cli",
+      originalSpec,
+      originalPlan,
     } as unknown as Val;
     const result = yield* compile(payload);
     const output = result as unknown as CompileOutput;

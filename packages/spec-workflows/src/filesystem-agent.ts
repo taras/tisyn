@@ -14,9 +14,8 @@
 // `transport.inprocess("./filesystem-agent.ts")` from `@tisyn/config`;
 // the workflow body calls
 // `Filesystem().readOriginal({ target, kind })` through an ambient
-// contract, and the compiler wraps the single argument as
-// `{ input: { target, kind } }` using the ambient param name — so the
-// handler destructures `{ input }` and then pulls the fields out.
+// contract. The compiler passes the single argument through as the
+// effect payload directly, so the handler receives `{ target, kind }`.
 
 import type { Operation } from "effection";
 import { call } from "effection";
@@ -33,10 +32,10 @@ import { filesystemDeclaration } from "./agents.ts";
 // types as disjoint. Wrap through `call` so the handler body uses
 // effection's `Operation<T>` consistently.
 function* readOriginal(payload: Val): Operation<Val> {
-  const { input } = payload as unknown as {
-    input: { target: string; kind: "spec" | "plan" };
+  const { target, kind } = payload as unknown as {
+    target: string;
+    kind: "spec" | "plan";
   };
-  const { target, kind } = input;
   if (kind !== "spec" && kind !== "plan") {
     throw new Error(
       `filesystem-agent: unknown kind "${kind}" for target "${target}". ` +

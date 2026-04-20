@@ -8,7 +8,7 @@
 import ts from "typescript";
 import type { TisynExpr as Expr } from "@tisyn/ir";
 import { print } from "@tisyn/ir";
-import type { DiscoveredContract } from "./discover.js";
+import type { ContractMethod, DiscoveredContract } from "./discover.js";
 import type { CompiledSymbol } from "./compile-symbols.js";
 
 export interface WorkflowInfo {
@@ -256,10 +256,18 @@ export function generateCode(
 
 function generateFactoryReturnType(contract: DiscoveredContract): string {
   const opsEntries = contract.methods.map((method) => {
-    const inputFields = method.params.map((p) => `${p.name}: ${p.type}`).join("; ");
-    return `${method.name}: OperationSpec<{ ${inputFields} }, ${method.resultType}>`;
+    const payloadType = methodPayloadType(method);
+    return `${method.name}: OperationSpec<${payloadType}, ${method.resultType}>`;
   });
   return `DeclaredAgent<{ ${opsEntries.join("; ")} }>`;
+}
+
+function methodPayloadType(method: ContractMethod): string {
+  if (method.params.length === 1) {
+    return method.params[0]!.type;
+  }
+  const fields = method.params.map((p) => `${p.name}: ${p.type}`).join("; ");
+  return `{ ${fields} }`;
 }
 
 function generateFactory(contract: DiscoveredContract): string {
@@ -280,11 +288,9 @@ function generateFactory(contract: DiscoveredContract): string {
 
   for (let i = 0; i < methods.length; i++) {
     const method = methods[i]!;
-    const payloadFields = method.params.map((p) => `${p.name}: ${p.type}`).join("; ");
+    const payloadType = methodPayloadType(method);
     const trailing = i < methods.length - 1 ? "," : ",";
-    lines.push(
-      `    ${method.name}: operation<{ ${payloadFields} }, ${method.resultType}>()${trailing}`,
-    );
+    lines.push(`    ${method.name}: operation<${payloadType}, ${method.resultType}>()${trailing}`);
   }
 
   lines.push(`  });`);

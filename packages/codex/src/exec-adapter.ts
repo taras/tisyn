@@ -25,14 +25,7 @@ import {
 import type { Val } from "@tisyn/ir";
 import type { CodexExecConfig } from "./types.js";
 import { validateCommand } from "./validate-config.js";
-
-const UNWRAP: Record<string, string> = {
-  newSession: "config",
-  closeSession: "handle",
-  prompt: "args",
-  fork: "session",
-  openFork: "data",
-};
+import { validateNewSessionPayload } from "@tisyn/code-agent";
 
 /**
  * Build the argument array for `codex exec`.
@@ -115,17 +108,11 @@ export function createExecBinding(config?: CodexExecConfig): LocalAgentBinding {
               const args = params.args[0] as Record<string, unknown> | undefined;
               const token = String(params.progressToken ?? id);
 
-              const unwrapKey = UNWRAP[opName];
-              let unwrapped: Record<string, unknown>;
-              if (unwrapKey && args && unwrapKey in args) {
-                unwrapped = args[unwrapKey] as Record<string, unknown>;
-              } else {
-                unwrapped = (args as Record<string, unknown>) ?? {};
-              }
+              const payload: Record<string, unknown> = (args as Record<string, unknown>) ?? {};
 
               const task = yield* spawn(function* () {
                 try {
-                  const result: Val = yield* handleOperation(opName, unwrapped, token, agentToHost);
+                  const result: Val = yield* handleOperation(opName, payload, token, agentToHost);
                   yield* agentToHost.send(executeSuccess(String(id), result));
                 } catch (e) {
                   const err = e instanceof Error ? e : new Error(String(e));
@@ -153,6 +140,7 @@ export function createExecBinding(config?: CodexExecConfig): LocalAgentBinding {
         ): Operation<Val> {
           switch (opName) {
             case "newSession": {
+              validateNewSessionPayload(params);
               if (params.model !== undefined) {
                 throw new Error(
                   "Codex exec adapter cannot honor 'model' in newSession config: " +

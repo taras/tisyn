@@ -514,10 +514,10 @@ describe("useTransport with property-access factory expression", () => {
   it("compiles property-access factory, installs transport, method invocation succeeds", function* () {
     // toAgentId("GreetService") = "greet-service"
     const greetAgent = agent("greet-service", {
-      greet: operation<{ name: string }, string>(),
+      greet: operation<string, string>(),
     });
     const factory = inprocessTransport(greetAgent, {
-      *greet({ name }: { name: string }) {
+      *greet(name: string) {
         return `hello ${name}`;
       },
     });

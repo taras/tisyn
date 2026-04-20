@@ -92,7 +92,7 @@ describe("Adversarial / edge cases", () => {
       },
     });
 
-    yield* dispatch("agent.op", { key: "val" } as unknown as Val);
+    yield* dispatch("agent.op", { key: "val" });
     expect(capturedId).toBe("agent.op");
     expect(capturedData).toEqual({ key: "val" });
   });

@@ -8,3 +8,4 @@ export type {
 export { CodeAgent } from "./code-agent.js";
 export { createMockCodeAgentTransport } from "./mock.js";
 export type { MockCodeAgentConfig, MockOperationConfig } from "./mock.js";
+export { validateNewSessionPayload } from "./validate.js";

@@ -8,9 +8,9 @@
 // later means adding a manifest entry — nothing in this file.
 //
 // The workflow body calls `Corpus().compile({ target, ... })` and
-// `Corpus().checkVerdict(...)` through ambient contracts, and the
-// compiler wraps each single argument as `{ input: <value> }` using
-// the ambient param name — so the handlers destructure `{ input }`.
+// `Corpus().checkVerdict(...)` through ambient contracts. The compiler
+// passes the single argument through as the effect payload directly,
+// so the handlers receive the input shape directly.
 //
 // This module is loaded via `tsx/esm/api` at runtime by the CLI's
 // agent resolver; it never passes through the `tsn run`
@@ -65,8 +65,7 @@ export interface CheckVerdictOutput {
 }
 
 export function* compile(payload: Val): Operation<Val> {
-  const { input } = payload as unknown as { input: CompileInput };
-  const { target, originalSpec, originalPlan } = input;
+  const { target, originalSpec, originalPlan } = payload as unknown as CompileInput;
 
   // Acquire the full registry for this target. Acquisition is
   // all-or-nothing: any F1/F2/F3 failure throws `AcquisitionError`
@@ -169,8 +168,8 @@ export function evaluateCompile(
 }
 
 function* checkVerdict(payload: Val): Operation<Val> {
-  const { input } = payload as unknown as { input: CheckVerdictInput };
-  const result: CheckVerdictOutput = { pass: parseVerdict(input.response) };
+  const { response } = payload as unknown as CheckVerdictInput;
+  const result: CheckVerdictOutput = { pass: parseVerdict(response) };
   return result as unknown as Val;
 }
 

@@ -54,7 +54,13 @@ export function* installAgentTransport(
             if (result.ok) {
               return result.value as Val;
             }
-            throw new Error(result.error.message);
+            {
+              const err = new Error(result.error.message);
+              if (result.error.name) {
+                err.name = result.error.name;
+              }
+              throw err;
+            }
           }
           const sink = yield* ProgressContext.get();
           if (sink) {
@@ -126,7 +132,13 @@ export function* installRemoteAgent<Ops extends Record<string, OperationSpec>>(
             if (result.ok) {
               return result.value as Val;
             }
-            throw new Error(result.error.message);
+            {
+              const err = new Error(result.error.message);
+              if (result.error.name) {
+                err.name = result.error.name;
+              }
+              throw err;
+            }
           }
           const sink = yield* ProgressContext.get();
           if (sink) {

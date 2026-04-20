@@ -12,7 +12,8 @@
 
 import { resource, createChannel, spawn } from "effection";
 import type { AgentMessage, LocalAgentBinding, HostMessage } from "@tisyn/transport";
-import { initializeResponse } from "@tisyn/protocol";
+import { executeApplicationError, initializeResponse } from "@tisyn/protocol";
+import { validateNewSessionPayload } from "@tisyn/code-agent";
 import { createAcpAdapter } from "./acp-adapter.js";
 import type { AcpAdapterConfig } from "./acp-adapter.js";
 
@@ -72,6 +73,26 @@ export function createBinding(config?: AcpAdapterConfig): LocalAgentBinding {
                 }),
               );
               return;
+            }
+            if (message.method === "execute") {
+              const operation = message.params.operation;
+              const bare = operation.includes(".") ? operation.split(".").pop()! : operation;
+              if (bare === "newSession") {
+                const payload =
+                  (message.params.args[0] as Record<string, unknown> | undefined) ?? {};
+                try {
+                  validateNewSessionPayload(payload);
+                } catch (e) {
+                  const err = e instanceof Error ? e : new Error(String(e));
+                  yield* agentToHost.send(
+                    executeApplicationError(String(message.id), {
+                      message: err.message,
+                      name: err.name,
+                    }),
+                  );
+                  return;
+                }
+              }
             }
             yield* adapter.sendTisynMessage(message);
           },

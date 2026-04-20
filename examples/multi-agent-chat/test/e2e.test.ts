@@ -73,9 +73,9 @@ describe("End-to-end chat", () => {
 
     // App agent — local, backed by session manager + signal
     yield* Agents.use(App(), {
-      *elicit({ input }) {
+      *elicit({ message }) {
         const sub = yield* userInput;
-        session.beginElicit(input.message);
+        session.beginElicit(message);
         try {
           const item = yield* sub.next();
           return { message: item.value };
@@ -83,14 +83,14 @@ describe("End-to-end chat", () => {
           session.endElicit();
         }
       },
-      *showAssistantMessage({ input }) {
-        session.showAssistantMessage(input.message);
+      *showAssistantMessage({ message }) {
+        session.showAssistantMessage(message);
       },
-      *loadChat({ messages }) {
+      *loadChat(messages) {
         session.loadChat(messages);
       },
-      *setReadOnly({ input }) {
-        session.setReadOnly(input.reason);
+      *setReadOnly({ reason }) {
+        session.setReadOnly(reason);
       },
     });
 

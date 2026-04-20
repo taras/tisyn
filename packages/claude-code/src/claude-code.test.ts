@@ -39,15 +39,15 @@ describe("Claude Code ACP Integration", () => {
       yield* installRemoteAgent(claudeCodeDeclaration, factory);
 
       // Simulate resource pattern: open, use, close
-      sessionHandle = yield* dispatch("claude-code.newSession", {
-        config: { model: "opus-4" },
-      } as unknown as Val);
+      sessionHandle = yield* dispatch(
+        claudeCodeDeclaration.newSession({
+          model: "opus-4",
+        }),
+      );
       expect(sessionHandle).toEqual({ sessionId: "s-123" });
 
       // Close session
-      yield* dispatch("claude-code.closeSession", {
-        handle: sessionHandle,
-      } as unknown as Val);
+      yield* dispatch(claudeCodeDeclaration.closeSession(sessionHandle));
     });
 
     expect(calls).toHaveLength(2);
@@ -71,13 +71,18 @@ describe("Claude Code ACP Integration", () => {
     yield* scoped(function* () {
       yield* installRemoteAgent(claudeCodeDeclaration, factory);
 
-      yield* dispatch("claude-code.newSession", {
-        config: { model: "opus-4" },
-      } as unknown as Val);
+      yield* dispatch(
+        claudeCodeDeclaration.newSession({
+          model: "opus-4",
+        }),
+      );
 
-      const result = yield* dispatch("claude-code.plan", {
-        args: { session: { sessionId: "s-123" }, prompt: "Implement the auth module" },
-      } as unknown as Val);
+      const result = yield* dispatch(
+        claudeCodeDeclaration.plan({
+          session: { sessionId: "s-123" },
+          prompt: "Implement the auth module",
+        }),
+      );
 
       expect(result).toEqual({
         response: "Here is the implementation plan...",
@@ -99,13 +104,18 @@ describe("Claude Code ACP Integration", () => {
     yield* scoped(function* () {
       yield* installRemoteAgent(claudeCodeDeclaration, factory);
 
-      yield* dispatch("claude-code.newSession", {
-        config: { model: "opus-4" },
-      } as unknown as Val);
+      yield* dispatch(
+        claudeCodeDeclaration.newSession({
+          model: "opus-4",
+        }),
+      );
 
-      const result = yield* dispatch("claude-code.prompt", {
-        args: { session: { sessionId: "s-123" }, prompt: "Analyze code" },
-      } as unknown as Val);
+      const result = yield* dispatch(
+        claudeCodeDeclaration.prompt({
+          session: { sessionId: "s-123" },
+          prompt: "Analyze code",
+        }),
+      );
 
       expect(result).toEqual({ response: "prompt result" });
     });
@@ -124,18 +134,26 @@ describe("Claude Code ACP Integration", () => {
     yield* scoped(function* () {
       yield* installRemoteAgent(claudeCodeDeclaration, factory);
 
-      yield* dispatch("claude-code.newSession", {
-        config: { model: "opus-4" },
-      } as unknown as Val);
+      yield* dispatch(
+        claudeCodeDeclaration.newSession({
+          model: "opus-4",
+        }),
+      );
 
-      const result1 = yield* dispatch("claude-code.plan", {
-        args: { session: { sessionId: "s-123" }, prompt: "First task" },
-      } as unknown as Val);
+      const result1 = yield* dispatch(
+        claudeCodeDeclaration.plan({
+          session: { sessionId: "s-123" },
+          prompt: "First task",
+        }),
+      );
       expect(result1).toEqual({ response: "plan result" });
 
-      const result2 = yield* dispatch("claude-code.plan", {
-        args: { session: { sessionId: "s-123" }, prompt: "Second task" },
-      } as unknown as Val);
+      const result2 = yield* dispatch(
+        claudeCodeDeclaration.plan({
+          session: { sessionId: "s-123" },
+          prompt: "Second task",
+        }),
+      );
       expect(result2).toEqual({ response: "plan result" });
     });
   });
@@ -163,12 +181,17 @@ describe("Claude Code ACP Integration", () => {
     yield* scoped(function* () {
       yield* installRemoteAgent(claudeCodeDeclaration, factory);
 
-      yield* dispatch("claude-code.newSession", {
-        config: { model: "opus-4" },
-      } as unknown as Val);
-      yield* dispatch("claude-code.plan", {
-        args: { session: { sessionId: "s-123" }, prompt: "Analyze" },
-      } as unknown as Val);
+      yield* dispatch(
+        claudeCodeDeclaration.newSession({
+          model: "opus-4",
+        }),
+      );
+      yield* dispatch(
+        claudeCodeDeclaration.plan({
+          session: { sessionId: "s-123" },
+          prompt: "Analyze",
+        }),
+      );
     });
 
     expect(progressEvents).toHaveLength(2);
@@ -191,18 +214,20 @@ describe("Claude Code ACP Integration", () => {
     yield* scoped(function* () {
       yield* installRemoteAgent(claudeCodeDeclaration, factory);
 
-      yield* dispatch("claude-code.newSession", {
-        config: { model: "opus-4" },
-      } as unknown as Val);
+      yield* dispatch(
+        claudeCodeDeclaration.newSession({
+          model: "opus-4",
+        }),
+      );
 
-      const forkData = yield* dispatch("claude-code.fork", {
-        session: { sessionId: "s-parent" },
-      } as unknown as Val);
+      const forkData = yield* dispatch(
+        claudeCodeDeclaration.fork({
+          sessionId: "s-parent",
+        }),
+      );
       expect(forkData).toEqual({ parentSessionId: "s-parent", forkId: "f-1" });
 
-      const childHandle = yield* dispatch("claude-code.openFork", {
-        data: forkData,
-      } as unknown as Val);
+      const childHandle = yield* dispatch(claudeCodeDeclaration.openFork(forkData));
       expect(childHandle).toEqual({ sessionId: "s-child" });
     });
 
@@ -223,14 +248,19 @@ describe("Claude Code ACP Integration", () => {
     yield* scoped(function* () {
       yield* installRemoteAgent(claudeCodeDeclaration, factory);
 
-      yield* dispatch("claude-code.newSession", {
-        config: { model: "opus-4" },
-      } as unknown as Val);
+      yield* dispatch(
+        claudeCodeDeclaration.newSession({
+          model: "opus-4",
+        }),
+      );
 
       try {
-        yield* dispatch("claude-code.plan", {
-          args: { session: { sessionId: "s-123" }, prompt: "Do something" },
-        } as unknown as Val);
+        yield* dispatch(
+          claudeCodeDeclaration.plan({
+            session: { sessionId: "s-123" },
+            prompt: "Do something",
+          }),
+        );
       } catch (e) {
         caughtError = e as Error;
       }
@@ -265,15 +295,20 @@ describe("Claude Code ACP Integration", () => {
     yield* scoped(function* () {
       yield* installRemoteAgent(claudeCodeDeclaration, recordingFactory as AgentTransportFactory);
 
-      yield* dispatch("claude-code.newSession", {
-        config: { model: "opus-4" },
-      } as unknown as Val);
+      yield* dispatch(
+        claudeCodeDeclaration.newSession({
+          model: "opus-4",
+        }),
+      );
 
       // Spawn a plan call that will never complete
       const task = yield* spawn(function* () {
-        yield* dispatch("claude-code.plan", {
-          args: { session: { sessionId: "s-123" }, prompt: "Long running task" },
-        } as unknown as Val);
+        yield* dispatch(
+          claudeCodeDeclaration.plan({
+            session: { sessionId: "s-123" },
+            prompt: "Long running task",
+          }),
+        );
       });
 
       // Give the dispatch a chance to start
@@ -298,17 +333,23 @@ describe("Claude Code ACP Integration", () => {
       yield* installRemoteAgent(claudeCodeDeclaration, factory);
 
       // First session lifecycle
-      yield* dispatch("claude-code.newSession", {
-        config: { model: "opus-4" },
-      } as unknown as Val);
-      yield* dispatch("claude-code.closeSession", {
-        handle: { sessionId: "s-new" },
-      } as unknown as Val);
+      yield* dispatch(
+        claudeCodeDeclaration.newSession({
+          model: "opus-4",
+        }),
+      );
+      yield* dispatch(
+        claudeCodeDeclaration.closeSession({
+          sessionId: "s-new",
+        }),
+      );
 
       // Second session through the same transport
-      const handle2 = yield* dispatch("claude-code.newSession", {
-        config: { model: "opus-4" },
-      } as unknown as Val);
+      const handle2 = yield* dispatch(
+        claudeCodeDeclaration.newSession({
+          model: "opus-4",
+        }),
+      );
       expect(handle2).toEqual({ sessionId: "s-new" });
     });
 
@@ -334,14 +375,16 @@ describe("Claude Code ACP Binding Path", () => {
     yield* scoped(function* () {
       yield* installRemoteAgent(claudeCodeDeclaration, binding.transport);
 
-      const handle = yield* dispatch("claude-code.newSession", {
-        config: { model: "opus-4" },
-      } as unknown as Val);
+      const handle = yield* dispatch(
+        claudeCodeDeclaration.newSession({
+          model: "opus-4",
+        }),
+      );
       expect(handle).toEqual({ sessionId: "test-session-1" });
     });
   });
 
-  it("adapter unwraps wrapped plan payload so ACP subprocess receives prompt at top level", function* () {
+  it("adapter forwards plan payload to ACP subprocess as top-level params", function* () {
     const binding = createBinding({
       command: "npx",
       arguments: ["tsx", mockAcpServer],
@@ -350,19 +393,22 @@ describe("Claude Code ACP Binding Path", () => {
     yield* scoped(function* () {
       yield* installRemoteAgent(claudeCodeDeclaration, binding.transport);
 
-      yield* dispatch("claude-code.newSession", {
-        config: { model: "opus-4" },
-      } as unknown as Val);
+      yield* dispatch(
+        claudeCodeDeclaration.newSession({
+          model: "opus-4",
+        }),
+      );
 
-      // Dispatch using the wrapped shape the compiler emits.
-      // The adapter must unwrap { args: { ... } } → { session, prompt }
-      // before sending to ACP, so the mock server can read prompt at top level.
-      const result = yield* dispatch("claude-code.plan", {
-        args: { session: { sessionId: "test-session-1" }, prompt: "Implement auth" },
-      } as unknown as Val);
+      // The compiler now emits the unwrapped payload directly. The adapter
+      // forwards { session, prompt } as ACP params so the mock server reads
+      // prompt at top level.
+      const result = yield* dispatch(
+        claudeCodeDeclaration.plan({
+          session: { sessionId: "test-session-1" },
+          prompt: "Implement auth",
+        }),
+      );
 
-      // The mock ACP server echoes msg.params.prompt — this assertion
-      // fails if the adapter sends the wrapped envelope as-is.
       expect(result).toEqual({
         response: "mock plan result for: Implement auth",
       });
@@ -378,25 +424,35 @@ describe("Claude Code ACP Binding Path", () => {
     yield* scoped(function* () {
       yield* installRemoteAgent(claudeCodeDeclaration, binding.transport);
 
-      yield* dispatch("claude-code.newSession", {
-        config: { model: "opus-4" },
-      } as unknown as Val);
+      yield* dispatch(
+        claudeCodeDeclaration.newSession({
+          model: "opus-4",
+        }),
+      );
 
-      const r1 = yield* dispatch("claude-code.plan", {
-        args: { session: { sessionId: "test-session-1" }, prompt: "Task 1" },
-      } as unknown as Val);
+      const r1 = yield* dispatch(
+        claudeCodeDeclaration.plan({
+          session: { sessionId: "test-session-1" },
+          prompt: "Task 1",
+        }),
+      );
       expect(r1).toEqual({ response: "mock plan result for: Task 1" });
 
-      const r2 = yield* dispatch("claude-code.plan", {
-        args: { session: { sessionId: "test-session-1" }, prompt: "Task 2" },
-      } as unknown as Val);
+      const r2 = yield* dispatch(
+        claudeCodeDeclaration.plan({
+          session: { sessionId: "test-session-1" },
+          prompt: "Task 2",
+        }),
+      );
       expect(r2).toEqual({ response: "mock plan result for: Task 2" });
 
-      // Wrapped closeSession({ handle }) must unwrap to the bare SessionHandle
-      // before reaching ACP. The mock server returns null for session/close.
-      const closeResult = yield* dispatch("claude-code.closeSession", {
-        handle: { sessionId: "test-session-1" },
-      } as unknown as Val);
+      // closeSession receives the SessionHandle directly as the payload.
+      // The mock server returns null for session/close.
+      const closeResult = yield* dispatch(
+        claudeCodeDeclaration.closeSession({
+          sessionId: "test-session-1",
+        }),
+      );
       expect(closeResult).toBeNull();
     });
   });
@@ -410,18 +466,49 @@ describe("Claude Code ACP Binding Path", () => {
     yield* scoped(function* () {
       yield* installRemoteAgent(claudeCodeDeclaration, binding.transport);
 
-      yield* dispatch("claude-code.newSession", {
-        config: { model: "opus-4" },
-      } as unknown as Val);
+      yield* dispatch(
+        claudeCodeDeclaration.newSession({
+          model: "opus-4",
+        }),
+      );
 
-      const result = yield* dispatch("claude-code.prompt", {
-        args: { session: { sessionId: "test-session-1" }, prompt: "Refactor auth" },
-      } as unknown as Val);
+      const result = yield* dispatch(
+        claudeCodeDeclaration.prompt({
+          session: { sessionId: "test-session-1" },
+          prompt: "Refactor auth",
+        }),
+      );
 
       expect(result).toEqual({
         response: "mock plan result for: Refactor auth",
       });
     });
+  });
+
+  it("ACP binding rejects wrapped newSession payload with InvalidPayload", function* () {
+    const binding = createBinding({
+      command: "npx",
+      arguments: ["tsx", mockAcpServer],
+    });
+
+    let caughtError: Error | null = null;
+
+    yield* scoped(function* () {
+      yield* installRemoteAgent(claudeCodeDeclaration, binding.transport);
+
+      try {
+        yield* dispatch(
+          claudeCodeDeclaration.newSession({ config: { model: "opus-4" } } as unknown as Val),
+        );
+      } catch (e) {
+        caughtError = e as Error;
+      }
+    });
+
+    expect(caughtError).not.toBeNull();
+    expect(caughtError!.name).toBe("InvalidPayload");
+    expect(caughtError!.message).toContain("unexpected payload key 'config'");
+    expect(caughtError!.message).toContain("Expected payload shape: { model?: string }");
   });
 
   it("surfaces subprocess diagnostic when ACP process exits immediately", function* () {
@@ -434,9 +521,11 @@ describe("Claude Code ACP Binding Path", () => {
     try {
       yield* scoped(function* () {
         yield* installRemoteAgent(claudeCodeDeclaration, binding.transport);
-        yield* dispatch("claude-code.newSession", {
-          config: { model: "opus-4" },
-        } as unknown as Val);
+        yield* dispatch(
+          claudeCodeDeclaration.newSession({
+            model: "opus-4",
+          }),
+        );
       });
     } catch (e) {
       caughtError = e as Error;
@@ -508,9 +597,11 @@ describe("Claude Code SDK Adapter", () => {
 
     yield* scoped(function* () {
       yield* installRemoteAgent(claudeCodeDeclaration, binding.transport);
-      const handle = yield* dispatch("claude-code.newSession", {
-        config: { model: "test" },
-      } as unknown as Val);
+      const handle = yield* dispatch(
+        claudeCodeDeclaration.newSession({
+          model: "test",
+        }),
+      );
       expect((handle as any).sessionId).toMatch(/^cc-\d+$/);
     });
 
@@ -527,9 +618,11 @@ describe("Claude Code SDK Adapter", () => {
 
     yield* scoped(function* () {
       yield* installRemoteAgent(claudeCodeDeclaration, binding.transport);
-      const handle = yield* dispatch("claude-code.newSession", {
-        config: { model: "test" },
-      } as unknown as Val);
+      const handle = yield* dispatch(
+        claudeCodeDeclaration.newSession({
+          model: "test",
+        }),
+      );
       const h = (handle as any).sessionId;
 
       mock.enqueue([
@@ -556,9 +649,12 @@ describe("Claude Code SDK Adapter", () => {
           permission_denials: [],
         },
       ]);
-      const r1 = yield* dispatch("claude-code.plan", {
-        args: { session: { sessionId: h }, prompt: "First" },
-      } as unknown as Val);
+      const r1 = yield* dispatch(
+        claudeCodeDeclaration.plan({
+          session: { sessionId: h },
+          prompt: "First",
+        }),
+      );
       expect(r1).toEqual({ response: "result 1" });
 
       mock.enqueue([
@@ -579,9 +675,12 @@ describe("Claude Code SDK Adapter", () => {
           permission_denials: [],
         },
       ]);
-      const r2 = yield* dispatch("claude-code.plan", {
-        args: { session: { sessionId: h }, prompt: "Second" },
-      } as unknown as Val);
+      const r2 = yield* dispatch(
+        claudeCodeDeclaration.plan({
+          session: { sessionId: h },
+          prompt: "Second",
+        }),
+      );
       expect(r2).toEqual({ response: "result 2" });
 
       expect(mock.sentMessages).toEqual(["First", "Second"]);
@@ -600,14 +699,43 @@ describe("Claude Code SDK Adapter", () => {
 
     yield* scoped(function* () {
       yield* installRemoteAgent(claudeCodeDeclaration, binding.transport);
-      const handle = yield* dispatch("claude-code.newSession", {
-        config: { model: "test" },
-      } as unknown as Val);
-      yield* dispatch("claude-code.closeSession", {
-        handle,
-      } as unknown as Val);
+      const handle = yield* dispatch(
+        claudeCodeDeclaration.newSession({
+          model: "test",
+        }),
+      );
+      yield* dispatch(claudeCodeDeclaration.closeSession(handle));
       expect(mock.closed).toBe(true);
     });
+
+    vi.doUnmock("@anthropic-ai/claude-agent-sdk");
+  });
+
+  it("newSession rejects wrapped payload with InvalidPayload", function* () {
+    const createSessionMock = vi.fn();
+    vi.doMock("@anthropic-ai/claude-agent-sdk", () => ({
+      unstable_v2_createSession: createSessionMock,
+    }));
+
+    const binding = createSdkBinding({ model: "test" });
+    let caughtError: Error | null = null;
+
+    yield* scoped(function* () {
+      yield* installRemoteAgent(claudeCodeDeclaration, binding.transport);
+      try {
+        yield* dispatch(
+          claudeCodeDeclaration.newSession({ config: { model: "test" } } as unknown as Val),
+        );
+      } catch (e) {
+        caughtError = e as Error;
+      }
+    });
+
+    expect(caughtError).not.toBeNull();
+    expect(caughtError!.name).toBe("InvalidPayload");
+    expect(caughtError!.message).toContain("unexpected payload key 'config'");
+    expect(caughtError!.message).toContain("Expected payload shape: { model?: string }");
+    expect(createSessionMock).not.toHaveBeenCalled();
 
     vi.doUnmock("@anthropic-ai/claude-agent-sdk");
   });
@@ -630,9 +758,11 @@ describe("Claude Code SDK Adapter", () => {
       yield* installRemoteAgent(claudeCodeDeclaration, binding.transport);
 
       // newSession
-      const handle = yield* dispatch("claude-code.newSession", {
-        config: { model: "test" },
-      } as unknown as Val);
+      const handle = yield* dispatch(
+        claudeCodeDeclaration.newSession({
+          model: "test",
+        }),
+      );
       const h = (handle as any).sessionId;
 
       // plan — initializes SDK sessionId
@@ -660,14 +790,19 @@ describe("Claude Code SDK Adapter", () => {
           permission_denials: [],
         },
       ]);
-      yield* dispatch("claude-code.plan", {
-        args: { session: { sessionId: h }, prompt: "init" },
-      } as unknown as Val);
+      yield* dispatch(
+        claudeCodeDeclaration.plan({
+          session: { sessionId: h },
+          prompt: "init",
+        }),
+      );
 
       // fork — uses real SDK sessionId, returns adapter handle as parentSessionId
-      const forkData = yield* dispatch("claude-code.fork", {
-        session: { sessionId: h },
-      } as unknown as Val);
+      const forkData = yield* dispatch(
+        claudeCodeDeclaration.fork({
+          sessionId: h,
+        }),
+      );
       expect(forkData).toEqual({
         parentSessionId: h,
         forkId: "forked-uuid",
@@ -675,9 +810,7 @@ describe("Claude Code SDK Adapter", () => {
       expect(forkFn).toHaveBeenCalledWith("sdk-parent-uuid");
 
       // openFork — creates new session, returns new adapter handle
-      const childHandle = yield* dispatch("claude-code.openFork", {
-        data: forkData,
-      } as unknown as Val);
+      const childHandle = yield* dispatch(claudeCodeDeclaration.openFork(forkData));
       expect((childHandle as any).sessionId).toMatch(/^cc-\d+$/);
       expect((childHandle as any).sessionId).not.toBe(h);
       expect(resumeFn).toHaveBeenCalledWith("forked-uuid", expect.any(Object));

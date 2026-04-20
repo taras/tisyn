@@ -20,37 +20,37 @@ import {
 import type { SessionHandle, PromptResult, NewSessionConfig, PromptArgs } from "@tisyn/code-agent";
 
 export function Claude(): DeclaredAgent<{
-  newSession: OperationSpec<{ config: NewSessionConfig }, SessionHandle>;
-  closeSession: OperationSpec<{ handle: SessionHandle }, null>;
-  prompt: OperationSpec<{ args: PromptArgs }, PromptResult>;
+  newSession: OperationSpec<NewSessionConfig, SessionHandle>;
+  closeSession: OperationSpec<SessionHandle, null>;
+  prompt: OperationSpec<PromptArgs, PromptResult>;
 }> {
   const id = "claude";
   return agent(id, {
-    newSession: operation<{ config: NewSessionConfig }, SessionHandle>(),
-    closeSession: operation<{ handle: SessionHandle }, null>(),
-    prompt: operation<{ args: PromptArgs }, PromptResult>(),
+    newSession: operation<NewSessionConfig, SessionHandle>(),
+    closeSession: operation<SessionHandle, null>(),
+    prompt: operation<PromptArgs, PromptResult>(),
   });
 }
 
 export function Codex(): DeclaredAgent<{
-  newSession: OperationSpec<{ config: NewSessionConfig }, SessionHandle>;
-  closeSession: OperationSpec<{ handle: SessionHandle }, null>;
-  prompt: OperationSpec<{ args: PromptArgs }, PromptResult>;
+  newSession: OperationSpec<NewSessionConfig, SessionHandle>;
+  closeSession: OperationSpec<SessionHandle, null>;
+  prompt: OperationSpec<PromptArgs, PromptResult>;
 }> {
   const id = "codex";
   return agent(id, {
-    newSession: operation<{ config: NewSessionConfig }, SessionHandle>(),
-    closeSession: operation<{ handle: SessionHandle }, null>(),
-    prompt: operation<{ args: PromptArgs }, PromptResult>(),
+    newSession: operation<NewSessionConfig, SessionHandle>(),
+    closeSession: operation<SessionHandle, null>(),
+    prompt: operation<PromptArgs, PromptResult>(),
   });
 }
 
 export function Output(): DeclaredAgent<{
-  log: OperationSpec<{ input: { label: string; text: string } }, void>;
+  log: OperationSpec<{ label: string; text: string }, void>;
 }> {
   const id = "output";
   return agent(id, {
-    log: operation<{ input: { label: string; text: string } }, void>(),
+    log: operation<{ label: string; text: string }, void>(),
   });
 }
 
@@ -61,10 +61,8 @@ export const handoff: TisynFn<[{ task: string }], unknown> = Fn(
     Eval(
       "output.log",
       Construct({
-        input: Construct({
-          label: "Task",
-          text: Get(Ref<any>("input"), "task"),
-        }),
+        label: "Task",
+        text: Get(Ref<any>("input"), "task"),
       }),
     ),
     Let(
@@ -72,10 +70,8 @@ export const handoff: TisynFn<[{ task: string }], unknown> = Fn(
       Eval(
         "output.log",
         Construct({
-          input: Construct({
-            label: "Status",
-            text: "Opening Claude session...",
-          }),
+          label: "Status",
+          text: "Opening Claude session...",
         }),
       ),
       Let(
@@ -91,10 +87,8 @@ export const handoff: TisynFn<[{ task: string }], unknown> = Fn(
           Eval(
             "output.log",
             Construct({
-              input: Construct({
-                label: "Status",
-                text: "Requesting Claude analysis...",
-              }),
+              label: "Status",
+              text: "Requesting Claude analysis...",
             }),
           ),
           Let(
@@ -102,13 +96,11 @@ export const handoff: TisynFn<[{ task: string }], unknown> = Fn(
             Eval(
               "claude.prompt",
               Construct({
-                args: Construct({
-                  session: Ref<any>("claudeSession"),
-                  prompt: Concat(
-                    "Reply to the other agent in one short message. Do not run tools or commands.\n\nUser request: ",
-                    Get(Ref<any>("input"), "task"),
-                  ),
-                }),
+                session: Ref<any>("claudeSession"),
+                prompt: Concat(
+                  "Reply to the other agent in one short message. Do not run tools or commands.\n\nUser request: ",
+                  Get(Ref<any>("input"), "task"),
+                ),
               }),
             ),
             Let(
@@ -116,10 +108,8 @@ export const handoff: TisynFn<[{ task: string }], unknown> = Fn(
               Eval(
                 "output.log",
                 Construct({
-                  input: Construct({
-                    label: "Claude",
-                    text: Get(Ref<any>("claudeResult"), "response"),
-                  }),
+                  label: "Claude",
+                  text: Get(Ref<any>("claudeResult"), "response"),
                 }),
               ),
               If(
@@ -129,10 +119,8 @@ export const handoff: TisynFn<[{ task: string }], unknown> = Fn(
                   Eval(
                     "output.log",
                     Construct({
-                      input: Construct({
-                        label: "Status",
-                        text: "Skipping Codex handoff because Claude did not return usable analysis.",
-                      }),
+                      label: "Status",
+                      text: "Skipping Codex handoff because Claude did not return usable analysis.",
                     }),
                   ),
                   null,
@@ -142,10 +130,8 @@ export const handoff: TisynFn<[{ task: string }], unknown> = Fn(
                   Eval(
                     "output.log",
                     Construct({
-                      input: Construct({
-                        label: "Status",
-                        text: "Opening Codex session...",
-                      }),
+                      label: "Status",
+                      text: "Opening Codex session...",
                     }),
                   ),
                   Let(
@@ -156,10 +142,8 @@ export const handoff: TisynFn<[{ task: string }], unknown> = Fn(
                       Eval(
                         "output.log",
                         Construct({
-                          input: Construct({
-                            label: "Status",
-                            text: "Handing Claude message to Codex for a brief reply...",
-                          }),
+                          label: "Status",
+                          text: "Handing Claude message to Codex for a brief reply...",
                         }),
                       ),
                       Let(
@@ -167,13 +151,11 @@ export const handoff: TisynFn<[{ task: string }], unknown> = Fn(
                         Eval(
                           "codex.prompt",
                           Construct({
-                            args: Construct({
-                              session: Ref<any>("codexSession"),
-                              prompt: Concat(
-                                "Hello, Codex. Reply to Claude with exactly one short greeting sentence. Do not inspect files, run commands, or suggest next steps.\n\nClaude's message:\n",
-                                Get(Ref<any>("claudeResult"), "response"),
-                              ),
-                            }),
+                            session: Ref<any>("codexSession"),
+                            prompt: Concat(
+                              "Hello, Codex. Reply to Claude with exactly one short greeting sentence. Do not inspect files, run commands, or suggest next steps.\n\nClaude's message:\n",
+                              Get(Ref<any>("claudeResult"), "response"),
+                            ),
                           }),
                         ),
                         Let(
@@ -181,19 +163,15 @@ export const handoff: TisynFn<[{ task: string }], unknown> = Fn(
                           Eval(
                             "output.log",
                             Construct({
-                              input: Construct({
-                                label: "Codex",
-                                text: Get(Ref<any>("codexResult"), "response"),
-                              }),
+                              label: "Codex",
+                              text: Get(Ref<any>("codexResult"), "response"),
                             }),
                           ),
                           Eval(
                             "output.log",
                             Construct({
-                              input: Construct({
-                                label: "Status",
-                                text: "Workflow complete.",
-                              }),
+                              label: "Status",
+                              text: "Workflow complete.",
                             }),
                           ),
                         ),
@@ -215,22 +193,12 @@ const __m0_useCodexSession: TisynFn<[NewSessionConfig], unknown> = Fn(
   Resource(
     Let(
       "handle",
-      Eval(
-        "codex.newSession",
-        Construct({
-          config: Ref<any>("config"),
-        }),
-      ),
+      Eval("codex.newSession", Ref<any>("config")),
       Try(
         Provide(Ref<any>("handle")),
         undefined,
         undefined,
-        Eval(
-          "codex.closeSession",
-          Construct({
-            handle: Ref<any>("handle"),
-          }),
-        ),
+        Eval("codex.closeSession", Ref<any>("handle")),
       ),
     ),
   ),
@@ -241,22 +209,12 @@ const __m0_useClaudeSession: TisynFn<[NewSessionConfig], unknown> = Fn(
   Resource(
     Let(
       "handle",
-      Eval(
-        "claude.newSession",
-        Construct({
-          config: Ref<any>("config"),
-        }),
-      ),
+      Eval("claude.newSession", Ref<any>("config")),
       Try(
         Provide(Ref<any>("handle")),
         undefined,
         undefined,
-        Eval(
-          "claude.closeSession",
-          Construct({
-            handle: Ref<any>("handle"),
-          }),
-        ),
+        Eval("claude.closeSession", Ref<any>("handle")),
       ),
     ),
   ),

@@ -3,21 +3,21 @@ import { screen, waitFor } from "@testing-library/dom";
 
 export function createDomAgentHandlers() {
   return {
-    *fill({ input }: { input: { name: string; value: string } }) {
+    *fill({ name, value }: { name: string; value: string }) {
       yield* call(() =>
         waitFor(
           () => {
             const el = screen.getByRole("textbox", {
-              name: input.name,
+              name,
             }) as HTMLInputElement;
             if (el.disabled) {
-              throw new Error(`Textbox "${input.name}" is disabled`);
+              throw new Error(`Textbox "${name}" is disabled`);
             }
             const nativeSetter = Object.getOwnPropertyDescriptor(
               HTMLInputElement.prototype,
               "value",
             )!.set!;
-            nativeSetter.call(el, input.value);
+            nativeSetter.call(el, value);
             el.dispatchEvent(new Event("input", { bubbles: true }));
           },
           { timeout: 5000 },
@@ -25,15 +25,15 @@ export function createDomAgentHandlers() {
       );
     },
 
-    *click({ input }: { input: { role: string; name: string } }) {
+    *click({ role, name }: { role: string; name: string }) {
       yield* call(() =>
         waitFor(
           () => {
-            const el = screen.getByRole(input.role as any, {
-              name: input.name,
+            const el = screen.getByRole(role as any, {
+              name,
             }) as HTMLButtonElement;
             if (el.disabled) {
-              throw new Error(`${input.role} "${input.name}" is disabled`);
+              throw new Error(`${role} "${name}" is disabled`);
             }
             el.click();
           },
@@ -42,37 +42,37 @@ export function createDomAgentHandlers() {
       );
     },
 
-    *pressKey({ input }: { input: { key: string } }) {
+    *pressKey({ key }: { key: string }) {
       yield* call(() =>
         waitFor(() => {
           const active = document.activeElement;
           if (!active) {
             throw new Error("No focused element");
           }
-          active.dispatchEvent(new KeyboardEvent("keydown", { key: input.key, bubbles: true }));
-          active.dispatchEvent(new KeyboardEvent("keyup", { key: input.key, bubbles: true }));
+          active.dispatchEvent(new KeyboardEvent("keydown", { key, bubbles: true }));
+          active.dispatchEvent(new KeyboardEvent("keyup", { key, bubbles: true }));
         }),
       );
     },
 
-    *expectVisible({ input }: { input: { text: string } }) {
+    *expectVisible({ text }: { text: string }) {
       yield* call(() =>
         waitFor(
           () => {
-            screen.getByText(input.text);
+            screen.getByText(text);
           },
           { timeout: 5000 },
         ),
       );
     },
 
-    *expectNotVisible({ input }: { input: { text: string } }) {
+    *expectNotVisible({ text }: { text: string }) {
       yield* call(() =>
         waitFor(
           () => {
-            const el = screen.queryByText(input.text);
+            const el = screen.queryByText(text);
             if (el) {
-              throw new Error(`Expected "${input.text}" to not be visible`);
+              throw new Error(`Expected "${text}" to not be visible`);
             }
           },
           { timeout: 5000 },
@@ -80,15 +80,15 @@ export function createDomAgentHandlers() {
       );
     },
 
-    *expectDisabled({ input }: { input: { role: string; name: string } }) {
+    *expectDisabled({ role, name }: { role: string; name: string }) {
       yield* call(() =>
         waitFor(
           () => {
-            const el = screen.getByRole(input.role as any, {
-              name: input.name,
+            const el = screen.getByRole(role as any, {
+              name,
             }) as HTMLInputElement;
             if (!el.disabled) {
-              throw new Error(`Expected ${input.role} "${input.name}" to be disabled`);
+              throw new Error(`Expected ${role} "${name}" to be disabled`);
             }
           },
           { timeout: 5000 },
@@ -96,15 +96,15 @@ export function createDomAgentHandlers() {
       );
     },
 
-    *expectEnabled({ input }: { input: { role: string; name: string } }) {
+    *expectEnabled({ role, name }: { role: string; name: string }) {
       yield* call(() =>
         waitFor(
           () => {
-            const el = screen.getByRole(input.role as any, {
-              name: input.name,
+            const el = screen.getByRole(role as any, {
+              name,
             }) as HTMLInputElement;
             if (el.disabled) {
-              throw new Error(`Expected ${input.role} "${input.name}" to be enabled`);
+              throw new Error(`Expected ${role} "${name}" to be enabled`);
             }
           },
           { timeout: 5000 },
@@ -112,14 +112,14 @@ export function createDomAgentHandlers() {
       );
     },
 
-    *expectStatusText({ input }: { input: { text: string } }) {
+    *expectStatusText({ text }: { text: string }) {
       yield* call(() =>
         waitFor(
           () => {
             const el = screen.getByRole("status");
             const actual = el.textContent?.trim();
-            if (actual !== input.text) {
-              throw new Error(`Expected status "${input.text}" but got "${actual}"`);
+            if (actual !== text) {
+              throw new Error(`Expected status "${text}" but got "${actual}"`);
             }
           },
           { timeout: 5000 },
@@ -128,23 +128,19 @@ export function createDomAgentHandlers() {
     },
 
     // Uses the transcript DOM contract: role="log" > .message children
-    *expectTranscript({ input }: { input: { messages: string[] } }) {
+    *expectTranscript({ messages }: { messages: string[] }) {
       yield* call(() =>
         waitFor(
           () => {
             const log = screen.getByRole("log");
             const messageEls = log.querySelectorAll(".message");
-            if (messageEls.length !== input.messages.length) {
-              throw new Error(
-                `Expected ${input.messages.length} messages, got ${messageEls.length}`,
-              );
+            if (messageEls.length !== messages.length) {
+              throw new Error(`Expected ${messages.length} messages, got ${messageEls.length}`);
             }
-            for (let i = 0; i < input.messages.length; i++) {
+            for (let i = 0; i < messages.length; i++) {
               const actual = messageEls[i]!.textContent?.trim();
-              if (actual !== input.messages[i]) {
-                throw new Error(
-                  `Message ${i}: expected "${input.messages[i]}" but got "${actual}"`,
-                );
+              if (actual !== messages[i]) {
+                throw new Error(`Message ${i}: expected "${messages[i]}" but got "${actual}"`);
               }
             }
           },

@@ -82,51 +82,19 @@ function resolveAcpMethod(operation: string): string {
   return method;
 }
 
-/**
- * Per-operation unwrap key for compiled workflow payloads.
- *
- * The Tisyn compiler wraps each operation's single parameter under the
- * authored parameter name (e.g. `plan(args: {...})` becomes
- * `{ args: { session, prompt } }`). ACP expects unwrapped top-level
- * params, so the adapter strips the envelope before writing to the wire.
- *
- * If the unwrap key is present in the args object, its value is used as
- * the ACP params. Otherwise the args object is passed through as-is,
- * which keeps the adapter resilient to already-unwrapped payloads.
- */
-const OPERATION_UNWRAP_KEY: Record<string, string> = {
-  newSession: "config",
-  closeSession: "handle",
-  plan: "args",
-  prompt: "args",
-  fork: "session",
-  openFork: "data",
-};
-
 // ── ACP ↔ Tisyn translation (pure functions) ──
 
 /**
  * Translate a Tisyn ExecuteRequest into an ACP request.
  * Maps the Tisyn operation name to the corresponding ACP wire method
- * and unwraps the single-parameter envelope the compiler emits.
+ * and forwards the effect payload directly as ACP params.
  *
  * The operation may be fully qualified (e.g. "claude-code.newSession")
  * or bare (e.g. "newSession"). The agent prefix is stripped before lookup.
  */
 export function tisynExecuteToAcp(id: string, operation: string, args: unknown): AcpRequest {
   const bare = operation.includes(".") ? operation.split(".").pop()! : operation;
-  const unwrapKey = OPERATION_UNWRAP_KEY[bare];
-  let params: Record<string, unknown>;
-  if (
-    unwrapKey &&
-    args &&
-    typeof args === "object" &&
-    unwrapKey in (args as Record<string, unknown>)
-  ) {
-    params = (args as Record<string, unknown>)[unwrapKey] as Record<string, unknown>;
-  } else {
-    params = (args as Record<string, unknown>) ?? {};
-  }
+  const params: Record<string, unknown> = (args as Record<string, unknown>) ?? {};
   return {
     jsonrpc: "2.0",
     id,

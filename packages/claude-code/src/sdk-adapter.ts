@@ -20,6 +20,7 @@ import {
   progressNotification,
 } from "@tisyn/protocol";
 import type { Val } from "@tisyn/ir";
+import { validateNewSessionPayload } from "@tisyn/code-agent";
 
 export interface SdkAdapterConfig {
   /** Model to use (e.g. "claude-sonnet-4-6"). Defaults to "claude-sonnet-4-6". */
@@ -92,28 +93,13 @@ export function createSdkBinding(config?: SdkAdapterConfig): LocalAgentBinding {
               const args = params.args[0] as Record<string, unknown> | undefined;
               const progressToken = String(params.progressToken ?? id);
 
-              // Unwrap the compiler's single-parameter envelope
-              const UNWRAP: Record<string, string> = {
-                newSession: "config",
-                closeSession: "handle",
-                plan: "args",
-                prompt: "args",
-                fork: "session",
-                openFork: "data",
-              };
-              const unwrapKey = UNWRAP[opName];
-              let unwrapped: Record<string, unknown>;
-              if (unwrapKey && args && unwrapKey in args) {
-                unwrapped = args[unwrapKey] as Record<string, unknown>;
-              } else {
-                unwrapped = (args as Record<string, unknown>) ?? {};
-              }
+              const payload: Record<string, unknown> = (args as Record<string, unknown>) ?? {};
 
               yield* spawn(function* () {
                 try {
                   const result: Val = yield* handleOperation(
                     opName,
-                    unwrapped,
+                    payload,
                     progressToken,
                     agentToHost,
                   );
@@ -142,6 +128,7 @@ export function createSdkBinding(config?: SdkAdapterConfig): LocalAgentBinding {
         ): Operation<Val> {
           switch (opName) {
             case "newSession": {
+              validateNewSessionPayload(params);
               const model = (params.model as string) ?? currentModel;
               currentModel = model;
               const sdk = yield* call(() => import("@anthropic-ai/claude-agent-sdk"));

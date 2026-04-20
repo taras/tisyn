@@ -67,16 +67,19 @@ Important exported types:
 import { agent, operation } from "@tisyn/agent";
 
 const orders = agent("orders", {
-  fetch: operation<{ input: { orderId: string } }, { id: string; total: number }>(),
-  cancel: operation<{ input: { orderId: string } }, void>(),
+  fetch: operation<{ orderId: string }, { id: string; total: number }>(),
+  cancel: operation<{ orderId: string }, void>(),
+  transfer: operation<{ from: string; to: string }, void>(),
 });
 ```
 
 Calling a declared operation produces a call descriptor. It is a typed effect request, not a direct function call.
 
 ```ts
-const request = orders.fetch({ input: { orderId: "ord-1" } });
+const request = orders.fetch({ orderId: "ord-1" });
 ```
+
+Single-parameter ambient methods pass their argument through directly as the operation payload. Multi-parameter ambient methods are still wrapped into a named object keyed by the authored parameter names — `transfer(from: string, to: string)` lowers to `{ from, to }`.
 
 ## Bind Handlers Locally
 
@@ -86,10 +89,13 @@ const request = orders.fetch({ input: { orderId: "ord-1" } });
 import { Agents } from "@tisyn/agent";
 
 yield* Agents.use(orders, {
-  *fetch({ input }) {
-    return { id: input.orderId, total: 42 };
+  *fetch({ orderId }) {
+    return { id: orderId, total: 42 };
   },
   *cancel() {},
+  *transfer({ from, to }) {
+    // multi-parameter methods receive a named object payload
+  },
 });
 ```
 
@@ -105,7 +111,7 @@ import { useAgent } from "@tisyn/agent";
 const ordersFacade = yield* useAgent(orders);
 
 // Direct method dispatch
-const order = yield* ordersFacade.fetch({ input: { orderId: "ord-1" } });
+const order = yield* ordersFacade.fetch({ orderId: "ord-1" });
 
 // Per-operation middleware via .around()
 yield* ordersFacade.around({
@@ -130,7 +136,7 @@ Multiple `useAgent()` calls with the same declaration in the same scope share mi
 import { dispatch } from "@tisyn/effects";
 
 const order = yield* dispatch(
-  orders.fetch({ input: { orderId: "ord-1" } }),
+  orders.fetch({ orderId: "ord-1" }),
 );
 ```
 
@@ -141,9 +147,9 @@ This is useful when:
 
 ```ts
 yield* Agents.use(checkout, {
-  *complete({ input }) {
+  *complete({ orderId }) {
     const order = yield* dispatch(
-      orders.fetch({ input: { orderId: input.orderId } }),
+      orders.fetch({ orderId }),
     );
 
     return { ok: order.total > 0 };
