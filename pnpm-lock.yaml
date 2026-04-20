@@ -47,6 +47,9 @@ importers:
       '@tisyn/claude-code':
         specifier: workspace:*
         version: link:../../packages/claude-code
+      '@tisyn/cli':
+        specifier: workspace:*
+        version: link:../../packages/cli
       '@tisyn/code-agent':
         specifier: workspace:*
         version: link:../../packages/code-agent
@@ -108,9 +111,6 @@ importers:
       '@testing-library/dom':
         specifier: ^10.4.1
         version: 10.4.1
-      '@tisyn/cli':
-        specifier: workspace:*
-        version: link:../../packages/cli
       '@types/node':
         specifier: ^25.5.0
         version: 25.5.0
