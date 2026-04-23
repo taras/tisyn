@@ -625,8 +625,12 @@ describe("invoke-inline — minimum acceptance subset", () => {
       if (e.coroutineId === "root" && e.type === "yield") {
         return e.description.name === "A1";
       }
-      if (e.coroutineId === "root" && e.type === "close") return false;
-      if (e.coroutineId === "root.1") return false;
+      if (e.coroutineId === "root" && e.type === "close") {
+        return false;
+      }
+      if (e.coroutineId === "root.1") {
+        return false;
+      }
       // keep root.0 entries + A1's lane (root@inline0.0)
       return true;
     });

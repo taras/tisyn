@@ -15,7 +15,7 @@ import { expect } from "vitest";
 import { scoped } from "effection";
 import { execute } from "@tisyn/runtime";
 import { InMemoryStream } from "@tisyn/durable-streams";
-import { Effects } from "@tisyn/effects";
+import { Effects, runAsTerminal } from "@tisyn/effects";
 
 describe("End-to-end crash/replay", () => {
   it("should replay stored effects and continue with live dispatch", function* () {
@@ -73,16 +73,18 @@ describe("End-to-end crash/replay", () => {
     const firstResult = yield* scoped(function* () {
       let firstRunCallCount = 0;
       yield* Effects.around({
-        *dispatch([_effectId, _data]: [string, any]) {
-          firstRunCallCount++;
-          if (firstRunCallCount === 1) {
-            return 10;
-          }
-          if (firstRunCallCount === 2) {
-            return 20;
-          }
-          // "Crash" on the 3rd call — simulate by throwing
-          throw new Error("SIMULATED_CRASH");
+        *dispatch([effectId, data]: [string, any]) {
+          return yield* runAsTerminal(effectId, data, function* () {
+            firstRunCallCount++;
+            if (firstRunCallCount === 1) {
+              return 10 as never;
+            }
+            if (firstRunCallCount === 2) {
+              return 20 as never;
+            }
+            // "Crash" on the 3rd call — simulate by throwing
+            throw new Error("SIMULATED_CRASH");
+          });
         },
       });
 
@@ -112,10 +114,12 @@ describe("End-to-end crash/replay", () => {
     let secondRunCallCount = 0;
     const secondResult = yield* scoped(function* () {
       yield* Effects.around({
-        *dispatch([_effectId, _data]: [string, any]) {
-          secondRunCallCount++;
-          // This should only be called for step3 (the live effect)
-          return 30; // step3 result
+        *dispatch([effectId, data]: [string, any]) {
+          return yield* runAsTerminal(effectId, data, function* () {
+            secondRunCallCount++;
+            // This should only be called for step3 (the live effect)
+            return 30 as never; // step3 result
+          });
         },
       });
 
