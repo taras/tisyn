@@ -20,10 +20,30 @@ body consume from the caller's allocator exactly as if they
 appeared at the caller's program point. Nested `invokeInline`
 from within inline-lane dispatch is rejected per spec §5.3.1.a.
 
+Replay semantics (scoped-effects §9.5): middleware re-executes
+identically on every run — original, pure replay, and crash
+recovery. External agent side effects do not re-fire because the
+runtime installs a per-dispatch `RuntimeTerminalBoundary` via
+`RuntimeTerminal.with(...)` that substitutes stored results at
+`runAsTerminal(...)` delegation sites. Inline bodies' compound
+externals (`resource`, `spawn`, `invoke`, `timebox`,
+`stream.subscribe`) re-spawn their child driveKernels on replay;
+those children replay from their own cursors; live host state
+(resource teardown callbacks, spawned task joins, subscription
+entries, allocator counters) rebuilds naturally. This makes the
+motivating browser/session/resource-continuity use case work
+across recovery, not just same-run.
+
 Internals: `driveKernel` is refactored to extract a `FrameState`
 record and a shared `iterateFrame` helper; the caller's own cursor
 and each inline lane cursor are processed via the same iteration
 logic, partitioned by the journal-lane id stored in
-`YieldEvent.coroutineId`. All existing `driveKernel` behaviors
-(replay, divergence, spawn/scope/resource/timebox orchestration,
-error propagation) are preserved bit-for-bit.
+`YieldEvent.coroutineId`. The pre-dispatch stored-yield
+short-circuit is removed; the replay check moves into the
+per-dispatch `RuntimeTerminalBoundary` closure. Close-event
+writing becomes idempotent via `appendCloseEvent` — on replay of a
+child whose Close is already durable, the event is pushed to
+`ctx.journal` for re-materialization only and the stream is not
+re-appended. All existing `driveKernel` behaviors (divergence,
+spawn/scope/resource/timebox orchestration, error propagation)
+are preserved.

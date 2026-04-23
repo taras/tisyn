@@ -20,5 +20,21 @@ handlers, `resolve` middleware, facade `.around` middleware, and
 calls from middleware dispatching an inline-body effect (nested
 inline) throw `InvalidInvokeCallSiteError` with zero side effects.
 
-`ctx.invokeInline` is added to the internal `DispatchContext` seam
-on `@tisyn/effects/internal`.
+Also adds `runAsTerminal(effectId, data, liveWork)` — the public
+delegation contract for `Effects.around({ dispatch })` middleware
+that terminates the chain and performs effectful work. Terminal
+middleware (agent implementations, remote transport bindings,
+mocks, etc.) MUST compose its live work through `runAsTerminal` so
+the runtime's replay-aware terminal boundary can substitute stored
+results in place of re-running `liveWork()` on replay. See
+`tisyn-scoped-effects-specification.md` §9.5 for the full
+middleware-author contract.
+
+Internals: `ctx.invokeInline` is added to the internal
+`DispatchContext` seam on `@tisyn/effects/internal`; a new
+`RuntimeTerminal` context + `RuntimeTerminalBoundary` interface is
+exported on `@tisyn/effects/internal` for the runtime to install
+per-dispatch. The built-in `EffectsApi` dispatch terminal routes
+its `sleep` and "no agent registered" paths through `runAsTerminal`
+so standalone uses gain the replay hook when the runtime is
+installed.
