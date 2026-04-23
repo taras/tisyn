@@ -43,6 +43,7 @@ describe("@tisyn/effects — package exports", () => {
       expect(names).toContain("dispatch");
       expect(names).toContain("resolve");
       expect(names).toContain("invoke");
+      expect(names).toContain("invokeInline");
       expect(names).toContain("installCrossBoundaryMiddleware");
       expect(names).toContain("getCrossBoundaryMiddleware");
       expect(names).toContain("InvalidInvokeCallSiteError");

@@ -26,6 +26,7 @@ import type { InvokeOpts } from "../dispatch.js";
 export interface DispatchContext {
   readonly coroutineId: string;
   invoke<T = Val>(fn: FnNode, args: readonly Val[], opts?: InvokeOpts): Operation<T>;
+  invokeInline<T = Val>(fn: FnNode, args: readonly Val[], opts?: InvokeOpts): Operation<T>;
 }
 
 /**

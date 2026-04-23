@@ -117,6 +117,38 @@ interface ResourceChild {
   waitCleanup: Operation<void>;
 }
 
+/**
+ * Per-frame state shared between driveKernel (caller cursor) and any
+ * iterateFrame invocations on the same frame (e.g. inline lanes).
+ *
+ * `yieldIndex` is the standard-effect ordinal for the caller's OWN cursor
+ * only — it advances on replay-consume and live-append when iterateFrame is
+ * processing the caller's cursor (journalLaneId === effectiveCoroutineId),
+ * and is NOT advanced by inline-lane iteration. It is the source of `q` in
+ * inline lane keys (`tisyn-inline-invocation-specification.md` §6.5.5).
+ *
+ * Lane cursor positions are tracked inside ReplayIndex, not on FrameState.
+ */
+interface FrameState {
+  childSpawnCount: number;
+  subscriptionCounter: number;
+  yieldIndex: number;
+  spawnedTasks: Map<string, { operation: Operation<EventResult> }>;
+  joinedTasks: Set<string>;
+  resourceChildren: ResourceChild[];
+}
+
+function createFrameState(): FrameState {
+  return {
+    childSpawnCount: 0,
+    subscriptionCounter: 0,
+    yieldIndex: 0,
+    spawnedTasks: new Map(),
+    joinedTasks: new Set(),
+    resourceChildren: [],
+  };
+}
+
 // ── Nested invocation helpers ──
 
 function isFnNode(value: unknown): value is FnNode {
@@ -170,9 +202,26 @@ function buildDispatchContext(args: {
   coroutineId: string;
   parentEnv: Env;
   driveContext: DriveContext;
-  allocateChildId: () => string;
+  frame: FrameState;
+  /**
+   * True when the dispatch is for an effect yielded inside an inline body —
+   * i.e. the enclosing iterateFrame is processing an inline lane cursor
+   * rather than the caller's own cursor. When true, `ctx.invokeInline` MUST
+   * reject per `tisyn-inline-invocation-specification.md` §5.3.1.a (nested
+   * inline invocation is an MVP non-goal).
+   */
+  isInlineLane: boolean;
 }): DispatchContext {
-  const { coroutineId, parentEnv, driveContext, allocateChildId } = args;
+  const { coroutineId, parentEnv, driveContext, frame, isInlineLane } = args;
+  const allocateChildId = (): string => `${coroutineId}.${frame.childSpawnCount++}`;
+  // `q` — caller yield ordinal for this dispatch, captured once at builder
+  // construction (i.e. at dispatch entry). Held in the closure so all
+  // invokeInline calls within the same dispatch share `q` and vary only in
+  // `j`. Per spec §6.5.5.
+  const q = frame.yieldIndex;
+  // `j` — per-dispatch invokeInline counter, starting at 0 for the first
+  // invokeInline call in this middleware body.
+  let j = 0;
   const self: DispatchContext = {
     coroutineId,
     *invoke<T>(fn: FnNode, invokeArgs: readonly Val[], opts?: InvokeOpts): Operation<T> {
@@ -206,6 +255,51 @@ function buildDispatchContext(args: {
         : yield* driveChild();
 
       return mapChildResultToOperationOutcome<T>(childResult);
+    },
+    *invokeInline<T>(fn: FnNode, invokeArgs: readonly Val[], opts?: InvokeOpts): Operation<T> {
+      // §5.3.3: only callable while this ctx is the active DispatchContext.
+      const active = yield* DispatchContext.get();
+      if (active !== self) {
+        throw new InvalidInvokeCallSiteError(
+          "ctx.invokeInline may only be called while its owning dispatch-boundary middleware is active",
+        );
+      }
+      // §5.3.1.a: reject when the current dispatch is on an inline lane.
+      // Zero side effects per IH9: no lane allocated, no `j` increment, no
+      // `fn.body` evaluation, no overlay push, no allocator advancement.
+      if (isInlineLane) {
+        throw new InvalidInvokeCallSiteError(
+          "invokeInline must not be called from middleware dispatching an inline-body effect; nested inline invocation is out of scope for MVP (spec §5.3.1.a, §11)",
+        );
+      }
+      if (!isFnNode(fn)) {
+        throw new InvalidInvokeInputError("fn must be a compiled Fn node");
+      }
+      if (!Array.isArray(invokeArgs)) {
+        throw new InvalidInvokeInputError("args must be an array");
+      }
+      validateInvokeOpts(opts);
+
+      // §6.5.5: form the deterministic inline lane key from `(q, j)`. `q` is
+      // the caller yield ordinal at dispatch entry; `j` is the per-dispatch
+      // counter. Advance `j` atomically on a successful call — rejections
+      // above MUST NOT touch `j`.
+      const laneId = `${coroutineId}@inline${q}.${j++}`;
+
+      const inlineEnv = extendMulti(parentEnv, [...fn.params], invokeArgs as Val[]);
+      const inlineKernel = evaluate(fn.body as Expr, inlineEnv);
+
+      // Run the inline body on its lane cursor while keeping
+      // effectiveCoroutineId = the caller's coroutineId. iterateFrame writes
+      // YieldEvents under `laneId` and reads replayIndex under `laneId`, but
+      // uses `coroutineId` for child-ID formation, subscription tokens, and
+      // ancestry checks. `frame.yieldIndex` is not advanced by this iteration
+      // because the journalLaneId ≠ effectiveCoroutineId guard in
+      // iterateFrame suppresses it.
+      const run = (): Operation<Val> =>
+        iterateFrame(inlineKernel, laneId, coroutineId, inlineEnv, driveContext, frame);
+      const value = opts?.overlay ? yield* withOverlayFrame(opts.overlay, run) : yield* run();
+      return value as T;
     },
   };
   return self;
@@ -337,476 +431,38 @@ function* driveKernel(
     return preClose.result;
   }
 
-  let nextValue: Val = null;
-  // When kernel.throw() yields a new effect (e.g., from catch/finally bodies),
-  // we store it here so the next loop iteration processes it without calling kernel.next().
-  let pendingStep: IteratorResult<EffectDescriptor, Val> | null = null;
-  // Unified counter for all compound-external children (scope, all, race, spawn) — replay-safe.
-  let childSpawnCount = 0;
-  // Per-coroutine subscription counter for deterministic token generation.
-  let subscriptionCounter = 0;
-  // Spawn/join tracking
-  const spawnedTasks = new Map<string, { operation: Operation<EventResult> }>();
-  const joinedTasks = new Set<string>();
-  const resourceChildren: ResourceChild[] = [];
+  // Per-frame state (unified child allocator, subscription counter, spawn/join
+  // tracking, resource children, and the caller's yieldIndex ordinal). See
+  // FrameState above.
+  const frame = createFrameState();
 
   // scoped() binds spawned children to the parent's lifetime:
   // children are alive while the parent runs, torn down when the parent exits.
   return yield* scoped(function* () {
     yield* CoroutineContext.set(coroutineId);
     try {
-      for (;;) {
-        const step = pendingStep ?? kernel.next(nextValue);
-        pendingStep = null;
+      // driveKernel processes the caller's own cursor — journalLaneId and
+      // effectiveCoroutineId are the same value. `iterateFrame` returns the
+      // kernel's final value on normal completion; exceptions propagate up
+      // through this try and are converted to an error CloseEvent below.
+      const value = yield* iterateFrame(kernel, coroutineId, coroutineId, env, ctx, frame);
 
-        if (step.done) {
-          // RV3: Reject subscription handles in close values
-          assertNoSubscriptionHandleInCloseValue(step.value);
-          // R21: Tear down resource children in reverse creation order
-          yield* teardownResourceChildren(resourceChildren);
-          closed = true;
-          const closeEvent: CloseEvent = {
-            type: "close",
-            coroutineId,
-            result: { status: "ok", value: step.value as Json },
-          };
-          yield* ctx.stream.append(closeEvent);
-          ctx.journal.push(closeEvent);
-
-          return { status: "ok", value: step.value as Json };
-        }
-
-        // Kernel yielded an effect descriptor
-        const descriptor = step.value as EffectDescriptor;
-
-        // ── Compound effect interception ──
-        if (isCompoundExternal(descriptor.id)) {
-          // Strip wrapper immediately — must not escape orchestration boundary
-          const compoundData = descriptor.data as { __tisyn_inner: unknown; __tisyn_env: Env };
-          const childEnv = compoundData.__tisyn_env;
-
-          if (descriptor.id === "scope") {
-            const inner = compoundData.__tisyn_inner as ScopeInner;
-            const childId = `${coroutineId}.${childSpawnCount++}`;
-            let scopeValue: Val = null;
-            let scopeErr: Error | null = null;
-            try {
-              scopeValue = yield* orchestrateScope(inner, childId, childEnv, ctx);
-            } catch (e) {
-              scopeErr = e instanceof Error ? e : new Error(String(e));
-            }
-            if (scopeErr === null) {
-              nextValue = scopeValue;
-            } else {
-              // T14: route through parent kernel so parent try/catch can intercept
-              const throwResult = kernel.throw(scopeErr);
-              if (throwResult.done) {
-                assertNoSubscriptionHandleInCloseValue(throwResult.value);
-                yield* teardownResourceChildren(resourceChildren);
-                closed = true;
-                const closeEvent: CloseEvent = {
-                  type: "close",
-                  coroutineId,
-                  result: { status: "ok", value: throwResult.value as Json },
-                };
-                yield* ctx.stream.append(closeEvent);
-                ctx.journal.push(closeEvent);
-                return { status: "ok", value: throwResult.value as Json };
-              }
-              pendingStep = throwResult;
-              nextValue = null;
-            }
-          } else if (descriptor.id === "spawn") {
-            // R1: deterministic child ID
-            const childId = `${coroutineId}.${childSpawnCount++}`;
-            const inner = compoundData.__tisyn_inner as { body: Expr };
-            const childKernel = evaluate(inner.body, childEnv);
-
-            const {
-              operation: joinOp,
-              resolve: joinResolve,
-              reject: joinReject,
-            } = withResolvers<EventResult>();
-            spawnedTasks.set(childId, { operation: joinOp });
-
-            // Background task — drives child kernel concurrently
-            yield* spawn(function* () {
-              try {
-                const result = yield* driveKernel(childKernel, childId, childEnv, ctx);
-                joinResolve(result);
-                if (result.status === "error") {
-                  // R12: child failure tears down parent scope unconditionally
-                  const errResult = result as {
-                    status: "error";
-                    error: { message: string; name?: string };
-                  };
-                  throw new EffectError(errResult.error.message, errResult.error.name);
-                }
-              } catch (e) {
-                const err = e instanceof Error ? e : new Error(String(e));
-                joinReject(err);
-                throw err; // R12: propagate to tear down parent Effection scope
-              }
-            });
-
-            // R4: resume parent immediately with task handle
-            nextValue = { __tisyn_task: childId } as Val;
-          } else if (descriptor.id === "join") {
-            // Join data is the resolved Ref value (task handle)
-            const taskHandle = compoundData.__tisyn_inner as Val;
-
-            // Runtime invariant: verify task handle shape
-            if (
-              taskHandle === null ||
-              typeof taskHandle !== "object" ||
-              typeof (taskHandle as Record<string, unknown>).__tisyn_task !== "string"
-            ) {
-              throw new RuntimeBugError("join: inner value is not a valid task handle");
-            }
-
-            const childId = (taskHandle as { __tisyn_task: string }).__tisyn_task;
-
-            // R8: double-join check
-            if (joinedTasks.has(childId)) {
-              throw new RuntimeBugError(`join: task '${childId}' has already been joined`);
-            }
-            joinedTasks.add(childId);
-
-            // Look up the spawned task's join operation
-            const entry = spawnedTasks.get(childId);
-            if (!entry) {
-              throw new RuntimeBugError(`join: no spawned task found for '${childId}'`);
-            }
-
-            // R6: wait for child completion
-            const childResult = yield* entry.operation;
-
-            // R7: resume parent with child's return value
-            if (childResult.status === "ok") {
-              nextValue = (childResult.value ?? null) as Val;
-            } else {
-              const errResult = childResult as {
-                status: "error";
-                error: { message: string; name?: string };
-              };
-              throw new EffectError(errResult.error.message, errResult.error.name);
-            }
-          } else if (descriptor.id === "resource") {
-            const childId = `${coroutineId}.${childSpawnCount++}`;
-            const inner = compoundData.__tisyn_inner as { body: Expr };
-            const childResourceKernel = evaluate(inner.body, childEnv);
-
-            const {
-              operation: provideOp,
-              resolve: provideRes,
-              reject: provideRej,
-            } = withResolvers<Val>();
-            const { operation: teardownOp, resolve: teardownRes } = withResolvers<void>();
-            const { operation: cleanupOp, resolve: cleanupRes } = withResolvers<void>();
-
-            yield* spawn(function* () {
-              yield* orchestrateResourceChild(
-                childResourceKernel,
-                childId,
-                childEnv,
-                ctx,
-                provideRes,
-                provideRej,
-                teardownOp,
-                cleanupRes,
-              );
-            });
-
-            let resourceValue: Val = null;
-            let resourceErr: Error | null = null;
-            try {
-              resourceValue = yield* provideOp;
-            } catch (e) {
-              resourceErr = e instanceof Error ? e : new Error(String(e));
-            }
-
-            if (resourceErr === null) {
-              resourceChildren.push({
-                childId,
-                signalTeardown: teardownRes,
-                waitCleanup: cleanupOp,
-              });
-              nextValue = resourceValue;
-            } else {
-              const throwResult = kernel.throw(resourceErr);
-              if (throwResult.done) {
-                assertNoSubscriptionHandleInCloseValue(throwResult.value);
-                yield* teardownResourceChildren(resourceChildren);
-                closed = true;
-                const closeEvent: CloseEvent = {
-                  type: "close",
-                  coroutineId,
-                  result: { status: "ok", value: throwResult.value as Json },
-                };
-                yield* ctx.stream.append(closeEvent);
-                ctx.journal.push(closeEvent);
-                return { status: "ok", value: throwResult.value as Json };
-              }
-              pendingStep = throwResult;
-              nextValue = null;
-            }
-          } else if (descriptor.id === "timebox") {
-            const inner = compoundData.__tisyn_inner as { duration: number; body: Expr };
-            // TB-R2: allocate 2 child IDs — body = N, timeout = N+1
-            const bodyChildId = `${coroutineId}.${childSpawnCount++}`;
-            const timeoutChildId = `${coroutineId}.${childSpawnCount++}`;
-
-            let timeboxValue: Val = null;
-            let timeboxErr: Error | null = null;
-            try {
-              timeboxValue = yield* orchestrateTimebox(
-                inner.duration,
-                inner.body,
-                bodyChildId,
-                timeoutChildId,
-                childEnv,
-                ctx,
-              );
-            } catch (e) {
-              timeboxErr = e instanceof Error ? e : new Error(String(e));
-            }
-
-            if (timeboxErr === null) {
-              nextValue = timeboxValue;
-            } else {
-              // Route error through parent kernel for try/catch interception
-              const throwResult = kernel.throw(timeboxErr);
-              if (throwResult.done) {
-                assertNoSubscriptionHandleInCloseValue(throwResult.value);
-                yield* teardownResourceChildren(resourceChildren);
-                closed = true;
-                const closeEvent: CloseEvent = {
-                  type: "close",
-                  coroutineId,
-                  result: { status: "ok", value: throwResult.value as Json },
-                };
-                yield* ctx.stream.append(closeEvent);
-                ctx.journal.push(closeEvent);
-                return { status: "ok", value: throwResult.value as Json };
-              }
-              pendingStep = throwResult;
-              nextValue = null;
-            }
-          } else if (descriptor.id === "provide") {
-            throw new RuntimeBugError("provide outside resource context");
-          } else {
-            const inner = compoundData.__tisyn_inner as { exprs: Expr[] };
-            const exprs = inner.exprs;
-            const startIndex = childSpawnCount;
-            childSpawnCount += exprs.length;
-            if (descriptor.id === "all") {
-              nextValue = yield* orchestrateAll(exprs, coroutineId, startIndex, childEnv, ctx);
-            } else {
-              nextValue = yield* orchestrateRace(exprs, coroutineId, startIndex, childEnv, ctx);
-            }
-          }
-          // Compound effects do NOT advance parent yieldIndex
-          continue;
-        }
-
-        // ── Standard effect dispatch ──
-        const description = parseEffectId(descriptor.id);
-
-        // Check replay index first
-        const stored = ctx.replayIndex.peekYield(coroutineId);
-
-        if (stored) {
-          // CASE 1: Replay entry exists — check description match
-          if (
-            stored.description.type !== description.type ||
-            stored.description.name !== description.name
-          ) {
-            const cursor = ctx.replayIndex.getCursor(coroutineId);
-            throw new DivergenceError(
-              `Divergence at ${coroutineId}[${cursor}]: ` +
-                `expected ${stored.description.type}.${stored.description.name}, ` +
-                `got ${description.type}.${description.name}`,
-            );
-          }
-
-          // Match — consume entry, feed stored result
-          ctx.replayIndex.consumeYield(coroutineId);
-
-          // Stream-specific: cache source definition during subscribe replay
-          if (descriptor.id === "stream.subscribe" && stored.result.status === "ok") {
-            const handle = stored.result.value as Record<string, unknown> | null;
-            if (handle && typeof handle === "object" && "__tisyn_subscription" in handle) {
-              ctx.subscriptions.set(handle.__tisyn_subscription as string, {
-                subscription: null,
-                sourceDefinition: descriptor.data,
-              });
-              subscriptionCounter++;
-            }
-          }
-
-          const replayedEvent: YieldEvent = {
-            type: "yield",
-            coroutineId,
-            description: stored.description,
-            result: stored.result,
-          };
-          ctx.journal.push(replayedEvent);
-
-          if (stored.result.status === "ok") {
-            nextValue = (stored.result.value ?? null) as Val;
-          } else if (stored.result.status === "error") {
-            const err = new EffectError(stored.result.error.message, stored.result.error.name);
-            const throwResult = kernel.throw(err);
-            if (throwResult.done) {
-              assertNoSubscriptionHandleInCloseValue(throwResult.value);
-              yield* teardownResourceChildren(resourceChildren);
-              closed = true;
-              const closeEvent: CloseEvent = {
-                type: "close",
-                coroutineId,
-                result: { status: "ok", value: throwResult.value as Json },
-              };
-              yield* ctx.stream.append(closeEvent);
-              ctx.journal.push(closeEvent);
-              return { status: "ok", value: throwResult.value as Json };
-            }
-            // kernel.throw() yielded a new effect (e.g., from catch/finally body)
-            pendingStep = throwResult;
-            nextValue = null;
-            continue;
-          } else {
-            throw new Error("Cannot replay cancelled result");
-          }
-
-          continue;
-        }
-
-        // Check for D2: continue past close
-        if (ctx.replayIndex.hasClose(coroutineId)) {
-          throw new DivergenceError(
-            `Divergence: journal shows ${coroutineId} closed, but generator continues to yield effects`,
-          );
-        }
-
-        // CASE 3: No replay entry, no close — LIVE dispatch
-        let effectResult: EventResult;
-        try {
-          let resultValue: Val;
-          if (descriptor.id === "__config") {
-            resultValue = (yield* ConfigContext.expect()) as Val;
-          } else if (descriptor.id === "stream.subscribe") {
-            const token = `sub:${coroutineId}:${subscriptionCounter++}`;
-            const sourceData = descriptor.data as unknown[];
-            const source = sourceData[0];
-            // Subscribe to the Effection stream
-            const sub = yield* source as Operation<{
-              next(): Operation<IteratorResult<Val, unknown>>;
-            }>;
-            ctx.subscriptions.set(token, { subscription: sub, sourceDefinition: source });
-            resultValue = { __tisyn_subscription: token } as unknown as Val;
-          } else if (descriptor.id === "stream.next") {
-            const nextData = descriptor.data as unknown[];
-            const handle = nextData[0] as Record<string, unknown> | null;
-            if (
-              !handle ||
-              typeof handle !== "object" ||
-              typeof handle.__tisyn_subscription !== "string"
-            ) {
-              throw new RuntimeBugError("stream.next: argument is not a valid subscription handle");
-            }
-            const token = handle.__tisyn_subscription as string;
-            // RV1: ancestor-or-equal coroutineId check
-            const handleCid = token.split(":")[1]!;
-            if (coroutineId !== handleCid && !coroutineId.startsWith(handleCid + ".")) {
-              throw new SubscriptionCapabilityError(
-                `stream.next: handle from '${handleCid}' cannot be used from '${coroutineId}'`,
-              );
-            }
-            const entry = ctx.subscriptions.get(token);
-            // Lazy reconstruction at live frontier
-            if (entry && !entry.subscription) {
-              const src = entry.sourceDefinition as unknown[];
-              const srcStream = src[0];
-              entry.subscription = yield* srcStream as Operation<{
-                next(): Operation<IteratorResult<Val, unknown>>;
-              }>;
-            }
-            if (!entry?.subscription) {
-              throw new RuntimeBugError(`stream.next: no subscription for token '${token}'`);
-            }
-            const iterResult = yield* entry.subscription.next();
-            if (iterResult.done) {
-              resultValue = { done: true } as unknown as Val;
-            } else {
-              resultValue = { done: false, value: iterResult.value } as unknown as Val;
-            }
-          } else {
-            // RV2: reject subscription handles in non-stream effect dispatch data
-            if (containsSubscriptionHandle(descriptor.data)) {
-              throw new SubscriptionCapabilityError(
-                `Effect '${descriptor.id}': resolved data contains a subscription handle, which is a restricted capability value`,
-              );
-            }
-            // Install a fresh DispatchContext for this dispatch chain —
-            // middleware may read it via DispatchContext.get() and call
-            // ctx.invoke(fn, args, opts?) to run a compiled Fn as a
-            // journaled child coroutine under the parent's unified allocator.
-            const dispatchCtx = buildDispatchContext({
-              coroutineId,
-              parentEnv: env,
-              driveContext: ctx,
-              allocateChildId: () => `${coroutineId}.${childSpawnCount++}`,
-            });
-            resultValue = yield* DispatchContext.with(dispatchCtx, () =>
-              dispatch(descriptor.id, descriptor.data as Val),
-            );
-          }
-          effectResult = { status: "ok", value: resultValue as Json };
-        } catch (error) {
-          const err = error instanceof Error ? error : new Error(String(error));
-          effectResult = {
-            status: "error",
-            error: { message: err.message, name: err.name },
-          };
-        }
-
-        // Persist-before-resume: write Yield event BEFORE resuming kernel
-        const yieldEvent: YieldEvent = {
-          type: "yield",
-          coroutineId,
-          description,
-          result: effectResult,
-        };
-        yield* ctx.stream.append(yieldEvent);
-        ctx.journal.push(yieldEvent);
-
-        if (effectResult.status === "ok") {
-          nextValue = (effectResult.value ?? null) as Val;
-        } else {
-          const err = new EffectError(effectResult.error.message, effectResult.error.name);
-          const throwResult = kernel.throw(err);
-          if (throwResult.done) {
-            assertNoSubscriptionHandleInCloseValue(throwResult.value);
-            yield* teardownResourceChildren(resourceChildren);
-            closed = true;
-            const closeEvent: CloseEvent = {
-              type: "close",
-              coroutineId,
-              result: { status: "ok", value: throwResult.value as Json },
-            };
-            yield* ctx.stream.append(closeEvent);
-            ctx.journal.push(closeEvent);
-            return { status: "ok", value: throwResult.value as Json };
-          }
-          // kernel.throw() yielded a new effect (e.g., from catch/finally body)
-          pendingStep = throwResult;
-          nextValue = null;
-          continue;
-        }
-      }
+      // Normal completion: RV3 subscription-handle check, R21 resource
+      // teardown in reverse creation order, then CloseEvent(ok).
+      assertNoSubscriptionHandleInCloseValue(value);
+      yield* teardownResourceChildren(frame.resourceChildren);
+      closed = true;
+      const closeEvent: CloseEvent = {
+        type: "close",
+        coroutineId,
+        result: { status: "ok", value: value as Json },
+      };
+      yield* ctx.stream.append(closeEvent);
+      ctx.journal.push(closeEvent);
+      return { status: "ok", value: value as Json };
     } catch (error) {
-      // Tear down resource children before writing parent CloseEvent (R23)
-      yield* teardownResourceChildren(resourceChildren);
+      // R23: Tear down resource children before writing parent CloseEvent.
+      yield* teardownResourceChildren(frame.resourceChildren);
 
       // DivergenceError = journal corruption — persist Close(err) then propagate fatally
       if (error instanceof DivergenceError) {
@@ -843,6 +499,446 @@ function* driveKernel(
       };
     }
   }); // end scoped — tears down unjoined spawned children
+}
+
+/**
+ * Iterate the kernel generator for a single cursor: consume replay entries
+ * when present, dispatch effects live when not, and maintain compound-external
+ * orchestration. Returns the generator's final `Val` on normal completion;
+ * exceptions (DivergenceError, effect errors unhandled by kernel.throw, etc.)
+ * propagate up to the caller.
+ *
+ * This helper is shared by `driveKernel` (which runs with journalLaneId ===
+ * effectiveCoroutineId for the caller's own cursor) and by `ctx.invokeInline`
+ * (which runs with journalLaneId = inline lane key per
+ * `tisyn-inline-invocation-specification.md` §6.5.5 while keeping
+ * effectiveCoroutineId = the caller's id).
+ *
+ * Notes:
+ * - `journalLaneId` is used for `YieldEvent.coroutineId` and `ReplayIndex`
+ *   cursor keys (peek/consume/getCursor/hasClose). This is what partitions
+ *   the replay cursor.
+ * - `effectiveCoroutineId` is used for child-ID formation
+ *   (`${effectiveCoroutineId}.${frame.childSpawnCount++}`), subscription
+ *   tokens, ancestry checks, and the `coroutineId` field installed on the
+ *   `DispatchContext`. Ownership semantics follow this id.
+ * - `frame.yieldIndex` is the caller's standard-effect ordinal. It advances
+ *   only when iterateFrame is processing the caller's own cursor
+ *   (journalLaneId === effectiveCoroutineId). Inline-lane iterations MUST
+ *   NOT advance it; doing so would corrupt the `q` the caller captures for
+ *   subsequent inline lane keys.
+ * - iterateFrame does NOT wrap in `scoped()`, does NOT call
+ *   `CoroutineContext.set`, does NOT write any `CloseEvent`, and does NOT
+ *   tear down `frame.resourceChildren`. Those are the responsibility of the
+ *   enclosing `driveKernel`.
+ */
+function* iterateFrame(
+  kernel: Generator<EffectDescriptor, Val, Val>,
+  journalLaneId: string,
+  effectiveCoroutineId: string,
+  env: Env,
+  ctx: DriveContext,
+  frame: FrameState,
+): Operation<Val> {
+  const isCallerCursor = journalLaneId === effectiveCoroutineId;
+  let nextValue: Val = null;
+  let pendingStep: IteratorResult<EffectDescriptor, Val> | null = null;
+
+  for (;;) {
+    const step = pendingStep ?? kernel.next(nextValue);
+    pendingStep = null;
+
+    if (step.done) {
+      return step.value;
+    }
+
+    const descriptor = step.value as EffectDescriptor;
+
+    // ── Compound effect interception ──
+    if (isCompoundExternal(descriptor.id)) {
+      const compoundData = descriptor.data as { __tisyn_inner: unknown; __tisyn_env: Env };
+      const childEnv = compoundData.__tisyn_env;
+
+      if (descriptor.id === "scope") {
+        const inner = compoundData.__tisyn_inner as ScopeInner;
+        const childId = `${effectiveCoroutineId}.${frame.childSpawnCount++}`;
+        let scopeValue: Val = null;
+        let scopeErr: Error | null = null;
+        try {
+          scopeValue = yield* orchestrateScope(inner, childId, childEnv, ctx);
+        } catch (e) {
+          scopeErr = e instanceof Error ? e : new Error(String(e));
+        }
+        if (scopeErr === null) {
+          nextValue = scopeValue;
+        } else {
+          // T14: route through parent kernel so parent try/catch can intercept
+          const throwResult = kernel.throw(scopeErr);
+          if (throwResult.done) {
+            return throwResult.value;
+          }
+          pendingStep = throwResult;
+          nextValue = null;
+        }
+      } else if (descriptor.id === "spawn") {
+        // R1: deterministic child ID
+        const childId = `${effectiveCoroutineId}.${frame.childSpawnCount++}`;
+        const inner = compoundData.__tisyn_inner as { body: Expr };
+        const childKernel = evaluate(inner.body, childEnv);
+
+        const {
+          operation: joinOp,
+          resolve: joinResolve,
+          reject: joinReject,
+        } = withResolvers<EventResult>();
+        frame.spawnedTasks.set(childId, { operation: joinOp });
+
+        // Background task — drives child kernel concurrently
+        yield* spawn(function* () {
+          try {
+            const result = yield* driveKernel(childKernel, childId, childEnv, ctx);
+            joinResolve(result);
+            if (result.status === "error") {
+              // R12: child failure tears down parent scope unconditionally
+              const errResult = result as {
+                status: "error";
+                error: { message: string; name?: string };
+              };
+              throw new EffectError(errResult.error.message, errResult.error.name);
+            }
+          } catch (e) {
+            const err = e instanceof Error ? e : new Error(String(e));
+            joinReject(err);
+            throw err; // R12: propagate to tear down parent Effection scope
+          }
+        });
+
+        // R4: resume parent immediately with task handle
+        nextValue = { __tisyn_task: childId } as Val;
+      } else if (descriptor.id === "join") {
+        const taskHandle = compoundData.__tisyn_inner as Val;
+        if (
+          taskHandle === null ||
+          typeof taskHandle !== "object" ||
+          typeof (taskHandle as Record<string, unknown>).__tisyn_task !== "string"
+        ) {
+          throw new RuntimeBugError("join: inner value is not a valid task handle");
+        }
+        const childId = (taskHandle as { __tisyn_task: string }).__tisyn_task;
+        if (frame.joinedTasks.has(childId)) {
+          throw new RuntimeBugError(`join: task '${childId}' has already been joined`);
+        }
+        frame.joinedTasks.add(childId);
+        const entry = frame.spawnedTasks.get(childId);
+        if (!entry) {
+          throw new RuntimeBugError(`join: no spawned task found for '${childId}'`);
+        }
+        const childResult = yield* entry.operation;
+        if (childResult.status === "ok") {
+          nextValue = (childResult.value ?? null) as Val;
+        } else {
+          const errResult = childResult as {
+            status: "error";
+            error: { message: string; name?: string };
+          };
+          throw new EffectError(errResult.error.message, errResult.error.name);
+        }
+      } else if (descriptor.id === "resource") {
+        const childId = `${effectiveCoroutineId}.${frame.childSpawnCount++}`;
+        const inner = compoundData.__tisyn_inner as { body: Expr };
+        const childResourceKernel = evaluate(inner.body, childEnv);
+
+        const {
+          operation: provideOp,
+          resolve: provideRes,
+          reject: provideRej,
+        } = withResolvers<Val>();
+        const { operation: teardownOp, resolve: teardownRes } = withResolvers<void>();
+        const { operation: cleanupOp, resolve: cleanupRes } = withResolvers<void>();
+
+        yield* spawn(function* () {
+          yield* orchestrateResourceChild(
+            childResourceKernel,
+            childId,
+            childEnv,
+            ctx,
+            provideRes,
+            provideRej,
+            teardownOp,
+            cleanupRes,
+          );
+        });
+
+        let resourceValue: Val = null;
+        let resourceErr: Error | null = null;
+        try {
+          resourceValue = yield* provideOp;
+        } catch (e) {
+          resourceErr = e instanceof Error ? e : new Error(String(e));
+        }
+
+        if (resourceErr === null) {
+          frame.resourceChildren.push({
+            childId,
+            signalTeardown: teardownRes,
+            waitCleanup: cleanupOp,
+          });
+          nextValue = resourceValue;
+        } else {
+          const throwResult = kernel.throw(resourceErr);
+          if (throwResult.done) {
+            return throwResult.value;
+          }
+          pendingStep = throwResult;
+          nextValue = null;
+        }
+      } else if (descriptor.id === "timebox") {
+        const inner = compoundData.__tisyn_inner as { duration: number; body: Expr };
+        // TB-R2: allocate 2 child IDs — body = N, timeout = N+1
+        const bodyChildId = `${effectiveCoroutineId}.${frame.childSpawnCount++}`;
+        const timeoutChildId = `${effectiveCoroutineId}.${frame.childSpawnCount++}`;
+
+        let timeboxValue: Val = null;
+        let timeboxErr: Error | null = null;
+        try {
+          timeboxValue = yield* orchestrateTimebox(
+            inner.duration,
+            inner.body,
+            bodyChildId,
+            timeoutChildId,
+            childEnv,
+            ctx,
+          );
+        } catch (e) {
+          timeboxErr = e instanceof Error ? e : new Error(String(e));
+        }
+
+        if (timeboxErr === null) {
+          nextValue = timeboxValue;
+        } else {
+          // Route error through parent kernel for try/catch interception
+          const throwResult = kernel.throw(timeboxErr);
+          if (throwResult.done) {
+            return throwResult.value;
+          }
+          pendingStep = throwResult;
+          nextValue = null;
+        }
+      } else if (descriptor.id === "provide") {
+        throw new RuntimeBugError("provide outside resource context");
+      } else {
+        const inner = compoundData.__tisyn_inner as { exprs: Expr[] };
+        const exprs = inner.exprs;
+        const startIndex = frame.childSpawnCount;
+        frame.childSpawnCount += exprs.length;
+        if (descriptor.id === "all") {
+          nextValue = yield* orchestrateAll(exprs, effectiveCoroutineId, startIndex, childEnv, ctx);
+        } else {
+          nextValue = yield* orchestrateRace(
+            exprs,
+            effectiveCoroutineId,
+            startIndex,
+            childEnv,
+            ctx,
+          );
+        }
+      }
+      // Compound effects do NOT advance parent yieldIndex
+      continue;
+    }
+
+    // ── Standard effect dispatch ──
+    const description = parseEffectId(descriptor.id);
+
+    // Check replay index first (keyed by journalLaneId per §6.6.1)
+    const stored = ctx.replayIndex.peekYield(journalLaneId);
+
+    if (stored) {
+      // CASE 1: Replay entry exists — check description match
+      if (
+        stored.description.type !== description.type ||
+        stored.description.name !== description.name
+      ) {
+        const cursor = ctx.replayIndex.getCursor(journalLaneId);
+        throw new DivergenceError(
+          `Divergence at ${journalLaneId}[${cursor}]: ` +
+            `expected ${stored.description.type}.${stored.description.name}, ` +
+            `got ${description.type}.${description.name}`,
+        );
+      }
+
+      // Match — consume entry, feed stored result
+      ctx.replayIndex.consumeYield(journalLaneId);
+
+      // Stream-specific: cache source definition during subscribe replay
+      if (descriptor.id === "stream.subscribe" && stored.result.status === "ok") {
+        const handle = stored.result.value as Record<string, unknown> | null;
+        if (handle && typeof handle === "object" && "__tisyn_subscription" in handle) {
+          ctx.subscriptions.set(handle.__tisyn_subscription as string, {
+            subscription: null,
+            sourceDefinition: descriptor.data,
+          });
+          frame.subscriptionCounter++;
+        }
+      }
+
+      const replayedEvent: YieldEvent = {
+        type: "yield",
+        coroutineId: journalLaneId,
+        description: stored.description,
+        result: stored.result,
+      };
+      ctx.journal.push(replayedEvent);
+
+      // Advance the caller's yieldIndex ordinal only when this iteration is
+      // on the caller's own cursor (§6.5.5 definition of `q`).
+      if (isCallerCursor) {
+        frame.yieldIndex++;
+      }
+
+      if (stored.result.status === "ok") {
+        nextValue = (stored.result.value ?? null) as Val;
+      } else if (stored.result.status === "error") {
+        const err = new EffectError(stored.result.error.message, stored.result.error.name);
+        const throwResult = kernel.throw(err);
+        if (throwResult.done) {
+          return throwResult.value;
+        }
+        // kernel.throw() yielded a new effect (e.g., from catch/finally body)
+        pendingStep = throwResult;
+        nextValue = null;
+        continue;
+      } else {
+        throw new Error("Cannot replay cancelled result");
+      }
+
+      continue;
+    }
+
+    // Check for D2: continue past close
+    if (ctx.replayIndex.hasClose(journalLaneId)) {
+      throw new DivergenceError(
+        `Divergence: journal shows ${journalLaneId} closed, but generator continues to yield effects`,
+      );
+    }
+
+    // CASE 3: No replay entry, no close — LIVE dispatch
+    let effectResult: EventResult;
+    try {
+      let resultValue: Val;
+      if (descriptor.id === "__config") {
+        resultValue = (yield* ConfigContext.expect()) as Val;
+      } else if (descriptor.id === "stream.subscribe") {
+        const token = `sub:${effectiveCoroutineId}:${frame.subscriptionCounter++}`;
+        const sourceData = descriptor.data as unknown[];
+        const source = sourceData[0];
+        // Subscribe to the Effection stream
+        const sub = yield* source as Operation<{
+          next(): Operation<IteratorResult<Val, unknown>>;
+        }>;
+        ctx.subscriptions.set(token, { subscription: sub, sourceDefinition: source });
+        resultValue = { __tisyn_subscription: token } as unknown as Val;
+      } else if (descriptor.id === "stream.next") {
+        const nextData = descriptor.data as unknown[];
+        const handle = nextData[0] as Record<string, unknown> | null;
+        if (
+          !handle ||
+          typeof handle !== "object" ||
+          typeof handle.__tisyn_subscription !== "string"
+        ) {
+          throw new RuntimeBugError("stream.next: argument is not a valid subscription handle");
+        }
+        const token = handle.__tisyn_subscription as string;
+        // RV1: ancestor-or-equal check against the effective coroutineId.
+        const handleCid = token.split(":")[1]!;
+        if (
+          effectiveCoroutineId !== handleCid &&
+          !effectiveCoroutineId.startsWith(handleCid + ".")
+        ) {
+          throw new SubscriptionCapabilityError(
+            `stream.next: handle from '${handleCid}' cannot be used from '${effectiveCoroutineId}'`,
+          );
+        }
+        const entry = ctx.subscriptions.get(token);
+        // Lazy reconstruction at live frontier
+        if (entry && !entry.subscription) {
+          const src = entry.sourceDefinition as unknown[];
+          const srcStream = src[0];
+          entry.subscription = yield* srcStream as Operation<{
+            next(): Operation<IteratorResult<Val, unknown>>;
+          }>;
+        }
+        if (!entry?.subscription) {
+          throw new RuntimeBugError(`stream.next: no subscription for token '${token}'`);
+        }
+        const iterResult = yield* entry.subscription.next();
+        if (iterResult.done) {
+          resultValue = { done: true } as unknown as Val;
+        } else {
+          resultValue = { done: false, value: iterResult.value } as unknown as Val;
+        }
+      } else {
+        // RV2: reject subscription handles in non-stream effect dispatch data
+        if (containsSubscriptionHandle(descriptor.data)) {
+          throw new SubscriptionCapabilityError(
+            `Effect '${descriptor.id}': resolved data contains a subscription handle, which is a restricted capability value`,
+          );
+        }
+        // Install a fresh DispatchContext for this dispatch chain — middleware
+        // may read it via DispatchContext.get() and call `ctx.invoke(...)` (or
+        // `ctx.invokeInline(...)` once wired) from within the middleware body.
+        // `isInlineLane` is true when iterateFrame is processing an inline
+        // lane cursor; `ctx.invokeInline` uses this flag to reject nested
+        // inline invocation per spec §5.3.1.a.
+        const dispatchCtx = buildDispatchContext({
+          coroutineId: effectiveCoroutineId,
+          parentEnv: env,
+          driveContext: ctx,
+          frame,
+          isInlineLane: !isCallerCursor,
+        });
+        resultValue = yield* DispatchContext.with(dispatchCtx, () =>
+          dispatch(descriptor.id, descriptor.data as Val),
+        );
+      }
+      effectResult = { status: "ok", value: resultValue as Json };
+    } catch (error) {
+      const err = error instanceof Error ? error : new Error(String(error));
+      effectResult = {
+        status: "error",
+        error: { message: err.message, name: err.name },
+      };
+    }
+
+    // Persist-before-resume: write Yield event BEFORE resuming kernel
+    const yieldEvent: YieldEvent = {
+      type: "yield",
+      coroutineId: journalLaneId,
+      description,
+      result: effectResult,
+    };
+    yield* ctx.stream.append(yieldEvent);
+    ctx.journal.push(yieldEvent);
+
+    // Advance caller's yieldIndex ordinal only for the caller's own cursor.
+    if (isCallerCursor) {
+      frame.yieldIndex++;
+    }
+
+    if (effectResult.status === "ok") {
+      nextValue = (effectResult.value ?? null) as Val;
+    } else {
+      const err = new EffectError(effectResult.error.message, effectResult.error.name);
+      const throwResult = kernel.throw(err);
+      if (throwResult.done) {
+        return throwResult.value;
+      }
+      // kernel.throw() yielded a new effect (e.g., from catch/finally body)
+      pendingStep = throwResult;
+      nextValue = null;
+      continue;
+    }
+  }
 }
 
 // ── Compound orchestration ──
