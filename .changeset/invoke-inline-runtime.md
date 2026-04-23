@@ -34,6 +34,21 @@ entries, allocator counters) rebuilds naturally. This makes the
 motivating browser/session/resource-continuity use case work
 across recovery, not just same-run.
 
+Replay is payload-sensitive: the runtime computes
+`payloadSha(descriptor.data)` at every YieldEvent-write site and
+stores it as `description.sha`. The divergence check at replay
+compares type + name + sha; mismatch raises `DivergenceError` with
+both stored and current hashes in the message. This prevents
+middleware that branches on payload from silently rebuilding
+divergent live state (e.g., opening a session for URL B while
+replay substitutes the stored handle for URL A). Legacy journals
+written before `description.sha` existed fall back to type + name
+matching per scoped-effects §9.5's legacy-compat rule. `payloadSha`
+is imported from `@tisyn/kernel` — no `node:crypto` reference in
+`@tisyn/runtime`; browser consumers (e.g.
+`packages/transport/src/transports/browser-executor.ts`) continue
+to build and run.
+
 Internals: `driveKernel` is refactored to extract a `FrameState`
 record and a shared `iterateFrame` helper; the caller's own cursor
 and each inline lane cursor are processed via the same iteration

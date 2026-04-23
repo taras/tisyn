@@ -846,6 +846,33 @@ the middleware chain in place of performing live terminal work.
 Otherwise the runtime MUST perform the live terminal work and
 write a new `YieldEvent`.
 
+**Description match is payload-sensitive.** The stored result
+substitutes for live terminal work only when the stored
+`YieldEvent`'s `description` matches the currently dispatched
+effect. Match requires:
+
+1. `description.type` equality.
+2. `description.name` equality.
+3. Payload-fingerprint equality, defined as
+   `description.sha === payloadSha(dispatched-data)`, where
+   `payloadSha(v) = bytesToHex(sha256(utf8(canonical(v))))` using
+   the canonical JSON serializer from `@tisyn/kernel` and SHA-256.
+   `@tisyn/kernel` exports `payloadSha` as an isomorphic helper
+   (Node + browser).
+
+A `type` / `name` mismatch or payload-fingerprint mismatch is a
+`DivergenceError`. The error message MUST include both the stored
+and computed fingerprints when the mismatch is payload-only.
+
+**Backward compatibility (legacy journals).** Journal entries
+written before the `description.sha` field existed do not carry
+it. A stored `YieldEvent` whose `description.sha` is absent MUST
+skip the payload-fingerprint check for that single entry and
+proceed with only type + name matching. New `YieldEvent`s
+written by the runtime always include `description.sha`. This
+legacy path exists for backward-compat only; new journals are
+fully payload-protected.
+
 The terminal boundary is a runtime implementation mechanism,
 not a middleware priority participant. It sits below every
 user-installable priority (including `at: "min"`) by

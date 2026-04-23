@@ -159,8 +159,12 @@ function applySentinel(actual: DurableEvent, expected: DurableEvent): DurableEve
  * Fixtures that DO declare `sha` are compared strictly.
  */
 function stripYieldSha(event: DurableEvent): DurableEvent {
-  if (event.type !== "yield") return event;
-  if (event.description.sha === undefined) return event;
+  if (event.type !== "yield") {
+    return event;
+  }
+  if (event.description.sha === undefined) {
+    return event;
+  }
   const { sha: _drop, ...rest } = event.description;
   return { ...event, description: rest };
 }
