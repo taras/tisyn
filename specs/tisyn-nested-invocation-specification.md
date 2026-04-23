@@ -203,7 +203,7 @@ On replay, the parent kernel MUST re-evaluate its IR per kernel spec §10.5. At 
 
 ### 8.2 Invoking-middleware re-execution
 
-At the replay frontier — the point at which the parent kernel enters live dispatch because its cursor has no stored entry matching the current yield — the invoking middleware MUST re-execute identically per scoped-effects §9.5 and companion test MR-002 (Core tier). For yields whose stored cursor entries short-circuit dispatch per scoped-effects §9.5, the runtime MUST consume the stored entry and feed its result without re-running middleware; middleware MUST NOT rely on re-execution in that case. No replay-phase API is exposed to middleware.
+On replay, the invoking middleware MUST re-execute identically per scoped-effects §9.5 and companion test MR-002 (Core tier). No replay-phase API is exposed to middleware, and the runtime MUST NOT selectively skip middleware during replay. External agent side effects are prevented from re-firing by the runtime's terminal boundary (scoped-effects §9.5), which substitutes stored results at the `runAsTerminal(...)` delegation point in place of live terminal work.
 
 ### 8.3 Allocator advancement on replay
 
@@ -282,7 +282,7 @@ An implementation is conformant with this specification if and only if it satisf
 - **H3.** Replay from the produced journal reaches the same terminal state with no divergence; per-coroutineId replay cursors operate independently; effects with durable recorded yields are not re-dispatched to agents on replay.
 - **H4.** Abnormal child close produces an Effection-level exception thrown at the invoking middleware's `yield* invoke(...)` await site, carrying the reified close reason.
 - **H5.** Parent cancellation during an active invoked child results in child teardown and propagated close reason.
-- **H6.** Invoking middleware containing `invoke` calls re-executes identically at the replay frontier with no observable difference (direct application of scoped-effects §9.5 and MR-002, Core tier). For yields whose stored cursor entries short-circuit dispatch per scoped-effects §9.5, middleware is not re-run and must not depend on being re-run in that case.
+- **H6.** Invoking middleware containing `invoke` calls re-executes on replay with no observable difference (direct application of scoped-effects §9.5 and MR-002, Core tier). External agent side effects at terminals composed through `runAsTerminal(...)` are replay-substituted by the runtime terminal boundary and do not fire twice.
 - **H7.** A `invoke` call writes no event under the parent coroutineId on its own account; only the child's own journal entries under its coroutineId are produced.
 
 ---
@@ -331,7 +331,7 @@ This specification is accompanied by two narrow amendments to existing specs. Th
 
 Add one paragraph:
 
-> The runtime MAY expose an `invoke(fn, args, opts?)` free helper (exported by an implementation-chosen package; the export path is not part of the normative surface) accessible from the body of an `Effects.around({ dispatch })` middleware. The operation is a runtime-controlled dispatch-boundary `Operation<T>` — it is initiated and resolved outside kernel IR evaluation — and it is not a compound external and does not produce a kernel descriptor. Semantics are defined by `tisyn-nested-invocation-specification.md`. Invoking middleware remains subject to the determinism expectation of §9.5; the replay property stated in MR-002 extends to middleware that calls `invoke` at the replay frontier without modification.
+> The runtime MAY expose an `invoke(fn, args, opts?)` free helper (exported by an implementation-chosen package; the export path is not part of the normative surface) accessible from the body of an `Effects.around({ dispatch })` middleware. The operation is a runtime-controlled dispatch-boundary `Operation<T>` — it is initiated and resolved outside kernel IR evaluation — and it is not a compound external and does not produce a kernel descriptor. Semantics are defined by `tisyn-nested-invocation-specification.md`. Invoking middleware is subject to the middleware-reruns-on-every-run semantics of §9.5; the replay property stated in MR-002 extends to middleware that calls `invoke` without modification.
 
 ### 16.2 `tisyn-compound-concurrency-specification.md` — §4.2 (Child Task IDs)
 

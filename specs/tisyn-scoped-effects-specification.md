@@ -182,12 +182,16 @@ part of the normative surface) accessible from the body of an
 `Effects.around({ dispatch })` middleware. The operation is a
 runtime-controlled dispatch-boundary `Operation<T>` — it is initiated and
 resolved outside kernel IR evaluation — and it is not a compound external, does
-not produce a kernel descriptor, does not allocate any coroutineId, and
-introduces no durable event. Effects yielded inside the inline body are
-journaled under the caller's coroutineId. Semantics are defined by
-`tisyn-inline-invocation-specification.md`. Invoking middleware remains subject
-to the determinism expectation of §9; the replay property stated in MR-002
-extends to middleware that calls `invokeInline` without modification.
+not produce a kernel descriptor, does not allocate any runtime coroutineId, and
+introduces no new durable-event discriminant. Effects yielded inside the inline
+body are journaled on a deterministic inline journal lane (a replay-cursor
+partition key stored in `YieldEvent.coroutineId`; see
+`tisyn-inline-invocation-specification.md` §6.5.5). Semantics are defined by
+`tisyn-inline-invocation-specification.md`. Invoking middleware is subject to
+the middleware-reruns-on-every-run semantics of §9.5; the replay property
+stated in MR-002 extends to middleware that calls `invokeInline` without
+modification — the inline body's kernel re-executes on replay and its
+dispatched effects are replay-substituted at the runtime terminal boundary.
 
 ### 3.2 Effect ID Namespace
 
@@ -823,29 +827,49 @@ The runtime MUST read guard metadata on restart and re-install
 JavaScript guard middleware via the middleware installation
 primitive. Guard implementations are host-provided.
 
-### 9.5 Per-Cursor Replay Policy (Normative)
+### 9.5 Replay Semantics and Middleware Contract (Normative)
 
-Replay is per `ReplayIndex` cursor. When the runtime consumes a
-stored cursor entry whose description matches the current kernel
-yield, it MUST feed the stored result to the kernel without
-re-running scoped-effects middleware for that yield; the stored
-result is authoritative.
+Scoped-effects middleware MUST execute identically on every run:
+the original live execution, any pure replay from a complete
+journal, and any crash recovery from a partial journal. The
+runtime does not skip middleware based on replay phase; no
+`ReplayPhase` API is exposed to middleware.
 
-Scoped-effects middleware executes identically at the **replay
-frontier** — the point at which the runtime enters live dispatch
-because no stored cursor entry matches the kernel's current
-yield. This covers:
+To prevent external agent side effects from firing twice on
+replay, the runtime MUST intercept each effect dispatch at the
+**terminal boundary** — the point at which the middleware
+chain's `next()` delegations ultimately land. At that boundary,
+when the active replay cursor has a stored `YieldEvent` whose
+description matches the currently dispatched effect, the runtime
+MUST consume the stored entry and feed its result back through
+the middleware chain in place of performing live terminal work.
+Otherwise the runtime MUST perform the live terminal work and
+write a new `YieldEvent`.
 
-- live original execution (the frontier is wherever the kernel
-  is currently yielding);
-- recovery from partial journals (the frontier is the first
-  un-journaled yield after the durable prefix).
+The terminal boundary is a runtime implementation mechanism,
+not a middleware priority participant. It sits below every
+user-installable priority (including `at: "min"`) by
+construction.
 
-Middleware authors MUST NOT rely on middleware firing for yields
-whose stored cursor entries short-circuit dispatch. Middleware
-determinism invariants (cited by companion test MR-002, Core
-tier) apply at the replay frontier; they do not apply to
-stored-yield consumption, which does not invoke middleware.
+**Middleware-author contract.**
+
+- Middleware is replayed on every run. Middleware MUST be
+  replay-transparent: running it again, with the terminal
+  boundary substituting stored results for dispatched effects,
+  MUST produce the same observable behavior as the original run.
+- Middleware MUST NOT perform non-idempotent external IO before
+  delegating to `next()`, unless that IO is routed through the
+  runtime-controlled terminal boundary via the
+  `runAsTerminal(effectId, data, liveWork)` helper exported by
+  `@tisyn/effects`. The boundary substitutes stored results in
+  place of `liveWork()` on replay.
+- A middleware that terminates the chain by not calling
+  `next()` and performs the effect itself IS the terminal for
+  that effect. To be replay-safe under this specification it
+  MUST compose its live work through `runAsTerminal(...)`. A
+  terminal that performs non-idempotent IO without delegating
+  through `runAsTerminal` is out of contract; the runtime cannot
+  substitute its side effects on replay.
 
 ---
 
