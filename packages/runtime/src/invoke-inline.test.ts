@@ -1012,4 +1012,78 @@ describe("invoke-inline — minimum acceptance subset", () => {
       expect(replayRun.result.error.name).toMatch(/Divergence/);
     }
   });
+
+  // ── IE-RP-013 ──
+  //
+  // Scoped-effects §9.5 payload-sensitive divergence, inline-invocation
+  // variant. If a workflow replays with a changed effect payload that was
+  // not changed in the original run, the terminal boundary MUST raise
+  // DivergenceError instead of substituting the stored result — otherwise
+  // middleware would re-run with the new payload and build divergent live
+  // state (resource handles, subscriptions, etc.) while the workflow
+  // continues with the stored handle from the original payload.
+
+  it("IE-RP-013: payload mismatch on caller-triggering dispatch raises DivergenceError", function* () {
+    // fn's body is opaque for this test — we never expect it to run on the
+    // replay pass because payload-sha divergence fires before the boundary
+    // substitutes.
+    const fn = Fn<[], Val>([], Q(null));
+
+    // Workflow dispatches `caller.A` with a payload. Middleware calls
+    // `invokeInline(fn)` to simulate a resource-producing inline body.
+    const workflowA: Val = {
+      tisyn: "eval",
+      id: "caller.A",
+      data: { id: "resource-A" },
+    } as unknown as Val;
+    const workflowB: Val = {
+      tisyn: "eval",
+      id: "caller.A",
+      data: { id: "resource-B" }, // DIFFERENT payload
+    } as unknown as Val;
+
+    let middlewareCalled = 0;
+    let inlineBodyExecuted = 0;
+    const middleware = {
+      *dispatch([effectId, data]: [string, Val], next: (e: string, d: Val) => Operation<Val>) {
+        if (effectId === "caller.A") {
+          middlewareCalled++;
+          yield* invokeInline(asFn(fn), []);
+          inlineBodyExecuted++;
+          return null as Val;
+        }
+        return yield* next(effectId, data);
+      },
+      *resolve() {
+        return false;
+      },
+    };
+
+    // Original run with payload A.
+    const stream1 = new InMemoryStream();
+    yield* Effects.around(middleware);
+    yield* installTailMiddleware();
+    const originalRun = yield* execute({ ir: workflowA as never, stream: stream1 });
+    expect(originalRun.result.status).toBe("ok");
+    expect(middlewareCalled).toBe(1);
+    expect(inlineBodyExecuted).toBe(1);
+
+    // Replay against SAME stored journal but with DIFFERENT IR payload.
+    // The runtime should raise DivergenceError at the caller.A dispatch
+    // before `runAsTerminal` substitutes the stored result — so the inline
+    // body must NOT execute a second time.
+    const stream2 = new InMemoryStream(stream1.snapshot());
+    yield* Effects.around(middleware);
+    const replayRun = yield* execute({ ir: workflowB as never, stream: stream2 });
+
+    expect(replayRun.result.status).toBe("error");
+    if (replayRun.result.status === "error") {
+      expect(replayRun.result.error.name).toBe("DivergenceError");
+      expect(replayRun.result.error.message).toContain("payload fingerprint mismatch");
+      expect(replayRun.result.error.message).toContain("caller.A");
+    }
+    // Divergence fired BEFORE the boundary invoked liveWork, so middleware's
+    // `invokeInline` did not execute a second time.
+    expect(inlineBodyExecuted).toBe(1);
+  });
 });

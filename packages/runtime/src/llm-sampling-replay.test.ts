@@ -5,6 +5,7 @@ import { InMemoryStream } from "@tisyn/durable-streams";
 import { Effects, runAsTerminal } from "@tisyn/effects";
 import { ProgressContext } from "@tisyn/transport";
 import type { YieldEvent, DurableEvent } from "@tisyn/kernel";
+import { payloadSha } from "@tisyn/kernel";
 import { Ref, Get } from "@tisyn/ir";
 import { createMockLlmTransport } from "@tisyn/transport/test-helpers/mock-llm-adapter";
 import type { ProgressEvent } from "@tisyn/transport";
@@ -162,10 +163,26 @@ describe("LLM Sampling — Replay", () => {
     }
   });
 
-  // LS-006: Replay ignores data differences (type/name match only)
-  it("LS-006: replay ignores data differences", function* () {
-    const stored: DurableEvent[] = [yieldEvent("llm", "sample", { cached: true })];
-    const stream = new InMemoryStream(stored);
+  // LS-006: Payload-fingerprint divergence
+  // Under scoped-effects §9.5, a stored yield with `description.sha` whose
+  // canonical payload differs from the current dispatch must raise
+  // DivergenceError — previously the runtime matched on type/name only, but
+  // under the R2b-revived middleware-reruns model that was unsafe because
+  // middleware can branch on payload and build divergent live state before
+  // terminal substitution.
+  it("LS-006: payload sha mismatch raises DivergenceError", function* () {
+    const storedPayload = { prompt: "original" };
+    const storedYield: YieldEvent = {
+      type: "yield",
+      coroutineId: "root",
+      description: {
+        type: "llm",
+        name: "sample",
+        sha: payloadSha(storedPayload as never),
+      },
+      result: { status: "ok", value: { cached: true } as never },
+    };
+    const stream = new InMemoryStream([storedYield]);
 
     let agentCalled = false;
     yield* Effects.around({
@@ -182,8 +199,12 @@ describe("LLM Sampling — Replay", () => {
       stream,
     });
 
+    expect(result.status).toBe("error");
+    if (result.status === "error") {
+      expect(result.error.name).toBe("DivergenceError");
+      expect(result.error.message).toContain("payload fingerprint mismatch");
+    }
     expect(agentCalled).toBe(false);
-    expect(result).toEqual({ status: "ok", value: { cached: true } });
   });
 
   // LS-033: Backend error replays identically

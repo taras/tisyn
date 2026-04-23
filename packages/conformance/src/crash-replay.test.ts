@@ -155,8 +155,8 @@ describe("End-to-end crash/replay", () => {
       type: "yield";
       description: { type: string; name: string };
     };
-    expect(y1.description).toEqual({ type: "x", name: "step1" });
-    expect(y2.description).toEqual({ type: "x", name: "step2" });
-    expect(y3.description).toEqual({ type: "x", name: "step3" });
+    expect(y1.description).toMatchObject({ type: "x", name: "step1" });
+    expect(y2.description).toMatchObject({ type: "x", name: "step2" });
+    expect(y3.description).toMatchObject({ type: "x", name: "step3" });
   });
 });

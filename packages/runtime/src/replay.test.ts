@@ -4,6 +4,7 @@ import { execute } from "./execute.js";
 import { InMemoryStream } from "@tisyn/durable-streams";
 import { Effects, runAsTerminal } from "@tisyn/effects";
 import type { YieldEvent, CloseEvent, DurableEvent } from "@tisyn/kernel";
+import { payloadSha } from "@tisyn/kernel";
 
 // IR that yields a single external effect: agent.op(data)
 function singleEffectIR(agentType: string, opName: string, data: unknown = []) {
@@ -160,9 +161,11 @@ describe("Replay", () => {
     }
   });
 
-  it("replay ignores data differences", function* () {
-    // Stored yield has data that differs from current IR args,
-    // but type/name match — should replay successfully
+  it("legacy journal (no description.sha) replays under legacy semantics", function* () {
+    // Stored yield hand-constructed without description.sha — represents a
+    // journal entry written before the payload-sha field existed. Per
+    // scoped-effects §9.5, the runtime MUST skip the payload-fingerprint
+    // check for entries with no stored sha and match on type+name only.
     const stored: DurableEvent[] = [yieldEvent("a", "op", 99)];
     const stream = new InMemoryStream(stored);
 
@@ -176,7 +179,8 @@ describe("Replay", () => {
       },
     });
 
-    // IR sends different data than what was stored — shouldn't matter
+    // IR sends a different payload than what was implicitly "stored" —
+    // legacy semantics must NOT raise DivergenceError for this.
     const { result } = yield* execute({
       ir: singleEffectIR("a", "op", ["different", "data"]) as never,
       stream,
@@ -184,5 +188,49 @@ describe("Replay", () => {
 
     expect(agentCalled).toBe(false);
     expect(result).toEqual({ status: "ok", value: 99 });
+  });
+
+  it("payload sha mismatch raises DivergenceError", function* () {
+    // Construct a stored YieldEvent WITH a `description.sha` computed for
+    // one canonical payload; dispatch with a different payload and assert
+    // DivergenceError per scoped-effects §9.5.
+    const storedPayload: unknown = ["original", "data"];
+    const storedYield: YieldEvent = {
+      type: "yield",
+      coroutineId: "root",
+      description: {
+        type: "a",
+        name: "op",
+        sha: payloadSha(storedPayload as never),
+      },
+      result: { status: "ok", value: 99 as never },
+    };
+    const stream = new InMemoryStream([storedYield]);
+
+    let agentCalled = false;
+    yield* Effects.around({
+      *dispatch([effectId, data]: [string, any]) {
+        return yield* runAsTerminal(effectId, data, function* () {
+          agentCalled = true;
+          return 1 as never;
+        });
+      },
+    });
+
+    const { result } = yield* execute({
+      ir: singleEffectIR("a", "op", ["different", "data"]) as never,
+      stream,
+    });
+
+    expect(result.status).toBe("error");
+    if (result.status === "error") {
+      expect(result.error.name).toBe("DivergenceError");
+      expect(result.error.message).toContain("payload fingerprint mismatch");
+      expect(result.error.message).toContain("stored sha=");
+      expect(result.error.message).toContain("current sha=");
+    }
+    // Boundary raised divergence before middleware's liveWork ran, so the
+    // terminal never recorded an agent call.
+    expect(agentCalled).toBe(false);
   });
 });

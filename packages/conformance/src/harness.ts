@@ -153,6 +153,19 @@ function applySentinel(actual: DurableEvent, expected: DurableEvent): DurableEve
 }
 
 /**
+ * Strip `description.sha` from a YieldEvent. Used by `journalMatches` when
+ * the fixture's expected event has no `sha` — this keeps legacy fixtures
+ * compatible with the payload-sha field added in scoped-effects §9.5.
+ * Fixtures that DO declare `sha` are compared strictly.
+ */
+function stripYieldSha(event: DurableEvent): DurableEvent {
+  if (event.type !== "yield") return event;
+  if (event.description.sha === undefined) return event;
+  const { sha: _drop, ...rest } = event.description;
+  return { ...event, description: rest };
+}
+
+/**
  * Compare journal events per §9.4 sequential mode.
  * Uses canonical byte comparison for strictness.
  */
@@ -168,8 +181,22 @@ function journalMatches(
   }
 
   for (let i = 0; i < expected.length; i++) {
-    const a = actual[i]!;
+    let a = actual[i]!;
     const e = applySentinel(a, expected[i]!);
+
+    // If the expected event's description has no `sha` (legacy fixture
+    // written before the payload-sha field existed), strip it from actual
+    // so the canonical comparison doesn't trip on it. Fixtures that opt
+    // into strict sha comparison by declaring `description.sha` are
+    // compared verbatim.
+    if (
+      e.type === "yield" &&
+      a.type === "yield" &&
+      e.description.sha === undefined &&
+      a.description.sha !== undefined
+    ) {
+      a = stripYieldSha(a);
+    }
 
     const aCanonical = canonical(a as unknown as Json);
     const eCanonical = canonical(e as unknown as Json);
