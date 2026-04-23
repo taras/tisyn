@@ -28,7 +28,7 @@ import {
   SubscriptionCapabilityError,
 } from "./errors.js";
 import { assertValidIr } from "@tisyn/validate";
-import { evaluate, type Env, envFromRecord, extendMulti } from "@tisyn/kernel";
+import { evaluate, type Env, envFromRecord, extendMulti, payloadSha } from "@tisyn/kernel";
 import { type DurableStream, InMemoryStream, ReplayIndex } from "@tisyn/durable-streams";
 import {
   dispatch,
@@ -770,7 +770,13 @@ function* iterateFrame(
     }
 
     // ── Standard effect dispatch ──
-    const description = parseEffectId(descriptor.id);
+    // Compute the effect description for this dispatch. `sha` is the
+    // deterministic payload fingerprint used by replay divergence detection
+    // per scoped-effects §9.5.
+    const description = {
+      ...parseEffectId(descriptor.id),
+      sha: payloadSha(descriptor.data as Json),
+    };
 
     // Peek the replay cursor for divergence detection. Consumption happens
     // either in the built-in branch (for __config / stream.*) or inside the
@@ -786,6 +792,20 @@ function* iterateFrame(
         `Divergence at ${journalLaneId}[${cursor}]: ` +
           `expected ${stored.description.type}.${stored.description.name}, ` +
           `got ${description.type}.${description.name}`,
+      );
+    }
+    // Payload-sensitive divergence check per scoped-effects §9.5. Legacy
+    // journals (no stored.description.sha) skip this check for that entry.
+    if (
+      stored &&
+      stored.description.sha !== undefined &&
+      stored.description.sha !== description.sha
+    ) {
+      const cursor = ctx.replayIndex.getCursor(journalLaneId);
+      throw new DivergenceError(
+        `Divergence at ${journalLaneId}[${cursor}]: ` +
+          `payload fingerprint mismatch for ${description.type}.${description.name} ` +
+          `(stored sha=${stored.description.sha}, current sha=${description.sha})`,
       );
     }
     if (!stored && ctx.replayIndex.hasClose(journalLaneId)) {
@@ -1516,7 +1536,10 @@ function* orchestrateResourceChild(
         }
 
         // ── Standard effect dispatch ──
-        const description = parseEffectId(descriptor.id);
+        const description = {
+          ...parseEffectId(descriptor.id),
+          sha: payloadSha(descriptor.data as Json),
+        };
         const stored = ctx.replayIndex.peekYield(childId);
 
         if (stored) {
@@ -1529,6 +1552,17 @@ function* orchestrateResourceChild(
               `Divergence at ${childId}[${cursor}]: ` +
                 `expected ${stored.description.type}.${stored.description.name}, ` +
                 `got ${description.type}.${description.name}`,
+            );
+          }
+          if (
+            stored.description.sha !== undefined &&
+            stored.description.sha !== description.sha
+          ) {
+            const cursor = ctx.replayIndex.getCursor(childId);
+            throw new DivergenceError(
+              `Divergence at ${childId}[${cursor}]: ` +
+                `payload fingerprint mismatch for ${description.type}.${description.name} ` +
+                `(stored sha=${stored.description.sha}, current sha=${description.sha})`,
             );
           }
           ctx.replayIndex.consumeYield(childId);
@@ -1841,7 +1875,10 @@ function* orchestrateResourceChild(
         }
 
         // ── Standard effect dispatch ──
-        const description = parseEffectId(descriptor.id);
+        const description = {
+          ...parseEffectId(descriptor.id),
+          sha: payloadSha(descriptor.data as Json),
+        };
         const stored = ctx.replayIndex.peekYield(childId);
 
         if (stored) {
@@ -1854,6 +1891,17 @@ function* orchestrateResourceChild(
               `Divergence at ${childId}[${cursor}]: ` +
                 `expected ${stored.description.type}.${stored.description.name}, ` +
                 `got ${description.type}.${description.name}`,
+            );
+          }
+          if (
+            stored.description.sha !== undefined &&
+            stored.description.sha !== description.sha
+          ) {
+            const cursor = ctx.replayIndex.getCursor(childId);
+            throw new DivergenceError(
+              `Divergence at ${childId}[${cursor}]: ` +
+                `payload fingerprint mismatch for ${description.type}.${description.name} ` +
+                `(stored sha=${stored.description.sha}, current sha=${description.sha})`,
             );
           }
           ctx.replayIndex.consumeYield(childId);

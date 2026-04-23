@@ -108,7 +108,7 @@ describe("invoke-inline — minimum acceptance subset", () => {
     const rootYields = yields(journal).filter((e) => e.coroutineId === "root");
     const rootCloses = closes(journal).filter((e) => e.coroutineId === "root");
     expect(rootYields).toHaveLength(1);
-    expect(rootYields[0]?.description).toEqual({ type: "caller", name: "A" });
+    expect(rootYields[0]?.description).toMatchObject({ type: "caller", name: "A" });
     expect(rootCloses).toHaveLength(1);
 
     // No entries under any lane cursor (empty body, no yields).
@@ -235,11 +235,11 @@ describe("invoke-inline — minimum acceptance subset", () => {
     // Distinct lane keys: `root@inline0.0` = [B] (q=0, j=0), `root@inline1.0` = [C] (q=1, j=0).
     const lane0 = yields(journal).filter((e) => e.coroutineId === "root@inline0.0");
     expect(lane0).toHaveLength(1);
-    expect(lane0[0]?.description).toEqual({ type: "child", name: "B" });
+    expect(lane0[0]?.description).toMatchObject({ type: "child", name: "B" });
 
     const lane1 = yields(journal).filter((e) => e.coroutineId === "root@inline1.0");
     expect(lane1).toHaveLength(1);
-    expect(lane1[0]?.description).toEqual({ type: "child", name: "C" });
+    expect(lane1[0]?.description).toMatchObject({ type: "child", name: "C" });
   });
 
   it("IE-B-013 (case b): sibling invokeInline calls within a single middleware body use distinct j values", function* () {
@@ -275,11 +275,11 @@ describe("invoke-inline — minimum acceptance subset", () => {
     // Lane `root@inline0.0` = [B] (q=0, j=0), lane `root@inline0.1` = [C] (q=0, j=1).
     const lane00 = yields(journal).filter((e) => e.coroutineId === "root@inline0.0");
     expect(lane00).toHaveLength(1);
-    expect(lane00[0]?.description).toEqual({ type: "child", name: "B" });
+    expect(lane00[0]?.description).toMatchObject({ type: "child", name: "B" });
 
     const lane01 = yields(journal).filter((e) => e.coroutineId === "root@inline0.1");
     expect(lane01).toHaveLength(1);
-    expect(lane01[0]?.description).toEqual({ type: "child", name: "C" });
+    expect(lane01[0]?.description).toMatchObject({ type: "child", name: "C" });
   });
 
   // ── IE-I-002J ──
@@ -788,7 +788,7 @@ describe("invoke-inline — minimum acceptance subset", () => {
     // The outer inline lane still recorded its inner.E yield; no nested lane exists.
     const outerLane = yields(journal).filter((e) => e.coroutineId === "root@inline0.0");
     expect(outerLane).toHaveLength(1);
-    expect(outerLane[0]?.description).toEqual({ type: "inner", name: "E" });
+    expect(outerLane[0]?.description).toMatchObject({ type: "inner", name: "E" });
 
     // No nested lane keys in the journal.
     const otherLanes = journal

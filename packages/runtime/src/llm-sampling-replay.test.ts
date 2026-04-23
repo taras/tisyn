@@ -87,7 +87,7 @@ describe("LLM Sampling — Standard External Effect", () => {
       (e) => e.description.type === "llm" && e.description.name === "sample",
     );
     expect(llmYield).toBeDefined();
-    expect(llmYield!.description).toEqual({ type: "llm", name: "sample" });
+    expect(llmYield!.description).toMatchObject({ type: "llm", name: "sample" });
   });
 
   // LS-003: Persist-before-resume — YieldEvent appears in journal before kernel resumes

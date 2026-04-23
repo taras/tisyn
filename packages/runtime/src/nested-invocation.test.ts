@@ -111,8 +111,8 @@ describe("nested invocation", () => {
 
     const childYields = yields(journal).filter((e) => e.coroutineId === "root.0");
     expect(childYields).toHaveLength(2);
-    expect(childYields[0]?.description).toEqual({ type: "child", name: "E1" });
-    expect(childYields[1]?.description).toEqual({ type: "child", name: "E2" });
+    expect(childYields[0]?.description).toMatchObject({ type: "child", name: "E1" });
+    expect(childYields[1]?.description).toMatchObject({ type: "child", name: "E2" });
 
     const childCloses = closes(journal).filter((e) => e.coroutineId === "root.0");
     expect(childCloses).toHaveLength(1);
