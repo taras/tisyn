@@ -38,7 +38,12 @@ import {
   InvalidInvokeOptionError,
   type InvokeOpts,
 } from "@tisyn/effects";
-import { DispatchContext, evaluateMiddlewareFn } from "@tisyn/effects/internal";
+import {
+  DispatchContext,
+  evaluateMiddlewareFn,
+  RuntimeTerminal,
+  type RuntimeTerminalBoundary,
+} from "@tisyn/effects/internal";
 import {
   installAgentTransport,
   type AgentTransportFactory,
@@ -750,179 +755,235 @@ function* iterateFrame(
     // ── Standard effect dispatch ──
     const description = parseEffectId(descriptor.id);
 
-    // Check replay index first (keyed by journalLaneId per §6.6.1)
+    // Peek the replay cursor for divergence detection. Consumption happens
+    // either in the built-in branch (for __config / stream.*) or inside the
+    // RuntimeTerminalBoundary below (for dispatch-chain effects, so that
+    // middleware re-executes on replay per scoped-effects §9.5).
     const stored = ctx.replayIndex.peekYield(journalLaneId);
-
-    if (stored) {
-      // CASE 1: Replay entry exists — check description match
-      if (
-        stored.description.type !== description.type ||
-        stored.description.name !== description.name
-      ) {
-        const cursor = ctx.replayIndex.getCursor(journalLaneId);
-        throw new DivergenceError(
-          `Divergence at ${journalLaneId}[${cursor}]: ` +
-            `expected ${stored.description.type}.${stored.description.name}, ` +
-            `got ${description.type}.${description.name}`,
-        );
-      }
-
-      // Match — consume entry, feed stored result
-      ctx.replayIndex.consumeYield(journalLaneId);
-
-      // Stream-specific: cache source definition during subscribe replay
-      if (descriptor.id === "stream.subscribe" && stored.result.status === "ok") {
-        const handle = stored.result.value as Record<string, unknown> | null;
-        if (handle && typeof handle === "object" && "__tisyn_subscription" in handle) {
-          ctx.subscriptions.set(handle.__tisyn_subscription as string, {
-            subscription: null,
-            sourceDefinition: descriptor.data,
-          });
-          frame.subscriptionCounter++;
-        }
-      }
-
-      const replayedEvent: YieldEvent = {
-        type: "yield",
-        coroutineId: journalLaneId,
-        description: stored.description,
-        result: stored.result,
-      };
-      ctx.journal.push(replayedEvent);
-
-      // Advance the caller's yieldIndex ordinal only when this iteration is
-      // on the caller's own cursor (§6.5.5 definition of `q`).
-      if (isCallerCursor) {
-        frame.yieldIndex++;
-      }
-
-      if (stored.result.status === "ok") {
-        nextValue = (stored.result.value ?? null) as Val;
-      } else if (stored.result.status === "error") {
-        const err = new EffectError(stored.result.error.message, stored.result.error.name);
-        const throwResult = kernel.throw(err);
-        if (throwResult.done) {
-          return throwResult.value;
-        }
-        // kernel.throw() yielded a new effect (e.g., from catch/finally body)
-        pendingStep = throwResult;
-        nextValue = null;
-        continue;
-      } else {
-        throw new Error("Cannot replay cancelled result");
-      }
-
-      continue;
+    if (
+      stored &&
+      (stored.description.type !== description.type ||
+        stored.description.name !== description.name)
+    ) {
+      const cursor = ctx.replayIndex.getCursor(journalLaneId);
+      throw new DivergenceError(
+        `Divergence at ${journalLaneId}[${cursor}]: ` +
+          `expected ${stored.description.type}.${stored.description.name}, ` +
+          `got ${description.type}.${description.name}`,
+      );
     }
-
-    // Check for D2: continue past close
-    if (ctx.replayIndex.hasClose(journalLaneId)) {
+    if (!stored && ctx.replayIndex.hasClose(journalLaneId)) {
       throw new DivergenceError(
         `Divergence: journal shows ${journalLaneId} closed, but generator continues to yield effects`,
       );
     }
 
-    // CASE 3: No replay entry, no close — LIVE dispatch
-    let effectResult: EventResult;
-    try {
-      let resultValue: Val;
-      if (descriptor.id === "__config") {
-        resultValue = (yield* ConfigContext.expect()) as Val;
-      } else if (descriptor.id === "stream.subscribe") {
-        const token = `sub:${effectiveCoroutineId}:${frame.subscriptionCounter++}`;
-        const sourceData = descriptor.data as unknown[];
-        const source = sourceData[0];
-        // Subscribe to the Effection stream
-        const sub = yield* source as Operation<{
-          next(): Operation<IteratorResult<Val, unknown>>;
-        }>;
-        ctx.subscriptions.set(token, { subscription: sub, sourceDefinition: source });
-        resultValue = { __tisyn_subscription: token } as unknown as Val;
-      } else if (descriptor.id === "stream.next") {
-        const nextData = descriptor.data as unknown[];
-        const handle = nextData[0] as Record<string, unknown> | null;
-        if (
-          !handle ||
-          typeof handle !== "object" ||
-          typeof handle.__tisyn_subscription !== "string"
-        ) {
-          throw new RuntimeBugError("stream.next: argument is not a valid subscription handle");
+    // Built-in effects (`__config`, `stream.subscribe`, `stream.next`) are
+    // handled in-frame, not via the middleware dispatch chain. Their replay
+    // substitution is handled here too, keyed by journalLaneId.
+    if (
+      descriptor.id === "__config" ||
+      descriptor.id === "stream.subscribe" ||
+      descriptor.id === "stream.next"
+    ) {
+      if (stored) {
+        // Replay a built-in from the cursor.
+        ctx.replayIndex.consumeYield(journalLaneId);
+        if (descriptor.id === "stream.subscribe" && stored.result.status === "ok") {
+          const handle = stored.result.value as Record<string, unknown> | null;
+          if (handle && typeof handle === "object" && "__tisyn_subscription" in handle) {
+            ctx.subscriptions.set(handle.__tisyn_subscription as string, {
+              subscription: null,
+              sourceDefinition: descriptor.data,
+            });
+            frame.subscriptionCounter++;
+          }
         }
-        const token = handle.__tisyn_subscription as string;
-        // RV1: ancestor-or-equal check against the effective coroutineId.
-        const handleCid = token.split(":")[1]!;
-        if (
-          effectiveCoroutineId !== handleCid &&
-          !effectiveCoroutineId.startsWith(handleCid + ".")
-        ) {
-          throw new SubscriptionCapabilityError(
-            `stream.next: handle from '${handleCid}' cannot be used from '${effectiveCoroutineId}'`,
-          );
+        const replayedEvent: YieldEvent = {
+          type: "yield",
+          coroutineId: journalLaneId,
+          description: stored.description,
+          result: stored.result,
+        };
+        ctx.journal.push(replayedEvent);
+        if (isCallerCursor) frame.yieldIndex++;
+        if (stored.result.status === "ok") {
+          nextValue = (stored.result.value ?? null) as Val;
+        } else if (stored.result.status === "error") {
+          const err = new EffectError(stored.result.error.message, stored.result.error.name);
+          const throwResult = kernel.throw(err);
+          if (throwResult.done) return throwResult.value;
+          pendingStep = throwResult;
+          nextValue = null;
+          continue;
+        } else {
+          throw new Error("Cannot replay cancelled result");
         }
-        const entry = ctx.subscriptions.get(token);
-        // Lazy reconstruction at live frontier
-        if (entry && !entry.subscription) {
-          const src = entry.sourceDefinition as unknown[];
-          const srcStream = src[0];
-          entry.subscription = yield* srcStream as Operation<{
+        continue;
+      }
+
+      // Live built-in handling.
+      let effectResult: EventResult;
+      try {
+        let resultValue: Val;
+        if (descriptor.id === "__config") {
+          resultValue = (yield* ConfigContext.expect()) as Val;
+        } else if (descriptor.id === "stream.subscribe") {
+          const token = `sub:${effectiveCoroutineId}:${frame.subscriptionCounter++}`;
+          const sourceData = descriptor.data as unknown[];
+          const source = sourceData[0];
+          const sub = yield* source as Operation<{
             next(): Operation<IteratorResult<Val, unknown>>;
           }>;
-        }
-        if (!entry?.subscription) {
-          throw new RuntimeBugError(`stream.next: no subscription for token '${token}'`);
-        }
-        const iterResult = yield* entry.subscription.next();
-        if (iterResult.done) {
-          resultValue = { done: true } as unknown as Val;
+          ctx.subscriptions.set(token, { subscription: sub, sourceDefinition: source });
+          resultValue = { __tisyn_subscription: token } as unknown as Val;
         } else {
-          resultValue = { done: false, value: iterResult.value } as unknown as Val;
+          // stream.next
+          const nextData = descriptor.data as unknown[];
+          const handle = nextData[0] as Record<string, unknown> | null;
+          if (
+            !handle ||
+            typeof handle !== "object" ||
+            typeof handle.__tisyn_subscription !== "string"
+          ) {
+            throw new RuntimeBugError("stream.next: argument is not a valid subscription handle");
+          }
+          const token = handle.__tisyn_subscription as string;
+          const handleCid = token.split(":")[1]!;
+          if (
+            effectiveCoroutineId !== handleCid &&
+            !effectiveCoroutineId.startsWith(handleCid + ".")
+          ) {
+            throw new SubscriptionCapabilityError(
+              `stream.next: handle from '${handleCid}' cannot be used from '${effectiveCoroutineId}'`,
+            );
+          }
+          const entry = ctx.subscriptions.get(token);
+          if (entry && !entry.subscription) {
+            const src = entry.sourceDefinition as unknown[];
+            const srcStream = src[0];
+            entry.subscription = yield* srcStream as Operation<{
+              next(): Operation<IteratorResult<Val, unknown>>;
+            }>;
+          }
+          if (!entry?.subscription) {
+            throw new RuntimeBugError(`stream.next: no subscription for token '${token}'`);
+          }
+          const iterResult = yield* entry.subscription.next();
+          if (iterResult.done) {
+            resultValue = { done: true } as unknown as Val;
+          } else {
+            resultValue = { done: false, value: iterResult.value } as unknown as Val;
+          }
         }
-      } else {
-        // RV2: reject subscription handles in non-stream effect dispatch data
-        if (containsSubscriptionHandle(descriptor.data)) {
-          throw new SubscriptionCapabilityError(
-            `Effect '${descriptor.id}': resolved data contains a subscription handle, which is a restricted capability value`,
-          );
-        }
-        // Install a fresh DispatchContext for this dispatch chain — middleware
-        // may read it via DispatchContext.get() and call `ctx.invoke(...)` (or
-        // `ctx.invokeInline(...)` once wired) from within the middleware body.
-        // `isInlineLane` is true when iterateFrame is processing an inline
-        // lane cursor; `ctx.invokeInline` uses this flag to reject nested
-        // inline invocation per spec §5.3.1.a.
-        const dispatchCtx = buildDispatchContext({
-          coroutineId: effectiveCoroutineId,
-          parentEnv: env,
-          driveContext: ctx,
-          frame,
-          isInlineLane: !isCallerCursor,
-        });
-        resultValue = yield* DispatchContext.with(dispatchCtx, () =>
-          dispatch(descriptor.id, descriptor.data as Val),
-        );
+        effectResult = { status: "ok", value: resultValue as Json };
+      } catch (error) {
+        const err = error instanceof Error ? error : new Error(String(error));
+        effectResult = { status: "error", error: { message: err.message, name: err.name } };
       }
+
+      const yieldEvent: YieldEvent = {
+        type: "yield",
+        coroutineId: journalLaneId,
+        description,
+        result: effectResult,
+      };
+      yield* ctx.stream.append(yieldEvent);
+      ctx.journal.push(yieldEvent);
+      if (isCallerCursor) frame.yieldIndex++;
+
+      if (effectResult.status === "ok") {
+        nextValue = (effectResult.value ?? null) as Val;
+      } else {
+        const err = new EffectError(effectResult.error.message, effectResult.error.name);
+        const throwResult = kernel.throw(err);
+        if (throwResult.done) return throwResult.value;
+        pendingStep = throwResult;
+        nextValue = null;
+        continue;
+      }
+      continue;
+    }
+
+    // ── Dispatch-chain effect ──
+    // RV2: reject subscription handles in non-stream effect dispatch data
+    if (containsSubscriptionHandle(descriptor.data)) {
+      throw new SubscriptionCapabilityError(
+        `Effect '${descriptor.id}': resolved data contains a subscription handle, which is a restricted capability value`,
+      );
+    }
+
+    // Install a per-dispatch RuntimeTerminalBoundary so in-repo terminals
+    // (agent handlers, remote transport, mocks, built-in Effects fallback)
+    // delegating through `runAsTerminal(...)` either substitute stored
+    // results or run their live work. Middleware always re-executes per
+    // scoped-effects §9.5. `replayBox.replayed` signals whether the
+    // boundary consumed a stored cursor entry, so the outer journal-write
+    // block knows not to append a duplicate live YieldEvent.
+    const replayBox = { replayed: false };
+    const boundary: RuntimeTerminalBoundary = {
+      *run<T extends Val = Val>(
+        _effectId: string,
+        _data: Val,
+        liveWork: () => Operation<T>,
+      ): Operation<T> {
+        if (stored) {
+          ctx.replayIndex.consumeYield(journalLaneId);
+          const replayedEvent: YieldEvent = {
+            type: "yield",
+            coroutineId: journalLaneId,
+            description: stored.description,
+            result: stored.result,
+          };
+          ctx.journal.push(replayedEvent);
+          if (isCallerCursor) frame.yieldIndex++;
+          replayBox.replayed = true;
+          if (stored.result.status === "error") {
+            throw new EffectError(stored.result.error.message, stored.result.error.name);
+          }
+          if (stored.result.status === "cancelled") {
+            throw new Error("Cannot replay cancelled result");
+          }
+          return (stored.result.value ?? null) as T;
+        }
+        return yield* liveWork();
+      },
+    };
+
+    const dispatchCtx = buildDispatchContext({
+      coroutineId: effectiveCoroutineId,
+      parentEnv: env,
+      driveContext: ctx,
+      frame,
+      isInlineLane: !isCallerCursor,
+    });
+
+    let effectResult: EventResult;
+    try {
+      const resultValue = yield* RuntimeTerminal.with(boundary, () =>
+        DispatchContext.with(dispatchCtx, () =>
+          dispatch(descriptor.id, descriptor.data as Val),
+        ),
+      );
       effectResult = { status: "ok", value: resultValue as Json };
     } catch (error) {
       const err = error instanceof Error ? error : new Error(String(error));
-      effectResult = {
-        status: "error",
-        error: { message: err.message, name: err.name },
-      };
+      effectResult = { status: "error", error: { message: err.message, name: err.name } };
     }
 
-    // Persist-before-resume: write Yield event BEFORE resuming kernel
-    const yieldEvent: YieldEvent = {
-      type: "yield",
-      coroutineId: journalLaneId,
-      description,
-      result: effectResult,
-    };
-    yield* ctx.stream.append(yieldEvent);
-    ctx.journal.push(yieldEvent);
-
-    // Advance caller's yieldIndex ordinal only for the caller's own cursor.
-    if (isCallerCursor) {
-      frame.yieldIndex++;
+    // Journal write — only for the LIVE path. When the boundary consumed a
+    // stored entry, it already pushed a replayedEvent into ctx.journal; the
+    // durable stream is unchanged on replay.
+    if (!replayBox.replayed) {
+      const yieldEvent: YieldEvent = {
+        type: "yield",
+        coroutineId: journalLaneId,
+        description,
+        result: effectResult,
+      };
+      yield* ctx.stream.append(yieldEvent);
+      ctx.journal.push(yieldEvent);
+      if (isCallerCursor) frame.yieldIndex++;
     }
 
     if (effectResult.status === "ok") {
@@ -933,7 +994,6 @@ function* iterateFrame(
       if (throwResult.done) {
         return throwResult.value;
       }
-      // kernel.throw() yielded a new effect (e.g., from catch/finally body)
       pendingStep = throwResult;
       nextValue = null;
       continue;
