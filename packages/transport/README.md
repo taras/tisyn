@@ -33,6 +33,8 @@ In practice, this lets you treat an agent declaration the same way whether it is
 
 `installRemoteAgent()` installs an agent declaration so that invocations are forwarded over a transport session instead of being resolved locally.
 
+Host-side transport terminals delegate their live session work through `runAsTerminal(...)` in `@tisyn/effects`. That keeps replay behavior transparent for ordinary transport consumers: middleware reruns, but matching durable yields substitute stored remote results instead of re-sending the remote call.
+
 ### Sessions
 
 `createSession()` creates the host-side protocol session that manages lifecycle, request routing, and message flow over a transport.
@@ -246,6 +248,7 @@ yield* scoped(function* () {
 - [`@tisyn/agent`](../agent/README.md) defines the typed agent declarations installed remotely.
 - [`@tisyn/protocol`](../protocol/README.md) provides the message types and wire-level protocol used by sessions and servers.
 - [`@tisyn/runtime`](../runtime/README.md) executes programs that may ultimately dispatch work through remote agents installed by this package.
+- [`@tisyn/effects`](../effects/README.md) provides the dispatch boundary and replay-safe terminal helper used by host-side transport installs.
 
 ## Boundaries
 

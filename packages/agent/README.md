@@ -42,6 +42,7 @@ The dispatch-boundary surface lives in [`@tisyn/effects`](../effects/README.md):
 - `dispatch` — perform an effect call through the current `Effects` middleware boundary. Accepts either `(effectId, data)` or a `{ effectId, data }` descriptor returned by `agent().op(args)`
 - `resolve` — query the Effects middleware chain to check if an agent is bound
 - `invoke` — invoke another declared operation from inside a handler, with nested-invocation guarantees
+- `runAsTerminal` — mark terminal handler work so replay can substitute the stored result instead of re-firing the external side effect
 - `installCrossBoundaryMiddleware` — install an IR function node as the cross-boundary middleware carrier for further remote delegation
 - `getCrossBoundaryMiddleware` — read the current cross-boundary middleware carrier from scope (returns `null` if not set)
 - `InvalidInvokeCallSiteError`, `InvalidInvokeInputError`, `InvalidInvokeOptionError` — error classes thrown by `invoke` on misuse
@@ -100,6 +101,8 @@ yield* Agents.use(orders, {
 ```
 
 For transport or protocol server use cases, `implementAgent()` creates an `AgentImplementation` object with `call(opName, payload)`. This is an internal/advanced API used by `@tisyn/transport`.
+
+In-repo agent bindings use `runAsTerminal(...)` internally when they become the terminal dispatcher for an effect. That keeps replay safety at the framework layer: middleware still reruns during replay, but durable results substitute at the terminal boundary instead of re-invoking the live handler. Ordinary workflow code using `Agents.use()` or `useAgent()` does not need to call `runAsTerminal(...)` directly.
 
 ## Use an Agent with Per-Operation Middleware
 

@@ -63,7 +63,7 @@ The kernel defines the event shapes that higher layers persist, including:
 - `YieldEvent`
 - `CloseEvent`
 
-These are the semantic boundary between evaluation and durable runtime behavior.
+These are the semantic boundary between evaluation and durable runtime behavior. `YieldEvent.description` now carries an optional `sha` field when the runtime can compute a deterministic payload fingerprint. Older durable journals may omit this field and continue to replay under legacy semantics.
 
 ### Runtime errors
 
@@ -120,7 +120,7 @@ The public surface exported from `src/index.ts` includes the following:
 
 ### Event and effect types
 
-- `EffectDescription` — describes a yielded effect before dispatch or persistence
+- `EffectDescription` — describes a yielded effect before dispatch or persistence; may include optional `sha` replay fingerprint metadata
 - `EventResult` — evaluator outcome shape consumed by the runtime
 - `YieldEvent` — persisted effect yield and its eventual result
 - `CloseEvent` — persisted terminal execution result
@@ -130,6 +130,7 @@ The public surface exported from `src/index.ts` includes the following:
 ### Helpers
 
 - `canonical` — produce a stable canonical representation for event payloads and comparisons
+- `payloadSha` — compute the deterministic payload fingerprint stored in `YieldEvent.description.sha` when payload-sensitive replay matching is available
 - `parseEffectId` — split an effect id into its agent and operation parts
 
 ## Example

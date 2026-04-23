@@ -71,6 +71,17 @@ Execution does not begin from scratch every time. The runtime first consults the
 
 Prior events are read from the stream and used to rebuild execution state. This allows the runtime to continue from known results instead of re-running completed work.
 
+### Replay semantics
+
+Replay is not "skip middleware." The runtime re-executes dispatch middleware on every run and prevents duplicate side effects at the runtime-controlled terminal boundary.
+
+- Middleware reruns during original execution, pure replay, and crash recovery.
+- Framework-level terminal handlers delegate live work through `runAsTerminal(...)`, allowing the runtime to substitute the stored result when the durable stream already contains a matching `YieldEvent`.
+- When a stored yield carries `description.sha`, replay matching is payload-sensitive as well as effect-id-sensitive. A payload mismatch raises `DivergenceError` instead of silently continuing with mismatched live state.
+- Legacy journal entries without `description.sha` still replay under the older type/name-only matching rules for compatibility.
+- `stream.subscribe` is a narrow explicit exclusion: its source payload is opaque and does not yet have a stable journaled identity, so replay preserves handle flow there without source-identity divergence detection. `stream.next` remains payload-sensitive.
+- Resource init/cleanup bodies participate in the same terminal-boundary replay substrate as ordinary dispatch, so middleware-created live state inside resources is re-established on recovery as well.
+
 ### Dispatch
 
 When evaluation reaches a live effect that is not already satisfied by replay, the runtime routes that effect through the installed agents.
