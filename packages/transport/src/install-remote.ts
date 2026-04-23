@@ -3,7 +3,7 @@ import type { Val } from "@tisyn/ir";
 import type { OperationSpec, AgentDeclaration } from "@tisyn/agent";
 import type { AgentTransportFactory } from "./transport.js";
 import { parseEffectId } from "@tisyn/kernel";
-import { Effects, getCrossBoundaryMiddleware } from "@tisyn/effects";
+import { Effects, getCrossBoundaryMiddleware, runAsTerminal } from "@tisyn/effects";
 import { executeRequest } from "@tisyn/protocol";
 import { createSession } from "./session.js";
 import { ProgressContext, CoroutineContext } from "./progress.js";
@@ -34,40 +34,45 @@ export function* installAgentTransport(
     *dispatch([effectId, data]: [string, Val], next) {
       const { type, name } = parseEffectId(effectId);
       if (type === agentId) {
-        const requestId = `${agentId}:${requestCounter++}`;
-        const middleware = yield* getCrossBoundaryMiddleware();
-        const stream = session.execute(
-          executeRequest(requestId, {
-            executionId,
-            taskId: "root",
-            operation: name,
-            args: [data],
-            progressToken: requestId,
-            ...(middleware != null ? { middleware: middleware as unknown as Val } : {}),
-          }),
-        );
-        const sub = yield* stream;
-        for (;;) {
-          const item = yield* sub.next();
-          if (item.done) {
-            const result = item.value;
-            if (result.ok) {
-              return result.value as Val;
-            }
-            {
-              const err = new Error(result.error.message);
-              if (result.error.name) {
-                err.name = result.error.name;
+        // Terminal delegation per scoped-effects §9.5: under replay, the
+        // runtime terminal boundary substitutes the stored result so the
+        // live session.execute(...) transport call does not re-fire.
+        return yield* runAsTerminal(effectId, data, function* () {
+          const requestId = `${agentId}:${requestCounter++}`;
+          const middleware = yield* getCrossBoundaryMiddleware();
+          const stream = session.execute(
+            executeRequest(requestId, {
+              executionId,
+              taskId: "root",
+              operation: name,
+              args: [data],
+              progressToken: requestId,
+              ...(middleware != null ? { middleware: middleware as unknown as Val } : {}),
+            }),
+          );
+          const sub = yield* stream;
+          for (;;) {
+            const item = yield* sub.next();
+            if (item.done) {
+              const result = item.value;
+              if (result.ok) {
+                return result.value as Val;
               }
-              throw err;
+              {
+                const err = new Error(result.error.message);
+                if (result.error.name) {
+                  err.name = result.error.name;
+                }
+                throw err;
+              }
+            }
+            const sink = yield* ProgressContext.get();
+            if (sink) {
+              const cid = (yield* CoroutineContext.get()) ?? "root";
+              sink({ token: requestId, effectId, coroutineId: cid, value: item.value });
             }
           }
-          const sink = yield* ProgressContext.get();
-          if (sink) {
-            const cid = (yield* CoroutineContext.get()) ?? "root";
-            sink({ token: requestId, effectId, coroutineId: cid, value: item.value });
-          }
-        }
+        });
       }
       return yield* next(effectId, data);
     },
@@ -110,42 +115,47 @@ export function* installRemoteAgent<Ops extends Record<string, OperationSpec>>(
     *dispatch([effectId, data]: [string, Val], next) {
       const { type, name } = parseEffectId(effectId);
       if (type === id) {
-        const requestId = `${id}:${requestCounter++}`;
-        const middleware = yield* getCrossBoundaryMiddleware();
+        // Terminal delegation per scoped-effects §9.5: under replay, the
+        // runtime terminal boundary substitutes the stored result so the
+        // live session.execute(...) transport call does not re-fire.
+        return yield* runAsTerminal(effectId, data, function* () {
+          const requestId = `${id}:${requestCounter++}`;
+          const middleware = yield* getCrossBoundaryMiddleware();
 
-        const stream = session.execute(
-          executeRequest(requestId, {
-            executionId,
-            taskId: "root",
-            operation: name,
-            args: [data],
-            progressToken: requestId,
-            ...(middleware != null ? { middleware: middleware as unknown as Val } : {}),
-          }),
-        );
+          const stream = session.execute(
+            executeRequest(requestId, {
+              executionId,
+              taskId: "root",
+              operation: name,
+              args: [data],
+              progressToken: requestId,
+              ...(middleware != null ? { middleware: middleware as unknown as Val } : {}),
+            }),
+          );
 
-        const sub = yield* stream;
-        for (;;) {
-          const item = yield* sub.next();
-          if (item.done) {
-            const result = item.value;
-            if (result.ok) {
-              return result.value as Val;
-            }
-            {
-              const err = new Error(result.error.message);
-              if (result.error.name) {
-                err.name = result.error.name;
+          const sub = yield* stream;
+          for (;;) {
+            const item = yield* sub.next();
+            if (item.done) {
+              const result = item.value;
+              if (result.ok) {
+                return result.value as Val;
               }
-              throw err;
+              {
+                const err = new Error(result.error.message);
+                if (result.error.name) {
+                  err.name = result.error.name;
+                }
+                throw err;
+              }
+            }
+            const sink = yield* ProgressContext.get();
+            if (sink) {
+              const cid = (yield* CoroutineContext.get()) ?? "root";
+              sink({ token: requestId, effectId, coroutineId: cid, value: item.value });
             }
           }
-          const sink = yield* ProgressContext.get();
-          if (sink) {
-            const cid = (yield* CoroutineContext.get()) ?? "root";
-            sink({ token: requestId, effectId, coroutineId: cid, value: item.value });
-          }
-        }
+        });
       }
       return yield* next(effectId, data);
     },

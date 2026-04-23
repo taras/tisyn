@@ -13,7 +13,7 @@ import type { DurableEvent, EventResult, EffectDescriptor } from "@tisyn/kernel"
 import { canonical } from "@tisyn/kernel";
 import { execute } from "@tisyn/runtime";
 import { InMemoryStream } from "@tisyn/durable-streams";
-import { Effects } from "@tisyn/effects";
+import { Effects, runAsTerminal } from "@tisyn/effects";
 
 // ── Fixture types ──
 
@@ -202,24 +202,32 @@ function* installMockDispatch(
   let effectIndex = 0;
 
   yield* Effects.around({
-    *dispatch([_effectId, _data]: [string, any]) {
-      if (effectIndex >= effects.length) {
-        throw new Error("More effects than expected");
-      }
-      const effect = effects[effectIndex]!;
-      effectIndex++;
-
-      if (effect.result.status === "ok") {
-        return effect.result.value;
-      }
-      if (effect.result.status === "error") {
-        const err = new Error(effect.result.error.message);
-        if (effect.result.error.name) {
-          err.name = effect.result.error.name;
+    *dispatch([effectId, data]: [string, any]) {
+      // Terminal delegation per scoped-effects §9.5: the runtime's terminal
+      // boundary substitutes stored results during replay. The mock's
+      // canned-effect list advances only when the boundary runs `liveWork()`
+      // (i.e. live-dispatch cases with no stored cursor entry). Under
+      // replay fixtures that pre-populate a stored journal, stored entries
+      // are substituted by the boundary and do not consume from `effects`.
+      return yield* runAsTerminal(effectId, data, function* () {
+        if (effectIndex >= effects.length) {
+          throw new Error("More effects than expected");
         }
-        throw err;
-      }
-      throw new Error("Unexpected cancelled result in mock");
+        const effect = effects[effectIndex]!;
+        effectIndex++;
+
+        if (effect.result.status === "ok") {
+          return effect.result.value;
+        }
+        if (effect.result.status === "error") {
+          const err = new Error(effect.result.error.message);
+          if (effect.result.error.name) {
+            err.name = effect.result.error.name;
+          }
+          throw err;
+        }
+        throw new Error("Unexpected cancelled result in mock");
+      });
     },
   });
 }

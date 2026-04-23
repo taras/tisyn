@@ -2,7 +2,7 @@ import type { Operation } from "effection";
 import type { Val } from "@tisyn/ir";
 import type { AgentDeclaration, ImplementationHandlers, OperationSpec } from "./types.js";
 import { parseEffectId } from "@tisyn/kernel";
-import { Effects } from "@tisyn/effects";
+import { Effects, runAsTerminal } from "@tisyn/effects";
 import { DispatchContext } from "@tisyn/effects/internal";
 
 /**
@@ -27,7 +27,12 @@ function* use<Ops extends Record<string, OperationSpec>>(
         if (!handler) {
           throw new Error(`Agent "${id}" has no handler for operation: ${name}`);
         }
-        return yield* DispatchContext.with(undefined, () => handler(data));
+        // Terminal delegation per scoped-effects §9.5: under replay, the
+        // runtime terminal boundary substitutes stored results in place of
+        // re-invoking the handler.
+        return yield* runAsTerminal(effectId, data, () =>
+          DispatchContext.with(undefined, () => handler(data)),
+        );
       }
       return yield* next(effectId, data);
     },
