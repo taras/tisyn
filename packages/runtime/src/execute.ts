@@ -30,7 +30,12 @@ import {
 } from "./errors.js";
 import { assertValidIr } from "@tisyn/validate";
 import { evaluate, type Env, envFromRecord, extendMulti, payloadSha } from "@tisyn/kernel";
-import { type DurableStream, InMemoryStream, ReplayIndex } from "@tisyn/durable-streams";
+import {
+  type DurableStream,
+  type YieldEntry,
+  InMemoryStream,
+  ReplayIndex,
+} from "@tisyn/durable-streams";
 import {
   dispatch,
   Effects,
@@ -577,6 +582,159 @@ function* driveKernel(
  *   tear down `frame.resourceChildren`. Those are the responsibility of the
  *   enclosing `driveKernel`.
  */
+
+/**
+ * Run one standard (non-built-in, non-compound) effect dispatch through the
+ * middleware chain with the scoped-effects §9.5 `RuntimeTerminalBoundary`
+ * installed, then write the resulting YieldEvent (replay, out-of-contract,
+ * or live) to the journal.
+ *
+ * Shared between `iterateFrame` and `orchestrateResourceChild` so that
+ * middleware inside resource bodies participates in the same replay
+ * substrate as caller-coroutine middleware. Without this, middleware
+ * inside a resource init/cleanup body that delegates through
+ * `runAsTerminal(...)` would fall through to live work on replay (no
+ * boundary installed), and external side effects would re-fire on
+ * recovery.
+ *
+ * The caller is responsible for:
+ *   1. Building `description` (via `describeEffect`).
+ *   2. Peeking the stored entry and running the type+name+sha divergence
+ *      check (the helper assumes any mismatch has already raised).
+ *   3. Resuming the kernel with the returned `EventResult` (callers differ
+ *      on close-event semantics: `iterateFrame` returns; resource init
+ *      throws `RuntimeBugError`; resource cleanup writes Close).
+ *
+ * The helper itself:
+ *   - Rejects subscription handles in non-stream dispatch data (RV2).
+ *   - Installs a per-dispatch `RuntimeTerminalBoundary` that substitutes
+ *     stored results at `runAsTerminal(...)` delegation sites and pushes
+ *     a replayed YieldEvent into `ctx.journal`.
+ *   - Installs a `DispatchContext` so middleware can call
+ *     `ctx.invoke` / `ctx.invokeInline`.
+ *   - Writes the journal on exit: no-op if the boundary already replayed;
+ *     out-of-contract substitute if `stored` is present but the boundary
+ *     didn't run (middleware short-circuited); live stream+journal append
+ *     otherwise.
+ *   - Calls `advanceYieldIndex()` exactly once per stored-consume or
+ *     live-append, leaving the frame-cursor advancement policy to the
+ *     caller.
+ */
+function* dispatchChainStandardEffect(args: {
+  descriptor: EffectDescriptor;
+  description: EffectDescription;
+  stored: YieldEntry | undefined;
+  journalLaneId: string;
+  effectiveCoroutineId: string;
+  env: Env;
+  ctx: DriveContext;
+  frame: FrameState;
+  isInlineLane: boolean;
+  advanceYieldIndex: () => void;
+}): Operation<EventResult> {
+  const {
+    descriptor,
+    description,
+    stored,
+    journalLaneId,
+    effectiveCoroutineId,
+    env,
+    ctx,
+    frame,
+    isInlineLane,
+    advanceYieldIndex,
+  } = args;
+
+  if (containsSubscriptionHandle(descriptor.data)) {
+    throw new SubscriptionCapabilityError(
+      `Effect '${descriptor.id}': resolved data contains a subscription handle, which is a restricted capability value`,
+    );
+  }
+
+  const replayBox = { replayed: false };
+  const boundary: RuntimeTerminalBoundary = {
+    *run<T extends Val = Val>(
+      _effectId: string,
+      _data: Val,
+      liveWork: () => Operation<T>,
+    ): Operation<T> {
+      if (stored) {
+        ctx.replayIndex.consumeYield(journalLaneId);
+        const replayedEvent: YieldEvent = {
+          type: "yield",
+          coroutineId: journalLaneId,
+          description: stored.description,
+          result: stored.result,
+        };
+        ctx.journal.push(replayedEvent);
+        advanceYieldIndex();
+        replayBox.replayed = true;
+        if (stored.result.status === "error") {
+          throw new EffectError(stored.result.error.message, stored.result.error.name);
+        }
+        if (stored.result.status === "cancelled") {
+          throw new Error("Cannot replay cancelled result");
+        }
+        return (stored.result.value ?? null) as T;
+      }
+      return yield* liveWork();
+    },
+  };
+
+  const dispatchCtx = buildDispatchContext({
+    coroutineId: effectiveCoroutineId,
+    parentEnv: env,
+    driveContext: ctx,
+    frame,
+    isInlineLane,
+  });
+
+  let effectResult: EventResult;
+  try {
+    const resultValue = yield* RuntimeTerminal.with(boundary, () =>
+      DispatchContext.with(dispatchCtx, () => dispatch(descriptor.id, descriptor.data as Val)),
+    );
+    effectResult = { status: "ok", value: resultValue as Json };
+  } catch (error) {
+    const err = error instanceof Error ? error : new Error(String(error));
+    effectResult = { status: "error", error: { message: err.message, name: err.name } };
+  }
+
+  if (replayBox.replayed) {
+    // Boundary already consumed the stored entry and pushed the replayed
+    // event to ctx.journal.
+    return effectResult;
+  }
+  if (stored) {
+    // Out-of-contract terminal: middleware short-circuited without
+    // delegating through runAsTerminal. Consume the cursor, push a
+    // replayed event, and substitute the stored result for the middleware
+    // return (§9.5 — stored cursor is authoritative). Out-of-contract
+    // terminals performing non-idempotent IO still double-fire per §9.5.
+    ctx.replayIndex.consumeYield(journalLaneId);
+    const replayedEvent: YieldEvent = {
+      type: "yield",
+      coroutineId: journalLaneId,
+      description: stored.description,
+      result: stored.result,
+    };
+    ctx.journal.push(replayedEvent);
+    advanceYieldIndex();
+    return stored.result;
+  }
+  // Live write.
+  const yieldEvent: YieldEvent = {
+    type: "yield",
+    coroutineId: journalLaneId,
+    description,
+    result: effectResult,
+  };
+  yield* ctx.stream.append(yieldEvent);
+  ctx.journal.push(yieldEvent);
+  advanceYieldIndex();
+  return effectResult;
+}
+
 function* iterateFrame(
   kernel: Generator<EffectDescriptor, Val, Val>,
   journalLaneId: string,
@@ -970,113 +1128,22 @@ function* iterateFrame(
     }
 
     // ── Dispatch-chain effect ──
-    // RV2: reject subscription handles in non-stream effect dispatch data
-    if (containsSubscriptionHandle(descriptor.data)) {
-      throw new SubscriptionCapabilityError(
-        `Effect '${descriptor.id}': resolved data contains a subscription handle, which is a restricted capability value`,
-      );
-    }
-
-    // Install a per-dispatch RuntimeTerminalBoundary so in-repo terminals
-    // (agent handlers, remote transport, mocks, built-in Effects fallback)
-    // delegating through `runAsTerminal(...)` either substitute stored
-    // results or run their live work. Middleware always re-executes per
-    // scoped-effects §9.5. `replayBox.replayed` signals whether the
-    // boundary consumed a stored cursor entry, so the outer journal-write
-    // block knows not to append a duplicate live YieldEvent.
-    const replayBox = { replayed: false };
-    const boundary: RuntimeTerminalBoundary = {
-      *run<T extends Val = Val>(
-        _effectId: string,
-        _data: Val,
-        liveWork: () => Operation<T>,
-      ): Operation<T> {
-        if (stored) {
-          ctx.replayIndex.consumeYield(journalLaneId);
-          const replayedEvent: YieldEvent = {
-            type: "yield",
-            coroutineId: journalLaneId,
-            description: stored.description,
-            result: stored.result,
-          };
-          ctx.journal.push(replayedEvent);
-          if (isCallerCursor) {
-            frame.yieldIndex++;
-          }
-          replayBox.replayed = true;
-          if (stored.result.status === "error") {
-            throw new EffectError(stored.result.error.message, stored.result.error.name);
-          }
-          if (stored.result.status === "cancelled") {
-            throw new Error("Cannot replay cancelled result");
-          }
-          return (stored.result.value ?? null) as T;
-        }
-        return yield* liveWork();
-      },
-    };
-
-    const dispatchCtx = buildDispatchContext({
-      coroutineId: effectiveCoroutineId,
-      parentEnv: env,
-      driveContext: ctx,
+    const effectResult = yield* dispatchChainStandardEffect({
+      descriptor,
+      description,
+      stored,
+      journalLaneId,
+      effectiveCoroutineId,
+      env,
+      ctx,
       frame,
       isInlineLane: !isCallerCursor,
+      advanceYieldIndex: () => {
+        if (isCallerCursor) {
+          frame.yieldIndex++;
+        }
+      },
     });
-
-    let effectResult: EventResult;
-    try {
-      const resultValue = yield* RuntimeTerminal.with(boundary, () =>
-        DispatchContext.with(dispatchCtx, () => dispatch(descriptor.id, descriptor.data as Val)),
-      );
-      effectResult = { status: "ok", value: resultValue as Json };
-    } catch (error) {
-      const err = error instanceof Error ? error : new Error(String(error));
-      effectResult = { status: "error", error: { message: err.message, name: err.name } };
-    }
-
-    // Journal write.
-    if (replayBox.replayed) {
-      // Boundary already consumed the stored entry and pushed a replayedEvent
-      // to ctx.journal. Nothing else to do — the durable stream is unchanged
-      // on replay.
-    } else if (stored) {
-      // Out-of-contract terminal: middleware short-circuited without
-      // delegating through `runAsTerminal`, so the boundary never ran — but
-      // the cursor does have a matching stored entry. Consume it and push a
-      // replayed event to `ctx.journal` so subsequent dispatches see the
-      // cursor at the correct position. This keeps the journal coherent for
-      // terminals that compute deterministic results internally (e.g.
-      // middleware that calls `invoke(...)` directly); out-of-contract
-      // terminals performing non-idempotent IO still double-fire per §9.5.
-      ctx.replayIndex.consumeYield(journalLaneId);
-      const replayedEvent: YieldEvent = {
-        type: "yield",
-        coroutineId: journalLaneId,
-        description: stored.description,
-        result: stored.result,
-      };
-      ctx.journal.push(replayedEvent);
-      if (isCallerCursor) {
-        frame.yieldIndex++;
-      }
-      // Substitute stored result in place of middleware's return, per §9.5
-      // (stored cursor is authoritative).
-      effectResult = stored.result;
-    } else {
-      // Live dispatch.
-      const yieldEvent: YieldEvent = {
-        type: "yield",
-        coroutineId: journalLaneId,
-        description,
-        result: effectResult,
-      };
-      yield* ctx.stream.append(yieldEvent);
-      ctx.journal.push(yieldEvent);
-      if (isCallerCursor) {
-        frame.yieldIndex++;
-      }
-    }
 
     if (effectResult.status === "ok") {
       nextValue = (effectResult.value ?? null) as Val;
