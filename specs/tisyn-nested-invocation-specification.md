@@ -319,6 +319,7 @@ The following are explicitly out of scope for this specification version and MUS
 - Any non-public spelling of the API other than the normative public name `invoke` (the export package of which is non-normative).
 - `invoke` from any site other than an `Effects.around({ dispatch })` body. Facade `.around(...)` middleware, `resolve` middleware, agent operation handlers, IR middleware, and compiler-authored middleware are **not** invoking surfaces in this revision; calls from those sites MUST throw `InvalidInvokeCallSiteError`.
 - Subordinate remote execution as a feature. §14 records only compatibility anchors.
+- Shared-lifetime inline execution of a compiled `Fn` in the caller's coroutine and scope is not in scope for this specification and MUST NOT be achieved by modifying `invoke` semantics. It is provided by a distinct runtime primitive `invokeInline`, defined by `tisyn-inline-invocation-specification.md`. `invokeInline` is not a mode or option of `invoke`; the two primitives have non-overlapping semantics on identity, allocator participation, journal contribution, and scope boundary. The `InvalidInvokeCallSiteError` and `InvalidInvokeInputError` classes defined by §5.3 of this specification are the recommended error classes for `invokeInline` failures of the same category.
 
 ---
 

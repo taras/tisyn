@@ -1,0 +1,333 @@
+# Tisyn Inline Invocation — Conformance Test Plan
+
+**Tests:** `tisyn-inline-invocation-specification.md`
+**Companion of.** `tisyn-inline-invocation-specification.md`
+**Complements.** `tisyn-nested-invocation-test-plan.md`
+**Depends on.** `tisyn-scoped-effects-test-plan.md` (MR-002 replay transparency); `tisyn-compound-concurrency-specification.md` (§4.2 allocator, §10 replay cursors, §9 ordering); `tisyn-spawn-test-plan.md`, `tisyn-resource-test-plan.md`, `tisyn-stream-iteration-test-plan.md` (interaction tests).
+
+Test IDs use the prefix `IE-` (Inline invocation → Equivalence) to disambiguate against `IN-` / `MR-` / `SP-` / `RS-` / `TB-` / `SI-` from other plans.
+
+Placement rationale: new companion file. The inline-invocation spec is a standalone peer of nested invocation (see spec §0 "Placement rationale"), and its test plan mirrors that placement. Amending the nested-invocation test plan would force conditional Core/Extended rows on every hook.
+
+---
+
+## 1. Overview
+
+### 1.1 Scope
+
+This test plan defines conformance criteria for `invokeInline` against spec §§5–8. It covers:
+
+- identity and non-allocation (§6.2, §6.3; IH1, IH2)
+- absence of an inline-owned durable boundary (§6.5; IH3, IH4)
+- scope and lifetime equivalence (§6.4; IH5)
+- replay and divergence equivalence (§6.6; IH6)
+- error propagation and call-site / input validation (§5.3, §6.8; IH8, IH9)
+- middleware and transport visibility, overlay scoping (§6.7, §6.9)
+- regression protection for `invoke` and composition integrity (IH10)
+- interaction with `spawn`, `resource`, `timebox`, and stream subscriptions (§6.4)
+
+It does not cover:
+
+- `invoke` semantics on their own terms (see nested-invocation test plan)
+- kernel evaluation rules (see kernel test plan)
+- compiler lowering (there is no authored surface)
+- durable-stream persistence beyond observing event contents
+
+### 1.2 Out of scope
+
+- Concurrent `invokeInline` composition within a single invoking middleware body (spec §6.10.3, §11).
+- Any authored-language form of inline invocation.
+- Capability values *returned* across the inline boundary (spec §10/G1); Extended-only until that clarification lands.
+
+### 1.3 Fixture conventions
+
+- **Mock transport-bound agents.** Lifetime tests use a mock "Session" agent (`openSession` / `switchSession` / `closeSession`), a mock "Db" agent (`acquire` / `release`), and a mock stream source, consistent with existing harnesses.
+- **Hand-constructed IR.** Inline bodies are constructed directly as `Fn(...)` values.
+- **Journal inspection.** Journals are compared by canonical JSON equality under the existing conformance harness.
+- **Non-normative reference surfaces.** Where a test uses a reference-harness surface (ambient coroutine-id, allocator snapshot, scoped-effect stack depth, `DispatchContext` identity), the row says so explicitly and is tiered accordingly (Extended or Diagnostic).
+
+---
+
+## 2. Observability model
+
+### 2.1 Tiers
+
+- **Core — Normative.** Conformance-determining. A Core test MUST pass for the implementation to be conformant. Core tests rely only on Workflow-visible or Journal-visible evidence.
+- **Extended — Normative.** SHOULD pass. Covers boundary cases, composition edges, and properties proven through Runtime-exposed or Harness-assisted evidence whose normative status is not yet standardized across the spec corpus. An Extended failure is a tracked conformance concern, not a disqualification.
+- **Diagnostic — Non-normative.** Implementation-specific evidence. MUST NOT determine conformance. Uses Harness-introspective observables.
+
+### 2.2 Observability classes
+
+- **Workflow-visible.** Observable through values produced and consumed inside the authored workflow: effect return values, thrown exceptions, authored control flow, IR-level bindings, agent operations. If evidence flows through host-side state (middleware-local JS variables, closure captures, runtime-provided tool surfaces), the test is *not* Workflow-visible.
+- **Journal-visible.** Observable by inspecting the durable `YieldEvent | CloseEvent` stream after the run, using only the coroutineId and yieldIndex structure.
+- **Runtime-exposed — Extended-qualified.** Uses a surface provided by the reference runtime that is not yet a normative conformance API. Includes: ambient coroutine-id inspection (`CoroutineContext` in the reference `@tisyn/transport` package), unified allocator snapshot, scoped-effect frame stack depth, `DispatchContext` object identity. Extended tests only.
+- **Harness-assisted — Extended-qualified.** Uses host-side JavaScript state inside the invoking middleware (middleware-local variables, closures) to bridge data between calls. Legitimate; labeled explicitly. Extended only; never the sole Core witness for any invariant.
+- **Harness-introspective — Diagnostic only.** Uses implementation internals with no normative standing (scope sentinels, driver-entry counters, private context probes).
+
+**Policy.** Core = Workflow-visible or Journal-visible. Runtime-exposed and Harness-assisted are Extended with an explicit note. Harness-introspective is Diagnostic.
+
+---
+
+## 3. Normative test cases
+
+### 3.1 Basic invocation and input validity (spec §§5.1, 5.5)
+
+| ID | Tier | Hook | Obs. class | Description | Setup | Expected |
+|---|---|---|---|---|---|---|
+| IE-B-001 | Core | §5.1 | Workflow-visible | `invokeInline` returns `Operation<T>` composed via `yield*` | Middleware calls `yield* invokeInline(Fn(["x"], Ref("x")), [42])` | Result is `42` |
+| IE-B-002 | Core | §6.1 | Workflow-visible | `args` bind positionally to `fn.params` | `Fn(["a","b"], Add(Ref("a"), Ref("b")))` with `args=[1,2]` | Result is `3` |
+| IE-B-003 | Core | §5.5.1, IH9 | Workflow-visible | `fn` must be a compiled `Fn` value | `invokeInline({not: "a Fn"}, [])` | Raises `InvalidInvoke*` family error; no journal entry, no allocator change |
+| IE-B-004 | Core | §5.5.2, IH9 | Workflow-visible | `args` must be an array | `invokeInline(fn, "not an array")` | Raises input-validity error; no side effects |
+| IE-B-005 | Extended | §5.5.4 | Journal-visible | `opts.label` is not journaled | Call with `{label: "sentinel-label"}`; inspect journal | No journal entry contains the label |
+| IE-B-006 | Core | §5.5.3 | Workflow-visible | `opts.overlay` structural validation | Pass a malformed overlay | Raises input-validity error; no side effects |
+
+### 3.2 Identity and non-allocation (spec §6.2, §6.3; IH1, IH2)
+
+| ID | Tier | Hook | Obs. class | Description | Setup | Expected |
+|---|---|---|---|---|---|---|
+| IE-I-001 | Extended | IH1 | Runtime-exposed (ambient coroutine-id; reference-harness surface) | Caller's coroutineId is visible inside the inline body | Inline body reads ambient coroutine-id; harness records caller id before the call | Reported id inside the body equals the caller's id |
+| IE-I-002 | Extended | IH2 | Runtime-exposed (allocator snapshot; reference-harness surface) | Allocator unchanged across the call | Snapshot the allocator before and after an `invokeInline` call whose body contains no allocator-advancing operation | Values equal |
+| IE-I-002J | Core | IH2 | Journal-visible | Allocator non-participation via child-coroutineId allocation | Caller: yield A; `invokeInline(fnYieldingB)` (body contains no allocator-advancing operation); yield C; then `invoke(childFn)` | Caller coroutineId: contiguous yields A, B, C; exactly one child coroutineId `parentId.0` attributable to the `invoke`; no other child coroutineId |
+| IE-I-003 | Core | IH1, §6.2 | Journal-visible | No additional coroutineId appears in the journal | Workflow uses `invokeInline` exclusively (no `invoke`, `scoped`, `spawn`, `resource`, `timebox`, `all`, `race`) | All journal events under the caller's coroutineId; exactly one `CloseEvent` |
+| IE-I-004 | Core | IH10, §6.10.4 | Journal-visible | Mixing `invoke` and `invokeInline`: only `invoke` allocates | Sequence: `invokeInline(a)` (body yields A), `invoke(b)` (child yields B), `invokeInline(c)` (body yields C); caller yields D | Caller coroutineId: contiguous [A, C, D] at yieldIndex 0..2; exactly one child coroutineId `parentId.0` with its own [B] and terminal `CloseEvent` |
+| IE-I-005 | Core | §6.3.2 | Journal-visible | Operations inside the inline body attribute their allocator advancements to themselves | Inline body contains `spawn(innerFn)`; caller then performs `spawn(callerFn)` | Two child coroutineIds `parentId.0` and `parentId.1` in source order; first attributable to inline-body `spawn` per spawn spec §A.4, second to the caller's `spawn` |
+| IE-I-006 | Extended | §6.3.2, IH10 | Journal-visible | Determinism under deeper mixed-origin allocation | Inline body contains `scoped(...)` then `spawn(...)`; caller then does `invoke(...)` | Three child coroutineIds in source order `parentId.0`, `parentId.1`, `parentId.2` |
+
+### 3.3 No durable boundary of its own (spec §6.5; IH3, IH4)
+
+| ID | Tier | Hook | Obs. class | Description | Setup | Expected |
+|---|---|---|---|---|---|---|
+| IE-B-010 | Core | IH3, §6.5.3 | Journal-visible | No `YieldEvent` attributable to the call itself | Caller yields A; `invokeInline(fn)` with empty body; caller yields B | Caller coroutineId: exactly two `YieldEvent`s (A at yieldIndex 0, B at yieldIndex 1); no other entries under any coroutineId on this path |
+| IE-B-011 | Core | IH3, §6.5.3 | Journal-visible | No `CloseEvent` attributable to the call itself | As IE-B-010, run to completion | Exactly one `CloseEvent` under the caller's coroutineId |
+| IE-B-012 | Core | IH4, §6.5.1–2 | Journal-visible | Caller-stream contiguity across the boundary | Caller A; inline body B, C; caller D | Caller coroutineId yieldIndex 0..3 with results A, B, C, D |
+| IE-B-013 | Core | IH4 | Journal-visible | Contiguity preserved across sequential inline calls | Caller A; `invokeInline(fn1)` yields B; `invokeInline(fn2)` yields C; caller D | yieldIndex 0..3 with A, B, C, D |
+| IE-B-014 | Core | IH3, §6.5.4 | Journal-visible | Durable event algebra unchanged | Enumerate event discriminants in a mixed workflow using `invokeInline` and `invoke` | Set is exactly `{YieldEvent, CloseEvent}` |
+
+### 3.4 Scope and lifetime (spec §6.4; IH5)
+
+Scope proven in Core through its normative consequences: caller-owned teardown ordering, no inline-owned close/yield events, middleware visibility. No Core test relies on middleware-local JS state to bridge data across calls; harness-assisted variants are Extended and flagged.
+
+| ID | Tier | Hook | Obs. class | Description | Setup | Expected |
+|---|---|---|---|---|---|---|
+| IE-L-001C | Core | IH5, §6.4.1 | Journal-visible | Resource created inside an inline body is torn down at caller scope exit, not at the inline call's return | Caller: `invokeInline(bodyAcquiringR1)` where body uses `resource(acquireR1)` with `try { provide(R1) } finally { releaseR1 }`. Caller then yields effect E. Caller scope exits | Caller coroutineId: acquire at yieldIndex 0; E at yieldIndex 1; **then** release as caller-scope teardown (resource spec §7.4) before caller `CloseEvent`. Release appearing at yieldIndex 1 with E at yieldIndex 2 would falsify |
+| IE-L-001H | Extended | IH5 | Harness-assisted | Sibling inline calls see the same live resource via middleware-local state | Middleware declares JS variable `session = null`. Inline A `resource(createSession)` stores session via host callback. Inline B reads `session`, does `db.query(session, …)` | Inline B succeeds; cleanup only at caller teardown. **Flagged G1** |
+| IE-L-002 | Extended | IH5, §6.4.2 | Journal-visible | Spawn from inline body attaches to caller's lifetime (no handle return) | Inline body spawns long-running child; caller scope exits | Child `CloseEvent` precedes caller `CloseEvent`; compound-concurrency §9 holds |
+| IE-L-002R | Extended | IH5 | Harness-assisted | Returning a spawn task handle from inline body and joining at caller | Inline body spawns, bridges handle via middleware-local state; caller joins | Join succeeds. **Flagged G1** |
+| IE-L-003C | Core | IH5 | Workflow-visible + journal-visible | Session-shaped resource reusable across sibling inline calls via transport-bound state | Transport-bound Session agent (state keyed by `sessionId` on the agent side). Inline A `openSession("s1")`. Caller yields E. Inline B `switchSession("s1")` | Inline B succeeds; cleanup at caller teardown. No capability value crosses the inline boundary |
+| IE-L-004 | Extended | IH5, §6.4.3 | Harness-assisted | Stream-subscription handle returned from inline body and reused by caller | Inline body `stream.subscribe`, bridges handle to caller | Later `stream.next` succeeds; ancestry passes. **Flagged G1** |
+| IE-L-004R | Core | IH5 | Workflow-visible + journal-visible | Subscription held in caller-scope and iterated from inline body | Caller does `stream.subscribe` directly, `Let`-binds handle. Caller calls `invokeInline(bodyIteratingUsingRefToHandle)` | `stream.next` inside inline body journals under caller coroutineId; ancestry passes; no handle movement across boundary |
+| IE-L-005 | Core | IH5, §6.4.4 | Journal-visible | Caller cancellation propagates to in-flight inline body | Inline body suspends on long-running effect; caller cancelled externally | Caller `Close(cancelled)` under caller coroutineId; no other `CloseEvent` attributable to inline body; any inline-body `finally` yields precede caller `Close(cancelled)` under caller coroutineId |
+| IE-L-006 | Core | §6.4, IH5 | Journal-visible | Reverse-order teardown across mixed origins | Caller creates R1 directly; inline A creates R2; inline B creates R3; caller exits | Cleanup R3 → R2 → R1 under caller coroutineId, then caller `CloseEvent` |
+
+### 3.5 Replay and divergence (spec §6.6; IH6)
+
+| ID | Tier | Hook | Obs. class | Description | Setup | Expected |
+|---|---|---|---|---|---|---|
+| IE-RP-001 | Core | IH6, §6.6.1 | Journal-visible | Pure replay reproduces journal and result byte-identically | Mixed workflow including `invokeInline`; serialize; replay | Terminal result and journal byte-identical; no live dispatch |
+| IE-RP-002 | Core | §6.6.2 | Journal-visible + workflow-visible | Durable Yield Rule applies to inline-body yields | Inline body yields two agent effects; replay with harness failing any live dispatch | Replay succeeds; no live dispatch |
+| IE-RP-003 | Extended | §6.6.4, MR-002 | Runtime-exposed | Invoking middleware re-executes deterministically on replay | Middleware body calls `invokeInline`; replay | Same `(fn, args, opts.overlay)` reached. Inherits from scoped-effects MR-002 |
+| IE-RP-004 | Extended | IH6, §6.6 | Runtime-exposed (allocator snapshot) | Replay allocator trajectory identical | Record allocator at observable points; replay; compare | Trajectories match |
+| IE-RP-004J | Core | IH6, §6.6 | Journal-visible | Replay child-coroutineId trajectory identical | Mixed workflow with `invoke`, `invokeInline`, and `spawn`-inside-inline-body. Run; replay | Both runs produce identical journals with identical child coroutineIds |
+| IE-RP-005 | Core | §6.6.3 | Workflow-visible + journal-visible | Divergence manifests as ordinary caller-coroutine divergence | Non-deterministic middleware: `invokeInline(fnA)` originally, `invokeInline(fnB)` on replay, fnA/fnB yield different first effects | `DivergenceError` attributable to caller coroutineId; no inline-specific class |
+| IE-RP-006 | Extended | §6.6.3 | Workflow-visible | Divergence from inline-body content only | Same `(fn, args)` but fn non-deterministic internally | Caller-coroutine `DivergenceError` |
+| IE-RP-007 | Core | IH6, IH10 | Journal-visible | Mixed `invoke` + `invokeInline` replay is deterministic | Run and replay IE-I-004 setup | Identical journals across runs |
+| IE-RP-008 | Core | §6.6.1 | Journal-visible | Partial-journal recovery through an inline call | Crash after caller's first inline-body yield; recover | Recovery replays stored events; live dispatch resumes at next kernel yield; no inline-specific recovery path |
+| IE-RP-009 | Extended | §6.6.1 | Journal-visible | Crash recovery with mixed primitives at different progress | Crash after `invoke(a)` completed and during `invokeInline(b)`'s body | Invoke child replays from own journal; caller continues per ordinary replay |
+
+### 3.6 Error propagation (spec §6.8; IH8)
+
+| ID | Tier | Hook | Obs. class | Description | Setup | Expected |
+|---|---|---|---|---|---|---|
+| IE-E-001 | Core | IH8, §6.8.1 | Workflow-visible | Uncaught inline-body error surfaces at call site as original error | Inline body throws `new MyError("x")` | Middleware observes exactly that exception at `yield* invokeInline(...)`; not wrapped |
+| IE-E-002 | Core | §6.8.1 | Workflow-visible | Error shape contrast with `invoke` | Parallel fixtures: inline body throws `MyError`; invoked child throws `MyError` | `invokeInline`: caller sees `MyError` directly (assertion reads thrown value's own properties). `invoke`: caller sees a reified close-reason exception carrying `MyError` per nested-invocation §10.2 |
+| IE-E-003 | Core | §6.8.2 | Workflow-visible | Errors caught inside inline body do not escape | Inline body `try/catch` catches error, returns value | `invokeInline` resolves with body's return value; no propagation |
+| IE-E-004 | Core | §6.8.3 | Workflow-visible | Uncaught error flows through caller's scoped-effects error flow | Middleware does not catch | Caller terminates per existing scoped-effects semantics; no inline-specific path |
+| IE-E-005 | Extended | §6.8.2 | Journal-visible | Error caught inside body produces no unusual event | Inline body's try/catch suppresses thrown error | Normal flow resumes; no spurious journal entry |
+| IE-E-006 | Core | §6.8.1 | Workflow-visible | Non-`Error` thrown values preserved verbatim | Inline body throws a plain object or string | Exact value propagates; no wrapping or coercion |
+
+### 3.7 Call-site and input rejection (spec §5.3; IH9)
+
+All share: a rejected call advances no allocator, writes no journal entry, pushes no overlay, does not evaluate `fn.body`.
+
+| ID | Tier | Hook | Obs. class | Description | Setup | Expected |
+|---|---|---|---|---|---|---|
+| IE-V-001 | Core | IH9, §5.3.1 | Workflow-visible + journal-visible | Rejected call produces no effects attributable to the rejected call attempt | Workflow: caller yields A; middleware calls `invokeInline` from a disallowed site (outside any `Effects.around({dispatch})`); harness observes the thrown error; caller yields B | (a) Throws `InvalidInvoke*` call-site error. (b) No journal entry is attributable to the rejected call attempt: journal contains exactly A at yieldIndex 0, B at yieldIndex 1, caller `CloseEvent`, with no additional entry appearing between A and B under any coroutineId. (c) No coroutineId is allocated attributable to the rejected attempt: no new child coroutineId in the journal. (d) No overlay push persists: if the rejected call supplied `opts.overlay`, a subsequent effect F after the rejection is not observed by any middleware frame installed by that overlay (asserted via a marker on F's journaled description). (e) No evaluation of `fn.body`: `fn.body`, had it been evaluated, would have produced a sentinel yield whose effect ID is absent from the journal between A and B. Unrelated subsequent workflow activity is not part of this assertion |
+| IE-V-002 | Core | §5.3.1 | Workflow-visible | Rejected from agent operation handler | Agent handler body calls `yield* invokeInline(...)` | Raises call-site error; no side effects |
+| IE-V-003 | Core | §5.3.1 | Workflow-visible | Rejected from `Effects.around({ resolve })` body | Install resolve middleware; call `invokeInline` inside | Raises call-site error; no side effects |
+| IE-V-004 | Core | §5.3.1 | Workflow-visible | Rejected from facade `.around(...)` body | Install facade middleware; call `invokeInline` inside | Raises call-site error; no side effects |
+| IE-V-005 | Extended | §5.3.3 | Runtime-exposed (`DispatchContext` identity) | Stale `DispatchContext` reuse | Capture ctx in invocation #1; attempt reuse in invocation #2 | Raises call-site error; no side effects |
+| IE-V-006 | Core | IH9 | Workflow-visible | Primitive-name distinguishability | Trigger call-site errors from both `invokeInline` and `invoke` in parallel | Thrown error distinguishes the failing primitive through any documented means (message content or property). **Flagged G2** |
+| IE-V-007 | Extended | §5.3.1 | Workflow-visible | `invokeInline` from IR-evaluated middleware | Hostile scenario attempting to reach `invokeInline` from IR middleware | Raises call-site error or is structurally impossible |
+
+### 3.8 Middleware, transport, overlay (spec §6.7, §6.9)
+
+| ID | Tier | Hook | Obs. class | Description | Setup | Expected |
+|---|---|---|---|---|---|---|
+| IE-M-001 | Core | §6.9 | Journal-visible | Inline-body effects traverse caller's middleware chain | Caller installs `Effects.around({ dispatch })` tagging effect descriptions; inline body yields an effect | Journaled effect description carries the tag |
+| IE-M-002 | Core | §6.9 | Workflow-visible + journal-visible | Caller's transport bindings visible inside inline body | Caller scope has `useTransport(Agent, ...)` + `useAgent(Agent)`; inline body calls agent method via facade | Dispatch routes to caller-scope-bound transport |
+| IE-M-003 | Core | §6.9 | Workflow-visible + journal-visible | Caller's agent facade resolution visible | Caller binds two agents; inline body dispatches to each | Both resolve correctly; no rebinding |
+| IE-M-004 | Extended | §6.7 | Runtime-exposed (stack depth) | Overlay scoping via stack-depth inspection | Record scoped-effect frame stack depth before/after call with no `opts.overlay` | Depths equal |
+| IE-M-004J | Core | §6.7 | Workflow-visible + journal-visible | Overlay scoping observed through effect behavior | `invokeInline(fn, args, { overlay })`; inline body yields E1 under transforming overlay; after return caller yields E2 | E1's journaled description reflects overlay transformation; E2's does not |
+| IE-M-005 | Core | §6.7 | Journal-visible | Overlay not journaled standalone | Call with `opts.overlay`; inspect journal | No entry records overlay as an independent durable input or event |
+| IE-M-006 | Extended | §6.9 | Journal-visible | Cross-boundary middleware visible to inline-body effects | Cross-boundary IR middleware installed at caller scope; inline body yields effect | Middleware fires; routing unchanged |
+
+### 3.9 `invoke` regression (IH10)
+
+| ID | Tier | Hook | Obs. class | Description | Setup | Expected |
+|---|---|---|---|---|---|---|
+| IE-N-001 | Core | IH10 | Journal-visible | `invoke` still allocates a child coroutineId | Single `invoke(fn)` call | Journal: new child coroutineId `parentId.0`; child's own `YieldEvent`s and terminal `CloseEvent` appear under it |
+| IE-N-002 | Core | IH10 | Workflow-visible + journal-visible | `invoke` still isolates its child's scope | `invoke` child acquires a resource; returns. Caller attempts to use | Resource torn down at child close; attempted use fails per existing resource semantics |
+| IE-N-003 | Core | IH10 | Journal-visible | `invoke` still writes `Close` under child coroutineId | Inspect journal for `invoke` call | `CloseEvent` under child coroutineId; no such event for any `invokeInline` call in same run |
+| IE-N-004 | Core | IH10 | Journal-visible | Mixed `invoke`/`invokeInline` preserves each primitive's invariants | Sequence: `invoke(a)`, `invokeInline(b)` (body yields one effect), `invoke(c)` | Two new child coroutineIds (for a and c); no coroutineId for b; inline body's yield appears contiguously under caller |
+| IE-N-005 | Core | IH10 | Workflow-visible | Error-shape contrast preserved under mixing | Single middleware body: branch A `invoke(aThrows)` (reified close-reason) vs branch B `invokeInline(bThrows)` (original) | Each branch surfaces its primitive's error shape unchanged |
+| IE-N-006 | Extended | IH10 | Journal-visible | Deep mixing with inline bodies containing `invoke` | Inline body of `invokeInline(outer)` itself contains `invoke(inner)` | `invoke(inner)`'s child is a child of the caller (not of any inline "body"); exactly one child coroutineId attributable to that `invoke` |
+| IE-N-007 | Extended | — | Journal-visible | `invoke`-only sanity regression | Workflow uses only `invoke` | Matches nested-invocation test plan expectations bit-for-bit |
+
+### 3.10 Interaction with other primitives
+
+#### 3.10.1 With `spawn`
+
+| ID | Tier | Obs. class | Description | Expected |
+|---|---|---|---|---|
+| IE-INT-SP-001C | Core | Journal-visible | Fire-and-forget spawn inside inline body, torn down at caller scope exit | Child `CloseEvent` before caller `CloseEvent`; no handle return required |
+| IE-INT-SP-001 | Extended | Harness-assisted | Join a task handle produced by inline body | Join succeeds. **Flagged G1** |
+| IE-INT-SP-002 | Core | Journal-visible | Spawned child not orphaned | No child events after caller teardown |
+| IE-INT-SP-003 | Extended | Journal-visible | Compound-concurrency §9 ordering under mixed-origin spawns | Ordering invariants hold |
+
+#### 3.10.2 With `resource`
+
+| ID | Tier | Obs. class | Description | Expected |
+|---|---|---|---|---|
+| IE-INT-RS-001C | Core | Journal-visible | Inline-body resource with try/finally; release at caller teardown | Release yield after caller's next yield; before caller `CloseEvent` |
+| IE-INT-RS-001H | Extended | Harness-assisted | Resource handle shared across siblings via middleware-local state | Second inline sees live handle. **Flagged G1** |
+| IE-INT-RS-002 | Core | Journal-visible | Mixed-source resources teardown in reverse creation order | R3 → R2 → R1 |
+| IE-INT-RS-003 | Extended | Journal-visible | Resource init failure propagation | Error out of `invokeInline` per IE-E-001; earlier resources still cleaned up |
+
+#### 3.10.3 With `timebox`
+
+| ID | Tier | Obs. class | Description | Expected |
+|---|---|---|---|---|
+| IE-INT-TB-001 | Extended | Journal-visible | `timebox` inside inline body behaves per timebox spec | Allocator advancement attributed to timebox; caller observes result |
+| IE-INT-TB-002 | Extended | Journal-visible | Timebox cancels inline-body work without affecting caller | Timebox cancels its body child per its own spec; caller continues |
+
+#### 3.10.4 With stream subscriptions
+
+| ID | Tier | Obs. class | Description | Expected |
+|---|---|---|---|---|
+| IE-INT-ST-001C | Core | Workflow-visible | Caller subscribes; inline body iterates via `Ref` | All `stream.next` calls succeed; ancestry passes |
+| IE-INT-ST-001 | Extended | Harness-assisted | Inline body subscribes; caller iterates via bridged handle | Succeeds. **Flagged G1** |
+| IE-INT-ST-002 | Extended | Harness-assisted | Subscription survives across sibling inline calls via handle bridge | Succeeds. **Flagged G1** |
+| IE-INT-ST-003 | Extended | Journal-visible | Subscription torn down at caller scope exit | Per stream spec §10.2 |
+
+---
+
+## 4. Diagnostic-only test cases (non-normative)
+
+**Observability:** Harness-introspective. MUST NOT determine conformance. Exist as diagnostic aids.
+
+| ID | Purpose |
+|---|---|
+| IE-D-001 | **Scope sentinel identity.** Install a scope-local sentinel in caller's scope; inline body reads it. Both reads return same object identity. Failure suggests (not proves) a new scope was opened |
+| IE-D-002 | **Coroutine-driver entry counter.** Instrument reference runtime's driver entry; baseline without `invokeInline` vs augmented. Counts equal. Substrate-specific |
+| IE-D-003 | **Overlay-stack leak detector.** Stack depth before/after call with no `opts.overlay` equal |
+| IE-D-004 | **Allocator call-site attribution trace.** Trace allocator-advancement call sites; `invokeInline` does not appear as a source |
+| IE-D-005 | **Child-ID issuer count.** Issuer called once per allocator-advancing operation; zero times per `invokeInline` |
+| IE-D-006 | **Ambient coroutine-id restored after call.** Read ambient coroutine-id inside body and after return; both equal caller's id |
+| IE-D-007 | **`DispatchContext` identity probe for stale-context detection.** Substrate-specific; localizes the enforcement code path |
+
+---
+
+## 5. Minimum acceptance subset
+
+Feature is MVP-complete when all 14 pass. All Journal-visible or Workflow-visible.
+
+| # | ID | Invariant | Obs. class |
+|---|---|---|---|
+| 1 | IE-B-001 | `invokeInline` returns `Operation<T>` usable via `yield*` | Workflow-visible |
+| 2 | IE-B-010 | No inline-owned `YieldEvent` (§6.5.3, IH3) | Journal-visible |
+| 3 | IE-B-011 | No inline-owned `CloseEvent` (§6.5.3, IH3) | Journal-visible |
+| 4 | IE-B-012 | Caller-stream contiguity across the call boundary (§6.5.1–2, IH4) | Journal-visible |
+| 5 | IE-I-002J | Allocator unchanged by `invokeInline` itself (§6.3.1, IH2) | Journal-visible |
+| 6 | IE-I-004 | Mixed `invoke` + `invokeInline`: only `invoke` allocates (IH10, §6.10.4) | Journal-visible |
+| 7 | IE-I-005 | Operations inside inline body attribute allocator advancements to themselves (§6.3.2) | Journal-visible |
+| 8 | IE-L-001C | Resource acquired inside an inline body is torn down at caller scope exit, not at call return (§6.4.1, IH5) | Journal-visible |
+| 9 | IE-L-005 | Caller cancellation reaches an in-flight inline body (§6.4.4, IH5, IH7) | Journal-visible |
+| 10 | IE-RP-001 | Pure replay reproduces journal and terminal result (§6.6.1, IH6) | Journal-visible |
+| 11 | IE-RP-005 | Divergence is ordinary caller-coroutine divergence (§6.6.3) | Workflow-visible + journal-visible |
+| 12 | IE-E-001 | Uncaught inline-body error surfaces at call site as original error (§6.8.1, IH8) | Workflow-visible |
+| 13 | IE-V-001 | Rejected call attempt has no attributable side effects (§5.3.1, IH9) | Workflow-visible + journal-visible |
+| 14 | IE-N-001 | `invoke` regression: still allocates child coroutineId and writes its own events | Journal-visible |
+
+---
+
+## 6. Coverage summary
+
+### 6.1 Invariant coverage (spec §6) — Core tier
+
+| Invariant | Core tests |
+|---|---|
+| §6.1 Observational equivalence (anchor) | All Core tests collectively |
+| §6.2 Coroutine identity | IE-I-003, IE-I-004, IE-I-005 |
+| §6.3.1 Allocator non-participation | IE-I-002J, IE-I-004 |
+| §6.3.2 Attribution to contained operations | IE-I-005 |
+| §6.4 Scope boundary | IE-L-001C, IE-L-005, IE-L-006, IE-L-003C, IE-L-004R (via consequences) |
+| §6.4.1 Resources outlive the call | IE-L-001C, IE-L-003C, IE-INT-RS-001C |
+| §6.4.2 Spawns attach to caller | IE-INT-SP-001C, IE-INT-SP-002 |
+| §6.4.3 Capabilities caller-owned | IE-L-003C, IE-INT-ST-001C |
+| §6.4.4 Cancellation pass-through | IE-L-005 |
+| §6.5.1 One YieldEvent per inline yield | IE-B-012, IE-B-013 |
+| §6.5.2 Contiguous yieldIndex | IE-B-012, IE-B-013 |
+| §6.5.3 No event for the call itself | IE-B-010, IE-B-011 |
+| §6.5.4 Durable algebra unchanged | IE-B-014 |
+| §6.6.1 Caller re-evaluation on replay | IE-RP-001, IE-RP-008 |
+| §6.6.2 Durable Yield Rule on inline yields | IE-RP-002 |
+| §6.6.3 Divergence is caller-coroutine | IE-RP-005 |
+| §6.6.4 Invoking-middleware determinism | Extended only (IE-RP-003, inherited from MR-002) |
+| §6.7 Overlay scoping | IE-M-004J, IE-M-005 |
+| §6.8.1 Original-error propagation | IE-E-001, IE-E-002, IE-E-006 |
+| §6.8.2 Caught errors do not escape | IE-E-003 |
+| §6.8.3 No special error path | IE-E-004 |
+| §6.9 Middleware visibility | IE-M-001, IE-M-002, IE-M-003 |
+| §6.10.1 Program-order preservation | IE-B-012 |
+| §6.10.2 Serial composition | IE-B-013 |
+| §6.10.4 Mixed-primitive determinism | IE-I-004, IE-RP-004J, IE-RP-007, IE-N-004 |
+
+### 6.2 Conformance-hook coverage — Core tier
+
+| Hook | Core tests |
+|---|---|
+| IH1 | IE-I-003, IE-I-004 |
+| IH2 | IE-I-002J, IE-I-004 |
+| IH3 | IE-B-010, IE-B-011, IE-B-014 |
+| IH4 | IE-B-012, IE-B-013 |
+| IH5 | IE-L-001C, IE-L-003C, IE-L-004R, IE-L-005, IE-L-006, IE-INT-SP-001C, IE-INT-SP-002, IE-INT-RS-001C, IE-INT-RS-002, IE-INT-ST-001C |
+| IH6 | IE-RP-001, IE-RP-002, IE-RP-005, IE-RP-007, IE-RP-008, IE-RP-004J |
+| IH7 | IE-L-005 |
+| IH8 | IE-E-001, IE-E-002, IE-E-003, IE-E-004, IE-E-006 |
+| IH9 | IE-B-003, IE-B-004, IE-B-006, IE-V-001, IE-V-002, IE-V-003, IE-V-004, IE-V-006 |
+| IH10 | IE-I-004, IE-I-005, IE-RP-007, IE-N-001, IE-N-002, IE-N-003, IE-N-004, IE-N-005 |
+
+### 6.3 Tier counts
+
+| Section | Core | Extended | Diagnostic | Total |
+|---|---|---|---|---|
+| §3.1 Basic / inputs | 5 | 1 | 0 | 6 |
+| §3.2 Identity / non-allocation | 4 | 3 | 0 | 7 |
+| §3.3 No durable boundary | 5 | 0 | 0 | 5 |
+| §3.4 Scope & lifetime | 5 | 3 | 0 | 8 |
+| §3.5 Replay & divergence | 6 | 3 | 0 | 9 |
+| §3.6 Error propagation | 5 | 1 | 0 | 6 |
+| §3.7 Call-site / input rejection | 6 | 2 | 0 | 8 |
+| §3.8 Middleware / transport / overlay | 5 | 2 | 0 | 7 |
+| §3.9 `invoke` regression | 5 | 2 | 0 | 7 |
+| §3.10 Interaction | 4 | 7 | 0 | 11 |
+| §4 Diagnostic | 0 | 0 | 7 | 7 |
+| **Total** | **50** | **24** | **7** | **81** |
+
+### 6.4 Flagged clarifications
+
+Tests explicitly flagged on non-blocking clarifications (spec §10). None affects MVP acceptance:
+
+- **G1** (capability return across boundary): IE-L-001H, IE-L-002R, IE-L-004, IE-INT-SP-001, IE-INT-RS-001H, IE-INT-ST-001, IE-INT-ST-002.
+- **G2** (inspectable primitive property): IE-V-006.
+- **G3** (cancellation observability restatement): IE-L-005 assertion tightness only.

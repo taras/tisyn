@@ -250,6 +250,28 @@ Relevant base contract and profiles remain in play.
 
 ---
 
+## 11.5 Inline Invocation — Active Runtime Design
+
+Issue #122 and the inline-invocation specs define a user-facing product fix:
+multi-step workflows need a way to share round-owned resources such as browser
+pages, sessions, API clients, and subscriptions across sibling steps without
+turning every step into an isolated child lifecycle.
+
+Treat `invokeInline` as the active direction:
+
+- sibling primitive to `invoke`, not an option on `invoke`
+- evaluates a compiled `Fn` in the caller's coroutine and Effection scope
+- creates no child coroutine, durable event, compiler form, or kernel descriptor
+- preserves existing `invoke` semantics for isolated nested execution
+- belongs in the runtime/effects dispatch-boundary layer, not the kernel or compiler
+
+When drafting PRs for this work, lead with the product need: users need
+stateful test/session resources to survive across deterministic step boundaries.
+Do not frame it as "`invoke` is broken"; frame it as adding the missing
+shared-lifetime execution primitive alongside the existing isolated primitive.
+
+---
+
 ## 12. Important Existing Specs To Respect
 
 These are especially relevant to implementation work:

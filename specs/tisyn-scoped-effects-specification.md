@@ -176,6 +176,19 @@ intercepts user-defined effect calls.
 > `Effects.around()` middleware applies at the shared dispatch
 > boundary regardless of which path an effect takes to reach it.
 
+The runtime MAY additionally expose an `invokeInline(fn, args, opts?)` free
+helper (exported by an implementation-chosen package; the export path is not
+part of the normative surface) accessible from the body of an
+`Effects.around({ dispatch })` middleware. The operation is a
+runtime-controlled dispatch-boundary `Operation<T>` — it is initiated and
+resolved outside kernel IR evaluation — and it is not a compound external, does
+not produce a kernel descriptor, does not allocate any coroutineId, and
+introduces no durable event. Effects yielded inside the inline body are
+journaled under the caller's coroutineId. Semantics are defined by
+`tisyn-inline-invocation-specification.md`. Invoking middleware remains subject
+to the determinism expectation of §9; the replay property stated in MR-002
+extends to middleware that calls `invokeInline` without modification.
+
 ### 3.2 Effect ID Namespace
 
 Effects are identified by string IDs. The `tisyn.*` namespace
