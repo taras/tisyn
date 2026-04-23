@@ -873,6 +873,22 @@ written by the runtime always include `description.sha`. This
 legacy path exists for backward-compat only; new journals are
 fully payload-protected.
 
+**Exclusion: `stream.subscribe`.** `stream.subscribe` dispatches
+omit `description.sha`. The effect's `data` is
+`[Operation, ...]` — the source is a live Effection Operation
+with no stable journaled identity in the current IR surface, and
+canonical JSON serialization of the source collapses to an empty
+object. Replay of `stream.subscribe` matches on type + name only.
+This preserves the stored handle flow across recovery but does
+NOT detect source-identity divergence for subscribe: replaying
+against a journal whose stored subscribe was opened on source A,
+while the re-executing workflow subscribes to source B, will
+succeed with the stored handle for A rather than raising
+`DivergenceError`. `stream.next` remains payload-sensitive: its
+`data` is `[handleToken, ...]` where `handleToken` is a
+canonicalizable string, so handle-payload divergence on
+`stream.next` IS detected.
+
 The terminal boundary is a runtime implementation mechanism,
 not a middleware priority participant. It sits below every
 user-installable priority (including `at: "min"`) by

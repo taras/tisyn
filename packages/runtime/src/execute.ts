@@ -14,6 +14,7 @@ import {
   type DurableEvent,
   type YieldEvent,
   type CloseEvent,
+  type EffectDescription,
   type EffectDescriptor,
   type EventResult,
   parseEffectId,
@@ -173,6 +174,28 @@ function createFrameState(): FrameState {
     joinedTasks: new Set(),
     resourceChildren: [],
   };
+}
+
+/**
+ * Build the `EffectDescription` stored in a YieldEvent for the given dispatch.
+ *
+ * Per scoped-effects §9.5, payload-sensitive divergence compares
+ * type + name + `payloadSha(data)`. `stream.subscribe` is the one documented
+ * exclusion: its `data` is `[Operation, ...]` where the source is a live
+ * Effection Operation with no stable journaled identity in the current IR
+ * surface — canonical JSON collapses the source to `{}`, so any sha would be
+ * a degenerate constant. Replay of `stream.subscribe` therefore matches on
+ * type + name only, which preserves the stored handle flow across recovery
+ * but does NOT detect source-identity divergence for subscribe.
+ * `stream.next` remains payload-sensitive: its `data` is `[handleToken, ...]`
+ * where `handleToken` is a canonicalizable string.
+ */
+function describeEffect(descriptor: EffectDescriptor): EffectDescription {
+  const base = parseEffectId(descriptor.id);
+  if (descriptor.id === "stream.subscribe") {
+    return base;
+  }
+  return { ...base, sha: payloadSha(descriptor.data as Json) };
 }
 
 // ── Nested invocation helpers ──
@@ -773,10 +796,7 @@ function* iterateFrame(
     // Compute the effect description for this dispatch. `sha` is the
     // deterministic payload fingerprint used by replay divergence detection
     // per scoped-effects §9.5.
-    const description = {
-      ...parseEffectId(descriptor.id),
-      sha: payloadSha(descriptor.data as Json),
-    };
+    const description = describeEffect(descriptor);
 
     // Peek the replay cursor for divergence detection. Consumption happens
     // either in the built-in branch (for __config / stream.*) or inside the
@@ -1536,10 +1556,7 @@ function* orchestrateResourceChild(
         }
 
         // ── Standard effect dispatch ──
-        const description = {
-          ...parseEffectId(descriptor.id),
-          sha: payloadSha(descriptor.data as Json),
-        };
+        const description = describeEffect(descriptor);
         const stored = ctx.replayIndex.peekYield(childId);
 
         if (stored) {
@@ -1875,10 +1892,7 @@ function* orchestrateResourceChild(
         }
 
         // ── Standard effect dispatch ──
-        const description = {
-          ...parseEffectId(descriptor.id),
-          sha: payloadSha(descriptor.data as Json),
-        };
+        const description = describeEffect(descriptor);
         const stored = ctx.replayIndex.peekYield(childId);
 
         if (stored) {

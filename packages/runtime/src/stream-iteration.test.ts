@@ -16,6 +16,7 @@ import { Effects } from "@tisyn/effects";
 import type { Val, IrInput } from "@tisyn/ir";
 import { InMemoryStream } from "@tisyn/durable-streams";
 import type { YieldEvent, DurableEvent } from "@tisyn/kernel";
+import { payloadSha } from "@tisyn/kernel";
 
 // ── IR helpers (plain objects, matching kernel/compiler output) ──
 
@@ -549,6 +550,119 @@ describe("stream replay", () => {
     });
     expect(result.status).toBe("error");
     expect((result as any).error.name).toBe("DivergenceError");
+  });
+
+  it("SI-D-020: stream.subscribe is excluded from payload-fingerprint divergence (§9.5)", function* () {
+    // Documented limitation from scoped-effects §9.5: `stream.subscribe`
+    // dispatches omit `description.sha` because the source payload is a
+    // live Effection Operation with no stable canonical representation.
+    // Replay therefore matches on type+name only and does NOT detect
+    // source-identity divergence for subscribe.
+
+    // (a) Live run: written subscribe YieldEvent should have no `sha`.
+    const irLive = LetIR(
+      "sub",
+      StreamSubscribe(Ref("source")),
+      GetIR(Ref("sub"), "__tisyn_subscription"),
+    );
+    const liveStream = mockStream(["a"] as Val[]);
+    const { journal: liveJournal } = yield* execute({
+      ir: irLive as unknown as IrInput,
+      env: { source: liveStream as unknown as Val },
+    });
+    const subscribeYield = liveJournal.find(
+      (e) => e.type === "yield" && (e as YieldEvent).description.name === "subscribe",
+    ) as YieldEvent;
+    expect(subscribeYield).toBeDefined();
+    expect(subscribeYield.description.sha).toBeUndefined();
+
+    // (b) Replay: the stored subscribe was opened against source A. Replay
+    // the same journal while passing a DIFFERENT source (B). Replay MUST
+    // succeed and return the stored handle — no DivergenceError — because
+    // `stream.subscribe` does not carry a payload fingerprint. This is the
+    // documented weakened contract. `stream.next` remains
+    // payload-sensitive; see SI-D-021.
+    const stored: DurableEvent[] = [
+      {
+        type: "yield",
+        coroutineId: "root",
+        description: { type: "stream", name: "subscribe" },
+        result: {
+          status: "ok",
+          value: { __tisyn_subscription: "sub:root:0" },
+        },
+      },
+      {
+        type: "close",
+        coroutineId: "root",
+        result: { status: "ok", value: "sub:root:0" },
+      },
+    ];
+    const durableStream = new InMemoryStream(stored);
+    const irReplay = LetIR(
+      "sub",
+      StreamSubscribe(Ref("source")),
+      GetIR(Ref("sub"), "__tisyn_subscription"),
+    );
+    const sourceB = mockStream(["different"] as Val[]);
+    const { result: replayResult } = yield* execute({
+      ir: irReplay as unknown as IrInput,
+      env: { source: sourceB as unknown as Val },
+      stream: durableStream,
+    });
+    expect(replayResult).toEqual({ status: "ok", value: "sub:root:0" });
+  });
+
+  it("SI-D-021: stream.next handle-payload divergence IS detected (§9.5)", function* () {
+    // `stream.next`'s data is `[handleToken, ...]` where the token is a
+    // canonicalizable string, so handle-payload divergence must raise
+    // DivergenceError (contrast SI-D-020).
+    //
+    // Hand-construct a journal whose stored stream.next description.sha
+    // was computed for a DIFFERENT handle than the replaying workflow
+    // will actually yield.
+    const storedSubscribe: YieldEvent = {
+      type: "yield",
+      coroutineId: "root",
+      description: { type: "stream", name: "subscribe" },
+      result: {
+        status: "ok",
+        value: { __tisyn_subscription: "sub:root:0" },
+      },
+    };
+    // The real handle payload that the workflow will produce on replay is
+    // `[{ __tisyn_subscription: "sub:root:0" }]`. We stage a stored
+    // stream.next whose sha was computed for a DIFFERENT handle token.
+    const wrongPayload: unknown = [{ __tisyn_subscription: "sub:root:999" }];
+    const storedNext: YieldEvent = {
+      type: "yield",
+      coroutineId: "root",
+      description: {
+        type: "stream",
+        name: "next",
+        sha: payloadSha(wrongPayload as never),
+      },
+      result: { status: "ok", value: { done: false, value: "stored" } },
+    };
+    const durableStream = new InMemoryStream([storedSubscribe, storedNext]);
+
+    const ir = LetIR(
+      "sub",
+      StreamSubscribe(Ref("source")),
+      LetIR("item", StreamNext(Ref("sub")), GetIR(Ref("item"), "value")),
+    );
+    const source = mockStream(["a"] as Val[]);
+    const { result } = yield* execute({
+      ir: ir as unknown as IrInput,
+      env: { source: source as unknown as Val },
+      stream: durableStream,
+    });
+    expect(result.status).toBe("error");
+    if (result.status === "error") {
+      expect(result.error.name).toBe("DivergenceError");
+      expect(result.error.message).toContain("payload fingerprint mismatch");
+      expect(result.error.message).toContain("stream.next");
+    }
   });
 
   it("SI-D-010: partial replay transitions to live at frontier", function* () {
