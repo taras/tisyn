@@ -134,6 +134,10 @@ Operational rule:
 
 Do not force re-edits of already-correct text based on stale views.
 
+Handoff documents are transient collaboration artifacts, not repository state.
+Do not commit `*-handoff.md` files. Keep them outside the repo or rely on the
+repo ignore rules when a local handoff file is useful during coordination.
+
 ---
 
 ## 9. Track B — Settled and Accepted

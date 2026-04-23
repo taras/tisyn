@@ -7,4 +7,5 @@ examples/multi-agent-chat/test/browser/dist-executor/
 /.claude/
 /worktrees/
 *handoff*.md
+*-handoff.md
 packages/spec/workflows/.debug/
