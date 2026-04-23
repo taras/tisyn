@@ -27,6 +27,7 @@
     "test": "vitest run"
   },
   "dependencies": {
+    "@noble/hashes": "^1.5.0",
     "@tisyn/ir": "workspace:*",
     "@tisyn/validate": "workspace:*"
   },
