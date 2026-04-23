@@ -49,6 +49,31 @@ is imported from `@tisyn/kernel` — no `node:crypto` reference in
 `packages/transport/src/transports/browser-executor.ts`) continue
 to build and run.
 
+`stream.subscribe` is the one documented exclusion from
+payload-fingerprint divergence: its data is `[Operation, ...]`
+where the source is a live Effection Operation with no stable
+journaled identity in the current IR surface, and canonical JSON
+collapses the source to `{}`. Replay of `stream.subscribe` matches
+on type + name only — the stored handle flow is preserved across
+recovery, but source-identity divergence is NOT detected for
+subscribe. `stream.next` remains payload-sensitive (its handle
+token is canonicalizable). A `describeEffect(descriptor)` helper
+localizes the exclusion to one place; the spec clause appears in
+scoped-effects §9.5.
+
+`orchestrateResourceChild` now installs the same per-dispatch
+`RuntimeTerminalBoundary` that `iterateFrame` does, via a shared
+`dispatchChainStandardEffect` helper used from both sites.
+Middleware inside resource init and cleanup bodies participates in
+the replay substrate: on recovery, middleware re-executes and
+`runAsTerminal(...)`-delegated live work is substituted with the
+stored result instead of re-firing. Without this, resource bodies
+would re-open browser pages / re-acquire sessions / re-fire
+external IO on every recovery. CloseEvent writes inside
+orchestrateResourceChild are now routed through `appendCloseEvent`
+for idempotency under replay. IE-RP-010 (Core-lite) locks in this
+property with an explicit full-run + recovery regression.
+
 Internals: `driveKernel` is refactored to extract a `FrameState`
 record and a shared `iterateFrame` helper; the caller's own cursor
 and each inline lane cursor are processed via the same iteration
