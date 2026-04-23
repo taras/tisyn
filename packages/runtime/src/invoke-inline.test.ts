@@ -784,6 +784,117 @@ describe("invoke-inline — minimum acceptance subset", () => {
     expect(root0Closes).toHaveLength(1);
   });
 
+  // ── IE-RP-010b: resource-frame yieldIndex counts built-in yields ──
+  // Regression: `orchestrateResourceChild` now carries its own `FrameState`
+  // and routes dispatch-chain effects through `buildDispatchContext(...)`,
+  // which captures `q = frame.yieldIndex` at dispatch entry. Built-in
+  // yields (`__config`, `stream.subscribe`, `stream.next`) MUST advance
+  // `resourceFrame.yieldIndex` identically to `iterateFrame`'s caller-
+  // cursor semantics; otherwise `ctx.invokeInline(...)` inside resource-
+  // body middleware computes the wrong `q` and inline lane keys undercount
+  // preceding built-ins.
+
+  it("IE-RP-010b: resource-body built-in yield advances frame.yieldIndex so a later invokeInline captures q=1", function* () {
+    // Resource body: Let(_cfg, __config, Let(_a, caller.A, provide(_a))).
+    // Middleware for caller.A calls invokeInline(fn), fn yields inner.X.
+    // With the fix, the `__config` yield advances `resourceFrame.yieldIndex`
+    // to 1 before caller.A's dispatch runs, so q=1 and the inline lane key
+    // is `root.0@inline1.0`. Without the fix (built-ins skip the advance),
+    // q=0 and the lane key is `root.0@inline0.0`.
+    const innerFn = Fn<[], Val>([], Eval<Val>("inner.X", Q([])));
+
+    const resourceIR = {
+      tisyn: "eval",
+      id: "resource",
+      data: {
+        tisyn: "quote",
+        expr: {
+          body: {
+            tisyn: "eval",
+            id: "let",
+            data: {
+              tisyn: "quote",
+              expr: {
+                name: "_cfg",
+                value: { tisyn: "eval", id: "__config", data: { tisyn: "quote", expr: null } },
+                body: {
+                  tisyn: "eval",
+                  id: "let",
+                  data: {
+                    tisyn: "quote",
+                    expr: {
+                      name: "_a",
+                      value: { tisyn: "eval", id: "caller.A", data: [] },
+                      body: {
+                        tisyn: "eval",
+                        id: "provide",
+                        data: { tisyn: "ref", name: "_a" },
+                      },
+                    },
+                  },
+                },
+              },
+            },
+          },
+        },
+      },
+    };
+
+    const stream1 = new InMemoryStream();
+    yield* Effects.around({
+      *dispatch([effectId, data]: [string, Val], next) {
+        if (effectId === "caller.A") {
+          yield* invokeInline(asFn(innerFn), []);
+          return "A-done" as unknown as Val;
+        }
+        return yield* next(effectId, data);
+      },
+      *resolve() {
+        return false;
+      },
+    });
+    yield* installTailMiddleware();
+    const firstRun = yield* execute({
+      ir: resourceIR as never,
+      config: { value: 1 } as Val,
+      stream: stream1,
+    });
+    expect(firstRun.result.status).toBe("ok");
+
+    const events = stream1.snapshot();
+    // Inner yield carries the inline lane key as its coroutineId.
+    const innerYield = events.find(
+      (e) => e.type === "yield" && (e as YieldEvent).description.name === "X",
+    ) as YieldEvent | undefined;
+    expect(innerYield).toBeDefined();
+    // q=1 because the preceding __config yield advanced resourceFrame.yieldIndex.
+    // Lane ordinal `0` would be the regression signature.
+    expect(innerYield!.coroutineId).toBe("root.0@inline1.0");
+
+    // Replay coverage: restart with the stored journal. Lane-key derivation
+    // must be deterministic across runs, so replay computes the same `q`
+    // and the stored inner yield replays on the same lane without divergence.
+    const stream2 = new InMemoryStream(events);
+    yield* Effects.around({
+      *dispatch([effectId, data]: [string, Val], next) {
+        if (effectId === "caller.A") {
+          yield* invokeInline(asFn(innerFn), []);
+          return "A-done" as unknown as Val;
+        }
+        return yield* next(effectId, data);
+      },
+      *resolve() {
+        return false;
+      },
+    });
+    const recoverRun = yield* execute({
+      ir: resourceIR as never,
+      config: { value: 1 } as Val,
+      stream: stream2,
+    });
+    expect(recoverRun.result.status).toBe("ok");
+  });
+
   // ── IE-RP-012 ──
   // Stream-subscribe recovery is a DIFFERENT property and intentionally
   // remains deferred: `stream.subscribe` is excluded from payload-

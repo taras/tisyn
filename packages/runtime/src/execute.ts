@@ -1683,6 +1683,12 @@ function* orchestrateResourceChild(
               result: stored.result,
             };
             ctx.journal.push(replayedEvent);
+            // Advance the resource-frame yield ordinal so `q` (captured by
+            // `buildDispatchContext` at later dispatch-chain sites) counts
+            // built-in yields too — matching iterateFrame's caller-cursor
+            // semantics. Without this, inline lane keys allocated from
+            // resource-body middleware undercount preceding built-ins.
+            resourceFrame.yieldIndex++;
             if (stored.result.status === "ok") {
               nextValue = (stored.result.value ?? null) as Val;
             } else if (stored.result.status === "error") {
@@ -1770,6 +1776,8 @@ function* orchestrateResourceChild(
           };
           yield* ctx.stream.append(yieldEvent);
           ctx.journal.push(yieldEvent);
+          // Advance on built-in live write — mirror the replay path.
+          resourceFrame.yieldIndex++;
 
           if (effectResult.status === "ok") {
             nextValue = (effectResult.value ?? null) as Val;
@@ -2050,6 +2058,9 @@ function* orchestrateResourceChild(
               result: stored.result,
             };
             ctx.journal.push(replayedEvent);
+            // Advance on built-in replay — mirror iterateFrame's caller-
+            // cursor semantics. See init-phase companion site.
+            resourceFrame.yieldIndex++;
             if (stored.result.status === "ok") {
               nextValue = (stored.result.value ?? null) as Val;
             } else if (stored.result.status === "error") {
@@ -2146,6 +2157,8 @@ function* orchestrateResourceChild(
           };
           yield* ctx.stream.append(yieldEvent);
           ctx.journal.push(yieldEvent);
+          // Advance on built-in live write — mirror the replay path.
+          resourceFrame.yieldIndex++;
 
           if (effectResult.status === "ok") {
             nextValue = (effectResult.value ?? null) as Val;
