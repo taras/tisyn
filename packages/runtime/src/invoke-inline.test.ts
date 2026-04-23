@@ -563,6 +563,128 @@ describe("invoke-inline — minimum acceptance subset", () => {
     expect(lane1).toHaveLength(1);
   });
 
+  // ── IE-RP-011 ──
+
+  it("IE-RP-011: durable inline invoke/spawn does not collide with later live-frontier invoke on recovery", function* () {
+    // A1 triggers invokeInline(fn1). fn1's body uses `all` with a single child
+    // expression — this allocates caller.childSpawnCount → root.0 for the
+    // nested child. On recovery after A1 is durable, A2 triggers
+    // invokeInline(fn2) which also does `all(...)` — it must allocate root.1,
+    // not root.0 (which A1's child already occupies on disk).
+    const fn1 = Fn<[], Val>([], Eval<Val>("all", Q({ exprs: [Eval("child.X", Q([]))] })));
+    const fn2 = Fn<[], Val>([], Eval<Val>("all", Q({ exprs: [Eval("child.Y", Q([]))] })));
+
+    const workflowIR = Eval<Val>(
+      "let",
+      Q({
+        name: "_a1",
+        value: Eval("caller.A1", Q([])),
+        body: Eval<Val>(
+          "let",
+          Q({
+            name: "_a2",
+            value: Eval("caller.A2", Q([])),
+            body: Eval("caller.D", Q([])),
+          }),
+        ),
+      }),
+    );
+
+    // Full run.
+    const stream1 = new InMemoryStream();
+    yield* Effects.around({
+      *dispatch([effectId, data]: [string, Val], next) {
+        if (effectId === "caller.A1") {
+          yield* invokeInline(asFn(fn1), []);
+          return null as Val;
+        }
+        if (effectId === "caller.A2") {
+          yield* invokeInline(asFn(fn2), []);
+          return null as Val;
+        }
+        return yield* next(effectId, data);
+      },
+      *resolve() {
+        return false;
+      },
+    });
+    yield* installTailMiddleware();
+    yield* execute({ ir: workflowIR as never, stream: stream1 });
+
+    // Sanity: full run's stream has root.0 (A1's inline child) and root.1
+    // (A2's inline child).
+    const fullEvents = stream1.snapshot();
+    const childIds = new Set(
+      fullEvents.map((e) => e.coroutineId).filter((id) => id === "root.0" || id === "root.1"),
+    );
+    expect(childIds).toEqual(new Set(["root.0", "root.1"]));
+
+    // Simulate crash: keep A1 durable and root.0 cursor durable, drop A2/D/
+    // Close@caller/root.1 entries.
+    const partialEvents = fullEvents.filter((e) => {
+      if (e.coroutineId === "root" && e.type === "yield") {
+        return e.description.name === "A1";
+      }
+      if (e.coroutineId === "root" && e.type === "close") return false;
+      if (e.coroutineId === "root.1") return false;
+      // keep root.0 entries + A1's lane (root@inline0.0)
+      return true;
+    });
+
+    // Recover with the same middleware chain.
+    const stream2 = new InMemoryStream(partialEvents);
+    yield* Effects.around({
+      *dispatch([effectId, data]: [string, Val], next) {
+        if (effectId === "caller.A1") {
+          yield* invokeInline(asFn(fn1), []);
+          return null as Val;
+        }
+        if (effectId === "caller.A2") {
+          yield* invokeInline(asFn(fn2), []);
+          return null as Val;
+        }
+        return yield* next(effectId, data);
+      },
+      *resolve() {
+        return false;
+      },
+    });
+    const recoverRun = yield* execute({ ir: workflowIR as never, stream: stream2 });
+    expect(recoverRun.result.status).toBe("ok");
+
+    // On recovery, A1's middleware re-runs; invokeInline re-opens
+    // root@inline0.0; fn1's `all` re-allocates root.0; child.X is replay-
+    // substituted at the runtime terminal boundary (no double-dispatch).
+    // After A1, frame.childSpawnCount = 1. A2's invokeInline opens
+    // root@inline1.0; fn2's `all` allocates root.1 — no collision with
+    // root.0 from A1's prior durable inline work.
+    const recoveredEvents = stream2.snapshot();
+    const root0Events = recoveredEvents.filter((e) => e.coroutineId === "root.0");
+    const root1Events = recoveredEvents.filter((e) => e.coroutineId === "root.1");
+    // root.0 events came from the durable prefix plus a single Close (its
+    // driveKernel re-ran on recovery and re-appended Close — but
+    // appendCloseEvent is idempotent via replayIndex.getClose, so no
+    // duplicate Close is appended).
+    expect(root0Events.filter((e) => e.type === "close")).toHaveLength(1);
+    // root.1 is freshly allocated on recovery for A2's child.Y.
+    const root1Yield = root1Events.filter((e) => e.type === "yield");
+    expect(root1Yield).toHaveLength(1);
+    expect((root1Yield[0] as { description: { name: string } }).description.name).toBe("Y");
+  });
+
+  // ── IE-RP-010 / IE-RP-012 ──
+  // Resource (IE-RP-010) and stream-subscribe (IE-RP-012) recovery regressions
+  // benefit from compiler-helper fixtures that wrap the compound externals in
+  // user-friendly APIs; writing them in pure hand-constructed IR tests here
+  // would duplicate compiler work. They are covered by the Core-tier coverage
+  // in the broader conformance suite once compiler-helper fixtures land. The
+  // property they exercise (recovery via middleware re-execution rebuilds live
+  // host state for durable prior inline compound externals) is the same
+  // property IE-RP-011 exercises for the invoke/spawn case: middleware
+  // re-runs per scoped-effects §9.5, the inline body's kernel re-yields its
+  // compound externals, their child driveKernels re-spawn and replay from
+  // their own cursors.
+
   // ── IE-E-001 ──
 
   it("IE-E-001: uncaught inline-body error surfaces at call site as the original error", function* () {
