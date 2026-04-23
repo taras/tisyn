@@ -20,7 +20,13 @@ import { InMemoryStream } from "@tisyn/durable-streams";
 import type { DurableEvent, YieldEvent, CloseEvent } from "@tisyn/kernel";
 import { Fn, Eval, Q } from "@tisyn/ir";
 import type { FnNode, Val } from "@tisyn/ir";
-import { Effects, InvalidInvokeCallSiteError, invoke, invokeInline } from "@tisyn/effects";
+import {
+  Effects,
+  InvalidInvokeCallSiteError,
+  invoke,
+  invokeInline,
+  runAsTerminal,
+} from "@tisyn/effects";
 import { execute } from "./execute.js";
 
 const asFn = (f: unknown): FnNode => f as FnNode;
@@ -676,18 +682,117 @@ describe("invoke-inline — minimum acceptance subset", () => {
     expect((root1Yield[0] as { description: { name: string } }).description.name).toBe("Y");
   });
 
-  // ── IE-RP-010 / IE-RP-012 ──
-  // Resource (IE-RP-010) and stream-subscribe (IE-RP-012) recovery regressions
-  // benefit from compiler-helper fixtures that wrap the compound externals in
-  // user-friendly APIs; writing them in pure hand-constructed IR tests here
-  // would duplicate compiler work. They are covered by the Core-tier coverage
-  // in the broader conformance suite once compiler-helper fixtures land. The
-  // property they exercise (recovery via middleware re-execution rebuilds live
-  // host state for durable prior inline compound externals) is the same
-  // property IE-RP-011 exercises for the invoke/spawn case: middleware
-  // re-runs per scoped-effects §9.5, the inline body's kernel re-yields its
-  // compound externals, their child driveKernels re-spawn and replay from
-  // their own cursors.
+  // ── IE-RP-010 (Core-lite) ──
+  // Resource init body: middleware inside the resource body participates
+  // in the scoped-effects §9.5 replay substrate. On recovery, middleware
+  // re-executes but `runAsTerminal(...)`-delegated external work does NOT
+  // re-fire — the per-dispatch `RuntimeTerminalBoundary` (now installed in
+  // `orchestrateResourceChild` as well as `iterateFrame`) substitutes the
+  // stored result. Without this, recovery would re-open browser pages /
+  // re-acquire sessions / re-fire external IO that was already captured in
+  // the journal.
+
+  it("IE-RP-010 (Core-lite): resource body middleware re-executes on recovery but terminals don't re-fire", function* () {
+    // IR: resource { provide(resource.open([])) } — resource init body
+    // dispatches `resource.open`, whose middleware delegates live work
+    // through `runAsTerminal`. The `provide` value is the stored handle.
+    const resourceIR = {
+      tisyn: "eval",
+      id: "resource",
+      data: {
+        tisyn: "quote",
+        expr: {
+          body: {
+            tisyn: "eval",
+            id: "provide",
+            data: { tisyn: "eval", id: "resource.open", data: [] },
+          },
+        },
+      },
+    };
+
+    let middlewareCounter = 0;
+    let liveCounter = 0;
+
+    // Full run — capture the durable journal.
+    const stream1 = new InMemoryStream();
+    yield* Effects.around({
+      *dispatch([effectId, data]: [string, Val], next) {
+        if (effectId === "resource.open") {
+          middlewareCounter++;
+          return yield* runAsTerminal(effectId, data, function* () {
+            liveCounter++;
+            return { handle: "h1" } as unknown as Val;
+          });
+        }
+        return yield* next(effectId, data);
+      },
+      *resolve() {
+        return false;
+      },
+    });
+    yield* installTailMiddleware();
+    const firstRun = yield* execute({ ir: resourceIR as never, stream: stream1 });
+    expect(firstRun.result.status).toBe("ok");
+    expect(middlewareCounter).toBe(1);
+    expect(liveCounter).toBe(1);
+
+    const fullEvents = stream1.snapshot();
+    // Resource child runs at root.0; its dispatched resource.open yields a
+    // YieldEvent on the child lane.
+    const childYields = fullEvents.filter(
+      (e) =>
+        e.coroutineId === "root.0" &&
+        e.type === "yield" &&
+        (e as YieldEvent).description.name === "open",
+    );
+    expect(childYields).toHaveLength(1);
+
+    // Recovery — replay against the full journal. Middleware must re-run
+    // (we assert `middlewareCounter` increments) but `liveCounter` MUST
+    // stay at 1 because the boundary inside the resource body now
+    // substitutes the stored result. Without Hole-1's fix, `liveCounter`
+    // would be 2 on recovery (external side effect re-fires).
+    middlewareCounter = 0;
+    const stream2 = new InMemoryStream(fullEvents);
+    yield* Effects.around({
+      *dispatch([effectId, data]: [string, Val], next) {
+        if (effectId === "resource.open") {
+          middlewareCounter++;
+          return yield* runAsTerminal(effectId, data, function* () {
+            liveCounter++;
+            return { handle: "h1" } as unknown as Val;
+          });
+        }
+        return yield* next(effectId, data);
+      },
+      *resolve() {
+        return false;
+      },
+    });
+    const recoverRun = yield* execute({ ir: resourceIR as never, stream: stream2 });
+    expect(recoverRun.result.status).toBe("ok");
+    // Middleware ran on replay (at least once for the resource.open).
+    expect(middlewareCounter).toBeGreaterThan(0);
+    // External terminal work did NOT re-fire.
+    expect(liveCounter).toBe(1);
+    // Journal did not re-append the resource child's Close event.
+    const recoveredEvents = stream2.snapshot();
+    const root0Closes = recoveredEvents.filter(
+      (e) => e.coroutineId === "root.0" && e.type === "close",
+    );
+    expect(root0Closes).toHaveLength(1);
+  });
+
+  // ── IE-RP-012 ──
+  // Stream-subscribe recovery is a DIFFERENT property and intentionally
+  // remains deferred: `stream.subscribe` is excluded from payload-
+  // fingerprint divergence per scoped-effects §9.5 (the source payload is
+  // an Operation with no stable journaled identity; replay matches on
+  // type+name only, preserving the stored handle flow but not detecting
+  // source-identity divergence). A meaningful subscribe recovery fixture
+  // needs compiler-helper support that wraps the compound external in a
+  // user-friendly API; that belongs in the broader Core-tier suite.
 
   // ── IE-E-001 ──
 
