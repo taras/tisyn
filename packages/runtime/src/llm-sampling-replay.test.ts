@@ -2,7 +2,7 @@ import { describe, it } from "@effectionx/vitest";
 import { expect } from "vitest";
 import { execute } from "./execute.js";
 import { InMemoryStream } from "@tisyn/durable-streams";
-import { Effects } from "@tisyn/effects";
+import { Effects, runAsTerminal } from "@tisyn/effects";
 import { ProgressContext } from "@tisyn/transport";
 import type { YieldEvent, DurableEvent } from "@tisyn/kernel";
 import { Ref, Get } from "@tisyn/ir";
@@ -127,9 +127,11 @@ describe("LLM Sampling — Replay", () => {
 
     let agentCalled = false;
     yield* Effects.around({
-      *dispatch([_effectId, _data]: [string, any]) {
-        agentCalled = true;
-        return 999;
+      *dispatch([effectId, data]: [string, any]) {
+        return yield* runAsTerminal(effectId, data, function* () {
+          agentCalled = true;
+          return 999 as never;
+        });
       },
     });
 
@@ -167,9 +169,11 @@ describe("LLM Sampling — Replay", () => {
 
     let agentCalled = false;
     yield* Effects.around({
-      *dispatch([_effectId, _data]: [string, any]) {
-        agentCalled = true;
-        return 1;
+      *dispatch([effectId, data]: [string, any]) {
+        return yield* runAsTerminal(effectId, data, function* () {
+          agentCalled = true;
+          return 1 as never;
+        });
       },
     });
 
@@ -191,9 +195,11 @@ describe("LLM Sampling — Replay", () => {
 
     let agentCalled = false;
     yield* Effects.around({
-      *dispatch([_effectId, _data]: [string, any]) {
-        agentCalled = true;
-        return 999;
+      *dispatch([effectId, data]: [string, any]) {
+        return yield* runAsTerminal(effectId, data, function* () {
+          agentCalled = true;
+          return 999 as never;
+        });
       },
     });
 
@@ -248,8 +254,10 @@ describe("LLM Sampling — Progress Non-Durability", () => {
     });
 
     yield* Effects.around({
-      *dispatch([_effectId, _data]: [string, any]) {
-        return 999;
+      *dispatch([effectId, data]: [string, any]) {
+        return yield* runAsTerminal(effectId, data, function* () {
+          return 999 as never;
+        });
       },
     });
 

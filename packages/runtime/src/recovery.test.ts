@@ -9,7 +9,7 @@ import { expect } from "vitest";
 import { scoped } from "effection";
 import { execute } from "./execute.js";
 import { InMemoryStream } from "@tisyn/durable-streams";
-import { Effects } from "@tisyn/effects";
+import { Effects, runAsTerminal } from "@tisyn/effects";
 import type { YieldEvent, CloseEvent, DurableEvent } from "@tisyn/kernel";
 
 // ── IR helpers ──
@@ -77,9 +77,11 @@ describe("Recovery", () => {
 
     let agentCalled = false;
     yield* Effects.around({
-      *dispatch([_effectId, _data]: [string, any]) {
-        agentCalled = true;
-        return 999;
+      *dispatch([effectId, data]: [string, any]) {
+        return yield* runAsTerminal(effectId, data, function* () {
+          agentCalled = true;
+          return 999 as never;
+        });
       },
     });
 
@@ -105,9 +107,11 @@ describe("Recovery", () => {
 
     let liveCallCount = 0;
     yield* Effects.around({
-      *dispatch([_effectId, _data]: [string, any]) {
-        liveCallCount++;
-        return 20;
+      *dispatch([effectId, data]: [string, any]) {
+        return yield* runAsTerminal(effectId, data, function* () {
+          liveCallCount++;
+          return 20 as never;
+        });
       },
     });
 
@@ -197,9 +201,11 @@ describe("Recovery", () => {
 
     let agentCalled = false;
     yield* Effects.around({
-      *dispatch([_effectId, _data]: [string, any]) {
-        agentCalled = true;
-        return 999;
+      *dispatch([effectId, data]: [string, any]) {
+        return yield* runAsTerminal(effectId, data, function* () {
+          agentCalled = true;
+          return 999 as never;
+        });
       },
     });
 

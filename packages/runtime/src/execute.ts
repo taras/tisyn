@@ -143,6 +143,27 @@ interface FrameState {
   resourceChildren: ResourceChild[];
 }
 
+/**
+ * Append a `CloseEvent` to the durable stream and the in-memory journal,
+ * unless the replay cursor already has a Close for this coroutineId (in which
+ * case the event is pushed to `ctx.journal` for re-materialization without
+ * re-appending to the stream).
+ *
+ * Under scoped-effects §9.5, middleware re-executes on replay, which means
+ * child driveKernels triggered by middleware-internal `invoke(...)` also
+ * re-execute. Their kernel completions would otherwise re-append Close events
+ * that are already durable. This helper keeps the stream append-only and
+ * idempotent under replay.
+ */
+function* appendCloseEvent(ctx: DriveContext, closeEvent: CloseEvent): Operation<void> {
+  if (ctx.replayIndex.getClose(closeEvent.coroutineId)) {
+    ctx.journal.push(closeEvent);
+    return;
+  }
+  yield* ctx.stream.append(closeEvent);
+  ctx.journal.push(closeEvent);
+}
+
 function createFrameState(): FrameState {
   return {
     childSpawnCount: 0,
@@ -421,8 +442,7 @@ function* driveKernel(
         coroutineId,
         result: { status: "cancelled" as const },
       };
-      yield* ctx.stream.append(closeEvent);
-      ctx.journal.push(closeEvent);
+      yield* appendCloseEvent(ctx, closeEvent);
     }
   });
 
@@ -462,8 +482,7 @@ function* driveKernel(
         coroutineId,
         result: { status: "ok", value: value as Json },
       };
-      yield* ctx.stream.append(closeEvent);
-      ctx.journal.push(closeEvent);
+      yield* appendCloseEvent(ctx, closeEvent);
       return { status: "ok", value: value as Json };
     } catch (error) {
       // R23: Tear down resource children before writing parent CloseEvent.
@@ -480,8 +499,7 @@ function* driveKernel(
             error: { message: error.message, name: error.name },
           },
         };
-        yield* ctx.stream.append(closeEvent);
-        ctx.journal.push(closeEvent);
+        yield* appendCloseEvent(ctx, closeEvent);
         throw error;
       }
 
@@ -495,8 +513,7 @@ function* driveKernel(
           error: { message: err.message, name: err.name },
         },
       };
-      yield* ctx.stream.append(closeEvent);
-      ctx.journal.push(closeEvent);
+      yield* appendCloseEvent(ctx, closeEvent);
 
       return {
         status: "error",
@@ -762,8 +779,7 @@ function* iterateFrame(
     const stored = ctx.replayIndex.peekYield(journalLaneId);
     if (
       stored &&
-      (stored.description.type !== description.type ||
-        stored.description.name !== description.name)
+      (stored.description.type !== description.type || stored.description.name !== description.name)
     ) {
       const cursor = ctx.replayIndex.getCursor(journalLaneId);
       throw new DivergenceError(
@@ -806,13 +822,17 @@ function* iterateFrame(
           result: stored.result,
         };
         ctx.journal.push(replayedEvent);
-        if (isCallerCursor) frame.yieldIndex++;
+        if (isCallerCursor) {
+          frame.yieldIndex++;
+        }
         if (stored.result.status === "ok") {
           nextValue = (stored.result.value ?? null) as Val;
         } else if (stored.result.status === "error") {
           const err = new EffectError(stored.result.error.message, stored.result.error.name);
           const throwResult = kernel.throw(err);
-          if (throwResult.done) return throwResult.value;
+          if (throwResult.done) {
+            return throwResult.value;
+          }
           pendingStep = throwResult;
           nextValue = null;
           continue;
@@ -890,14 +910,18 @@ function* iterateFrame(
       };
       yield* ctx.stream.append(yieldEvent);
       ctx.journal.push(yieldEvent);
-      if (isCallerCursor) frame.yieldIndex++;
+      if (isCallerCursor) {
+        frame.yieldIndex++;
+      }
 
       if (effectResult.status === "ok") {
         nextValue = (effectResult.value ?? null) as Val;
       } else {
         const err = new EffectError(effectResult.error.message, effectResult.error.name);
         const throwResult = kernel.throw(err);
-        if (throwResult.done) return throwResult.value;
+        if (throwResult.done) {
+          return throwResult.value;
+        }
         pendingStep = throwResult;
         nextValue = null;
         continue;
@@ -936,7 +960,9 @@ function* iterateFrame(
             result: stored.result,
           };
           ctx.journal.push(replayedEvent);
-          if (isCallerCursor) frame.yieldIndex++;
+          if (isCallerCursor) {
+            frame.yieldIndex++;
+          }
           replayBox.replayed = true;
           if (stored.result.status === "error") {
             throw new EffectError(stored.result.error.message, stored.result.error.name);
@@ -961,9 +987,7 @@ function* iterateFrame(
     let effectResult: EventResult;
     try {
       const resultValue = yield* RuntimeTerminal.with(boundary, () =>
-        DispatchContext.with(dispatchCtx, () =>
-          dispatch(descriptor.id, descriptor.data as Val),
-        ),
+        DispatchContext.with(dispatchCtx, () => dispatch(descriptor.id, descriptor.data as Val)),
       );
       effectResult = { status: "ok", value: resultValue as Json };
     } catch (error) {
@@ -971,10 +995,36 @@ function* iterateFrame(
       effectResult = { status: "error", error: { message: err.message, name: err.name } };
     }
 
-    // Journal write — only for the LIVE path. When the boundary consumed a
-    // stored entry, it already pushed a replayedEvent into ctx.journal; the
-    // durable stream is unchanged on replay.
-    if (!replayBox.replayed) {
+    // Journal write.
+    if (replayBox.replayed) {
+      // Boundary already consumed the stored entry and pushed a replayedEvent
+      // to ctx.journal. Nothing else to do — the durable stream is unchanged
+      // on replay.
+    } else if (stored) {
+      // Out-of-contract terminal: middleware short-circuited without
+      // delegating through `runAsTerminal`, so the boundary never ran — but
+      // the cursor does have a matching stored entry. Consume it and push a
+      // replayed event to `ctx.journal` so subsequent dispatches see the
+      // cursor at the correct position. This keeps the journal coherent for
+      // terminals that compute deterministic results internally (e.g.
+      // middleware that calls `invoke(...)` directly); out-of-contract
+      // terminals performing non-idempotent IO still double-fire per §9.5.
+      ctx.replayIndex.consumeYield(journalLaneId);
+      const replayedEvent: YieldEvent = {
+        type: "yield",
+        coroutineId: journalLaneId,
+        description: stored.description,
+        result: stored.result,
+      };
+      ctx.journal.push(replayedEvent);
+      if (isCallerCursor) {
+        frame.yieldIndex++;
+      }
+      // Substitute stored result in place of middleware's return, per §9.5
+      // (stored cursor is authoritative).
+      effectResult = stored.result;
+    } else {
+      // Live dispatch.
       const yieldEvent: YieldEvent = {
         type: "yield",
         coroutineId: journalLaneId,
@@ -983,12 +1033,14 @@ function* iterateFrame(
       };
       yield* ctx.stream.append(yieldEvent);
       ctx.journal.push(yieldEvent);
-      if (isCallerCursor) frame.yieldIndex++;
+      if (isCallerCursor) {
+        frame.yieldIndex++;
+      }
     }
 
     if (effectResult.status === "ok") {
       nextValue = (effectResult.value ?? null) as Val;
-    } else {
+    } else if (effectResult.status === "error") {
       const err = new EffectError(effectResult.error.message, effectResult.error.name);
       const throwResult = kernel.throw(err);
       if (throwResult.done) {
@@ -997,6 +1049,8 @@ function* iterateFrame(
       pendingStep = throwResult;
       nextValue = null;
       continue;
+    } else {
+      throw new Error("Cannot replay cancelled result");
     }
   }
 }
@@ -1234,8 +1288,7 @@ function orchestrateScope(
           coroutineId: childId,
           result: { status: "error", error: { message: err.message, name: err.name } },
         };
-        yield* ctx.stream.append(closeEvent);
-        ctx.journal.push(closeEvent);
+        yield* appendCloseEvent(ctx, closeEvent);
         throw new EffectError(err.message, err.name);
       }
       yield* installAgentTransport(prefix, factory as unknown as AgentTransportFactory);

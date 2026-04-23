@@ -27,6 +27,7 @@ import {
   InvalidInvokeOptionError,
   invoke,
   resolve,
+  runAsTerminal,
 } from "@tisyn/effects";
 import { execute } from "./execute.js";
 import { currentScopedEffectFrames } from "./scoped-effect-stack.js";
@@ -160,11 +161,13 @@ describe("nested invocation", () => {
       });
       yield* Effects.around(
         {
-          *dispatch([eid, _d]: [string, Val]) {
-            if (eid === "child.E1") {
-              childCounter.n++;
-            }
-            return null as Val;
+          *dispatch([eid, d]: [string, Val]) {
+            return yield* runAsTerminal(eid, d, function* () {
+              if (eid === "child.E1") {
+                childCounter.n++;
+              }
+              return null as Val;
+            });
           },
         },
         { at: "min" },
@@ -305,11 +308,13 @@ describe("nested invocation", () => {
 
       yield* Effects.around(
         {
-          *dispatch([eid, _d]: [string, Val]) {
-            if (eid === "child.fail") {
-              throw new Error("boom");
-            }
-            return null as Val;
+          *dispatch([eid, d]: [string, Val]) {
+            return yield* runAsTerminal(eid, d, function* () {
+              if (eid === "child.fail") {
+                throw new Error("boom");
+              }
+              return null as Val;
+            });
           },
         },
         { at: "min" },

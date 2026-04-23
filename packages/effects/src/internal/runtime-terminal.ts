@@ -33,11 +33,7 @@ import type { Val } from "@tisyn/ir";
  * the public `runAsTerminal(...)` helper in `@tisyn/effects`.
  */
 export interface RuntimeTerminalBoundary {
-  run<T extends Val = Val>(
-    effectId: string,
-    data: Val,
-    liveWork: () => Operation<T>,
-  ): Operation<T>;
+  run<T extends Val = Val>(effectId: string, data: Val, liveWork: () => Operation<T>): Operation<T>;
 }
 
 /**
