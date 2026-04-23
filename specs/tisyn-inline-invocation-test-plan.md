@@ -3,7 +3,7 @@
 **Tests:** `tisyn-inline-invocation-specification.md`
 **Companion of.** `tisyn-inline-invocation-specification.md`
 **Complements.** `tisyn-nested-invocation-test-plan.md`
-**Depends on.** `tisyn-scoped-effects-test-plan.md` (MR-002 replay transparency); `tisyn-compound-concurrency-specification.md` (§4.2 allocator, §10 replay cursors, §9 ordering); `tisyn-spawn-test-plan.md`, `tisyn-resource-test-plan.md`, `tisyn-stream-iteration-test-plan.md` (interaction tests).
+**Depends on.** `tisyn-scoped-effects-specification.md` §9.5 (per-cursor replay policy); `tisyn-scoped-effects-test-plan.md` (MR-002 replay transparency, narrowed); `tisyn-compound-concurrency-specification.md` (§4.2 allocator, §10 replay cursors, §9 ordering); `tisyn-spawn-test-plan.md`, `tisyn-resource-test-plan.md`, `tisyn-stream-iteration-test-plan.md` (interaction tests).
 
 Test IDs use the prefix `IE-` (Inline invocation → Equivalence) to disambiguate against `IN-` / `MR-` / `SP-` / `RS-` / `TB-` / `SI-` from other plans.
 
@@ -43,7 +43,7 @@ It does not cover:
 
 - **Mock transport-bound agents.** Lifetime tests use a mock "Session" agent (`openSession` / `switchSession` / `closeSession`), a mock "Db" agent (`acquire` / `release`), and a mock stream source, consistent with existing harnesses.
 - **Hand-constructed IR.** Inline bodies are constructed directly as `Fn(...)` values.
-- **Journal inspection.** Journals are compared by canonical JSON equality under the existing conformance harness.
+- **Journal inspection.** Journals are compared by canonical JSON equality under the existing conformance harness. Inline-body yields are inspected via their **lane cursor** (partition key = `${callerCoroutineId}@inline${q}.${j}`); the caller's own-body yields are inspected via the caller's coroutineId cursor. See §3.0 for the two-cursor convention.
 - **Non-normative reference surfaces.** Where a test uses a reference-harness surface (ambient coroutine-id, allocator snapshot, scoped-effect stack depth, `DispatchContext` identity), the row says so explicitly and is tiered accordingly (Extended or Diagnostic).
 
 ---
@@ -70,6 +70,18 @@ It does not cover:
 
 ## 3. Normative test cases
 
+### 3.0 Two-cursor assertion convention
+
+Under spec §6.5 / §6.5.5, inline-body yields are journaled on a **inline journal lane** — a replay-cursor partition key of the form `${callerCoroutineId}@inline${q}.${j}` — not under the caller's coroutineId. The caller's own-coroutineId cursor contains only the caller-body yields (including the triggering dispatch that invoked `invokeInline`).
+
+Every test in §3 that asserts journal content uses the two-cursor model:
+
+- `eventsFor(journal, callerCoroutineId)` reads the caller's own-body yields plus the triggering dispatches and caller `CloseEvent`.
+- `eventsFor(stream, laneKey)` reads the inline body's yields for a specific inline invocation. The lane key is `${callerCoroutineId}@inline${q}.${j}` where `q` is the caller's yield ordinal at the triggering dispatch and `j` is the per-dispatch invokeInline counter (starts at 0 for the first invokeInline in a dispatch).
+- No `CloseEvent` appears on any lane cursor.
+
+Per spec §6.6.1 (per-cursor replay policy): during **pure replay** from a complete journal, stored caller yields short-circuit dispatch and the lane cursor is NOT re-materialized into `ctx.journal`; assertions about lane content during pure replay read the durable stream, not `ctx.journal`. During **crash recovery**, live-dispatch re-enters middleware, lane cursors drain from the crash point forward, and `ctx.journal` is populated for both caller and lane from the replay-frontier onward.
+
 ### 3.1 Basic invocation and input validity (spec §§5.1, 5.5)
 
 | ID | Tier | Hook | Obs. class | Description | Setup | Expected |
@@ -87,21 +99,21 @@ It does not cover:
 |---|---|---|---|---|---|---|
 | IE-I-001 | Extended | IH1 | Runtime-exposed (ambient coroutine-id; reference-harness surface) | Caller's coroutineId is visible inside the inline body | Inline body reads ambient coroutine-id; harness records caller id before the call | Reported id inside the body equals the caller's id |
 | IE-I-002 | Extended | IH2 | Runtime-exposed (allocator snapshot; reference-harness surface) | Allocator unchanged across the call | Snapshot the allocator before and after an `invokeInline` call whose body contains no allocator-advancing operation | Values equal |
-| IE-I-002J | Core | IH2 | Journal-visible | Allocator non-participation via child-coroutineId allocation | Caller: yield A; `invokeInline(fnYieldingB)` (body contains no allocator-advancing operation); yield C; then `invoke(childFn)` | Caller coroutineId: contiguous yields A, B, C; exactly one child coroutineId `parentId.0` attributable to the `invoke`; no other child coroutineId |
-| IE-I-003 | Core | IH1, §6.2 | Journal-visible | No additional coroutineId appears in the journal | Workflow uses `invokeInline` exclusively (no `invoke`, `scoped`, `spawn`, `resource`, `timebox`, `all`, `race`) | All journal events under the caller's coroutineId; exactly one `CloseEvent` |
-| IE-I-004 | Core | IH10, §6.10.4 | Journal-visible | Mixing `invoke` and `invokeInline`: only `invoke` allocates | Sequence: `invokeInline(a)` (body yields A), `invoke(b)` (child yields B), `invokeInline(c)` (body yields C); caller yields D | Caller coroutineId: contiguous [A, C, D] at yieldIndex 0..2; exactly one child coroutineId `parentId.0` with its own [B] and terminal `CloseEvent` |
-| IE-I-005 | Core | §6.3.2 | Journal-visible | Operations inside the inline body attribute their allocator advancements to themselves | Inline body contains `spawn(innerFn)`; caller then performs `spawn(callerFn)` | Two child coroutineIds `parentId.0` and `parentId.1` in source order; first attributable to inline-body `spawn` per spawn spec §A.4, second to the caller's `spawn` |
+| IE-I-002J | Core | IH2 | Journal-visible | Allocator non-participation via child-coroutineId allocation | Caller yields A (middleware calls `invokeInline(fnYieldingB)`; fn.body yields B with no allocator-advancing operation); caller yields C (middleware calls `invoke(childFn)`) | Caller cursor: [A, C] at yieldIndex 0..1. Inline lane `${caller}@inline0.0`: [B]. Invoke-child `${caller}.0` cursor: childFn's yields + terminal `CloseEvent`. No other child coroutineIds, no other inline lanes |
+| IE-I-003 | Core | IH1, §6.2 | Journal-visible | No additional runtime coroutineId appears in the journal | Workflow uses `invokeInline` exclusively (no `invoke`, `scoped`, `spawn`, `resource`, `timebox`, `all`, `race`) | No coroutineId values of the form `parentId.{k}` appear. Caller cursor and inline lane cursors partition all events. Exactly one `CloseEvent` overall, under the caller's coroutineId |
+| IE-I-004 | Core | IH10, §6.10.4 | Journal-visible | Mixing `invoke` and `invokeInline`: only `invoke` allocates | Sequence: caller yields Ta (middleware calls `invokeInline(a)`, a yields A); caller yields Tb (middleware calls `invoke(b)`, b yields B); caller yields Tc (middleware calls `invokeInline(c)`, c yields C); caller yields D | Caller cursor: [Ta, Tb, Tc, D] at yieldIndex 0..3. Inline lane `${caller}@inline0.0`: [A] (`q=0, j=0`). Inline lane `${caller}@inline2.0`: [C] (`q=2, j=0`). Invoke-child `${caller}.0` (allocated at Tb) cursor: [B] + terminal `CloseEvent`. Exactly one new child coroutineId; zero from `invokeInline` |
+| IE-I-005 | Core | §6.3.2 | Journal-visible | Operations inside the inline body attribute their allocator advancements to the caller's unified child allocator | Inline body contains `spawn(innerFn)`; caller then performs `spawn(callerFn)` | Two child coroutineIds `${caller}.0` and `${caller}.1` in source order; first attributable to inline-body `spawn` per spawn spec §A.4 (consumed from caller's `childSpawnCount`, NOT from any lane-local allocator), second to the caller's own `spawn` |
 | IE-I-006 | Extended | §6.3.2, IH10 | Journal-visible | Determinism under deeper mixed-origin allocation | Inline body contains `scoped(...)` then `spawn(...)`; caller then does `invoke(...)` | Three child coroutineIds in source order `parentId.0`, `parentId.1`, `parentId.2` |
 
 ### 3.3 No durable boundary of its own (spec §6.5; IH3, IH4)
 
 | ID | Tier | Hook | Obs. class | Description | Setup | Expected |
 |---|---|---|---|---|---|---|
-| IE-B-010 | Core | IH3, §6.5.3 | Journal-visible | No `YieldEvent` attributable to the call itself | Caller yields A; `invokeInline(fn)` with empty body; caller yields B | Caller coroutineId: exactly two `YieldEvent`s (A at yieldIndex 0, B at yieldIndex 1); no other entries under any coroutineId on this path |
-| IE-B-011 | Core | IH3, §6.5.3 | Journal-visible | No `CloseEvent` attributable to the call itself | As IE-B-010, run to completion | Exactly one `CloseEvent` under the caller's coroutineId |
-| IE-B-012 | Core | IH4, §6.5.1–2 | Journal-visible | Caller-stream contiguity across the boundary | Caller A; inline body B, C; caller D | Caller coroutineId yieldIndex 0..3 with results A, B, C, D |
-| IE-B-013 | Core | IH4 | Journal-visible | Contiguity preserved across sequential inline calls | Caller A; `invokeInline(fn1)` yields B; `invokeInline(fn2)` yields C; caller D | yieldIndex 0..3 with A, B, C, D |
-| IE-B-014 | Core | IH3, §6.5.4 | Journal-visible | Durable event algebra unchanged | Enumerate event discriminants in a mixed workflow using `invokeInline` and `invoke` | Set is exactly `{YieldEvent, CloseEvent}` |
+| IE-B-010 | Core | IH3, §6.5.3 | Journal-visible | No `YieldEvent` attributable to the call itself | Caller yields A (triggering middleware calls `invokeInline(fn)` with fn's body empty); caller yields D after return | Caller cursor: [A, D] at its own yieldIndex 0..1. Inline lane `${caller}@inline0.0` cursor: empty (fn.body is empty — no yields). No other entries under any cursor on this path |
+| IE-B-011 | Core | IH3, §6.5.3 | Journal-visible | No `CloseEvent` attributable to the call itself | As IE-B-010, run to completion | Exactly one `CloseEvent` under the caller's coroutineId. Zero `CloseEvent`s under any inline lane key |
+| IE-B-012 | Core | IH4, §6.5.1–2 | Journal-visible | Caller cursor / lane cursor partition | Caller yields A (triggering middleware calls `invokeInline(fn)`; fn yields B, C); caller yields D | Caller cursor: [A, D] at its own yieldIndex 0..1. Inline lane `${caller}@inline0.0` cursor: [B, C] at its own yieldIndex 0..1. Contiguity assertion is per-cursor |
+| IE-B-013 | Core | IH4, §6.5.5 | Journal-visible | Distinct lane keys for distinct caller dispatches | Case (a): Caller yields A1 (middleware calls `invokeInline(fn1)` yielding B); caller yields A2 (middleware calls `invokeInline(fn2)` yielding C); caller yields D. Case (b): a single triggering caller yield A whose middleware calls `invokeInline(fn1)` (yielding B) then `invokeInline(fn2)` (yielding C); caller yields D | Case (a): caller cursor = [A1, A2, D] at yieldIndex 0..2; lane `${caller}@inline0.0` = [B] (`q=0, j=0`); lane `${caller}@inline1.0` = [C] (`q=1, j=0`). Case (b): caller cursor = [A, D] at yieldIndex 0..1; lane `${caller}@inline0.0` = [B] (`q=0, j=0`); lane `${caller}@inline0.1` = [C] (`q=0, j=1`). Distinct lanes per distinct `(q, j)` tuple |
+| IE-B-014 | Core | IH3, §6.5.4 | Journal-visible | Durable event algebra unchanged | Enumerate event discriminants in a mixed workflow using `invokeInline` and `invoke` across caller, invoke-child, and inline lane cursors | Set of event type discriminants is exactly `{YieldEvent, CloseEvent}`. `coroutineId` field's grammar is widened to include inline lane keys (§6.5.5), but this is a string-grammar widening, not a new discriminant |
 
 ### 3.4 Scope and lifetime (spec §6.4; IH5)
 
@@ -123,16 +135,17 @@ Scope proven in Core through its normative consequences: caller-owned teardown o
 
 | ID | Tier | Hook | Obs. class | Description | Setup | Expected |
 |---|---|---|---|---|---|---|
-| IE-RP-001 | Core | IH6, §6.6.1 | Journal-visible | Pure replay reproduces journal and result byte-identically | Mixed workflow including `invokeInline`; serialize; replay | Terminal result and journal byte-identical; no live dispatch |
-| IE-RP-002 | Core | §6.6.2 | Journal-visible + workflow-visible | Durable Yield Rule applies to inline-body yields | Inline body yields two agent effects; replay with harness failing any live dispatch | Replay succeeds; no live dispatch |
-| IE-RP-003 | Extended | §6.6.4, MR-002 | Runtime-exposed | Invoking middleware re-executes deterministically on replay | Middleware body calls `invokeInline`; replay | Same `(fn, args, opts.overlay)` reached. Inherits from scoped-effects MR-002 |
+| IE-RP-001 | Core | IH6, §6.6.1 | Journal-visible | Pure replay reproduces caller-cursor `ctx.journal` byte-identically | Mixed workflow including `invokeInline`; serialize; replay | Terminal result byte-identical. `eventsFor(journal, caller)` byte-identical to original. `eventsFor(stream, laneKey)` retained in durable stream byte-identical to original. `eventsFor(journal, laneKey)` empty on pure replay — middleware did not re-run per scoped-effects §9.5, so iterateFrame did not re-materialize lane events into `ctx.journal`. No live dispatch |
+| IE-RP-002 | Core | §6.6.2 | Journal-visible + workflow-visible | Durable Yield Rule applies to inline-body yields on lane cursor | Inline body yields two agent effects; replay with harness failing any live dispatch | Replay succeeds; no live dispatch on the lane cursor during recovery if lane entries are durable |
+| IE-RP-003 | Extended | §6.6.4, MR-002 | Runtime-exposed | Invoking middleware re-executes deterministically at the replay frontier | Middleware body calls `invokeInline`; crash-recovery scenario (triggering yield not durable); recover | Same `(fn, args, opts.overlay)` reached at the replay frontier. Inherits from scoped-effects MR-002 narrowed per §9.5 |
 | IE-RP-004 | Extended | IH6, §6.6 | Runtime-exposed (allocator snapshot) | Replay allocator trajectory identical | Record allocator at observable points; replay; compare | Trajectories match |
-| IE-RP-004J | Core | IH6, §6.6 | Journal-visible | Replay child-coroutineId trajectory identical | Mixed workflow with `invoke`, `invokeInline`, and `spawn`-inside-inline-body. Run; replay | Both runs produce identical journals with identical child coroutineIds |
-| IE-RP-005 | Core | §6.6.3 | Workflow-visible + journal-visible | Divergence manifests as ordinary caller-coroutine divergence | Non-deterministic middleware: `invokeInline(fnA)` originally, `invokeInline(fnB)` on replay, fnA/fnB yield different first effects | `DivergenceError` attributable to caller coroutineId; no inline-specific class |
-| IE-RP-006 | Extended | §6.6.3 | Workflow-visible | Divergence from inline-body content only | Same `(fn, args)` but fn non-deterministic internally | Caller-coroutine `DivergenceError` |
-| IE-RP-007 | Core | IH6, IH10 | Journal-visible | Mixed `invoke` + `invokeInline` replay is deterministic | Run and replay IE-I-004 setup | Identical journals across runs |
-| IE-RP-008 | Core | §6.6.1 | Journal-visible | Partial-journal recovery through an inline call | Crash after caller's first inline-body yield; recover | Recovery replays stored events; live dispatch resumes at next kernel yield; no inline-specific recovery path |
-| IE-RP-009 | Extended | §6.6.1 | Journal-visible | Crash recovery with mixed primitives at different progress | Crash after `invoke(a)` completed and during `invokeInline(b)`'s body | Invoke child replays from own journal; caller continues per ordinary replay |
+| IE-RP-004J | Core | IH6, §6.6 | Journal-visible | Replay child-coroutineId trajectory identical across caller and invoke-child cursors | Mixed workflow with `invoke`, `invokeInline`, and `spawn`-inside-inline-body. Run; replay | Both runs produce identical caller-cursor and invoke-child-cursor journals with identical child coroutineIds. Lane cursors retain their stream entries |
+| IE-RP-005 | Core | §6.6.3 | Workflow-visible + journal-visible | Divergence manifests under the appropriate cursor | Non-deterministic middleware: `invokeInline(fnA)` originally, `invokeInline(fnB)` on crash recovery, fnA/fnB yield different first effects | `DivergenceError` attributable to the lane cursor (not the caller cursor) when the divergence is in fn's first yield. No inline-specific class |
+| IE-RP-006 | Extended | §6.6.3 | Workflow-visible | Divergence from inline-body content only | Same `(fn, args)` but fn non-deterministic internally | Lane-cursor `DivergenceError` |
+| IE-RP-007 | Core | IH6, IH10 | Journal-visible | Mixed `invoke` + `invokeInline` replay is deterministic per-cursor | Run and replay IE-I-004 setup | Identical caller cursor and invoke-child cursor in `ctx.journal` across runs. Lane cursor streams byte-identical |
+| IE-RP-008 | Core | §6.6.1 | Journal-visible | Partial-journal recovery through an inline call (single invocation) | Crash after an inline-body yield was durable but before the triggering caller yield. Recover | Caller cursor is empty for the triggering yield → live dispatch re-enters → middleware re-runs → invokeInline opens same lane key (`q=0`, `j=0`) → iterateFrame drains partial lane cursor, live-dispatches remainder → middleware returns → triggering caller yield appended live. `ctx.journal` after recovery matches a full original run |
+| IE-RP-008b | Core | §6.5.5, §6.6.1 | Journal-visible | Recovery with prior durable inline invocation selects the correct lane key | Caller yields A1 (middleware calls `invokeInline(fn)` yielding B1); caller yields A2 (middleware calls `invokeInline(fg)` yielding B2); caller yields D. Crash occurs after A1 and lane `${caller}@inline0.0`=[B1] are fully durable but before A2's triggering YieldEvent is durable. B2 may or may not be partially durable | On recovery: caller cursor = [A1]; lane `${caller}@inline0.0` = [B1]; lane `${caller}@inline1.0` = [B2] partial or full. Replay consumes A1 from caller cursor WITHOUT running middleware (scoped-effects §9.5); `frame.yieldIndex` advances to 1. Caller yields A2 → cursor empty → live dispatch → middleware runs → invokeInline opens lane `${caller}@inline1.0` (from `q=1, j=0`) — matches A2's durable lane, NOT A1's. iterateFrame replays/live-dispatches as needed for B2; fg completes; middleware returns; A2 appended live; D live-dispatched. No lane-key collision on `@inline0.0`. Acceptance gate for the `(q, j)` composite-key design |
+| IE-RP-009 | Extended | §6.6.1 | Journal-visible | Crash recovery with mixed primitives at different progress | Crash after `invoke(a)` completed and during `invokeInline(b)`'s body | Invoke child replays from own cursor; caller continues per ordinary per-cursor replay; lane cursor drains per its own mechanism |
 
 ### 3.6 Error propagation (spec §6.8; IH8)
 
@@ -158,6 +171,7 @@ All share: a rejected call advances no allocator, writes no journal entry, pushe
 | IE-V-005 | Extended | §5.3.3 | Runtime-exposed (`DispatchContext` identity) | Stale `DispatchContext` reuse | Capture ctx in invocation #1; attempt reuse in invocation #2 | Raises call-site error; no side effects |
 | IE-V-006 | Core | IH9 | Workflow-visible | Primitive-name distinguishability | Trigger call-site errors from both `invokeInline` and `invoke` in parallel | Thrown error distinguishes the failing primitive through any documented means (message content or property). **Flagged G2** |
 | IE-V-007 | Extended | §5.3.1 | Workflow-visible | `invokeInline` from IR-evaluated middleware | Hostile scenario attempting to reach `invokeInline` from IR middleware | Raises call-site error or is structurally impossible |
+| IE-V-008 | Core | IH9, §5.3.1.a, §11 | Workflow-visible + journal-visible | Nested `invokeInline` from inline-lane dispatch is rejected with zero side effects | Install an `Effects.around({ dispatch })` middleware that unconditionally calls `yield* invokeInline(fn)`. Workflow: caller yields A → middleware handles A → calls `invokeInline(fn)` → fn.body yields effect E → middleware re-enters dispatching E (now on inline lane) → tries to call `invokeInline(fg)`. Harness observes the rejection and allows the outer inline body to continue | The nested call throws `InvalidInvokeCallSiteError` identifying the primitive name. No lane allocated for the rejected attempt. No `j` increment for the nested dispatch. No evaluation of `fg.body`. No entry on any cursor attributable to the rejected attempt. Durable journal shows caller cursor = [A, D] and inline lane `${caller}@inline0.0` = [E, ...] — identical to the same workflow without the rejected nested call. `frame.yieldIndex` and outer `j` counter unchanged by the rejection |
 
 ### 3.8 Middleware, transport, overlay (spec §6.7, §6.9)
 
@@ -239,24 +253,27 @@ All share: a rejected call advances no allocator, writes no journal entry, pushe
 
 ## 5. Minimum acceptance subset
 
-Feature is MVP-complete when all 14 pass. All Journal-visible or Workflow-visible.
+Feature is MVP-complete when all 17 pass. All Journal-visible or Workflow-visible.
 
 | # | ID | Invariant | Obs. class |
 |---|---|---|---|
 | 1 | IE-B-001 | `invokeInline` returns `Operation<T>` usable via `yield*` | Workflow-visible |
-| 2 | IE-B-010 | No inline-owned `YieldEvent` (§6.5.3, IH3) | Journal-visible |
-| 3 | IE-B-011 | No inline-owned `CloseEvent` (§6.5.3, IH3) | Journal-visible |
-| 4 | IE-B-012 | Caller-stream contiguity across the call boundary (§6.5.1–2, IH4) | Journal-visible |
-| 5 | IE-I-002J | Allocator unchanged by `invokeInline` itself (§6.3.1, IH2) | Journal-visible |
-| 6 | IE-I-004 | Mixed `invoke` + `invokeInline`: only `invoke` allocates (IH10, §6.10.4) | Journal-visible |
-| 7 | IE-I-005 | Operations inside inline body attribute allocator advancements to themselves (§6.3.2) | Journal-visible |
-| 8 | IE-L-001C | Resource acquired inside an inline body is torn down at caller scope exit, not at call return (§6.4.1, IH5) | Journal-visible |
-| 9 | IE-L-005 | Caller cancellation reaches an in-flight inline body (§6.4.4, IH5, IH7) | Journal-visible |
-| 10 | IE-RP-001 | Pure replay reproduces journal and terminal result (§6.6.1, IH6) | Journal-visible |
-| 11 | IE-RP-005 | Divergence is ordinary caller-coroutine divergence (§6.6.3) | Workflow-visible + journal-visible |
-| 12 | IE-E-001 | Uncaught inline-body error surfaces at call site as original error (§6.8.1, IH8) | Workflow-visible |
-| 13 | IE-V-001 | Rejected call attempt has no attributable side effects (§5.3.1, IH9) | Workflow-visible + journal-visible |
-| 14 | IE-N-001 | `invoke` regression: still allocates child coroutineId and writes its own events | Journal-visible |
+| 2 | IE-B-010 | No inline-call-itself `YieldEvent` (§6.5.3, IH3) | Journal-visible |
+| 3 | IE-B-011 | No inline-call-itself `CloseEvent`; no `CloseEvent` under any lane key (§6.5.3, IH3) | Journal-visible |
+| 4 | IE-B-012 | Caller cursor and inline lane cursor partition correctly (§6.5.1–2, IH4) | Journal-visible |
+| 5 | IE-B-013 | Distinct lane keys for distinct caller dispatches or sibling calls (§6.5.5) | Journal-visible |
+| 6 | IE-I-002J | Allocator unchanged by `invokeInline` itself (§6.3.1, IH2) | Journal-visible |
+| 7 | IE-I-004 | Mixed `invoke` + `invokeInline`: only `invoke` allocates (IH10, §6.10.4) | Journal-visible |
+| 8 | IE-I-005 | Operations inside inline body attribute allocator advancements to caller's unified allocator (§6.3.2) | Journal-visible |
+| 9 | IE-L-001C | Resource acquired inside an inline body is torn down at caller scope exit, not at call return (§6.4.1, IH5) | Journal-visible |
+| 10 | IE-L-005 | Caller cancellation reaches an in-flight inline body (§6.4.4, IH5, IH7) | Journal-visible |
+| 11 | IE-RP-001 | Pure replay reproduces caller-cursor `ctx.journal` byte-identically (§6.6.1, IH6) | Journal-visible |
+| 12 | IE-RP-005 | Divergence under the appropriate cursor (§6.6.3) | Workflow-visible + journal-visible |
+| 13 | IE-RP-008b | Recovery with prior durable inline invocation selects the correct lane key (§6.5.5 + §6.6.1) | Journal-visible |
+| 14 | IE-E-001 | Uncaught inline-body error surfaces at call site as original error (§6.8.1, IH8) | Workflow-visible |
+| 15 | IE-V-001 | Rejected call attempt has no attributable side effects on any cursor (§5.3.1, IH9) | Workflow-visible + journal-visible |
+| 16 | IE-V-008 | Nested `invokeInline` from inline-lane dispatch is rejected with zero side effects (§5.3.1.a, §11, IH9) | Workflow-visible + journal-visible |
+| 17 | IE-N-001 | `invoke` regression: still allocates child coroutineId and writes its own events | Journal-visible |
 
 ---
 
@@ -275,14 +292,15 @@ Feature is MVP-complete when all 14 pass. All Journal-visible or Workflow-visibl
 | §6.4.2 Spawns attach to caller | IE-INT-SP-001C, IE-INT-SP-002 |
 | §6.4.3 Capabilities caller-owned | IE-L-003C, IE-INT-ST-001C |
 | §6.4.4 Cancellation pass-through | IE-L-005 |
-| §6.5.1 One YieldEvent per inline yield | IE-B-012, IE-B-013 |
-| §6.5.2 Contiguous yieldIndex | IE-B-012, IE-B-013 |
-| §6.5.3 No event for the call itself | IE-B-010, IE-B-011 |
-| §6.5.4 Durable algebra unchanged | IE-B-014 |
-| §6.6.1 Caller re-evaluation on replay | IE-RP-001, IE-RP-008 |
-| §6.6.2 Durable Yield Rule on inline yields | IE-RP-002 |
-| §6.6.3 Divergence is caller-coroutine | IE-RP-005 |
-| §6.6.4 Invoking-middleware determinism | Extended only (IE-RP-003, inherited from MR-002) |
+| §6.5.1 One YieldEvent per inline yield on lane cursor | IE-B-012, IE-B-013 |
+| §6.5.2 Contiguous yieldIndex within lane cursor | IE-B-012, IE-B-013 |
+| §6.5.3 No event for the call itself; no CloseEvent under lane key | IE-B-010, IE-B-011 |
+| §6.5.4 Durable algebra unchanged (grammar widened) | IE-B-014 |
+| §6.5.5 Inline journal lane keys distinct per `(q, j)` | IE-B-013, IE-RP-008b |
+| §6.6.1 Per-cursor replay policy | IE-RP-001, IE-RP-008, IE-RP-008b |
+| §6.6.2 Durable Yield Rule on inline lane yields | IE-RP-002 |
+| §6.6.3 Per-cursor divergence | IE-RP-005 |
+| §6.6.4 Invoking-middleware determinism at replay frontier | Extended only (IE-RP-003, inherited from MR-002 narrowed) |
 | §6.7 Overlay scoping | IE-M-004J, IE-M-005 |
 | §6.8.1 Original-error propagation | IE-E-001, IE-E-002, IE-E-006 |
 | §6.8.2 Caught errors do not escape | IE-E-003 |
@@ -301,10 +319,10 @@ Feature is MVP-complete when all 14 pass. All Journal-visible or Workflow-visibl
 | IH3 | IE-B-010, IE-B-011, IE-B-014 |
 | IH4 | IE-B-012, IE-B-013 |
 | IH5 | IE-L-001C, IE-L-003C, IE-L-004R, IE-L-005, IE-L-006, IE-INT-SP-001C, IE-INT-SP-002, IE-INT-RS-001C, IE-INT-RS-002, IE-INT-ST-001C |
-| IH6 | IE-RP-001, IE-RP-002, IE-RP-005, IE-RP-007, IE-RP-008, IE-RP-004J |
+| IH6 | IE-RP-001, IE-RP-002, IE-RP-005, IE-RP-007, IE-RP-008, IE-RP-008b, IE-RP-004J |
 | IH7 | IE-L-005 |
 | IH8 | IE-E-001, IE-E-002, IE-E-003, IE-E-004, IE-E-006 |
-| IH9 | IE-B-003, IE-B-004, IE-B-006, IE-V-001, IE-V-002, IE-V-003, IE-V-004, IE-V-006 |
+| IH9 | IE-B-003, IE-B-004, IE-B-006, IE-V-001, IE-V-002, IE-V-003, IE-V-004, IE-V-006, IE-V-008 |
 | IH10 | IE-I-004, IE-I-005, IE-RP-007, IE-N-001, IE-N-002, IE-N-003, IE-N-004, IE-N-005 |
 
 ### 6.3 Tier counts
@@ -315,14 +333,14 @@ Feature is MVP-complete when all 14 pass. All Journal-visible or Workflow-visibl
 | §3.2 Identity / non-allocation | 4 | 3 | 0 | 7 |
 | §3.3 No durable boundary | 5 | 0 | 0 | 5 |
 | §3.4 Scope & lifetime | 5 | 3 | 0 | 8 |
-| §3.5 Replay & divergence | 6 | 3 | 0 | 9 |
+| §3.5 Replay & divergence | 7 | 3 | 0 | 10 |
 | §3.6 Error propagation | 5 | 1 | 0 | 6 |
-| §3.7 Call-site / input rejection | 6 | 2 | 0 | 8 |
+| §3.7 Call-site / input rejection | 7 | 2 | 0 | 9 |
 | §3.8 Middleware / transport / overlay | 5 | 2 | 0 | 7 |
 | §3.9 `invoke` regression | 5 | 2 | 0 | 7 |
 | §3.10 Interaction | 4 | 7 | 0 | 11 |
 | §4 Diagnostic | 0 | 0 | 7 | 7 |
-| **Total** | **50** | **24** | **7** | **81** |
+| **Total** | **52** | **24** | **7** | **83** |
 
 ### 6.4 Flagged clarifications
 

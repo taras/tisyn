@@ -3,11 +3,11 @@
 **Status.** Normative. MVP.
 **Depends on.**
   - `tisyn-kernel-specification.md` (evaluation model; no amendment).
-  - `tisyn-scoped-effects-specification.md` (§3 Dispatch Boundary; §5 overlays; §9 durability/replay; companion test MR-002, Core tier).
+  - `tisyn-scoped-effects-specification.md` (§3 Dispatch Boundary; §5 overlays; §9.5 per-cursor replay policy; companion test MR-002, Core tier).
   - `tisyn-compound-concurrency-specification.md` (§4.2 unified allocator; §10 replay cursors; §9 ordering). Referenced for non-participation.
 **Complements.** `tisyn-nested-invocation-specification.md` (sibling primitive; strict non-overlap).
 **Depended on by.** None in MVP.
-**Exports (terminology).** *inline invocation*, *inline caller*, *inline body*.
+**Exports (terminology).** *inline invocation*, *inline caller*, *inline body*, *inline journal lane*, *inline-lane dispatch*.
 
 ---
 
@@ -19,7 +19,7 @@ This is a standalone spec, not an amendment to nested invocation. `invoke` and `
 
 ## 1. Overview
 
-Inline invocation is a runtime-controlled mechanism by which dispatch-boundary middleware MAY evaluate a compiled `Fn` *in the current coroutine, inside the current Effection scope*, without allocating a new child coroutineId, without opening a new scope boundary, without advancing any allocator, and without introducing any new durable event. Effects yielded inside the inline body are journaled in the caller's stream under the caller's coroutineId, continuing the caller's yieldIndex sequence.
+Inline invocation is a runtime-controlled mechanism by which dispatch-boundary middleware MAY evaluate a compiled `Fn` *in the caller's effective coroutine identity, inside the caller's Effection scope*, without allocating a new child coroutineId, without opening a new scope boundary, without advancing the unified child allocator, and without introducing any new durable-event discriminant. Effects yielded inside the inline body are journaled on a deterministic **inline journal lane** associated with the caller (§6.5.5). The lane is a replay-cursor partition key written into the `coroutineId` field of durable `YieldEvent`s; it is not a coroutine identity and confers no scope boundary, cancellation pathway, resource ownership, or capability ancestry.
 
 Inline invocation is initiated from host-side JavaScript middleware through the public API `invokeInline(fn, args, opts?)`, exposed as a free helper from the same (non-normative) package as `invoke`. It is not a kernel descriptor, not a compound external, and not a new durable event kind. The durable event algebra `YieldEvent | CloseEvent` is unmodified. The kernel is unmodified. The compiler is unmodified.
 
@@ -53,15 +53,17 @@ This specification does not define:
 
 **Kernel specification.** Unmodified. `invokeInline` does not produce a kernel descriptor, does not invoke SUSPEND from authored IR, is not classified, and does not execute inside kernel IR evaluation as a compound-external. The runtime uses the existing kernel `evaluate` path to construct the inline body's generator; the mechanism by which that generator's yields reach the dispatch loop is an implementation detail constrained only by the invariants of §6.
 
-**Scoped-effects specification.** The replay property on which this specification relies is §9 ("Durability and Replay"), enforced by the Core-tier companion test MR-002. This specification does not alter any scoped-effects semantics. One synchronized cross-reference paragraph is added under scoped-effects §3 (Dispatch Boundary) to name `invokeInline` and point to this specification (see §16.1).
+**Scoped-effects specification.** The replay property on which this specification relies is §9.5 ("Per-Cursor Replay Policy (Normative)"), enforced by the Core-tier companion test MR-002 as narrowed. This specification does not alter any scoped-effects semantics. One synchronized cross-reference paragraph is added under scoped-effects §3 (Dispatch Boundary) to name `invokeInline` and point to this specification (see §16.1).
 
-**Compound concurrency specification.** The unified child allocator (§4.2) MUST NOT be advanced by inline invocation itself. The per-coroutineId replay cursor model (§10) is reused: the caller's cursor is the only one that applies. Ordering invariants (§9) continue to apply to the caller. This specification does not alter any compound-concurrency semantics and does not add any paragraph to that specification — non-participation is a negative property, stated normatively here.
+**Compound concurrency specification.** The unified child allocator (§4.2) MUST NOT be advanced by inline invocation itself. The per-coroutineId replay cursor model (§10) is reused: this specification adds one or more inline-lane cursors alongside the caller's coroutineId cursor; each lane cursor operates under the existing per-cursor mechanism without modification. Ordering invariants (§9) continue to apply per cursor (the caller's own cursor, and each inline-lane cursor separately). This specification does not alter any compound-concurrency semantics and does not add any paragraph to that specification — non-participation is a negative property, stated normatively here.
 
 **Nested invocation specification.** Unmodified. One synchronized cross-reference paragraph is added under nested-invocation spec §15 (Explicit non-goals and deferred items) stating that shared-lifetime inline execution is provided by `invokeInline` (see §16.2). Inline invocation is a sibling primitive, not an option on `invoke`. The call-site gating of §5.3 of the nested-invocation spec is reused by reference for `invokeInline`'s own call-site preconditions (§5.3 below), and the `InvalidInvokeCallSiteError` / `InvalidInvokeInputError` classes defined there are the recommended classes for `invokeInline` failures (§5.3.4 below).
 
 **Spawn, resource, timebox specifications.** Unmodified. `spawn`, `resource`, and `timebox` descriptors yielded from inside an inline body are identical to those yielded from the caller's own body. Their specs handle this case without change. Their allocator-advancement attributions apply to them, not to `invokeInline` (§6.3.2).
 
-**Stream iteration specification.** Unmodified. Subscription handles acquired inside an inline body are owned by the caller's coroutineId (because no new coroutineId exists). Capability-value rules apply unchanged.
+**Stream iteration specification.** Unmodified. Subscription handles acquired inside an inline body are owned by the caller's coroutineId (the inline body's effective coroutine identity is the caller; the inline journal lane is a replay-cursor partition key, not a coroutine identity — §6.5.5). Capability-value rules apply unchanged and use the caller's coroutineId for ancestry.
+
+**Kernel specification (system/replay terminology).** The `coroutineId` field on durable `YieldEvent` and `CloseEvent` values is a replay-cursor partition key. Its grammar is the set of strings accepted as cursor keys by `ReplayIndex`; this specification widens that grammar to include inline lane keys (§6.5.5). No kernel behavior or replay mechanism is introduced; the per-cursor mechanism defined by the kernel/system specifications applies unchanged to lane keys.
 
 **Compiler specification.** Unmodified. `invokeInline` has no authored surface and no IR form. This specification MUST NOT introduce any compiler amendment.
 
@@ -71,15 +73,21 @@ This specification does not define:
 
 ## 4. Terminology
 
-**Inline invocation.** The act of evaluating a compiled `Fn` body in the caller's coroutine and scope by calling `invokeInline(fn, args, opts?)` from dispatch-boundary code.
+**Inline invocation.** The act of evaluating a compiled `Fn` body under the caller's effective coroutine identity and scope by calling `invokeInline(fn, args, opts?)` from dispatch-boundary code.
 
-**Inline caller.** The coroutine whose `DispatchContext` is active at the moment of the `invokeInline` call. Also the coroutine in whose scope and journal the inline body runs.
+**Inline caller.** The coroutine whose `DispatchContext` is active at the moment of the `invokeInline` call. Also the coroutine in whose scope the inline body runs and whose effective coroutine identity the inline body observes.
 
 **Inline body.** The compiled `Fn` body evaluated by inline invocation, constructed from `fn.body` with `fn.params` bound to `args`.
+
+**Inline journal lane.** A replay-cursor partition key of the form `${callerCoroutineId}@inline${q}.${j}` (see §6.5.5 for the definition of `q` and `j`). It is written into the `coroutineId` field of durable `YieldEvent`s produced by an inline body. It is accepted by the existing `ReplayIndex` map as a cursor key. It is NOT a runtime coroutine identity; it confers no scope boundary, no cancellation pathway, no resource ownership, and no capability ancestry.
+
+**Inline-lane dispatch.** A dispatch of a standard effect whose enclosing iteration is on an inline journal lane — i.e., the effect was yielded by a compiled `Fn` body running under `invokeInline`. Middleware bodies registered via `Effects.around({ dispatch })` execute for inline-lane dispatches just as they do for caller-lane dispatches (§6.9). See §5.3.1 for the inline-lane nested-invocation restriction.
 
 **Dispatch boundary.** As defined by scoped-effects §3.
 
 **Unified child allocator.** The `childSpawnCount` counter defined by compound concurrency §4.2. Inline invocation MUST NOT advance this counter on its own account.
+
+**Replay-cursor partition key.** The `coroutineId` field on durable events, serving as the per-cursor replay-partition identifier. For events emitted directly by a running coroutine, the key equals the coroutine's runtime identity. For events emitted inside an inline body (§5), the key is the inline journal lane; the running coroutine's effective identity remains the inline caller's.
 
 ---
 
@@ -107,7 +115,9 @@ The public name of this operation MUST be `invokeInline`. Its export package is 
 
 ### 5.3 Call-site preconditions
 
-5.3.1. `invokeInline` MUST be called only from within the dynamic extent of an active `Effects.around({ dispatch })` middleware body registered against the runtime's dispatch chain. Calls from any other site — including `Effects.around({ resolve })` bodies, agent operation handlers, agent-facade `.around(...)` per-operation middleware, IR-evaluated middleware, compiler-authored middleware, and code outside any middleware — MUST produce a runtime error and MUST NOT evaluate the inline body, MUST NOT push any overlay, and MUST NOT write any journal entry, and MUST NOT advance the unified child allocator.
+5.3.1. `invokeInline` MUST be called only from within the dynamic extent of an active `Effects.around({ dispatch })` middleware body registered against the runtime's dispatch chain AND dispatching an effect on the caller's own coroutine cursor. Calls from any other site — including `Effects.around({ resolve })` bodies, agent operation handlers, agent-facade `.around(...)` per-operation middleware, IR-evaluated middleware, compiler-authored middleware, and code outside any middleware — MUST produce a runtime error and MUST NOT evaluate the inline body, MUST NOT push any overlay, MUST NOT write any journal entry, and MUST NOT advance the unified child allocator.
+
+5.3.1.a. `invokeInline` MUST NOT be called from within an `Effects.around({ dispatch })` middleware body that is dispatching an inline-body effect (i.e., where the current dispatch's journal lane is an inline journal lane rather than a coroutineId; see §4 *Inline-lane dispatch*). A call from such a site is a call-site violation and MUST raise `InvalidInvokeCallSiteError` with zero side effects: no inline lane allocated, no journal entry, no overlay push, no evaluation of `fn.body`, no advancement of the unified child allocator, no advancement of any frame or per-dispatch counter. Nested inline invocation via inline-lane dispatch is an MVP non-goal; see §11.
 
 5.3.2. Isolation: the runtime MUST ensure that code paths not on the dispatch boundary do not observe a non-`undefined` `DispatchContext`. This is the same isolation requirement as nested-invocation spec §5.3.2; no separate enforcement mechanism is required.
 
@@ -147,6 +157,8 @@ The primitive `invokeInline(fn, args, opts?)`, when called from a permitted call
 
 The effective coroutineId during inline-body evaluation MUST be the inline caller's coroutineId. No new coroutineId MUST be allocated, observed, or reported on account of `invokeInline`.
 
+Effective coroutine identity inside an inline body — the value observable via the ambient coroutine-id, used for cancellation, resource ownership, spawn ancestry, and capability ancestry — is the inline caller's coroutineId. The inline journal lane defined in §6.5.5 is a replay-cursor partition key that is stored in `YieldEvent.coroutineId` of inline-body yields; it does not shift effective coroutine identity and does not confer scope, ownership, or ancestry semantics.
+
 ### 6.3 Allocator non-participation and attribution
 
 - **§6.3.1 Non-participation.** The unified child allocator of compound-concurrency §4.2 MUST NOT be advanced on account of `invokeInline` itself. The per-origin advancement amounts enumerated in nested-invocation §6.3 are not extended by this specification.
@@ -165,19 +177,34 @@ Consequences (stated here for conformance testing):
 
 ### 6.5 Journal equivalence
 
-Effects yielded inside the inline body MUST be journaled as if yielded directly by the caller:
+Effects yielded inside the inline body MUST be journaled on the inline journal lane associated with this `invokeInline` call (§6.5.5):
 
-- **§6.5.1** Each such effect MUST produce exactly one `YieldEvent` under the caller's coroutineId.
-- **§6.5.2** The `yieldIndex` sequence of those events MUST be monotonic and contiguous with events produced directly by the caller's body, in program order.
-- **§6.5.3** No `YieldEvent` or `CloseEvent` MUST be written on account of the `invokeInline` call itself. No marker event of any kind MUST be introduced.
-- **§6.5.4** The durable event algebra `YieldEvent | CloseEvent` is unmodified by this specification.
+- **§6.5.1** Each such effect MUST produce exactly one `YieldEvent` with `coroutineId` equal to the inline journal lane key for this inline invocation (§6.5.5). The lane key is a replay-cursor partition identifier; it is not a coroutine identity.
+- **§6.5.2** The `yieldIndex` sequence of those events MUST be monotonic and contiguous within the inline lane, in the program order of the inline body. The caller's own-coroutineId cursor is unaffected by inline-body yields.
+- **§6.5.3** No `YieldEvent` or `CloseEvent` MUST be written on account of the `invokeInline` call itself. No marker event of any kind MUST be introduced. No `CloseEvent` is ever written with a `coroutineId` equal to an inline journal lane key (the inline lane carries `YieldEvent`s only).
+- **§6.5.4** The durable event algebra `YieldEvent | CloseEvent` is unmodified by this specification. The string grammar of the `coroutineId` field is widened to include inline lane keys (§6.5.5). This is a grammar extension on a string field; no new event discriminant is introduced.
+- **§6.5.5 Inline journal lane.** Each `invokeInline` call opens a deterministic inline journal lane keyed by `${callerCoroutineId}@inline${q}.${j}` where:
+
+    - `q` is the standard-effect yield ordinal of the triggering dispatch within the caller's cursor. The caller's cursor advances on every standard-effect yield whether it was live-appended or replay-consumed; `q` is the value of that counter at the moment the triggering dispatch begins. Compound-external yields (scope, spawn, resource, timebox, all, race) do not advance `q`.
+    - `j` is a per-dispatch counter. It starts at 0 when a dispatch begins and increments once per `invokeInline` call made from within the dispatch's middleware chain, in program order.
+
+    The `(q, j)` composite is required for deterministic recovery: under the per-cursor replay policy defined by scoped-effects §9.5, middleware does not re-run for caller yields consumed from stored cursor entries. A frame-local counter advanced only by `invokeInline` would therefore diverge between original run and recovery whenever an earlier inline-triggering caller yield is fully durable. The `q` field advances deterministically via the caller cursor's own replay mechanism; the `j` field resets per dispatch, so its value depends only on the middleware body's program order within a single dispatch — which is deterministic per scoped-effects §9.5 (invoking-middleware determinism at the replay frontier).
+
+    The lane key is stored in `YieldEvent.coroutineId` for every effect yielded inside the inline body. Sibling inline invocations within a single middleware body receive distinct `j` values; inline invocations under distinct caller yields receive distinct `q` values.
 
 ### 6.6 Replay and divergence equivalence
 
-- **§6.6.1** On replay, the caller's kernel re-evaluates the caller's IR per kernel spec §10.5. Effects contributed by the inline body are replayed from the caller's journal under the caller's coroutineId, indistinguishably from effects produced directly by the caller.
-- **§6.6.2** The Durable Yield Rule (compound-concurrency §10.6.2) MUST apply to inline-body yields treated as ordinary caller yields.
-- **§6.6.3** Divergence conditions (kernel spec §10.4) MUST apply to the caller's coroutine without modification. A non-deterministic invoking middleware that reaches a different `(fn, args, overlay)` on replay, or whose inline body yields a different effect sequence, manifests as ordinary caller-coroutine divergence. No inline-specific divergence condition MUST be introduced.
-- **§6.6.4** Replay equivalence of `(fn, args, opts.overlay)` MUST be obtained via invoking-middleware determinism (scoped-effects §9 / companion test MR-002, Core tier). No new durable-input category MUST be introduced.
+- **§6.6.1** Replay partitioning uses durable-event `coroutineId` as the cursor key. Inline-body yields populate a cursor under their lane key; the caller's own-coroutineId cursor is not affected by inline yields and sees its yields in natural program order, including the triggering dispatch whose middleware called `invokeInline`.
+
+    Replay is per-cursor (scoped-effects §9.5). A cursor's kernel runs only when the runtime reaches a program point that requires live execution at that cursor. The caller's replay kernel consumes its own cursor in natural program order; the inline body's kernel is (re-)evaluated only when the surrounding dispatch middleware re-runs — which happens during recovery from a crash where the triggering yield was not durably written, and does NOT happen during pure replay of a fully-journaled caller run.
+
+    Consequence (pure replay): when the caller's triggering yield for an inline invocation is already durable, the runtime consumes the caller's stored triggering yield and continues without re-running middleware; the inline lane cursor is left untouched. The durable stream retains the lane's YieldEvents for post-run observation but they are not re-materialized into `ctx.journal` during that pure replay because their kernel did not run.
+
+    Consequence (crash recovery): when the triggering yield was NOT durably written, the caller's cursor has no entry for that yield; live dispatch re-enters, middleware re-runs deterministically (scoped-effects §9.5 / MR-002 as narrowed), `invokeInline` opens the same lane key (same `q` because `frame.yieldIndex` is deterministically advanced by replay-consume and live-append of earlier caller yields, and same `j` because it is a per-dispatch counter reset to zero at dispatch entry), and the inline iteration drains whatever lane-cursor entries were durable before the crash via the same per-cursor replay logic, then live-dispatches any un-journaled remainder. The lane events are re-materialized into `ctx.journal` during this recovery path.
+
+- **§6.6.2** The Durable Yield Rule (compound-concurrency §10.6.2) MUST apply to inline-body yields treated as ordinary yields on their lane cursor.
+- **§6.6.3** Divergence conditions (kernel spec §10.4) MUST apply per cursor. A non-deterministic invoking middleware that reaches a different `(fn, args, overlay)` on replay, or whose inline body yields a different effect sequence on an inline lane cursor, manifests as ordinary per-cursor divergence at either the caller's cursor or the inline lane cursor as appropriate. No inline-specific divergence condition MUST be introduced. No invokeInline-specific replay mechanism is introduced; the per-cursor replay mechanism is the existing substrate mechanism, now also applied to inline lane keys.
+- **§6.6.4** Replay equivalence of `(fn, args, opts.overlay)` MUST be obtained via invoking-middleware determinism (scoped-effects §9.5 / companion test MR-002, Core tier — at the replay frontier). No new durable-input category MUST be introduced.
 
 ### 6.7 Overlay semantics
 
@@ -197,10 +224,10 @@ Effects yielded inside the inline body MUST traverse the caller's scoped-effects
 
 ### 6.10 Ordering
 
-- **§6.10.1** Program-order preservation: within the caller's journal, a yield produced before the `invokeInline` call, a yield produced inside the inline body, and a yield produced after the call MUST appear in that program order.
-- **§6.10.2** Multiple sequential `invokeInline` calls within a single invoking middleware body MUST produce strictly serialized inline bodies.
-- **§6.10.3** Concurrent `invokeInline` composition within a single invoking middleware body is out of scope for MVP (§15) and MUST NOT be relied upon.
-- **§6.10.4** Composition with `invoke`: each `invoke` call continues to advance the allocator per nested-invocation §6.2; each `invokeInline` call contributes zero. The interleaved sequence MUST be deterministic by scoped-effects §9.
+- **§6.10.1** Program-order preservation is per cursor. Within the caller's own-coroutineId cursor, yields produced by the caller's own body preserve program order. Within each inline lane cursor, yields produced by that inline body preserve program order. Yields on different cursors are not ordered relative to each other by this specification.
+- **§6.10.2** Multiple sequential `invokeInline` calls within a single invoking middleware body MUST produce strictly serialized inline bodies. Each sibling call opens a distinct inline lane via its own `j` value (§6.5.5).
+- **§6.10.3** Concurrent `invokeInline` composition within a single invoking middleware body is out of scope for MVP (§11) and MUST NOT be relied upon. Nested `invokeInline` from inline-lane dispatch is also out of scope (§5.3.1.a, §11).
+- **§6.10.4** Composition with `invoke`: each `invoke` call continues to advance the unified child allocator per nested-invocation §6.2; each `invokeInline` call contributes zero. The interleaved sequence MUST be deterministic by scoped-effects §9.5.
 
 ---
 
@@ -208,15 +235,17 @@ Effects yielded inside the inline body MUST traverse the caller's scoped-effects
 
 Stated explicitly for implementors:
 
-- Allocating a new coroutineId on account of `invokeInline`.
+- Allocating a new runtime coroutineId on account of `invokeInline`. (The inline journal lane key is NOT a coroutineId; it is a replay-cursor partition key — see §4, §6.5.5.)
 - Opening a new structured-concurrency scope on the call's account.
-- Writing any `YieldEvent` or `CloseEvent` attributable to the call itself.
+- Writing any `YieldEvent` attributable to the call itself (only the inline body's own yields populate the lane cursor).
+- Writing any `CloseEvent` with a `coroutineId` equal to an inline lane key.
 - Introducing any new durable event discriminant.
 - Wrapping inline-body errors as reified close reasons.
 - Leaking `opts.overlay` beyond the call's dynamic extent.
 - Journaling `opts.overlay`, `fn`, `args`, or `opts.label` as standalone durable inputs or events.
-- Introducing any replay-phase mechanism specific to `invokeInline`.
+- Introducing any replay-phase mechanism specific to `invokeInline` (the per-cursor replay mechanism of scoped-effects §9.5 applies unchanged to lane keys).
 - Modifying any observable behavior of `invoke`.
+- Allowing `invokeInline` to allocate an inline lane when called from inline-lane dispatch (§5.3.1.a — the call MUST be rejected with zero side effects).
 
 ---
 
@@ -224,16 +253,16 @@ Stated explicitly for implementors:
 
 An implementation is conformant with this specification if and only if it satisfies each of the following for every program exercising `invokeInline`. All hooks are phrased as properties of observable behavior.
 
-- **IH1. Coroutine identity.** During inline-body evaluation, the effective coroutineId observable to the body equals the caller's coroutineId. No new coroutineId appears in the journal on account of `invokeInline`.
+- **IH1. Coroutine identity.** During inline-body evaluation, the effective coroutineId observable to the body (ambient runtime identity, used for cancellation, ownership, and ancestry) equals the caller's coroutineId. No new runtime coroutineId is allocated on account of `invokeInline`. The inline journal lane key that appears in `YieldEvent.coroutineId` for inline-body yields is a replay-cursor partition key, not a coroutine identity (§4, §6.5.5).
 - **IH2. Allocator non-participation.** A snapshot of the caller's unified child allocator immediately before and immediately after an `invokeInline` call, taken with no intervening operation that would independently advance the allocator, yields equal values.
-- **IH3. No durable boundary of its own.** No `YieldEvent` and no `CloseEvent` is written on account of the `invokeInline` call itself. The durable event algebra is unchanged.
-- **IH4. Journal-stream extension.** Effects yielded inside the inline body appear as ordinary `YieldEvent`s under the caller's coroutineId, with `yieldIndex` values contiguous with the caller's own yields in program order (§6.10.1).
+- **IH3. No durable boundary of its own.** No `YieldEvent` and no `CloseEvent` is written on account of the `invokeInline` call itself. No `CloseEvent` is ever written with a `coroutineId` equal to an inline journal lane key. The durable event algebra `YieldEvent | CloseEvent` is unchanged; the `coroutineId` string grammar is widened to include lane keys (§6.5.4, §6.5.5).
+- **IH4. Lane-cursor extension.** Effects yielded inside the inline body appear as ordinary `YieldEvent`s with `coroutineId` equal to the inline lane key, `yieldIndex` contiguous within that lane in the program order of the inline body. The caller's own coroutineId cursor is not affected by inline-body yields.
 - **IH5. Caller-owned lifetime.** Resources, spawned children, and capability values created inside the inline body remain live and usable after `invokeInline` returns, up to the caller's own scope teardown, with lifetimes governed by the caller's scope rather than a boundary introduced by `invokeInline`.
-- **IH6. Replay equivalence.** Replay of a journal produced with `invokeInline` reaches the same terminal state with no divergence. The Durable Yield Rule applies to inline-body yields treated as caller yields. No replay-phase mechanism specific to `invokeInline` is introduced.
+- **IH6. Replay equivalence.** Replay of a journal produced with `invokeInline` reaches the same terminal state with no divergence under the per-cursor replay policy (§6.6.1, scoped-effects §9.5). The Durable Yield Rule applies to inline-body yields on their lane cursor. No replay-phase mechanism specific to `invokeInline` is introduced.
 - **IH7. Cancellation pass-through.** Cancellation of the caller during an in-flight inline body is observed by the body through the caller's cancellation mechanism; the caller's terminal state and teardown order are unchanged by the presence of the call.
 - **IH8. Error pass-through.** An uncaught error raised inside the inline body is observable at the `yield* invokeInline(...)` site as the original error value, not as a reified close reason. Errors caught inside the body do not surface at the call site.
-- **IH9. Invalid call sites have no effect.** A call from a disallowed site (§5.3) raises the call-site error (§5.3.4) and produces no change to the allocator, no journal entry, no overlay push, and no evaluation of `fn.body`.
-- **IH10. Composition integrity.** Mixing `invoke` and `invokeInline` in a single invoking middleware body leaves each primitive's own invariants intact: `invoke` continues to allocate per nested-invocation §6.2; `invokeInline` continues to satisfy IH1–IH9; their journal contributions compose in program order (§6.10.1).
+- **IH9. Invalid call sites have no effect.** A call from a disallowed site (§5.3 including §5.3.1 and §5.3.1.a) raises the call-site error (§5.3.4) and produces no change to the allocator, no journal entry on any cursor, no inline lane allocation, no overlay push, and no evaluation of `fn.body`. A nested `invokeInline` call from inline-lane dispatch (§5.3.1.a) produces none of the above side effects and does not advance `j` for any dispatch.
+- **IH10. Composition integrity.** Mixing `invoke` and `invokeInline` in a single invoking middleware body leaves each primitive's own invariants intact: `invoke` continues to allocate per nested-invocation §6.2; `invokeInline` continues to satisfy IH1–IH9; their journal contributions compose per-cursor (caller cursor, invoke-child cursor, and any inline lane cursors separately).
 
 ---
 
@@ -260,6 +289,7 @@ None blocks acceptance, implementation, or MVP conformance.
 The following are explicitly out of scope for this specification version and MUST NOT be relied upon:
 
 - Concurrent `invokeInline` composition within a single invoking middleware body.
+- Nested `invokeInline` from inline-lane dispatch. §5.3.1.a requires implementations to reject this call site rather than allocate a nested lane key. A future amendment MAY introduce a nesting-path lane-key scheme if the use case emerges.
 - Any compiler surface, authored syntax, or IR form for inline invocation.
 - Per-call narrower timebox applied to the inline body (use ordinary `timebox` in the caller).
 - Per-call agent rebinding applied to the inline body (use scope configuration in the caller).
@@ -277,7 +307,7 @@ This specification is accompanied by two narrow amendments to existing specs.
 
 Add one paragraph (sibling to the `invoke` paragraph added by nested-invocation §16.1):
 
-> The runtime MAY additionally expose an `invokeInline(fn, args, opts?)` free helper (exported by an implementation-chosen package; the export path is not part of the normative surface) accessible from the body of an `Effects.around({ dispatch })` middleware. The operation is a runtime-controlled dispatch-boundary `Operation<T>` — it is initiated and resolved outside kernel IR evaluation — and it is not a compound external, does not produce a kernel descriptor, does not allocate any coroutineId, and introduces no durable event. Effects yielded inside the inline body are journaled under the caller's coroutineId. Semantics are defined by `tisyn-inline-invocation-specification.md`. Invoking middleware remains subject to the determinism expectation of §9; the replay property stated in MR-002 extends to middleware that calls `invokeInline` without modification.
+> The runtime MAY additionally expose an `invokeInline(fn, args, opts?)` free helper (exported by an implementation-chosen package; the export path is not part of the normative surface) accessible from the body of an `Effects.around({ dispatch })` middleware that is dispatching an effect on the caller's own coroutine cursor. The operation is a runtime-controlled dispatch-boundary `Operation<T>` — it is initiated and resolved outside kernel IR evaluation — and it is not a compound external, does not produce a kernel descriptor, does not allocate any runtime coroutineId, and introduces no new durable-event discriminant. Effects yielded inside the inline body are journaled on a deterministic inline journal lane (a replay-cursor partition key of the form `${callerCoroutineId}@inline${q}.${j}`; see `tisyn-inline-invocation-specification.md` §6.5.5) stored in `YieldEvent.coroutineId`. Semantics are defined by `tisyn-inline-invocation-specification.md`. Invoking middleware remains subject to the determinism expectation of §9.5 (per-cursor replay policy); the replay property stated in MR-002 extends to middleware that calls `invokeInline` at the replay frontier without modification. `invokeInline` MUST NOT be called from middleware dispatching an inline-body effect; such calls are rejected per `tisyn-inline-invocation-specification.md` §5.3.1.a.
 
 ### 16.2 `tisyn-nested-invocation-specification.md` — §15 (Explicit non-goals and deferred items)
 

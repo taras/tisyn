@@ -23,7 +23,7 @@ A runtime implementation is conformant with respect to nested invocation if and 
 This plan validates the nested-invocation specification as derived from the following normative sources:
 
 - **`tisyn-nested-invocation-specification.md`** — primary spec; §§1–13, §15, §16. §14 is non-normative and not tested.
-- **`tisyn-scoped-effects-specification.md` §9** and its Core-tier companion test **MR-002** — the replay-transparency property that invoking middleware re-executes identically on replay. Inherited by direct citation in nested-invocation spec §8.2.
+- **`tisyn-scoped-effects-specification.md` §9.5** and its Core-tier companion test **MR-002** — the per-cursor replay policy: invoking middleware re-executes identically at the replay frontier; yields whose stored cursor entries short-circuit dispatch do not re-invoke middleware. Inherited by direct citation in nested-invocation spec §8.2.
 - **`tisyn-kernel-specification.md` §10.5** — parent kernel re-evaluates IR on replay; at external yield points, the runtime feeds journaled outcomes. Inherited by nested-invocation spec §8.1.
 - **`tisyn-compound-concurrency-specification.md`** — §4.2 (unified child allocator, `parentId.{k}` format, invariant I-ID); §9 (ordering); §10.1, §10.3 (per-coroutineId replay cursors; complete/partial/empty journal behaviors); §10.4 (divergence); §10.6.2 (Durable Yield Rule). All inherited by nested-invocation spec §§6, §8, §12.
 - **`tisyn-timebox-specification.md` §8.2** — timebox consumes +2 counter advancement per invocation; basis for mixed-accounting tests.
@@ -286,19 +286,21 @@ Tier 2 failure is informative. It is not, by itself, a conformance failure. Tier
 
 ---
 
-#### T13 — `middleware_reexecutes_on_replay_with_invoke`
+#### T13 — `middleware_reexecutes_at_replay_frontier_with_invoke`
 
 - **Tier.** 1.
-- **Purpose.** Operationalize MR-002 for nested invocation: invoking middleware re-executes identically on replay with no observable difference, and child agents are not re-dispatched for journal-complete effects.
+- **Purpose.** Operationalize MR-002 for nested invocation under the per-cursor replay policy (scoped-effects §9.5): invoking middleware re-executes identically at the replay frontier, and child agents are not re-dispatched for journal-complete effects. Stored yields whose cursor entries short-circuit dispatch do not re-invoke middleware.
 - **Setup.**
   - T01 fixture. Install a harness middleware-entry probe (H-A5) recording each entry into the invoking middleware body.
   - Agent side-effect counter from H-A4.
-- **Execution.** Run to completion; persist; replay.
+- **Execution.** Run to completion; persist; pure-replay from the complete journal. Separately: crash after the first invoked child completes but before the parent's next yield is durable; recover.
 - **Assertions.**
-  - Middleware-entry probe records at least one entry on the original run and at least one entry on the replay pass (middleware re-executes per MR-002).
-  - Agent side-effect counter increments by 2 on the original run and by 0 on the replay.
-  - `yield* invoke(...)` returns the same value on the original run and on replay.
-- **Validates.** Spec §8.2, §8.5; H6.
+  - Original run: middleware-entry probe records at least one entry per caller yield that traverses the dispatch block.
+  - Pure replay from a complete journal: middleware-entry probe records **zero** entries. Every caller yield has a matching stored cursor entry that short-circuits dispatch per scoped-effects §9.5; middleware MUST NOT be invoked.
+  - Recovery from partial journal: middleware-entry probe records entries only for yields beyond the durable prefix (i.e., the replay frontier onward). Yields consumed from the cursor before the frontier record zero probe entries.
+  - Agent side-effect counter increments on the original run and during recovery's live-dispatch window; zero increments for cursor-consumed yields.
+  - `yield* invoke(...)` returns the same value on the original run and on replay / recovery.
+- **Validates.** Spec §8.2 (narrowed), §8.5; H6 (narrowed); scoped-effects §9.5.
 - **Harness.** H-A1, H-A3, H-A4, H-A5.
 
 ---
@@ -443,7 +445,7 @@ This plan explicitly treats the following as load-bearing requirements validated
 - **No parent event for the `invoke` call itself.** Covered by T01 (positive) and T16 (negative non-advance on error). Spec §7.6, H7.
 - **Child writes its own `YieldEvent` / `CloseEvent` stream.** Covered by T01, T03, T11. Spec §7.5, §7.6.
 - **Replay does not re-dispatch durable child yields.** Covered by T02, T13. Spec §8.5 (Durable Yield Rule inherited).
-- **Invoking middleware re-executes on replay under MR-002 inheritance.** Covered by T13. Spec §8.2; H6.
+- **Invoking middleware re-executes at the replay frontier under MR-002 / §9.5 inheritance.** Covered by T13. Spec §8.2 (narrowed); H6 (narrowed); scoped-effects §9.5.
 - **Unified allocator across mixed origins.** Covered by T15 (mixed kernel + invoke), T17 (mixed timebox + invoke). Spec §6.3; H2.
 - **No `.n` namespace or alternate separator.** Covered by T15, T17 explicit scan assertions. Spec §6.6.
 - **Invalid non-dispatch-middleware call allocates no child coroutineId.** Covered by T16 (facade/resolve/handler/outside sub-fixtures) and T-IMPL-CALL (handler reached through `impl.call(...)` under a live parent `DispatchContext`). Spec §5.3.1, §5.3.2, §5.3.3.
@@ -465,7 +467,7 @@ No other ambiguities remained at the time of this plan's derivation.
 
 ## 8. Tier discipline audit
 
-- **T13 (`middleware_reexecutes_on_replay_with_invoke`) is Tier 1.** It is the direct operationalization of MR-002 (Core tier in the scoped-effects companion test plan) applied to middleware that contains `invoke`. The underlying property is already Core-tier normative; the inheritance is explicit in nested-invocation spec §8.2. Classifying T13 as Tier 2 would under-state the conformance requirement.
+- **T13 (`middleware_reexecutes_at_replay_frontier_with_invoke`) is Tier 1.** It is the direct operationalization of MR-002 (Core tier in the scoped-effects companion test plan) under the per-cursor replay policy of scoped-effects §9.5, applied to middleware that contains `invoke`. The underlying property is already Core-tier normative; the inheritance is explicit in nested-invocation spec §8.2. Classifying T13 as Tier 2 would under-state the conformance requirement.
 - **T18 (`negative_raw_kernel_bypass_is_non_conformant`) is Tier 2.** The subject of the test is a deliberately non-conformant straw implementation, not the production runtime. A Tier 1 test cannot assert conformance properties of an implementation designed to violate conformance. The test remains valuable as a diagnostic and documents the anti-pattern.
 - **T15 (`mixed_kernel_and_invoke_unified_counter`) and T17 (`timebox_and_invoke_counter_accounting`) are Tier 1 and load-bearing.** They are the primary conformance evidence for the allocator model (spec §6). A namespaced-allocator implementation would observably fail these tests. Demoting them to Tier 2 would eliminate the ability to detect the most consequential design regression.
 - **T19 (`fn_identity_stability_gate`) is Tier 2.** It reinforces an assumption the nested-invocation spec relies on (invariant I-ID survives compiler builds) but does not itself specify. The content-hash-stability requirement is a compiler-spec concern; promotion depends on that spec carrying the requirement normatively.

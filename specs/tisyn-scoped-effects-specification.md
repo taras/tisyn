@@ -823,6 +823,30 @@ The runtime MUST read guard metadata on restart and re-install
 JavaScript guard middleware via the middleware installation
 primitive. Guard implementations are host-provided.
 
+### 9.5 Per-Cursor Replay Policy (Normative)
+
+Replay is per `ReplayIndex` cursor. When the runtime consumes a
+stored cursor entry whose description matches the current kernel
+yield, it MUST feed the stored result to the kernel without
+re-running scoped-effects middleware for that yield; the stored
+result is authoritative.
+
+Scoped-effects middleware executes identically at the **replay
+frontier** — the point at which the runtime enters live dispatch
+because no stored cursor entry matches the kernel's current
+yield. This covers:
+
+- live original execution (the frontier is wherever the kernel
+  is currently yielding);
+- recovery from partial journals (the frontier is the first
+  un-journaled yield after the durable prefix).
+
+Middleware authors MUST NOT rely on middleware firing for yields
+whose stored cursor entries short-circuit dispatch. Middleware
+determinism invariants (cited by companion test MR-002, Core
+tier) apply at the replay frontier; they do not apply to
+stored-yield consumption, which does not invoke middleware.
+
 ---
 
 ## 10. Pure Middleware Logic Constraints (v1)
