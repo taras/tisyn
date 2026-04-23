@@ -7,3 +7,4 @@
  */
 export { DispatchContext } from "./dispatch-context.js";
 export { evaluateMiddlewareFn } from "./middleware-eval.js";
+export { RuntimeTerminal, type RuntimeTerminalBoundary } from "./runtime-terminal.js";

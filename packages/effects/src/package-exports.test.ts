@@ -44,6 +44,7 @@ describe("@tisyn/effects — package exports", () => {
       expect(names).toContain("resolve");
       expect(names).toContain("invoke");
       expect(names).toContain("invokeInline");
+      expect(names).toContain("runAsTerminal");
       expect(names).toContain("installCrossBoundaryMiddleware");
       expect(names).toContain("getCrossBoundaryMiddleware");
       expect(names).toContain("InvalidInvokeCallSiteError");
@@ -68,17 +69,20 @@ describe("@tisyn/effects — package exports", () => {
   });
 
   describe("internal subpath (`./internal`)", () => {
-    it("exposes DispatchContext and evaluateMiddlewareFn", () => {
+    it("exposes DispatchContext, evaluateMiddlewareFn, and RuntimeTerminal", () => {
       const names = Object.keys(internal).sort();
       expect(names).toContain("DispatchContext");
       expect(names).toContain("evaluateMiddlewareFn");
+      expect(names).toContain("RuntimeTerminal");
     });
 
     it("source files carry @internal JSDoc tags", () => {
       const dcSource = readFileSync(resolve(pkgRoot, "src/internal/dispatch-context.ts"), "utf8");
       const mwSource = readFileSync(resolve(pkgRoot, "src/internal/middleware-eval.ts"), "utf8");
+      const rtSource = readFileSync(resolve(pkgRoot, "src/internal/runtime-terminal.ts"), "utf8");
       expect(dcSource).toMatch(/@internal/);
       expect(mwSource).toMatch(/@internal/);
+      expect(rtSource).toMatch(/@internal/);
     });
 
     it("README.md documents non-stability", () => {

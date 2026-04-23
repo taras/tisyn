@@ -1,6 +1,7 @@
 import { type Operation, sleep as effectionSleep } from "effection";
 import type { Val } from "@tisyn/ir";
 import { createApi } from "@effectionx/context-api";
+import { runAsTerminal } from "./run-as-terminal.js";
 
 /** Scoped-effect frame pushed for the duration of an invoked child subtree. */
 export interface ScopedEffectFrame {
@@ -19,13 +20,21 @@ export interface InvokeOpts {
 // ---------------------------------------------------------------------------
 
 const EffectsApi = createApi("Effects", {
-  *dispatch(effectId: string, _data: Val): Operation<Val> {
-    if (effectId === "sleep") {
-      const ms = (_data as unknown[])[0] as number;
-      yield* effectionSleep(ms);
-      return null as Val;
-    }
-    throw new Error(`No agent registered for effect: ${effectId}`);
+  *dispatch(effectId: string, data: Val): Operation<Val> {
+    // Route the built-in fallback through the runtime-controlled terminal
+    // boundary (`runAsTerminal`). Under replay, the boundary substitutes
+    // stored results in place of `liveWork()`. When no runtime is installed
+    // (standalone @tisyn/effects use), the helper invokes `liveWork()`
+    // directly. See tisyn-scoped-effects-specification.md §9.5.
+    const liveWork = function* (): Operation<Val> {
+      if (effectId === "sleep") {
+        const ms = (data as unknown[])[0] as number;
+        yield* effectionSleep(ms);
+        return null as Val;
+      }
+      throw new Error(`No agent registered for effect: ${effectId}`);
+    };
+    return yield* runAsTerminal(effectId, data, liveWork);
   },
   *resolve(_agentId: string): Operation<boolean> {
     return false;
