@@ -32,13 +32,16 @@ import type { InvokeOpts } from "./dispatch.js";
  * only.
  *
  * See `tisyn-inline-invocation-specification.md` for the full
- * normative contract. Phase 5B runtime scope: standard-effect
- * dispatch inside the body, nested `invokeInline` / `invoke` calls
- * reached through standard-effect middleware. `stream.subscribe` /
- * `stream.next` and all compound externals (`scope`, `spawn`, `join`,
- * `resource`, `timebox`, `all`, `race`) inside an inline body are
- * rejected with a clear error in this phase; runtime follow-ups will
- * lift those restrictions.
+ * normative contract. The current runtime phase supports standard-
+ * effect dispatch inside the body, nested `invokeInline` / `invoke`
+ * calls reached through standard-effect middleware, and
+ * `stream.subscribe` / `stream.next` with owner-coroutineId counter
+ * allocation (§12.4) — sibling inline lanes and the original caller
+ * share a single subscription counter, so handles acquired inside
+ * inline bodies compose with each other and with the caller
+ * (§12.7). Compound externals (`scope`, `spawn`, `join`, `resource`,
+ * `timebox`, `all`, `race`) inside an inline body are still rejected
+ * with a clear error; follow-up runtime phases will lift those.
  */
 export function* invokeInline<T = Val>(
   fn: FnNode,

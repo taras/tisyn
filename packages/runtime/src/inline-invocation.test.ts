@@ -1,22 +1,26 @@
 /**
- * Inline invocation — core runtime slice tests (Phase 5B, Refs #122).
+ * Inline invocation runtime tests (Refs #122).
  *
- * Covers the IL-* subset from `tisyn-inline-invocation-test-plan.md` that is
- * implementable under the Phase 5B scope: basic invocation (§6), allocator
- * and lane-id format (§7), journal shape (§8), ordering (§10), replay (§9),
- * call-site rejection (§6.2), nested inline (§7.6), and `invoke` inside
- * inline (§11.3).
+ * Covers the IL-* subset from `tisyn-inline-invocation-test-plan.md`
+ * that is implementable today:
+ *
+ *  - Basic invocation (§6), allocator and lane-id format (§7), journal
+ *    shape (§8), ordering (§10), replay (§9), call-site rejection
+ *    (§6.2), nested inline (§7.6), and `invoke` inside inline (§11.3).
+ *  - Capability ownership and counter allocation (§12): owner-
+ *    coroutineId shared subscription counter, sibling-lane handle
+ *    reuse, caller-after-return handle reuse, `invoke`-child isolated
+ *    namespace, replay counter reconstruction.
  *
  * Out of scope — not tested here:
- *   - stream.subscribe / stream.next inside inline bodies (rejected loudly
- *     by driveInlineBody; owner-counter semantics §12.4 deferred).
  *   - Compound externals (scope/spawn/join/resource/timebox/all/race)
- *     inside inline bodies (rejected loudly).
+ *     inside inline bodies (still rejected loudly by driveInlineBody).
  *   - IL-INT-*, IL-RD-*, IL-EX-*, and the full 31-test minimum subset.
  */
 
 import { describe, it } from "@effectionx/vitest";
 import { expect } from "vitest";
+import type { Operation } from "effection";
 import { InMemoryStream } from "@tisyn/durable-streams";
 import type { DurableEvent, YieldEvent, CloseEvent } from "@tisyn/kernel";
 import { Fn, Eval, Ref, Arr, Q, Try } from "@tisyn/ir";
@@ -824,5 +828,594 @@ describe("invokeInline — core runtime slice", () => {
     expect(laneYields).toHaveLength(1);
     expect(laneYields[0]!.description).toEqual({ type: "failing", name: "op" });
     expect(laneYields[0]!.result.status).toBe("error");
+  });
+
+  // ── Capability ownership + counter allocation (§12, IH13) ──
+
+  // Mock Effection-compatible stream for inline tests. Emits `items` in order
+  // then signals `done: true`. Matches the shape used by stream-iteration.test.ts.
+  function mockStream(
+    items: Val[],
+  ): Operation<{ next(): Operation<IteratorResult<Val, unknown>> }> {
+    let idx = 0;
+    return {
+      *[Symbol.iterator]() {
+        return {
+          next(): Operation<IteratorResult<Val, unknown>> {
+            return {
+              *[Symbol.iterator]() {
+                if (idx < items.length) {
+                  return { done: false as const, value: items[idx++] as Val };
+                }
+                return { done: true as const, value: undefined };
+              },
+            } as Operation<IteratorResult<Val, unknown>>;
+          },
+        };
+      },
+    } as Operation<{ next(): Operation<IteratorResult<Val, unknown>> }>;
+  }
+
+  // IR builders scoped to stream tests.
+  const streamSubscribe = (sourceName: string): Val =>
+    ({ tisyn: "eval", id: "stream.subscribe", data: [Ref(sourceName)] }) as unknown as Val;
+  const streamNext = (handleName: string): Val =>
+    ({ tisyn: "eval", id: "stream.next", data: [Ref(handleName)] }) as unknown as Val;
+
+  // Helper: Fn([], stream.subscribe([Ref(sourceName)])) — returns the handle.
+  const subscribeBodyFn = (sourceName: string): TisynFn<[], Val> =>
+    Fn<[], Val>([], streamSubscribe(sourceName) as unknown as Val) as unknown as TisynFn<[], Val>;
+
+  // Helper: Fn(["h"], stream.next([Ref("h")])) — expects a handle arg.
+  const nextBodyFn: TisynFn<[Val], Val> = Fn<[Val], Val>(
+    ["h"],
+    streamNext("h") as unknown as Val,
+  ) as unknown as TisynFn<[Val], Val>;
+
+  it("IL-CO-001: sibling inline lanes share owner — B can use A's handle", function* () {
+    // Inline A subscribes; inline B uses the handle. Both triggered by
+    // sequential caller effects, each handled by middleware that invokes
+    // the corresponding body.
+    let handleFromA: Val | undefined;
+    let nextResultInB: Val | undefined;
+
+    yield* Effects.around({
+      *dispatch([effectId, data]: [string, Val], next) {
+        if (effectId === "parent.triggerA") {
+          handleFromA = yield* invokeInline<Val>(asFn(subscribeBodyFn("source")), []);
+          return null as Val;
+        }
+        if (effectId === "parent.triggerB") {
+          nextResultInB = yield* invokeInline<Val>(asFn(nextBodyFn), [handleFromA as Val]);
+          return null as Val;
+        }
+        return yield* next(effectId, data);
+      },
+    });
+    yield* Effects.around(
+      {
+        *dispatch([_e, _d]: [string, Val]) {
+          return null as Val;
+        },
+      },
+      { at: "min" },
+    );
+
+    // IR: let _ = parent.triggerA in parent.triggerB
+    const ir = {
+      tisyn: "eval",
+      id: "let",
+      data: {
+        tisyn: "quote",
+        expr: {
+          name: "_",
+          value: { tisyn: "eval", id: "parent.triggerA", data: [] },
+          body: { tisyn: "eval", id: "parent.triggerB", data: [] },
+        },
+      },
+    };
+
+    const { journal } = yield* execute({
+      ir: ir as never,
+      env: { source: mockStream([42]) as unknown as Val },
+    });
+
+    // stream.subscribe journaled under lane A (root.0).
+    const subEvent = yields(journal).find(
+      (e) => e.description.type === "stream" && e.description.name === "subscribe",
+    );
+    expect(subEvent?.coroutineId).toBe("root.0");
+    // stream.next journaled under lane B (root.1).
+    const nextEvent = yields(journal).find(
+      (e) => e.description.type === "stream" && e.description.name === "next",
+    );
+    expect(nextEvent?.coroutineId).toBe("root.1");
+    // No ancestry failure and the iteration returned 42.
+    expect(nextResultInB).toEqual({ done: false, value: 42 });
+    // Handle token prefix uses owner (root), not lane id.
+    expect((handleFromA as Record<string, unknown>).__tisyn_subscription).toMatch(/^sub:root:\d+$/);
+  });
+
+  it("IL-CO-002: nested inline subscribes; caller uses handle after inline returns", function* () {
+    // Outer inline invokes inner inline, which subscribes and returns the
+    // handle. Outer returns the handle. Middleware captures it, then the
+    // caller's kernel dispatches stream.next with that handle.
+    const outerBody: TisynFn<[], Val> = Fn<[], Val>(
+      [],
+      Eval<Val>("outer.trigger", Q([])),
+    ) as unknown as TisynFn<[], Val>;
+
+    let outerLaneHandle: Val | undefined;
+
+    yield* Effects.around({
+      *dispatch([effectId, data]: [string, Val], next) {
+        if (effectId === "parent.acquire") {
+          outerLaneHandle = yield* invokeInline<Val>(asFn(outerBody), []);
+          return outerLaneHandle as Val;
+        }
+        if (effectId === "outer.trigger") {
+          // Middleware handling the inner-level effect invokes the
+          // innermost inline lane which does the actual subscribe.
+          return yield* invokeInline<Val>(asFn(subscribeBodyFn("source")), []);
+        }
+        return yield* next(effectId, data);
+      },
+    });
+    yield* Effects.around(
+      {
+        *dispatch([_e, _d]: [string, Val]) {
+          return null as Val;
+        },
+      },
+      { at: "min" },
+    );
+
+    // IR: let h = parent.acquire in stream.next([h])
+    const ir = {
+      tisyn: "eval",
+      id: "let",
+      data: {
+        tisyn: "quote",
+        expr: {
+          name: "h",
+          value: { tisyn: "eval", id: "parent.acquire", data: [] },
+          body: { tisyn: "eval", id: "stream.next", data: [Ref("h")] },
+        },
+      },
+    };
+
+    const { result, journal } = yield* execute({
+      ir: ir as never,
+      env: { source: mockStream([99]) as unknown as Val },
+    });
+
+    // Caller's stream.next succeeded — ancestry passed (owner is root at
+    // both sites: the outer invokeInline inherited, the inner one too).
+    expect(result).toEqual({ status: "ok", value: { done: false, value: 99 } });
+
+    // The subscribe event is under the innermost lane (root.0.0).
+    const subEvent = yields(journal).find(
+      (e) => e.description.type === "stream" && e.description.name === "subscribe",
+    );
+    expect(subEvent?.coroutineId).toBe("root.0.0");
+    // The next event is under the caller (root).
+    const nextEvent = yields(journal).find(
+      (e) => e.description.type === "stream" && e.description.name === "next",
+    );
+    expect(nextEvent?.coroutineId).toBe("root");
+  });
+
+  it("IL-CO-003: stream.subscribe YieldEvent journals under laneId with owner-keyed token", function* () {
+    yield* Effects.around({
+      *dispatch([effectId, data]: [string, Val], next) {
+        if (effectId === "parent.trigger") {
+          yield* invokeInline<Val>(asFn(subscribeBodyFn("source")), []);
+          return null as Val;
+        }
+        return yield* next(effectId, data);
+      },
+    });
+    yield* Effects.around(
+      {
+        *dispatch([_e, _d]: [string, Val]) {
+          return null as Val;
+        },
+      },
+      { at: "min" },
+    );
+
+    const { journal } = yield* execute({
+      ir: effectIR("parent", "trigger") as never,
+      env: { source: mockStream([]) as unknown as Val },
+    });
+
+    const subEvent = yields(journal).find(
+      (e) => e.description.type === "stream" && e.description.name === "subscribe",
+    );
+    expect(subEvent).toBeDefined();
+    // Journal identity: lane coroutineId, NOT the caller's.
+    expect(subEvent?.coroutineId).toBe("root.0");
+    // Token prefix: owner coroutineId (the caller, root), not the lane id.
+    const handle = (subEvent!.result as { status: "ok"; value: Record<string, unknown> }).value;
+    expect(handle.__tisyn_subscription).toMatch(/^sub:root:\d+$/);
+  });
+
+  it("IL-CO-007: YieldEvent shape unchanged — no ownerCoroutineId field", function* () {
+    yield* Effects.around({
+      *dispatch([effectId, data]: [string, Val], next) {
+        if (effectId === "parent.trigger") {
+          yield* invokeInline<Val>(asFn(subscribeBodyFn("source")), []);
+          return null as Val;
+        }
+        return yield* next(effectId, data);
+      },
+    });
+    yield* Effects.around(
+      {
+        *dispatch([_e, _d]: [string, Val]) {
+          return null as Val;
+        },
+      },
+      { at: "min" },
+    );
+
+    const stream = new InMemoryStream();
+    yield* execute({
+      ir: effectIR("parent", "trigger") as never,
+      stream,
+      env: { source: mockStream([]) as unknown as Val },
+    });
+    const persisted = yield* stream.readAll();
+
+    const subEvent = persisted.find(
+      (e) =>
+        e.type === "yield" &&
+        (e as YieldEvent).description.type === "stream" &&
+        (e as YieldEvent).description.name === "subscribe",
+    );
+    expect(subEvent).toBeDefined();
+    // Normative durable-event keys only — no runtime-only owner field
+    // leaks into the stream.
+    const keys = Object.keys(subEvent as object).sort();
+    expect(keys).toEqual(["coroutineId", "description", "result", "type"]);
+  });
+
+  it("IL-CO-011: caller + two sibling inline lanes allocate unique owner-counter tokens", function* () {
+    // IR: caller subscribe, then two sequential inline subscribes via
+    // middleware triggers.
+    const ir = {
+      tisyn: "eval",
+      id: "let",
+      data: {
+        tisyn: "quote",
+        expr: {
+          name: "h0",
+          value: streamSubscribe("source"),
+          body: {
+            tisyn: "eval",
+            id: "let",
+            data: {
+              tisyn: "quote",
+              expr: {
+                name: "_1",
+                value: { tisyn: "eval", id: "parent.triggerA", data: [] },
+                body: { tisyn: "eval", id: "parent.triggerB", data: [] },
+              },
+            },
+          },
+        },
+      },
+    };
+
+    yield* Effects.around({
+      *dispatch([effectId, data]: [string, Val], next) {
+        if (effectId === "parent.triggerA") {
+          yield* invokeInline<Val>(asFn(subscribeBodyFn("source")), []);
+          return null as Val;
+        }
+        if (effectId === "parent.triggerB") {
+          yield* invokeInline<Val>(asFn(subscribeBodyFn("source")), []);
+          return null as Val;
+        }
+        return yield* next(effectId, data);
+      },
+    });
+    yield* Effects.around(
+      {
+        *dispatch([_e, _d]: [string, Val]) {
+          return null as Val;
+        },
+      },
+      { at: "min" },
+    );
+
+    const { journal } = yield* execute({
+      ir: ir as never,
+      env: { source: mockStream([]) as unknown as Val },
+    });
+
+    const subEvents = yields(journal).filter(
+      (e) => e.description.type === "stream" && e.description.name === "subscribe",
+    );
+    expect(subEvents).toHaveLength(3);
+
+    const tokens = subEvents.map(
+      (e) =>
+        (e.result as { status: "ok"; value: { __tisyn_subscription: string } }).value
+          .__tisyn_subscription,
+    );
+    // All three tokens distinct.
+    expect(new Set(tokens).size).toBe(3);
+    // All three share the owner (root), allocated sequentially from one counter.
+    expect(tokens).toEqual(["sub:root:0", "sub:root:1", "sub:root:2"]);
+
+    // Subscribe events under root (caller), root.0 (lane A), root.1 (lane B).
+    expect(subEvents.map((e) => e.coroutineId)).toEqual(["root", "root.0", "root.1"]);
+  });
+
+  it("IL-CO-012: sibling lane can use another sibling lane's handle via shared owner", function* () {
+    // Lane A subscribes and returns handle H; lane B uses H to take one
+    // item. Both lanes share the same owner (caller = root), so ancestry
+    // passes and the tokens belong to the same counter family.
+    let handleFromA: Val | undefined;
+    let itemInB: Val | undefined;
+
+    yield* Effects.around({
+      *dispatch([effectId, data]: [string, Val], next) {
+        if (effectId === "parent.triggerA") {
+          handleFromA = yield* invokeInline<Val>(asFn(subscribeBodyFn("source")), []);
+          return null as Val;
+        }
+        if (effectId === "parent.triggerB") {
+          // Lane B subscribes first (T2) then uses H from A.
+          const bBodySubscribeThenUseA: TisynFn<[Val], Val> = Fn<[Val], Val>(["h"], {
+            tisyn: "eval",
+            id: "let",
+            data: {
+              tisyn: "quote",
+              expr: {
+                name: "_own",
+                value: streamSubscribe("source"),
+                body: streamNext("h"),
+              },
+            },
+          } as unknown as Val) as unknown as TisynFn<[Val], Val>;
+          itemInB = yield* invokeInline<Val>(asFn(bBodySubscribeThenUseA), [handleFromA as Val]);
+          return null as Val;
+        }
+        return yield* next(effectId, data);
+      },
+    });
+    yield* Effects.around(
+      {
+        *dispatch([_e, _d]: [string, Val]) {
+          return null as Val;
+        },
+      },
+      { at: "min" },
+    );
+
+    const ir = {
+      tisyn: "eval",
+      id: "let",
+      data: {
+        tisyn: "quote",
+        expr: {
+          name: "_",
+          value: { tisyn: "eval", id: "parent.triggerA", data: [] },
+          body: { tisyn: "eval", id: "parent.triggerB", data: [] },
+        },
+      },
+    };
+
+    const { journal } = yield* execute({
+      ir: ir as never,
+      env: { source: mockStream([7]) as unknown as Val },
+    });
+
+    // Ancestry passed: lane B successfully pulled from lane A's handle.
+    expect(itemInB).toEqual({ done: false, value: 7 });
+
+    // Two subscribes → two tokens, pairwise distinct, both under root owner.
+    const subEvents = yields(journal).filter(
+      (e) => e.description.type === "stream" && e.description.name === "subscribe",
+    );
+    expect(subEvents).toHaveLength(2);
+    const tokens = subEvents.map(
+      (e) =>
+        (e.result as { status: "ok"; value: { __tisyn_subscription: string } }).value
+          .__tisyn_subscription,
+    );
+    expect(tokens).toEqual(["sub:root:0", "sub:root:1"]);
+  });
+
+  it("IL-CO-013: replay advances owner counter; post-replay live token continues the sequence", function* () {
+    // Live run: caller sub (T0), parent.triggerA (inline sub — T1), caller sub (T2).
+    // Same nested-let structure as IL-CO-011 but the final body is a third
+    // caller-level stream.subscribe rather than a second trigger effect, so
+    // the IR itself evaluates to the third handle.
+    const ir = {
+      tisyn: "eval",
+      id: "let",
+      data: {
+        tisyn: "quote",
+        expr: {
+          name: "h0",
+          value: streamSubscribe("source"),
+          body: {
+            tisyn: "eval",
+            id: "let",
+            data: {
+              tisyn: "quote",
+              expr: {
+                name: "_1",
+                value: { tisyn: "eval", id: "parent.triggerA", data: [] },
+                body: streamSubscribe("source"),
+              },
+            },
+          },
+        },
+      },
+    };
+
+    const run = function* (stream: InMemoryStream) {
+      yield* Effects.around({
+        *dispatch([effectId, data]: [string, Val], next) {
+          if (effectId === "parent.triggerA") {
+            yield* invokeInline<Val>(asFn(subscribeBodyFn("source")), []);
+            return null as Val;
+          }
+          return yield* next(effectId, data);
+        },
+      });
+      yield* Effects.around(
+        {
+          *dispatch([_e, _d]: [string, Val]) {
+            return null as Val;
+          },
+        },
+        { at: "min" },
+      );
+      return yield* execute({
+        ir: ir as never,
+        stream,
+        env: { source: mockStream([]) as unknown as Val },
+      });
+    };
+
+    const stream = new InMemoryStream();
+    const first = yield* run(stream);
+    const second = yield* run(stream);
+
+    // Byte-identical journals — owner counter reconstructed deterministically.
+    expect(second.journal).toEqual(first.journal);
+
+    const subEvents = yields(first.journal).filter(
+      (e) => e.description.type === "stream" && e.description.name === "subscribe",
+    );
+    const tokens = subEvents.map(
+      (e) =>
+        (e.result as { status: "ok"; value: { __tisyn_subscription: string } }).value
+          .__tisyn_subscription,
+    );
+    // All three sequentially from owner root's shared counter.
+    expect(tokens).toEqual(["sub:root:0", "sub:root:1", "sub:root:2"]);
+  });
+
+  it("IL-CO-014: invoke child uses its own subscription namespace (token owner = child coroutineId)", function* () {
+    // `invoke` child subscribes inside its own coroutine. Per v6 §12.8
+    // the child's own coroutineId is its own owner — so the subscription
+    // token must be prefixed with the child's coroutineId, not the
+    // caller's. We cannot smuggle the handle out of the child (RV3 on
+    // close values, RV2 on capture-effect data), so we inspect the
+    // child's stream.subscribe YieldEvent directly from the journal.
+    //
+    // Ancestry-failure when a foreign coroutine tries to use a handle is
+    // already covered by the existing stream-iteration RV1 tests; this
+    // test pins the Phase 5C invariant that `invoke` children get a
+    // fresh subscription namespace rather than inheriting the caller's
+    // owner.
+    const childBody: TisynFn<[], Val> = Fn<[], Val>([], {
+      tisyn: "eval",
+      id: "let",
+      data: {
+        tisyn: "quote",
+        expr: {
+          name: "_h",
+          value: streamSubscribe("source"),
+          body: Q(null),
+        },
+      },
+    } as unknown as Val) as unknown as TisynFn<[], Val>;
+
+    yield* Effects.around({
+      *dispatch([effectId, data]: [string, Val], next) {
+        if (effectId === "parent.childSub") {
+          yield* invoke<Val>(asFn(childBody), []);
+          return null as Val;
+        }
+        return yield* next(effectId, data);
+      },
+    });
+    yield* Effects.around(
+      {
+        *dispatch([_e, _d]: [string, Val]) {
+          return null as Val;
+        },
+      },
+      { at: "min" },
+    );
+
+    const { journal } = yield* execute({
+      ir: effectIR("parent", "childSub") as never,
+      env: { source: mockStream([]) as unknown as Val },
+    });
+
+    // Subscribe YieldEvent under the invoke child's coroutineId.
+    const childSubEvent = yields(journal).find(
+      (e) =>
+        e.coroutineId === "root.0" &&
+        e.description.type === "stream" &&
+        e.description.name === "subscribe",
+    );
+    expect(childSubEvent).toBeDefined();
+    const handle = (
+      childSubEvent!.result as {
+        status: "ok";
+        value: { __tisyn_subscription: string };
+      }
+    ).value;
+    // Token prefix is the invoke child's own coroutineId — NOT the
+    // caller's root. §12.8: invoke resets owner to its own id.
+    expect(handle.__tisyn_subscription).toMatch(/^sub:root\.0:\d+$/);
+    expect(handle.__tisyn_subscription.startsWith("sub:root:")).toBe(false);
+  });
+
+  // ── Regression: compound externals still rejected inside inline ──
+
+  it("regression: resource inside inline body still rejects with clear error", function* () {
+    // IR: resource body inside inline body.
+    const resourceInner = {
+      tisyn: "eval",
+      id: "resource",
+      data: {
+        tisyn: "quote",
+        expr: { body: { tisyn: "eval", id: "provide", data: 0 } },
+      },
+    };
+    const bodyWithResource: TisynFn<[], Val> = Fn<[], Val>(
+      [],
+      resourceInner as unknown as Val,
+    ) as unknown as TisynFn<[], Val>;
+
+    yield* Effects.around({
+      *dispatch([effectId, data]: [string, Val], next) {
+        if (effectId === "parent.trigger") {
+          yield* invokeInline<Val>(asFn(bodyWithResource), []);
+          return null as Val;
+        }
+        return yield* next(effectId, data);
+      },
+    });
+    yield* Effects.around(
+      {
+        *dispatch([_e, _d]: [string, Val]) {
+          return null as Val;
+        },
+      },
+      { at: "min" },
+    );
+
+    const { result } = yield* execute({
+      ir: effectIR("parent", "trigger") as never,
+    });
+
+    expect(result.status).toBe("error");
+    if (result.status === "error") {
+      expect(result.error.message).toContain("resource");
+      expect(result.error.message).toContain(
+        "compound primitives inside inline bodies are deferred",
+      );
+    }
   });
 });

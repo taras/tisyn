@@ -32,6 +32,19 @@ import type { InvokeOpts } from "../dispatch.js";
  */
 export interface DispatchContext {
   readonly coroutineId: string;
+  /**
+   * Runtime-only identity used for capability ownership and shared
+   * subscription-counter allocation. Equals `coroutineId` for ordinary
+   * dispatch and for `invoke` children (the child's own coroutineId
+   * becomes its own owner). Inherited unchanged from the outermost
+   * `invokeInline`'s caller for inline lanes — sibling inline lanes
+   * and the caller itself share a single owner coroutineId, and thus
+   * a single subscription-token counter. See
+   * `tisyn-inline-invocation-specification.md` §12.3, §12.8.
+   *
+   * Not written into YieldEvents or any durable stream data.
+   */
+  readonly ownerCoroutineId: string;
   invoke<T = Val>(fn: FnNode, args: readonly Val[], opts?: InvokeOpts): Operation<T>;
   invokeInline<T = Val>(fn: FnNode, args: readonly Val[], opts?: InvokeOpts): Operation<T>;
 }
