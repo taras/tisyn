@@ -496,11 +496,12 @@ regression, not removal regression.
 | RD-EX-005 | Core | Journal-visible | Full existing nested-invocation test plan passes | Identical journals |
 | RD-EX-006 | Core | Journal-visible | Full existing payload-sensitive divergence tests pass | Identical journals |
 
-> **Note.** Test IDs `RD-PD-*` and `RD-EX-004` are reserved
-> for a future payload-fingerprint specification and are
-> intentionally not defined in this test plan. Test IDs
-> `RD-IL-*` and `RD-MX-003` are deliberately not defined here
-> either; inline-invocation coverage lives in
+> **Note.** Test IDs `RD-PD-*` are reserved for a future
+> payload-fingerprint specification and are intentionally not
+> defined in this test plan (payload-sensitive divergence
+> regression is already covered by `RD-EX-006`). Test IDs
+> `RD-IL-*`, `RD-MX-003`, and `RD-EX-004` are deliberately not
+> defined here either; inline-invocation coverage lives in
 > `tisyn-inline-invocation-test-plan.md`, which is the
 > authoritative test plan for `invokeInline` semantics.
 
