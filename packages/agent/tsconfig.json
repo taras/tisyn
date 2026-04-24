@@ -6,5 +6,10 @@
   },
   "include": ["src"],
   "exclude": ["src/**/*.test.ts"],
-  "references": [{ "path": "../ir" }, { "path": "../kernel" }, { "path": "../effects" }]
+  "references": [
+    { "path": "../context-api" },
+    { "path": "../ir" },
+    { "path": "../kernel" },
+    { "path": "../effects" }
+  ]
 }

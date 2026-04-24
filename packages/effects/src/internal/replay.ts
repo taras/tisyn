@@ -8,7 +8,7 @@
  */
 
 import type { Operation } from "effection";
-import type { PropertyMiddleware } from "@effectionx/context-api";
+import type { PropertyMiddleware } from "@tisyn/context-api";
 import type { Val } from "@tisyn/ir";
 import { EffectsApi } from "../dispatch.js";
 

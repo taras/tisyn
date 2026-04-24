@@ -160,12 +160,12 @@ importers:
 
   packages/agent:
     dependencies:
-      '@effectionx/context-api':
-        specifier: https://pkg.pr.new/@effectionx/context-api@215
-        version: https://pkg.pr.new/@effectionx/context-api@215(effection@4.0.2)
       '@effectionx/middleware':
         specifier: ^0.1.1
         version: 0.1.1
+      '@tisyn/context-api':
+        specifier: workspace:*
+        version: link:../context-api
       '@tisyn/effects':
         specifier: workspace:*
         version: link:../effects
@@ -426,6 +426,22 @@ importers:
         specifier: ^4
         version: 4.1.0(@types/node@25.5.0)(vite@7.3.1(@types/node@25.5.0)(tsx@4.21.0))
 
+  packages/context-api:
+    dependencies:
+      '@effectionx/middleware':
+        specifier: ^0.1.1
+        version: 0.1.1
+    devDependencies:
+      '@effectionx/vitest':
+        specifier: ^0.3.0
+        version: 0.3.1(effection@4.0.2)(vitest@4.1.0(@types/node@25.5.0)(vite@7.3.1(@types/node@25.5.0)(tsx@4.21.0)))
+      effection:
+        specifier: 4.0.2
+        version: 4.0.2
+      vitest:
+        specifier: ^4
+        version: 4.1.0(@types/node@25.5.0)(vite@7.3.1(@types/node@25.5.0)(tsx@4.21.0))
+
   packages/dsl:
     dependencies:
       '@tisyn/ir':
@@ -457,12 +473,12 @@ importers:
 
   packages/effects:
     dependencies:
-      '@effectionx/context-api':
-        specifier: https://pkg.pr.new/@effectionx/context-api@215
-        version: https://pkg.pr.new/@effectionx/context-api@215(effection@4.0.2)
       '@effectionx/middleware':
         specifier: ^0.1.1
         version: 0.1.1
+      '@tisyn/context-api':
+        specifier: workspace:*
+        version: link:../context-api
       '@tisyn/ir':
         specifier: workspace:*
         version: link:../ir
@@ -517,15 +533,15 @@ importers:
 
   packages/runtime:
     dependencies:
-      '@effectionx/context-api':
-        specifier: https://pkg.pr.new/@effectionx/context-api@215
-        version: https://pkg.pr.new/@effectionx/context-api@215(effection@4.0.2)
       '@tisyn/agent':
         specifier: workspace:*
         version: link:../agent
       '@tisyn/config':
         specifier: workspace:*
         version: link:../config
+      '@tisyn/context-api':
+        specifier: workspace:*
+        version: link:../context-api
       '@tisyn/durable-streams':
         specifier: workspace:*
         version: link:../durable-streams
@@ -854,12 +870,6 @@ packages:
 
   '@changesets/write@0.4.0':
     resolution: {integrity: sha512-CdTLvIOPiCNuH71pyDu3rA+Q0n65cmAbXnwWH84rKGiFumFzkmHNT8KHTMEchcxN+Kl8I54xGUhJ7l3E7X396Q==}
-
-  '@effectionx/context-api@https://pkg.pr.new/@effectionx/context-api@215':
-    resolution: {tarball: https://pkg.pr.new/@effectionx/context-api@215}
-    version: 0.7.0
-    peerDependencies:
-      effection: ^3 || ^4
 
   '@effectionx/converge@0.1.4':
     resolution: {integrity: sha512-M11KU7jK3gOFGI4RT+Bf6ITMJntzzoGEO2KPx9r8uBoR+Rgwiyeuq+OeIHkuiHLUC+bB1g93KOj7aKR/G0F1/Q==}
@@ -3063,11 +3073,6 @@ snapshots:
       fs-extra: 7.0.1
       human-id: 4.1.3
       prettier: 2.8.8
-
-  '@effectionx/context-api@https://pkg.pr.new/@effectionx/context-api@215(effection@4.0.2)':
-    dependencies:
-      '@effectionx/middleware': 0.1.1
-      effection: 4.0.2
 
   '@effectionx/converge@0.1.4(effection@4.0.2)':
     dependencies:

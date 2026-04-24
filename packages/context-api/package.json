@@ -1,14 +1,16 @@
 {
-  "name": "@tisyn/agent",
+  "name": "@tisyn/context-api",
   "version": "0.14.0",
-  "license": "UNLICENSED",
+  "license": "MIT",
   "repository": {
     "type": "git",
     "url": "https://github.com/taras/tisyn.git",
-    "directory": "packages/agent"
+    "directory": "packages/context-api"
   },
   "files": [
-    "dist"
+    "dist",
+    "LICENSE",
+    "README.md"
   ],
   "type": "module",
   "main": "./dist/index.js",
@@ -27,16 +29,10 @@
     "test": "vitest run"
   },
   "dependencies": {
-    "@effectionx/middleware": "^0.1.1",
-    "@tisyn/context-api": "workspace:*",
-    "@tisyn/effects": "workspace:*",
-    "@tisyn/ir": "workspace:*",
-    "@tisyn/kernel": "workspace:*"
+    "@effectionx/middleware": "^0.1.1"
   },
   "devDependencies": {
     "@effectionx/vitest": "^0.3.0",
-    "@tisyn/durable-streams": "workspace:*",
-    "@tisyn/runtime": "workspace:*",
     "effection": "4.0.2",
     "vitest": "^4"
   },

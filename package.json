@@ -1,7 +1,6 @@
 {
   "private": true,
   "scripts": {
-    "postinstall": "node scripts/patch-context-api-preview.mjs",
     "build": "tsc --build",
     "test": "pnpm -r run test && pnpm run test:oxlint-plugin",
     "test:oxlint-plugin": "node --test tools/oxlint/test/*.test.mjs",

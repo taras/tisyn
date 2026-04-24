@@ -9,7 +9,7 @@
  */
 
 import type { Operation } from "effection";
-import { createApi } from "@effectionx/context-api";
+import { createApi } from "@tisyn/context-api";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { isAbsolute } from "node:path";
 import { loadModule as defaultLoadModule, ModuleLoadError } from "./load-module.js";

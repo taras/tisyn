@@ -31,8 +31,8 @@
     "test": "vitest run --passWithNoTests"
   },
   "dependencies": {
-    "@effectionx/context-api": "https://pkg.pr.new/@effectionx/context-api@215",
     "@effectionx/middleware": "^0.1.1",
+    "@tisyn/context-api": "workspace:*",
     "@tisyn/ir": "workspace:*",
     "@tisyn/kernel": "workspace:*"
   },

@@ -5,6 +5,5 @@
     "rootDir": "./src"
   },
   "include": ["src"],
-  "exclude": ["src/**/*.test.ts"],
-  "references": [{ "path": "../context-api" }, { "path": "../ir" }, { "path": "../kernel" }]
+  "exclude": ["src/**/*.test.ts"]
 }
