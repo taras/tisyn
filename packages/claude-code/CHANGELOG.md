@@ -1,5 +1,55 @@
 # @tisyn/claude-code
 
+## 0.14.0
+
+### Minor Changes
+
+- 89c8355: **BREAKING:** The Claude Code adapter no longer accepts the legacy
+  single-parameter envelope shape (e.g. `{ args: { session, prompt } }`,
+  `{ config: { model } }`, `{ handle: { sessionId } }`,
+  `{ session: { sessionId } }`, `{ data: forkData }`). The compiler now
+  emits operation payloads unwrapped, and both the ACP stdio adapter
+  and the SDK adapter forward the effect payload directly: ACP receives
+  it as top-level `params`; the SDK receives it as the operation input.
+
+  Callers dispatching against the Claude Code agent must use the
+  unwrapped payload shape — for example, dispatch
+  `{ session, prompt }` to `claude-code.plan` instead of
+  `{ args: { session, prompt } }`.
+
+- 51d11f5: **BREAKING:** `claude-code.newSession` against the Claude Code SDK
+  adapter or the ACP binding now throws an `InvalidPayload` error when
+  the payload contains any key other than `model`. Previously such
+  payloads (e.g. `{ config: { model: "..." } }`) were silently accepted
+  and the adapter fell back to default model selection.
+
+  Dispatch the payload directly — `dispatch(ClaudeCode.newSession({}))`
+  or `dispatch(ClaudeCode.newSession({ model: "..." }))`.
+
+### Patch Changes
+
+- Updated dependencies [e7d62c6]
+- Updated dependencies [4766e26]
+- Updated dependencies [29707e6]
+- Updated dependencies [e1e37b2]
+- Updated dependencies [51d11f5]
+- Updated dependencies [c268fc0]
+- Updated dependencies [969d91f]
+- Updated dependencies [ad2e267]
+- Updated dependencies [dde36c6]
+- Updated dependencies [0f255bf]
+- Updated dependencies [2037b6b]
+- Updated dependencies [29707e6]
+- Updated dependencies [e7d62c6]
+- Updated dependencies [51d11f5]
+- Updated dependencies [4766e26]
+  - @tisyn/agent@0.15.0
+  - @tisyn/code-agent@0.3.0
+  - @tisyn/effects@0.3.0
+  - @tisyn/transport@0.15.0
+  - @tisyn/ir@0.15.0
+  - @tisyn/protocol@0.15.0
+
 ## 0.13.0
 
 ### Minor Changes

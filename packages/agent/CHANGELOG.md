@@ -1,5 +1,63 @@
 # @tisyn/agent
 
+## 0.15.0
+
+### Minor Changes
+
+- e7d62c6: **BREAKING:** `Agents.use()` and `implementAgent(...).install()` now
+  register their dispatch middleware at `{ at: "min" }` (below user
+  middleware) instead of the default max priority. User-installed
+  `Effects.around` interceptors, including those installed after the
+  agent binding, continue to observe and can transform a dispatch
+  before the framework handler resolves it — the change to `min` makes
+  the framework handler sit strictly below the user-middleware region.
+
+  This prepares the ground for the replay-aware dispatch boundary
+  planned in #125, which will sit between max-priority user middleware
+  and min-priority framework handlers. No replay logic is introduced
+  yet.
+
+  `resolve` middleware (used by `useAgent` binding-probe) is **not**
+  moved — it remains at default priority. The single previous
+  `Effects.around({ dispatch, resolve })` registration is now split
+  into two separate `Effects.around` calls so the priority change is
+  scoped to dispatch only.
+
+  Callers that already install their own `{ at: "min" }` core handlers
+  downstream of `Agents.use` / `implementAgent` should note that two
+  min-priority entries now coexist; relative ordering between them
+  follows registration order.
+
+- 4766e26: Documentation: README updated to teach the new single-parameter
+  payload rule. Single-parameter operations pass their argument
+  through directly as the payload (no `{ input: ... }` wrapper);
+  multi-parameter operations still receive a named object keyed by
+  parameter names. Examples for `agent()`, `Agents.use()`,
+  `useAgent()`, and `dispatch()` use the unwrapped shape.
+
+  No runtime API changes in this package — the bump tracks the
+  fixed-group `@tisyn/compiler` change that drives the new payload
+  shape.
+
+### Patch Changes
+
+- 29707e6: Swap the preview `@effectionx/context-api` dependency for
+  the in-repo workspace vendor `@tisyn/context-api`. No
+  behavior change in public `@tisyn/agent` API or observable
+  facade / middleware-composition semantics.
+- Updated dependencies [29707e6]
+- Updated dependencies [c268fc0]
+- Updated dependencies [969d91f]
+- Updated dependencies [ad2e267]
+- Updated dependencies [dde36c6]
+- Updated dependencies [0f255bf]
+- Updated dependencies [2037b6b]
+- Updated dependencies [29707e6]
+  - @tisyn/context-api@0.15.0
+  - @tisyn/effects@0.3.0
+  - @tisyn/ir@0.15.0
+  - @tisyn/kernel@0.15.0
+
 ## 0.14.0
 
 ### Minor Changes

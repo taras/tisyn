@@ -1,5 +1,26 @@
 # @tisyn/cli
 
+## 0.6.2
+
+### Patch Changes
+
+- Updated dependencies [4766e26]
+- Updated dependencies [0f255bf]
+- Updated dependencies [43e8c48]
+- Updated dependencies [969d91f]
+- Updated dependencies [33c6391]
+- Updated dependencies [dde36c6]
+- Updated dependencies [2037b6b]
+- Updated dependencies [29707e6]
+- Updated dependencies [e7d62c6]
+- Updated dependencies [51d11f5]
+- Updated dependencies [4766e26]
+  - @tisyn/compiler@0.15.0
+  - @tisyn/runtime@0.15.0
+  - @tisyn/transport@0.15.0
+  - @tisyn/ir@0.15.0
+  - @tisyn/durable-streams@0.15.0
+
 ## 0.6.1
 
 ### Patch Changes
