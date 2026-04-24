@@ -3,14 +3,18 @@ import { defineConfig } from "vitest/config";
 
 export default defineConfig({
   resolve: {
-    alias: {
-      "@tisyn/ir": resolve(__dirname, "../ir/src/index.ts"),
-      "@tisyn/kernel": resolve(__dirname, "../kernel/src/index.ts"),
-      "@tisyn/agent": resolve(__dirname, "../agent/src/index.ts"),
-      "@tisyn/protocol": resolve(__dirname, "../protocol/src/index.ts"),
-      "@tisyn/runtime": resolve(__dirname, "../runtime/src/index.ts"),
-      "@tisyn/validate": resolve(__dirname, "../validate/src/index.ts"),
-    },
+    alias: [
+      { find: /^@tisyn\/ir$/, replacement: resolve(__dirname, "../ir/src/index.ts") },
+      { find: /^@tisyn\/kernel$/, replacement: resolve(__dirname, "../kernel/src/index.ts") },
+      { find: /^@tisyn\/agent$/, replacement: resolve(__dirname, "../agent/src/index.ts") },
+      { find: /^@tisyn\/protocol$/, replacement: resolve(__dirname, "../protocol/src/index.ts") },
+      { find: /^@tisyn\/runtime$/, replacement: resolve(__dirname, "../runtime/src/index.ts") },
+      {
+        find: /^@tisyn\/runtime\/execute$/,
+        replacement: resolve(__dirname, "../runtime/src/execute.ts"),
+      },
+      { find: /^@tisyn\/validate$/, replacement: resolve(__dirname, "../validate/src/index.ts") },
+    ],
   },
   test: {
     exclude: ["node_modules/**", "dist/**"],

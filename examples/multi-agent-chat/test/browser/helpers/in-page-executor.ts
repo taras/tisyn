@@ -1,7 +1,7 @@
 import { run } from "effection";
 import { Agents } from "@tisyn/agent";
-import { execute } from "@tisyn/runtime";
-import { InMemoryStream } from "@tisyn/durable-streams";
+import { execute } from "@tisyn/runtime/execute";
+import { InMemoryStream } from "@tisyn/durable-streams/browser";
 import { Call } from "@tisyn/ir";
 import type { IrInput } from "@tisyn/ir";
 import { Dom } from "../dom-workflows.generated.js";
