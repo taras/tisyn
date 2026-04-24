@@ -111,13 +111,19 @@ describe("End-to-end crash/replay", () => {
 
     let secondRunCallCount = 0;
     const secondResult = yield* scoped(function* () {
-      yield* Effects.around({
-        *dispatch([_effectId, _data]: [string, any]) {
-          secondRunCallCount++;
-          // This should only be called for step3 (the live effect)
-          return 30; // step3 result
+      // Install at `{ at: "min" }` so the stub agent sits below the runtime's
+      // replay-substitution boundary (§9.5). On replay the first two effects
+      // substitute from the journal before reaching min; only the live step3
+      // dispatch drives the mock.
+      yield* Effects.around(
+        {
+          *dispatch([_effectId, _data]: [string, any]) {
+            secondRunCallCount++;
+            return 30; // step3 result
+          },
         },
-      });
+        { at: "min" },
+      );
 
       return yield* execute({
         ir: ir as never,

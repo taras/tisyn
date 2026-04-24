@@ -76,12 +76,15 @@ describe("Recovery", () => {
     const stream = new InMemoryStream(stored);
 
     let agentCalled = false;
-    yield* Effects.around({
-      *dispatch([_effectId, _data]: [string, any]) {
-        agentCalled = true;
-        return 999;
+    yield* Effects.around(
+      {
+        *dispatch([_effectId, _data]: [string, any]) {
+          agentCalled = true;
+          return 999;
+        },
       },
-    });
+      { at: "min" },
+    );
 
     const ir = allIR(effectIR("a", "op1"), effectIR("a", "op2"));
 
@@ -104,12 +107,15 @@ describe("Recovery", () => {
     const stream = new InMemoryStream(stored);
 
     let liveCallCount = 0;
-    yield* Effects.around({
-      *dispatch([_effectId, _data]: [string, any]) {
-        liveCallCount++;
-        return 20;
+    yield* Effects.around(
+      {
+        *dispatch([_effectId, _data]: [string, any]) {
+          liveCallCount++;
+          return 20;
+        },
       },
-    });
+      { at: "min" },
+    );
 
     const ir = allIR(effectIR("a", "op1"), effectIR("a", "op2"));
 
@@ -131,12 +137,15 @@ describe("Recovery", () => {
     const stream = new InMemoryStream();
 
     let liveCallCount = 0;
-    yield* Effects.around({
-      *dispatch([_effectId, _data]: [string, any]) {
-        liveCallCount++;
-        return liveCallCount * 10;
+    yield* Effects.around(
+      {
+        *dispatch([_effectId, _data]: [string, any]) {
+          liveCallCount++;
+          return liveCallCount * 10;
+        },
       },
-    });
+      { at: "min" },
+    );
 
     const ir = allIR(effectIR("a", "op1"), effectIR("a", "op2"));
 
@@ -156,22 +165,28 @@ describe("Recovery", () => {
     // Run 1: fresh execution
     const { journal: journal1 } = yield* scoped(function* () {
       let callCount = 0;
-      yield* Effects.around({
-        *dispatch([_effectId, _data]: [string, any]) {
-          return ++callCount * 10;
+      yield* Effects.around(
+        {
+          *dispatch([_effectId, _data]: [string, any]) {
+            return ++callCount * 10;
+          },
         },
-      });
+        { at: "min" },
+      );
       return yield* execute({ ir: ir as never });
     });
 
     // Run 2: fresh execution with same IR
     const { journal: journal2 } = yield* scoped(function* () {
       let callCount = 0;
-      yield* Effects.around({
-        *dispatch([_effectId, _data]: [string, any]) {
-          return ++callCount * 10;
+      yield* Effects.around(
+        {
+          *dispatch([_effectId, _data]: [string, any]) {
+            return ++callCount * 10;
+          },
         },
-      });
+        { at: "min" },
+      );
       return yield* execute({ ir: ir as never });
     });
 
@@ -196,12 +211,15 @@ describe("Recovery", () => {
     const stream = new InMemoryStream(stored);
 
     let agentCalled = false;
-    yield* Effects.around({
-      *dispatch([_effectId, _data]: [string, any]) {
-        agentCalled = true;
-        return 999;
+    yield* Effects.around(
+      {
+        *dispatch([_effectId, _data]: [string, any]) {
+          agentCalled = true;
+          return 999;
+        },
       },
-    });
+      { at: "min" },
+    );
 
     const ir = raceIR(effectIR("a", "op1"), effectIR("a", "op2"));
 

@@ -915,7 +915,12 @@ behavior for every standard-effect dispatch:
 2. **If a stored entry exists (replay path):**
    - MUST return the stored result as the dispatch result.
    - MUST consume the replay cursor entry.
-   - MUST push a replayed `YieldEvent` to the durable stream.
+   - MUST push a replayed `YieldEvent` to the in-memory
+     execution journal returned by `execute`.
+   - MUST NOT append a duplicate replayed `YieldEvent` to the
+     backing durable stream. The durable stream is an
+     append-only record of live events only; replay
+     substitution MUST be idempotent against it.
    - MUST advance the coroutine's `yieldIndex`.
    - MUST NOT delegate into the min region or core handler.
      Min-priority middleware and the core handler MUST NOT

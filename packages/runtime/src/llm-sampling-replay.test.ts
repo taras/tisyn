@@ -126,12 +126,15 @@ describe("LLM Sampling — Replay", () => {
     const stream = new InMemoryStream(stored);
 
     let agentCalled = false;
-    yield* Effects.around({
-      *dispatch([_effectId, _data]: [string, any]) {
-        agentCalled = true;
-        return 999;
+    yield* Effects.around(
+      {
+        *dispatch([_effectId, _data]: [string, any]) {
+          agentCalled = true;
+          return 999;
+        },
       },
-    });
+      { at: "min" },
+    );
 
     const { result } = yield* execute({
       ir: singleEffectIR("llm", "sample") as never,
@@ -166,12 +169,15 @@ describe("LLM Sampling — Replay", () => {
     const stream = new InMemoryStream(stored);
 
     let agentCalled = false;
-    yield* Effects.around({
-      *dispatch([_effectId, _data]: [string, any]) {
-        agentCalled = true;
-        return 1;
+    yield* Effects.around(
+      {
+        *dispatch([_effectId, _data]: [string, any]) {
+          agentCalled = true;
+          return 1;
+        },
       },
-    });
+      { at: "min" },
+    );
 
     const { result } = yield* execute({
       ir: singleEffectIR("llm", "sample", { prompt: "different data" }) as never,
@@ -190,12 +196,15 @@ describe("LLM Sampling — Replay", () => {
     const stream = new InMemoryStream(stored);
 
     let agentCalled = false;
-    yield* Effects.around({
-      *dispatch([_effectId, _data]: [string, any]) {
-        agentCalled = true;
-        return 999;
+    yield* Effects.around(
+      {
+        *dispatch([_effectId, _data]: [string, any]) {
+          agentCalled = true;
+          return 999;
+        },
       },
-    });
+      { at: "min" },
+    );
 
     const { result } = yield* execute({
       ir: singleEffectIR("llm", "sample") as never,
@@ -247,11 +256,14 @@ describe("LLM Sampling — Progress Non-Durability", () => {
       progressEvents.push(event);
     });
 
-    yield* Effects.around({
-      *dispatch([_effectId, _data]: [string, any]) {
-        return 999;
+    yield* Effects.around(
+      {
+        *dispatch([_effectId, _data]: [string, any]) {
+          return 999;
+        },
       },
-    });
+      { at: "min" },
+    );
 
     const { result } = yield* execute({
       ir: singleEffectIR("llm", "sample") as never,
