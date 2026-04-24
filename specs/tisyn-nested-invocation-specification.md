@@ -320,6 +320,8 @@ The following are explicitly out of scope for this specification version and MUS
 - `invoke` from any site other than an `Effects.around({ dispatch })` body. Facade `.around(...)` middleware, `resolve` middleware, agent operation handlers, IR middleware, and compiler-authored middleware are **not** invoking surfaces in this revision; calls from those sites MUST throw `InvalidInvokeCallSiteError`.
 - Subordinate remote execution as a feature. §14 records only compatibility anchors.
 
+**Relationship to inline invocation.** Shared-lifetime inline execution is provided by `invokeInline` (`tisyn-inline-invocation-specification.md`). `invoke` from middleware handling inline-body dispatches retains full nested-invocation semantics.
+
 ---
 
 ## 16. Synchronized cross-spec amendments

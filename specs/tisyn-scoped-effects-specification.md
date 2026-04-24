@@ -176,6 +176,8 @@ intercepts user-defined effect calls.
 > `Effects.around()` middleware applies at the shared dispatch
 > boundary regardless of which path an effect takes to reach it.
 
+> The runtime MAY expose `invokeInline(fn, args, opts?)` from `Effects.around({ dispatch })` middleware. Effects journal under a distinct inline lane coroutineId (journal identity); capability ownership and counter allocation use the original caller's coroutineId (owner identity). Owner coroutineId is runtime context, not durable data. The lane does not produce a `CloseEvent`. Child-bearing primitives retain own semantics. Participates in §9.5 replay. Nested inline permitted. Semantics: `tisyn-inline-invocation-specification.md`.
+
 ### 3.2 Effect ID Namespace
 
 Effects are identified by string IDs. The `tisyn.*` namespace
@@ -1007,17 +1009,17 @@ through a separate path that bypasses the replay boundary.
 
 ---
 
-> **Note (future extensions).** This specification defines
-> replay substitution against the current
+> **Note (future extensions and interactions).** This
+> specification defines replay substitution against the current
 > `YieldEvent | CloseEvent` durable algebra and
-> effect-description (type + name) cursor matching. Two future
-> extensions are expected to compose with this model without
-> changing §9.5.1–§9.5.7: (a) payload-sensitive cursor
-> matching, if and when a payload-fingerprint specification is
-> adopted, and (b) inline invocation, if and when an
-> inline-invocation specification is adopted. Neither
-> extension is specified here, and neither is required for
-> conformance to §9.5.
+> effect-description (type + name) cursor matching.
+> Payload-sensitive cursor matching is expected to compose with
+> this model without changing §9.5.1–§9.5.7, if and when a
+> payload-fingerprint specification is adopted. Inline
+> invocation is specified by
+> `tisyn-inline-invocation-specification.md`; effects dispatched
+> during inline-body evaluation participate in §9.5 replay per
+> that specification's §9 (Replay Model).
 
 ---
 

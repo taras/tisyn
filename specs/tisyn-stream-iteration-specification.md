@@ -408,6 +408,10 @@ stream subscription handles.
 The string MUST be derived deterministically from `coroutineId`
 and a monotonic subscription counter within that coroutine.
 
+### 6.2.1 Subscription Counter Under Inline Invocation
+
+When a `stream.subscribe` effect is dispatched during inline-body evaluation (as defined by `tisyn-inline-invocation-specification.md`), the subscription counter from which the deterministic token is allocated MUST be the counter associated with the owner coroutineId, not the journal coroutineId. The owner coroutineId is the original inline caller's coroutineId per inline-invocation §12.3. All inline lanes that share the same owner coroutineId share a single subscription counter, ensuring token uniqueness across sibling and nested inline invocations. The `YieldEvent` for the `stream.subscribe` effect is written under the journal coroutineId (the inline lane) per normal journaling rules; the token inside the event result is drawn from the owner's shared counter. On replay, the counter is reconstructed by deterministic re-execution of the same inline-invocation sequence. Capability ancestry checks use the owner coroutineId per inline-invocation §12.7.
+
 ### 6.3 Restriction Table
 
 | Where | Permitted? | Enforced by |

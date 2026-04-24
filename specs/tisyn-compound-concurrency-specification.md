@@ -267,6 +267,10 @@ The `spawn_index` is the child's position in the `exprs` array of the originatin
 
 **Invariant I-ID:** Given the same IR and journal, task IDs MUST be identical across runs.
 
+Additionally, the unified `childSpawnCount` allocator is advanced by inline invocation. Each accepted `invokeInline(fn, args, opts?)` call from a valid dispatch-boundary call site (per `tisyn-inline-invocation-specification.md` §6.2) MUST advance the parent's `childSpawnCount` by exactly `+1`. The allocated coroutineId uses the standard `parentId.{k}` format and names an **inline lane** — a durable replay identity for journaling the inline body's effects. Unlike coroutineIds allocated by `invoke`, `spawn`, `resource`, `scope`, `timebox`, `all`, or `race`, the inline lane's coroutineId does not create a new Effection scope boundary and does not produce a `CloseEvent`. A rejected `invokeInline` call (invalid call site, invalid input) MUST NOT advance the allocator. Invariant I-ID applies uniformly: for the same IR, inputs, and middleware code, inline lane IDs allocated by `invokeInline` MUST be byte-identical across original run and replay, interleaved deterministically with IDs allocated by all other allocation origins.
+
+This amendment does not change the unified allocator's mechanics, counter format, or I-ID invariant. It adds `invokeInline` as a new allocation origin alongside the existing set, and documents that the allocated ID is an inline lane — not a child scope.
+
 ### 4.3 Task State Machine
 
 ```
