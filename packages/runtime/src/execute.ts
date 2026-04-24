@@ -185,21 +185,25 @@ type InlineResourceTarget =
     };
 
 /**
- * Shared spawn/join state for an `invokeInline` body. Inline bodies
- * do not maintain their own spawn/join tracking per §11.2 "no
- * intermediate scope"; instead they read and write the HOSTING
- * dispatch site's existing maps — `driveKernel`'s own
- * `spawnedTasks` + `joinedTasks`, or `orchestrateResourceChild`'s
- * init/cleanup-phase maps when the hosting dispatch is inside a
- * resource body. The shared map/set gives sibling inline lanes and
- * post-return caller code resolution parity with the hosting
- * kernel's own spawn/join yields (§11.5).
+ * Tisyn's durable task table for a given dispatch site. Maps the
+ * IR-level durable task id (the string inside a `{ __tisyn_task }`
+ * handle) to the live Effection join operation, and tracks the
+ * once-only `joinedTasks` set (R8). Bridges durable IR identity to
+ * live runtime operations; does NOT own scope or lifetime —
+ * Effection's `scoped(...)` owns those.
  *
- * Runtime-internal only. No `kind` discriminant: every dispatch
- * site passes a caller-scope registry because `spawn`/`join` are
- * already supported by every current hosting site.
+ * Every dispatch site that already supports spawn/join (root
+ * `driveKernel`, `orchestrateResourceChild` init and cleanup
+ * phases) maintains its own table locally. This interface is the
+ * typed reference through which an `invokeInline` body sees the
+ * hosting site's existing table — inline bodies do not maintain
+ * their own per §11.2 ("no intermediate scope"), so an inline-body
+ * `spawn` registers in, and an inline-body `join` resolves
+ * against, the host's table.
+ *
+ * Runtime-internal only. Not exported.
  */
-interface InlineTaskRegistry {
+interface DurableTaskTable {
   spawnedTasks: Map<string, { operation: Operation<EventResult> }>;
   joinedTasks: Set<string>;
 }
@@ -260,7 +264,7 @@ function buildDispatchContext(args: {
   driveContext: DriveContext;
   allocateChildId: () => string;
   inlineResourceTarget: InlineResourceTarget;
-  inlineTaskRegistry: InlineTaskRegistry;
+  durableTaskTable: DurableTaskTable;
 }): DispatchContext {
   const {
     coroutineId,
@@ -269,7 +273,7 @@ function buildDispatchContext(args: {
     driveContext,
     allocateChildId,
     inlineResourceTarget,
-    inlineTaskRegistry,
+    durableTaskTable,
   } = args;
   const self: DispatchContext = {
     coroutineId,
@@ -345,7 +349,7 @@ function buildDispatchContext(args: {
           driveContext,
           laneOwner,
           inlineResourceTarget,
-          inlineTaskRegistry,
+          durableTaskTable,
         );
 
       if (opts?.overlay) {
@@ -388,7 +392,7 @@ function buildDispatchContext(args: {
  *   resource-cleanup phase, the target rejects instead — preserving
  *   the ordinary-yield nested-resource rejection.
  * - `spawn` / `join` inside an inline body attach to the hosting
- *   caller's Effection scope and shared task registry (§11.5).
+ *   caller's Effection scope and durable task table (§11.5).
  *   Spawned child id is `laneId.{m}` from the lane's own
  *   `inlineChildSpawnCount`; the child runs via a full
  *   `driveKernel` and produces its own `CloseEvent` under that id.
@@ -409,7 +413,7 @@ function* driveInlineBody<T = Val>(
   ctx: DriveContext,
   ownerCoroutineId: string,
   inlineResourceTarget: InlineResourceTarget,
-  inlineTaskRegistry: InlineTaskRegistry,
+  durableTaskTable: DurableTaskTable,
 ): Operation<T> {
   // Own childSpawnCount per v6 §7.3. Subscription counter state lives on
   // `ctx.subscriptionCounters[ownerCoroutineId]`, shared with the caller
@@ -506,8 +510,9 @@ function* driveInlineBody<T = Val>(
       }
       if (descriptor.id === "spawn") {
         // §11.5: spawn a foreground child at the HOSTING caller's
-        // Effection scope and task registry. Lane allocator advances
-        // by exactly +1 (matches the `resource` rule above).
+        // Effection scope, registering in its durable task table.
+        // Lane allocator advances by exactly +1 (matches the
+        // `resource` rule above).
         const compoundData = descriptor.data as {
           __tisyn_inner: { body: Expr };
           __tisyn_env: Env;
@@ -523,7 +528,7 @@ function* driveInlineBody<T = Val>(
         // Register in the hosting site's shared spawnedTasks so
         // sibling inline lanes and post-return caller code can
         // resolve this handle.
-        inlineTaskRegistry.spawnedTasks.set(spawnChildId, { operation: joinOp });
+        durableTaskTable.spawnedTasks.set(spawnChildId, { operation: joinOp });
 
         yield* spawn(function* () {
           try {
@@ -565,12 +570,12 @@ function* driveInlineBody<T = Val>(
         // R8: double-join — shared set with hosting caller, so a
         // second join attempt from any lane or from caller code
         // against the same handle fails.
-        if (inlineTaskRegistry.joinedTasks.has(joinChildId)) {
+        if (durableTaskTable.joinedTasks.has(joinChildId)) {
           throw new RuntimeBugError(`join: task '${joinChildId}' has already been joined`);
         }
-        inlineTaskRegistry.joinedTasks.add(joinChildId);
+        durableTaskTable.joinedTasks.add(joinChildId);
 
-        const entry = inlineTaskRegistry.spawnedTasks.get(joinChildId);
+        const entry = durableTaskTable.spawnedTasks.get(joinChildId);
         if (!entry) {
           throw new RuntimeBugError(`join: no spawned task found for '${joinChildId}'`);
         }
@@ -639,10 +644,11 @@ function* driveInlineBody<T = Val>(
       // outermost caller's registration destination, so sibling lanes
       // and nested lanes all register with the same caller's array.
       inlineResourceTarget,
-      // Same inheritance for the task registry: sibling and nested
-      // inline lanes share the hosting caller's spawn/join maps so
-      // task handles are resolvable across lanes (§11.5).
-      inlineTaskRegistry,
+      // Same inheritance for the durable task table: sibling and
+      // nested inline lanes share the hosting caller's
+      // spawn/join maps so task handles are resolvable across
+      // lanes (§11.5).
+      durableTaskTable,
     });
 
     if (result.status === "ok") {
@@ -1149,10 +1155,10 @@ function* driveKernel(
             },
           },
           // §11.5: inline-body spawn/join shares this kernel's own
-          // task registry so handles acquired inside an inline body
-          // are resolvable across sibling inline lanes and
+          // durable task table so handles acquired inside an inline
+          // body are resolvable across sibling inline lanes and
           // post-return caller code.
-          inlineTaskRegistry: { spawnedTasks, joinedTasks },
+          durableTaskTable: { spawnedTasks, joinedTasks },
         });
 
         if (effectResult.status === "ok") {
@@ -1706,9 +1712,9 @@ function* orchestrateResourceChild(
           },
           // §11.5: inline-body spawn/join from middleware running on
           // a resource-init dispatch attaches to the init phase's
-          // shared task registry — matching where ordinary-yield
+          // durable task table — matching where ordinary-yield
           // `spawn` inside the resource init body already lands.
-          inlineTaskRegistry: { spawnedTasks, joinedTasks },
+          durableTaskTable: { spawnedTasks, joinedTasks },
         });
 
         if (effectResult.status === "ok") {
@@ -1928,10 +1934,10 @@ function* orchestrateResourceChild(
           },
           // §11.5: inline-body spawn/join from middleware running on
           // a resource-cleanup dispatch attaches to the cleanup
-          // phase's shared task registry — matching where
+          // phase's durable task table — matching where
           // ordinary-yield `spawn` inside the cleanup body itself
           // already lands.
-          inlineTaskRegistry: { spawnedTasks, joinedTasks },
+          durableTaskTable: { spawnedTasks, joinedTasks },
         });
 
         if (effectResult.status === "ok") {
@@ -2009,16 +2015,16 @@ interface DispatchStandardEffectParams {
    */
   inlineResourceTarget: InlineResourceTarget;
   /**
-   * Shared `spawn` / `join` tracking for `invokeInline` bodies:
-   * pair of maps from the hosting dispatch site's own
-   * `driveKernel`-like scope. Inline-body spawn/join reads and
-   * writes these maps directly so sibling inline lanes and
-   * post-return caller code can resolve task handles registered
-   * inside an inline body, and double-join is detected across the
-   * shared boundary (§11.5). Unused by ordinary (non-inline)
-   * dispatch paths.
+   * Reference to the hosting dispatch site's existing durable
+   * task table (`driveKernel`'s local `spawnedTasks` +
+   * `joinedTasks`, or `orchestrateResourceChild`'s
+   * init/cleanup-phase equivalents). Passed through so an
+   * `invokeInline` body can share the same table — an inline-
+   * body `spawn` registers in it, an inline-body `join` resolves
+   * against it, and R8 once-only join is enforced across the
+   * boundary (§11.5).
    */
-  inlineTaskRegistry: InlineTaskRegistry;
+  durableTaskTable: DurableTaskTable;
 }
 
 /**
@@ -2088,7 +2094,7 @@ function* dispatchStandardEffect(
     ctx,
     allocateChildId,
     inlineResourceTarget,
-    inlineTaskRegistry,
+    durableTaskTable,
   } = params;
 
   const description = parseEffectId(descriptor.id);
@@ -2260,7 +2266,7 @@ function* dispatchStandardEffect(
     driveContext: ctx,
     allocateChildId,
     inlineResourceTarget,
-    inlineTaskRegistry,
+    durableTaskTable,
   });
 
   const runtimeCtxValue: RuntimeDispatchValue = { coroutineId, ctx };

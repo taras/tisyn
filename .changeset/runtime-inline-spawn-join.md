@@ -11,6 +11,13 @@ returned task handle be joinable from the inline body
 itself, sibling inline lanes, or later caller code —
 without creating an inline scope boundary.
 
+The implementation shares the hosting dispatch site's
+existing durable task table (the pair of `spawnedTasks` +
+`joinedTasks` maps already maintained by `driveKernel` and
+`orchestrateResourceChild` for ordinary-yield spawn/join)
+with inline evaluation. No new inline-specific bookkeeping
+system is introduced.
+
 - **Spawn.** Inside an inline body, `spawn` allocates the
   child id from the lane's own `inlineChildSpawnCount` in
   `laneId.{m}` format and starts the child via
@@ -21,14 +28,14 @@ without creating an inline scope boundary.
   under `laneId.{m}`. The inline lane itself still produces
   no `CloseEvent`.
 - **Join.** Handles resolve against the hosting caller's
-  shared `spawnedTasks` map; the double-join set is also
-  shared, so the existing "already been joined" error fires
-  whether both joins are from the inline body, from siblings,
-  or across the caller boundary.
+  `spawnedTasks` map; the double-join set is also shared, so
+  the existing "already been joined" error fires whether
+  both joins are from the inline body, from siblings, or
+  across the caller boundary.
 - **Resource-body hosts unchanged.** When a resource init or
   cleanup body hosts the dispatch, inline-body spawn/join
-  attaches to THAT phase's spawn/join maps — mirroring where
-  ordinary-yield `spawn` from inside the resource body
+  attaches to THAT phase's durable task table — mirroring
+  where ordinary-yield `spawn` from inside the resource body
   already lands.
 
 `scope`, `timebox`, `all`, `race` inside inline bodies

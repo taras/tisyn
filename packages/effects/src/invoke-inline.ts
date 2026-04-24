@@ -38,11 +38,12 @@ import type { InvokeOpts } from "./dispatch.js";
  * `stream.subscribe` / `stream.next` with owner-coroutineId counter
  * allocation (§12.4), `resource` with provide-in-caller-scope and
  * cleanup-at-caller-teardown semantics (§11.4, §11.8), and
- * `spawn` / `join` with caller-scope lifetime and a shared task
- * registry (§11.5) — sibling inline lanes, post-return caller
- * code, and the inline body itself can all resolve task handles
- * acquired inside an inline body; double-join across the boundary
- * fails with the existing "already been joined" error. The
+ * `spawn` / `join` with caller-scope lifetime via the hosting
+ * site's durable task table (§11.5) — sibling inline lanes,
+ * post-return caller code, and the inline body itself can all
+ * resolve task handles acquired inside an inline body; double-join
+ * across the boundary fails with the existing "already been
+ * joined" error. The
  * remaining four compound externals (`scope`, `timebox`, `all`,
  * `race`) inside an inline body are still rejected with a clear
  * error; follow-up runtime phases will lift those. `resource`
