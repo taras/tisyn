@@ -22,10 +22,18 @@ import type { InvokeOpts } from "../dispatch.js";
  * @internal
  *
  * Cross-package seam describing the active dispatch chain.
+ *
+ * `invoke` runs a compiled `Fn` as a journaled child coroutine (own scope,
+ * own `CloseEvent`, reified child results). `invokeInline` runs a compiled
+ * `Fn` as a journaled inline lane under the caller's scope (own
+ * coroutineId for durable replay identity, no `CloseEvent`, direct
+ * return-value and error propagation). See
+ * `tisyn-inline-invocation-specification.md` for the full contract.
  */
 export interface DispatchContext {
   readonly coroutineId: string;
   invoke<T = Val>(fn: FnNode, args: readonly Val[], opts?: InvokeOpts): Operation<T>;
+  invokeInline<T = Val>(fn: FnNode, args: readonly Val[], opts?: InvokeOpts): Operation<T>;
 }
 
 /**

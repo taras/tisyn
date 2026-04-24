@@ -43,6 +43,7 @@ describe("@tisyn/effects — package exports", () => {
       expect(names).toContain("dispatch");
       expect(names).toContain("resolve");
       expect(names).toContain("invoke");
+      expect(names).toContain("invokeInline");
       expect(names).toContain("installCrossBoundaryMiddleware");
       expect(names).toContain("getCrossBoundaryMiddleware");
       expect(names).toContain("InvalidInvokeCallSiteError");
@@ -73,6 +74,13 @@ describe("@tisyn/effects — package exports", () => {
       expect(names).toContain("DispatchContext");
       expect(names).toContain("evaluateMiddlewareFn");
       expect(names).toContain("installReplayDispatch");
+    });
+
+    it("does NOT duplicate invokeInline on the internal subpath", () => {
+      // invokeInline is a stable public helper exported from the primary
+      // barrel only. It MUST NOT be duplicated on @tisyn/effects/internal.
+      const names = Object.keys(internal);
+      expect(names).not.toContain("invokeInline");
     });
 
     it("source files carry @internal JSDoc tags", () => {
