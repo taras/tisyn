@@ -359,13 +359,207 @@ cannot observe replay/record phase.
 
 ---
 
-## 13. Cross-Boundary Middleware Coverage
+## 13. Replay-Aware Dispatch
+
+These tests complement the general replay-transparency tests in
+§12 (`MR-*`). `MR-*` covers the invariant that workflow-facing
+middleware cannot observe the replay/record phase; `RD-*`
+covers the structural replay-substitution model defined by
+scoped-effects §9.5. Neither set replaces the other.
+
+Observability classes used below:
+
+- **Workflow-visible.** Effect return values, thrown
+  exceptions, authored control flow, observable side-effect
+  counts.
+- **Journal-visible.** Durable `YieldEvent | CloseEvent`
+  stream contents.
+- **API-surface-visible.** Whether a symbol exists as a public
+  export (import succeeds or fails). Acceptable in Extended for
+  exclusion-regression tests.
+- **Harness-introspective (Diagnostic).** Implementation
+  internals. Not conformance.
+
+Core tests use only Workflow-visible and Journal-visible
+evidence.
+
+### 13.1 Three-Lane Composition Ordering (§9.5.1)
+
+| ID | Tier | Obs. class | Description | Setup | Expected |
+|---|---|---|---|---|---|
+| RD-CO-001 | Core | Workflow-visible | Max frames run before min frames | Install a max `dispatch` middleware that logs `"max"`. Install a min `dispatch` middleware that logs `"min"`. Both call `next`. Core handler logs `"core"`. Live dispatch | Log order: `["max", "min", "core"]` |
+| RD-CO-002 | Core | Workflow-visible | Multiple max frames in installation order; multiple min frames in reverse installation order | Install max M1, max M2, min m1, min m2 (all logging, all calling `next`). Core logs `"core"`. Live dispatch | Log order: `["M1", "M2", "m2", "m1", "core"]` |
+| RD-CO-003 | Core | Workflow-visible | On replay with stored cursor, min frames do not execute | Same composition as RD-CO-002. Run once live (producing a journal). Replay from the journal | Replay log: `["M1", "M2"]` — max frames rerun; min frames and core do not execute; dispatch result equals stored result |
+| RD-CO-004 | Extended | Workflow-visible | Replay boundary is not user-installable | Attempt `Effects.around(handlers, { at: "replay" as any })` | Throws an error (unknown group name) or type-level rejection; no middleware installed |
+
+### 13.2 Max-Region Rerun on Replay (§9.5.4)
+
+| ID | Tier | Obs. class | Description | Setup | Expected |
+|---|---|---|---|---|---|
+| RD-MX-001 | Core | Workflow-visible + journal-visible | Max middleware pre-`next` code runs on replay | Max middleware increments a harness-visible counter before calling `next`. Agent handler at min. Run live, producing journal. Replay | Counter incremented on replay; dispatch result equals stored result |
+| RD-MX-002 | Core | Workflow-visible + journal-visible | Max middleware post-`next` code runs on replay | Max middleware appends `"post"` to a log after `next` returns. Run live; replay | `"post"` appears in the log on both original and replay runs |
+| RD-MX-004 | Core | Journal-visible | Max middleware's orchestration child replays correctly | Max middleware invokes a child coroutine before `next`. Run live; replay | Child coroutine replays from its own journal; invoking middleware re-executes; final dispatch result equals stored result |
+| RD-MX-005 | Extended | Workflow-visible | Multiple max frames each perform pre-`next` work on replay | Three max frames, each setting a different flag. Run live; replay | All three flags set on replay |
+
+### 13.3 Replay-Boundary Substitution (§9.5.3)
+
+| ID | Tier | Obs. class | Description | Setup | Expected |
+|---|---|---|---|---|---|
+| RD-RP-001 | Core | Journal-visible | Stored result substitutes for the dispatch on replay | Agent handler at min returns `{ value: 42 }` live. Run live; serialize journal; replay | Replay produces byte-identical journal; no live dispatch occurs; terminal result matches |
+| RD-RP-002 | Core | Journal-visible | Replay cursor is consumed per dispatch | Two sequential dispatches to different agent operations. Run live; replay | Both dispatches produce their stored results in order; yieldIndex advances for each |
+| RD-RP-003 | Core | Journal-visible | Replayed `YieldEvent` is pushed to the durable stream | Inspect the stream after replay | A replayed `YieldEvent` (with the stored result) exists at the expected yieldIndex under the caller's coroutineId |
+| RD-RP-004 | Core | Journal-visible | yieldIndex advances on replay substitution | Three dispatches in sequence. Run live; replay; inspect journal | yieldIndex 0, 1, 2 on both runs |
+| RD-RP-005 | Core | Workflow-visible | Replay-substituted result is returned to max middleware | Max middleware logs `next()` return value after calling `next`. Agent handler at min returns `"live-value"`. Run live; replay | Max middleware's post-`next` log shows `"live-value"` on both original and replay |
+| RD-RP-006 | Core | Workflow-visible | No live agent dispatch occurs on replay | Agent handler at min increments a call counter. Run live (counter = 1); replay | Counter remains 1 after replay; no second invocation |
+
+### 13.4 Min/Core Non-Execution on Replay (§9.5.3)
+
+| ID | Tier | Obs. class | Description | Setup | Expected |
+|---|---|---|---|---|---|
+| RD-MN-001 | Core | Workflow-visible | Min-priority middleware body does not execute on replay | Min middleware sets a flag when its body runs. Max middleware calls `next`. Run live (flag set); replay | Flag is not re-set on replay |
+| RD-MN-002 | Core | Workflow-visible | Core handler does not execute on replay when stored cursor exists | Core handler sets a flag. Run live (flag set); replay | Flag not re-set on replay |
+| RD-MN-003 | Core | Workflow-visible | Agent handler body does not refire on replay | `Agents.use` handler performs a non-idempotent side effect (appends to a list). Run live (list has 1 entry); replay | List still has 1 entry after replay; no duplicate |
+| RD-MN-004 | Core | Workflow-visible | Transport `session.execute(...)` does not refire on replay | `installAgentTransport` handler increments a counter. Run live (counter = 1); replay | Counter remains 1 after replay |
+| RD-MN-005 | Core | Workflow-visible | `sleep` handler does not refire on replay | Dispatch `sleep` effect. Run live; replay; measure elapsed time | Replay does not block for the sleep duration |
+| RD-MN-006 | Extended | Workflow-visible | User-authored min constraint does not execute on replay | User installs an innermost constraint at `{ at: "min" }` that logs. Run live (log entry); replay | No log entry on replay |
+
+### 13.5 Framework Handler Installation at Min (§9.5.2)
+
+| ID | Tier | Obs. class | Description | Setup | Expected |
+|---|---|---|---|---|---|
+| RD-FW-001 | Core | Workflow-visible | `Agents.use` handler runs after max middleware | Install a max middleware that logs `"max"` before `next` and an `Agents.use` handler that logs `"agent"`. Live dispatch | Log: `["max", "agent"]` — max runs before agent, consistent with agent being at min |
+| RD-FW-002 | Core | Workflow-visible | `installAgentTransport` handler runs after max middleware | Install max logging middleware and a transport binding. Live dispatch to the transport-bound agent | Max middleware log entry appears before the transport's live execution |
+| RD-FW-003 | Core | Workflow-visible | `installRemoteAgent` handler runs after max middleware | Same pattern as RD-FW-002 with `installRemoteAgent` | Same ordering evidence |
+| RD-FW-004 | Core | Workflow-visible | Multiple agent handlers at min compose correctly | Two agents bound via `Agents.use` in the same scope. Dispatch to each | Each handler handles its own prefix; both are below max middleware in execution order |
+| RD-FW-005 | Extended | Workflow-visible | Agent handler at min + user constraint at min compose correctly | `Agents.use` handler at min and a user constraint at min. Live dispatch | Both execute; constraint is outer-min (more recently installed); handler is inner-min |
+| RD-FW-006 | Core | Workflow-visible | `implementAgent(...).install` handler runs after max middleware | After `yield* impl.install()` for an `implementAgent`-bound agent, install a max-priority `Effects.around` interceptor that logs `"max"`. Handler logs `"impl-handler"`. Live dispatch | Log: `["max", "impl-handler"]` — max runs before the handler, consistent with `implementAgent(...).install` installing its dispatch middleware at min |
+
+### 13.6 No Public Replay-Lane Leakage (§9.5.1)
+
+| ID | Tier | Obs. class | Description | Setup | Expected |
+|---|---|---|---|---|---|
+| RD-PL-001 | Core | Workflow-visible | `Effects.around` with an unknown `{ at }` value is rejected | Attempt to install middleware at `{ at: "replay" as any }` | Runtime error or type error; no middleware installed |
+| RD-PL-002 | Extended | Workflow-visible | Error messages for invalid `{ at }` do not expose internal group names | Trigger the RD-PL-001 error; inspect the message | Message says "unknown group" or similar; does not list `"replay"` as a known option (only `"max"` and `"min"` appear) |
+| RD-PL-003 | Extended | Workflow-visible | User cannot observe the replay boundary's existence through middleware composition | Install max and min middleware that count `next` calls. Live dispatch | Each middleware's `next` call count is consistent with the documented two-lane model; no extra visible `next` hop |
+
+### 13.7 Short-Circuit with Stored Cursor (§9.5.5)
+
+| ID | Tier | Obs. class | Description | Setup | Expected |
+|---|---|---|---|---|---|
+| RD-SC-001 | Core | Journal-visible | Short-circuiting max frame's return is overridden by stored cursor on replay | Max middleware short-circuits (returns `"mock"` without calling `next`). Run live (journals `"mock"`); replay | Replay result is `"mock"` (from stored cursor); no min or core execution; journal identical |
+| RD-SC-002 | Core | Journal-visible | Deterministic short-circuiting mock produces matching stored cursor | Same as RD-SC-001 with deterministic mock | Both runs produce identical journals |
+| RD-SC-003 | Core | Journal-visible | Non-deterministic short-circuiting mock is overridden by stored cursor | Mock returns `"v1"` originally and `"v2"` on replay. Stored cursor has `"v1"` | Replay result is `"v1"` (stored cursor wins); `"v2"` discarded |
+| RD-SC-004 | Extended | Workflow-visible | Short-circuit in max does not trigger min execution on replay | Mock short-circuits. Min middleware sets a flag. Run live; replay | Flag not set on replay |
+
+### 13.8 Resource-Body Dispatch (§9.5.7)
+
+Test descriptions use semantic wording ("dispatch from a
+resource init/cleanup body") and do not reference runtime
+implementation helper names.
+
+| ID | Tier | Obs. class | Description | Setup | Expected |
+|---|---|---|---|---|---|
+| RD-RS-001 | Core | Journal-visible | Dispatch from resource init body uses the same replay model | Resource init body dispatches an agent effect. Max middleware installed in the same scope logs. Run live; replay | Max middleware log appears on both runs; agent handler does not refire on replay |
+| RD-RS-002 | Core | Journal-visible | Dispatch from resource cleanup body uses the same replay model | Resource cleanup body dispatches an agent effect. Run live; replay | Same substitution behavior as init body |
+| RD-RS-003 | Core | Journal-visible | Crash during resource init; recovery replays resource-body dispatches correctly | Resource init dispatches two effects; crash after the first; recover | First effect replays from cursor; second effect dispatches live; agent handler fires once per effect across the full lifecycle |
+
+### 13.9 Transport Binding Interaction
+
+| ID | Tier | Obs. class | Description | Setup | Expected |
+|---|---|---|---|---|---|
+| RD-TR-001 | Core | Workflow-visible + journal-visible | Transport-bound agent handler does not refire on replay | `installAgentTransport(Agent, factory)`. Dispatch to agent. Run live; replay | Handler fires once across both runs |
+| RD-TR-002 | Core | Journal-visible | Transport reinstallation on replay (scope setup rerun) | Scope setup calls `installAgentTransport`. Run live; replay | Transport is reinstalled during scope-setup rerun; dispatches substitute at replay boundary |
+| RD-TR-003 | Extended | Journal-visible | Multiple transport bindings in the same scope | Two agents bound to different transports. Dispatch to each. Run live; replay | Both substitute correctly; neither refires |
+
+### 13.10 Exclusion Regression — Prototype Helper Shape (§9.5.6)
+
+Tests in this section verify that the excluded prototype
+symbols are not exported by the implementation, and that
+replay works without any such helper. Phrased as exclusion
+regression, not removal regression.
+
+| ID | Tier | Obs. class | Description | Setup | Expected |
+|---|---|---|---|---|---|
+| RD-RG-001 | Extended | API-surface-visible | `runAsTerminal` is not exported from `@tisyn/effects` | Attempt to import `runAsTerminal` from `@tisyn/effects` | Import fails; symbol does not exist |
+| RD-RG-002 | Extended | API-surface-visible | `RuntimeTerminal` is not exported from `@tisyn/effects/internal` | Attempt to import `RuntimeTerminal` from `@tisyn/effects/internal` | Import fails; symbol does not exist |
+| RD-RG-003 | Extended | API-surface-visible | `RuntimeTerminalBoundary` is not exported from `@tisyn/effects/internal` | Attempt to import `RuntimeTerminalBoundary` from `@tisyn/effects/internal` | Import fails; symbol does not exist |
+| RD-RG-004 | Core | Journal-visible | Replay correctness without any helper | Agent handler at min, no terminal-delegation wrapping anywhere. Run live; replay | Identical journals; no refire; replay substitution is structural |
+| RD-RG-005 | Diagnostic | Harness-introspective | No `effectId`/`data` restatement at any framework handler site | Inspect `Agents.use`, `implementAgent(...).install`, `installAgentTransport`, `installRemoteAgent` handler bodies at the source level | No restated parameters to a boundary helper. **Non-normative; implementation-quality check only** |
+
+### 13.11 Regression Protection for Existing Conformance
+
+| ID | Tier | Obs. class | Description | Expected |
+|---|---|---|---|---|
+| RD-EX-001 | Core | Journal-visible | Full existing crash-replay test suite passes | Identical journals before and after the change |
+| RD-EX-002 | Core | Journal-visible | Full existing resource-recovery battery passes | Identical journals |
+| RD-EX-003 | Core | Journal-visible | Full existing cross-boundary middleware tests pass | Identical journals |
+| RD-EX-005 | Core | Journal-visible | Full existing nested-invocation test plan passes | Identical journals |
+| RD-EX-006 | Core | Journal-visible | Full existing payload-sensitive divergence tests pass | Identical journals |
+
+> **Note.** Test IDs `RD-IL-*`, `RD-PD-*`, `RD-MX-003`, and
+> `RD-EX-004` are reserved for future phases that introduce
+> inline-invocation and payload-fingerprint specifications.
+> They are intentionally not defined in this test plan.
+
+### 13.12 Minimum Acceptance Subset
+
+Feature is implementation-ready when all 12 pass:
+
+| # | ID | What it proves |
+|---|---|---|
+| 1 | RD-CO-001 | Three-lane composition ordering on live dispatch |
+| 2 | RD-CO-003 | Min does not execute on replay |
+| 3 | RD-MX-001 | Max reruns on replay |
+| 4 | RD-RP-001 | Stored result substitutes on replay |
+| 5 | RD-RP-006 | No live agent dispatch on replay |
+| 6 | RD-MN-003 | Agent handler does not refire on replay |
+| 7 | RD-MN-004 | Transport handler does not refire on replay |
+| 8 | RD-FW-001 | `Agents.use` is at min priority |
+| 9 | RD-SC-001 | Short-circuit stored-cursor-wins on replay |
+| 10 | RD-RS-001 | Resource-body dispatch uses same replay model |
+| 11 | RD-RG-004 | Replay works without any helper |
+| 12 | RD-EX-001 | Existing crash-replay suite stays green |
+
+### 13.13 Coverage Summary for §13
+
+**Spec-section coverage**
+
+| Spec subsection | Test IDs |
+|---|---|
+| §9.5.1 Structural replay boundary | RD-CO-001..004, RD-PL-001..003 |
+| §9.5.2 Framework handlers at min | RD-FW-001..006 |
+| §9.5.3 Replay substitution semantics | RD-RP-001..006, RD-MN-001..006 |
+| §9.5.4 Max re-executes on replay | RD-MX-001, 002, 004, 005 |
+| §9.5.5 Short-circuit stored-cursor-wins | RD-SC-001..004 |
+| §9.5.6 No delegation helper | RD-RG-001..005 |
+| §9.5.7 Resource-body interaction | RD-RS-001..003 |
+
+**Tier counts**
+
+| Category | Core | Extended | Diagnostic | Total |
+|---|---|---|---|---|
+| Composition ordering | 3 | 1 | 0 | 4 |
+| Max rerun | 3 | 1 | 0 | 4 |
+| Replay substitution | 6 | 0 | 0 | 6 |
+| Min/core non-execution | 5 | 1 | 0 | 6 |
+| Framework installation | 5 | 1 | 0 | 6 |
+| Public leakage | 1 | 2 | 0 | 3 |
+| Short-circuit | 3 | 1 | 0 | 4 |
+| Resource interaction | 3 | 0 | 0 | 3 |
+| Transport interaction | 2 | 1 | 0 | 3 |
+| Exclusion regression | 1 | 3 | 1 | 5 |
+| Existing regression | 5 | 0 | 0 | 5 |
+| **Total** | **37** | **11** | **1** | **49** |
+
+---
+
+## 14. Cross-Boundary Middleware Coverage
 
 This section covers the interaction between host Effects
 middleware, scope isolation, and explicit cross-boundary
 middleware propagation.
 
-### 13.1 Intended Contract
+### 14.1 Intended Contract
 
 Three rules govern middleware at the host/agent boundary:
 
@@ -384,7 +578,7 @@ Three rules govern middleware at the host/agent boundary:
    Effects max.** It runs before any middleware the child
    handler installs, whether max or min.
 
-### 13.2 Tests
+### 14.2 Tests
 
 | ID | Tier | Title | Setup | Expected |
 |---|---|---|---|---|
@@ -395,7 +589,7 @@ Three rules govern middleware at the host/agent boundary:
 
 ---
 
-## 14. Agents Setup API
+## 15. Agents Setup API
 
 Tests for the `Agents.use()` local binding primitive and the
 routing-owned `resolve` operation that replaces the former
@@ -412,7 +606,7 @@ routing-owned `resolve` operation that replaces the former
 
 ---
 
-## 15. Acceptance Criteria
+## 16. Acceptance Criteria
 
 The scoped-effects middleware/facade slice is considered
 correctly implemented when:
@@ -443,10 +637,17 @@ correctly implemented when:
 11. All Core tier cross-boundary middleware tests (MI-*)
     pass.
 
-12. No Core tier test produces an unexpected error, hang,
+12. All Core tier replay-aware dispatch tests (RD-*) defined
+    in §13 pass.
+
+13. The Minimum Acceptance Subset in §13.12 MUST pass before
+    the replay-aware dispatch implementation (Refs #125) is
+    considered complete.
+
+14. No Core tier test produces an unexpected error, hang,
     or crash.
 
-13. Generic host Effects middleware does not cross the
+15. Generic host Effects middleware does not cross the
     agent boundary by scope inheritance. Explicit
     cross-boundary middleware crosses via
     `installCrossBoundaryMiddleware(fn)` and the protocol
@@ -455,9 +656,9 @@ correctly implemented when:
 
 ---
 
-## 16. Coverage Summary
+## 17. Coverage Summary
 
-### 16.1 Scoped-Effects Section Coverage
+### 17.1 Scoped-Effects Section Coverage
 
 | Scoped-effects section | Test category | Test IDs | Status |
 |---|---|---|---|
@@ -472,9 +673,16 @@ correctly implemented when:
 | §5.1 Installation / §7.3 child install / §7.5 monotonic narrowing | Single mechanism | MM-001–003 | Covered |
 | §9 Durability and replay | Replay | MR-001–004 | Covered |
 | §6.1 Agent binding / §6.2 lookup | Agents setup API | AG-001–006 | Covered |
-| §13 Cross-boundary middleware | Cross-boundary | MI-001–004 | Covered |
+| §14 Cross-boundary middleware | Cross-boundary | MI-001–004 | Covered |
+| §9.5.1 Structural replay boundary | Replay-aware dispatch | RD-CO-001–004, RD-PL-001–003 | Covered |
+| §9.5.2 Framework handlers at min | Replay-aware dispatch | RD-FW-001–006 | Covered |
+| §9.5.3 Replay substitution semantics | Replay-aware dispatch | RD-RP-001–006, RD-MN-001–006 | Covered |
+| §9.5.4 Max re-executes on replay | Replay-aware dispatch | RD-MX-001, 002, 004, 005 | Covered |
+| §9.5.5 Short-circuit stored-cursor-wins | Replay-aware dispatch | RD-SC-001–004 | Covered |
+| §9.5.6 No delegation helper | Replay-aware dispatch | RD-RG-001–005 | Covered |
+| §9.5.7 Resource-body interaction | Replay-aware dispatch | RD-RS-001–003 | Covered |
 
-### 16.2 Test Count Summary
+### 17.2 Test Count Summary
 
 | Category | Core | Extended | Total |
 |---|---|---|---|
@@ -492,4 +700,17 @@ correctly implemented when:
 | Replay transparency | 3 | 1 | 4 |
 | Agents setup API | 6 | 0 | 6 |
 | Cross-boundary middleware | 4 | 0 | 4 |
-| **Total** | **56** | **6** | **62** |
+| RD composition ordering | 3 | 1 | 4 |
+| RD max rerun | 3 | 1 | 4 |
+| RD replay substitution | 6 | 0 | 6 |
+| RD min/core non-execution | 5 | 1 | 6 |
+| RD framework installation | 5 | 1 | 6 |
+| RD public leakage | 1 | 2 | 3 |
+| RD short-circuit | 3 | 1 | 4 |
+| RD resource interaction | 3 | 0 | 3 |
+| RD transport interaction | 2 | 1 | 3 |
+| RD exclusion regression | 1 | 3 | 4 |
+| RD existing regression | 5 | 0 | 5 |
+| **Total** | **93** | **17** | **110** |
+
+> **Note.** §13.10 also includes one Diagnostic test (`RD-RG-005`) which is non-normative and not counted in the Core/Extended totals above. See §13.13 for the full Core/Extended/Diagnostic breakdown.
