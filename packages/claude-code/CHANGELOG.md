@@ -1,5 +1,17 @@
 # @tisyn/claude-code
 
+## 0.14.1
+
+### Patch Changes
+
+- Updated dependencies [f4012af]
+  - @tisyn/transport@0.16.0
+  - @tisyn/agent@0.16.0
+  - @tisyn/code-agent@0.3.1
+  - @tisyn/ir@0.16.0
+  - @tisyn/protocol@0.16.0
+  - @tisyn/effects@0.3.1
+
 ## 0.14.0
 
 ### Minor Changes

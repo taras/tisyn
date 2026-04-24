@@ -1,5 +1,23 @@
 # @tisyn/runtime
 
+## 0.16.0
+
+### Minor Changes
+
+- f4012af: Add `@tisyn/runtime/execute` subpath so consumers bundling `execute()` for the browser can import it without pulling the Node-only loader/config code re-exported from the root entrypoint. Closes #106.
+
+### Patch Changes
+
+- Updated dependencies [f4012af]
+- Updated dependencies [f4012af]
+  - @tisyn/durable-streams@0.16.0
+  - @tisyn/transport@0.16.0
+  - @tisyn/agent@0.16.0
+  - @tisyn/ir@0.16.0
+  - @tisyn/kernel@0.16.0
+  - @tisyn/validate@0.16.0
+  - @tisyn/effects@0.3.1
+
 ## 0.15.0
 
 ### Minor Changes

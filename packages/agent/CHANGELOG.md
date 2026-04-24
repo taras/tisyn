@@ -1,5 +1,13 @@
 # @tisyn/agent
 
+## 0.16.0
+
+### Patch Changes
+
+- @tisyn/ir@0.16.0
+- @tisyn/kernel@0.16.0
+- @tisyn/effects@0.3.1
+
 ## 0.15.0
 
 ### Minor Changes

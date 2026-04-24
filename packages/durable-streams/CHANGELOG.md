@@ -1,5 +1,15 @@
 # @tisyn/durable-streams
 
+## 0.16.0
+
+### Minor Changes
+
+- f4012af: Add `@tisyn/durable-streams/browser` subpath exporting `DurableStream`, `InMemoryStream`, `ReplayIndex`, and `YieldEntry`. Browser bundles can import from this subpath to avoid pulling `FileStream`'s `node:fs` / `node:path` dependencies transitively.
+
+### Patch Changes
+
+- @tisyn/kernel@0.16.0
+
 ## 0.15.0
 
 ### Patch Changes
