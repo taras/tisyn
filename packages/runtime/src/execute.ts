@@ -241,8 +241,155 @@ function buildDispatchContext(args: {
 
       return mapChildResultToOperationOutcome<T>(childResult);
     },
+    *invokeInline<T>(fn: FnNode, invokeArgs: readonly Val[], opts?: InvokeOpts): Operation<T> {
+      // v6 §6.2.3: stale-context check. Only valid while the SAME ctx is
+      // the currently-active DispatchContext. Rejected calls (here or
+      // below via input validation) MUST NOT advance the allocator.
+      const active = yield* DispatchContext.get();
+      if (active !== self) {
+        throw new InvalidInvokeCallSiteError(
+          "ctx.invokeInline may only be called while its owning dispatch-boundary middleware is active",
+        );
+      }
+      if (!isFnNode(fn)) {
+        throw new InvalidInvokeInputError("invokeInline: fn must be a compiled Fn node");
+      }
+      if (!Array.isArray(invokeArgs)) {
+        throw new InvalidInvokeInputError("invokeInline: args must be an array");
+      }
+      validateInvokeOpts(opts);
+
+      // v6 §7.2: advance the caller's unified childSpawnCount by exactly
+      // +1 at the moment of the accepted call.
+      const laneId = allocateChildId();
+
+      const laneEnv = extendMulti(parentEnv, [...fn.params], invokeArgs as Val[]);
+      const laneKernel = evaluate(fn.body as Expr, laneEnv);
+
+      const driveLane = () => driveInlineBody<T>(laneKernel, laneId, laneEnv, driveContext);
+
+      if (opts?.overlay) {
+        return yield* withOverlayFrame(opts.overlay, driveLane);
+      }
+      return yield* driveLane();
+    },
   };
   return self;
+}
+
+// ── Inline invocation body driver ──
+
+/**
+ * Drive a compiled `Fn` as an inline lane under its caller's Effection
+ * scope. Implements the Phase 5B subset of
+ * `tisyn-inline-invocation-specification.md` v6:
+ *
+ * - Standard-effect dispatches (agent effects + `__config`) journal
+ *   under `laneId` via the shared `dispatchStandardEffect` helper and
+ *   participate in replay on the lane's independent cursor.
+ * - Lane has its own `childSpawnCount` starting at 0 (v6 §7.3); nested
+ *   `invokeInline` / `invoke` from middleware handling the body's
+ *   dispatched effects allocate from this per-lane counter.
+ * - Lane produces NO `CloseEvent` — ever. Normal completion returns
+ *   the kernel's final value directly; uncaught errors propagate
+ *   directly to the caller's middleware frame.
+ * - Compound externals (`scope`, `spawn`, `join`, `resource`,
+ *   `timebox`, `all`, `race`) inside an inline body are rejected with
+ *   a clear error: Phase 5B runtime scope does NOT run them under
+ *   inline-lane semantics yet.
+ * - `stream.subscribe` and `stream.next` inside an inline body are
+ *   rejected with a clear error: v6 §12.4 requires owner-coroutineId
+ *   counter allocation for the deterministic token; Phase 5B defers
+ *   that and rejects the effect ids rather than producing journal
+ *   entries that would violate the landed spec.
+ */
+function* driveInlineBody<T = Val>(
+  kernel: Generator<EffectDescriptor, Val, Val>,
+  laneId: string,
+  env: Env,
+  ctx: DriveContext,
+): Operation<T> {
+  // Own childSpawnCount per v6 §7.3.
+  let inlineChildSpawnCount = 0;
+  let subscriptionCounter = 0; // Never consumed: stream effects rejected below.
+  let nextValue: Val = null;
+  let pendingStep: IteratorResult<EffectDescriptor, Val> | null = null;
+
+  for (;;) {
+    const step = pendingStep ?? kernel.next(nextValue);
+    pendingStep = null;
+
+    if (step.done) {
+      // v6 §8.4: NO CloseEvent for the inline lane. Return the kernel's
+      // terminal value directly to the caller's middleware frame.
+      return (step.value ?? null) as T;
+    }
+
+    const descriptor = step.value as EffectDescriptor;
+
+    // Compound-external descriptors are out of scope for this phase (see
+    // decision log §4 of the Phase 5B plan). Reject uniformly with a
+    // clear error that names the descriptor id.
+    if (isCompoundExternal(descriptor.id)) {
+      throw new Error(
+        `invokeInline body dispatched compound external '${descriptor.id}'; ` +
+          `compound primitives inside inline bodies are deferred (Phase 5B scope; ` +
+          `see tisyn-inline-invocation-specification.md §11)`,
+      );
+    }
+
+    // Stream intrinsics require owner-coroutineId counter allocation
+    // per v6 §12.4 which is deferred. Reject both effect ids rather
+    // than emitting lane-local tokens that would violate the spec.
+    if (descriptor.id === "stream.subscribe" || descriptor.id === "stream.next") {
+      throw new Error(
+        `invokeInline body dispatched '${descriptor.id}'; stream effects inside ` +
+          `inline bodies require owner-counter semantics ` +
+          `(tisyn-inline-invocation-specification.md §12.4) which are deferred ` +
+          `in Phase 5B. Use plain agent effects inside the inline body for now.`,
+      );
+    }
+
+    // Agent effects and `__config` go through the shared helper. The
+    // lane's independent coroutineId + its own allocator are threaded
+    // through here so nested invoke/invokeInline calls from middleware
+    // handling the body's dispatched effects allocate from the lane.
+    const { result } = yield* dispatchStandardEffect({
+      descriptor,
+      coroutineId: laneId,
+      env,
+      ctx,
+      allocateChildId: () => `${laneId}.${inlineChildSpawnCount++}`,
+      allocateSubscriptionToken: () => `sub:${laneId}:${subscriptionCounter++}`,
+      advanceSubscriptionCounter: () => {
+        subscriptionCounter++;
+      },
+    });
+
+    if (result.status === "ok") {
+      nextValue = (result.value ?? null) as Val;
+    } else if (result.status === "error") {
+      // Propagate as EffectError through the kernel. If the kernel
+      // catches it, we continue with the new step; if not, the error
+      // escapes driveInlineBody and propagates directly to the caller's
+      // middleware frame — v6 §13.1.
+      const err = new EffectError(result.error.message, result.error.name);
+      const throwResult = kernel.throw(err);
+      if (throwResult.done) {
+        // Uncaught — the kernel rejected the throw and ended. Propagate
+        // the error directly to the caller. No CloseEvent (v6 §8.4),
+        // no teardown (no resource children in Phase 5B scope).
+        throw err;
+      }
+      pendingStep = throwResult;
+      nextValue = null;
+      continue;
+    } else {
+      throw new RuntimeBugError(
+        "dispatchStandardEffect returned cancelled status to driveInlineBody",
+      );
+    }
+  }
 }
 
 /**
