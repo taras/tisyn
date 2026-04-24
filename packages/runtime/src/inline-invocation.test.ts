@@ -11,11 +11,15 @@
  *    coroutineId shared subscription counter, sibling-lane handle
  *    reuse, caller-after-return handle reuse, `invoke`-child isolated
  *    namespace, replay counter reconstruction.
+ *  - Lifetime (§11) — `resource` inside an inline body provides in
+ *    the caller's scope and cleans up at caller teardown. IL-PI-*,
+ *    IL-L-*, IL-CS-*, IL-RD-* subset.
  *
  * Out of scope — not tested here:
- *   - Compound externals (scope/spawn/join/resource/timebox/all/race)
- *     inside inline bodies (still rejected loudly by driveInlineBody).
- *   - IL-INT-*, IL-RD-*, IL-EX-*, and the full 31-test minimum subset.
+ *   - Non-resource compound externals (scope/spawn/join/timebox/all/
+ *     race) inside inline bodies (still rejected loudly by
+ *     driveInlineBody).
+ *   - IL-INT-*, IL-EX-*, and the full 31-test minimum subset.
  */
 
 import { describe, it } from "@effectionx/vitest";
@@ -1371,30 +1375,281 @@ describe("invokeInline — core runtime slice", () => {
     expect(handle.__tisyn_subscription.startsWith("sub:root:")).toBe(false);
   });
 
-  // ── Regression: compound externals still rejected inside inline ──
+  // ── Phase 5D: inline-body `resource` continuity (IL-PI / IL-L / IL-CS / IL-RD) ──
 
-  it("regression: resource inside inline body still rejects with clear error", function* () {
-    // IR: resource body inside inline body.
-    const resourceInner = {
+  // IR helpers for inline-resource tests (mirror resource.test.ts shapes).
+  const resourceIR = (body: unknown) =>
+    ({
       tisyn: "eval",
       id: "resource",
-      data: {
-        tisyn: "quote",
-        expr: { body: { tisyn: "eval", id: "provide", data: 0 } },
-      },
-    };
-    const bodyWithResource: TisynFn<[], Val> = Fn<[], Val>(
+      data: { tisyn: "quote", expr: { body } },
+    }) as unknown as Val;
+
+  const provideIR = (value: unknown) =>
+    ({
+      tisyn: "eval",
+      id: "provide",
+      data: value,
+    }) as unknown as Val;
+
+  const seqIR = (...exprs: unknown[]) =>
+    ({
+      tisyn: "eval",
+      id: "seq",
+      data: { tisyn: "quote", expr: { exprs } },
+    }) as unknown as Val;
+
+  it("IL-PI-001: primary invariant — E under laneId, R cleanup at caller teardown, Y succeeds", function* () {
+    // Inline body: dispatch effect E, then acquire resource R. E is a
+    // direct effect of the inline body (journals under laneId); R's
+    // init body provides "session-handle" and its cleanup dispatches
+    // session.close at caller teardown. The Fn returns R's provide value.
+    const inlineBody: TisynFn<[], Val> = Fn<[], Val>(
       [],
-      resourceInner as unknown as Val,
+      seqIR(
+        effectIR("setup", "touch"),
+        resourceIR(
+          Try(provideIR("session-handle"), undefined, undefined, effectIR("session", "close")),
+        ),
+      ) as unknown as Val,
+    ) as unknown as TisynFn<[], Val>;
+
+    let capturedHandle: Val | undefined;
+    let usedHandle: Val | undefined;
+
+    yield* Effects.around({
+      *dispatch([effectId, _data]: [string, Val], next) {
+        if (effectId === "caller.go") {
+          capturedHandle = yield* invokeInline<Val>(asFn(inlineBody), []);
+          return null as Val;
+        }
+        if (effectId === "caller.use") {
+          usedHandle = capturedHandle;
+          return null as Val;
+        }
+        return yield* next(effectId, _data);
+      },
+    });
+    yield* Effects.around(
+      {
+        *dispatch([_e, _d]: [string, Val]) {
+          return null as Val;
+        },
+      },
+      { at: "min" },
+    );
+
+    const { result, journal } = yield* execute({
+      ir: seqIR(effectIR("caller", "go"), effectIR("caller", "use")) as never,
+    });
+
+    expect(result.status).toBe("ok");
+    expect(usedHandle).toBe("session-handle");
+
+    // E (setup.touch) journals under the inline lane, not root.
+    const setupYields = yields(journal).filter(
+      (e) => e.description.type === "setup" && e.description.name === "touch",
+    );
+    expect(setupYields).toHaveLength(1);
+    expect(setupYields[0]!.coroutineId).toBe("root.0");
+
+    // R's cleanup effect (session.close) fires at caller teardown.
+    const cleanupYields = yields(journal).filter(
+      (e) => e.description.type === "session" && e.description.name === "close",
+    );
+    expect(cleanupYields).toHaveLength(1);
+    // Cleanup runs under the resource child's coroutineId (root.0.0).
+    expect(cleanupYields[0]!.coroutineId).toBe("root.0.0");
+
+    // Resource child produces its own CloseEvent under root.0.0.
+    const resourceCloses = closes(journal).filter((e) => e.coroutineId === "root.0.0");
+    expect(resourceCloses).toHaveLength(1);
+    expect(resourceCloses[0]!.result.status).toBe("ok");
+
+    // Inline lane produces NO CloseEvent.
+    expect(closes(journal).some((e) => e.coroutineId === "root.0")).toBe(false);
+  });
+
+  it("IL-PI-003 / IL-L-002: resource continuity across sibling inline lanes", function* () {
+    // A: inline lane that acquires a resource whose provide value is "session-xyz".
+    // B: inline lane that reads the stored handle via middleware and returns it.
+    // Both called sequentially from caller middleware.
+    const inlineA: TisynFn<[], Val> = Fn<[], Val>(
+      [],
+      resourceIR(
+        Try(provideIR("session-xyz"), undefined, undefined, effectIR("session", "close")),
+      ) as unknown as Val,
+    ) as unknown as TisynFn<[], Val>;
+
+    const inlineB: TisynFn<[], Val> = Fn<[], Val>(
+      [],
+      effectIR("session", "read") as unknown as Val,
+    ) as unknown as TisynFn<[], Val>;
+
+    let aHandle: Val | undefined;
+    let bReadBack: Val | undefined;
+
+    yield* Effects.around({
+      *dispatch([effectId, _data]: [string, Val], next) {
+        if (effectId === "caller.go") {
+          aHandle = yield* invokeInline<Val>(asFn(inlineA), []);
+          bReadBack = yield* invokeInline<Val>(asFn(inlineB), []);
+          return null as Val;
+        }
+        return yield* next(effectId, _data);
+      },
+    });
+    yield* Effects.around(
+      {
+        *dispatch([effectId, _d]: [string, Val]) {
+          if (effectId === "session.read") {
+            return aHandle as Val;
+          }
+          return null as Val;
+        },
+      },
+      { at: "min" },
+    );
+
+    const { result, journal } = yield* execute({
+      ir: effectIR("caller", "go") as never,
+    });
+
+    expect(result.status).toBe("ok");
+    expect(aHandle).toBe("session-xyz");
+    expect(bReadBack).toBe("session-xyz");
+
+    // Distinct lane IDs root.0 (A) and root.1 (B). A's resource child is root.0.0.
+    const sessionReadYields = yields(journal).filter(
+      (e) => e.description.type === "session" && e.description.name === "read",
+    );
+    expect(sessionReadYields).toHaveLength(1);
+    expect(sessionReadYields[0]!.coroutineId).toBe("root.1");
+
+    const resourceCloses = closes(journal).filter((e) => e.coroutineId === "root.0.0");
+    expect(resourceCloses).toHaveLength(1);
+
+    // Cleanup fires at caller teardown (after B's session.read).
+    const cleanupYields = yields(journal).filter(
+      (e) => e.description.type === "session" && e.description.name === "close",
+    );
+    expect(cleanupYields).toHaveLength(1);
+    // session.close fires after session.read in journal order.
+    const readIdx = journal.indexOf(sessionReadYields[0]!);
+    const closeIdx = journal.indexOf(cleanupYields[0]!);
+    expect(closeIdx).toBeGreaterThan(readIdx);
+  });
+
+  it("IL-L-005: mixed caller + inline resources tear down in reverse acquisition order", function* () {
+    // Caller acquires R1 directly; inline A acquires R2; inline B acquires R3.
+    // On caller teardown, cleanup fires R3 → R2 → R1.
+    const inlineA: TisynFn<[], Val> = Fn<[], Val>(
+      [],
+      resourceIR(
+        Try(provideIR("a"), undefined, undefined, effectIR("cleanup", "r2")),
+      ) as unknown as Val,
+    ) as unknown as TisynFn<[], Val>;
+
+    const inlineB: TisynFn<[], Val> = Fn<[], Val>(
+      [],
+      resourceIR(
+        Try(provideIR("b"), undefined, undefined, effectIR("cleanup", "r3")),
+      ) as unknown as Val,
     ) as unknown as TisynFn<[], Val>;
 
     yield* Effects.around({
-      *dispatch([effectId, data]: [string, Val], next) {
-        if (effectId === "parent.trigger") {
-          yield* invokeInline<Val>(asFn(bodyWithResource), []);
+      *dispatch([effectId, _data]: [string, Val], next) {
+        if (effectId === "caller.go") {
+          yield* invokeInline<Val>(asFn(inlineA), []);
+          yield* invokeInline<Val>(asFn(inlineB), []);
           return null as Val;
         }
-        return yield* next(effectId, data);
+        return yield* next(effectId, _data);
+      },
+    });
+    yield* Effects.around(
+      {
+        *dispatch([_e, _d]: [string, Val]) {
+          return null as Val;
+        },
+      },
+      { at: "min" },
+    );
+
+    // Caller IR: acquire R1 directly in root's driveKernel, then trigger
+    // caller.go (whose middleware runs inline A and inline B). R1 is
+    // acquired BEFORE the inline calls so its registration predates R2/R3.
+    // Seq discards R1's provide value; the resource is still registered
+    // with root's `resourceChildren` for reverse-order cleanup.
+    const ir = seqIR(
+      resourceIR(Try(provideIR("r1"), undefined, undefined, effectIR("cleanup", "r1"))),
+      effectIR("caller", "go"),
+    );
+
+    const { result, journal } = yield* execute({ ir: ir as never });
+    expect(result.status).toBe("ok");
+
+    const cleanupYields = yields(journal).filter((e) => e.description.type === "cleanup");
+    expect(cleanupYields.map((e) => e.description.name)).toEqual(["r3", "r2", "r1"]);
+  });
+
+  it("IL-CS-004: resource child produces its own CloseEvent under laneId.{m}; inline lane has none", function* () {
+    const inlineBody: TisynFn<[], Val> = Fn<[], Val>(
+      [],
+      resourceIR(provideIR(42)) as unknown as Val,
+    ) as unknown as TisynFn<[], Val>;
+
+    yield* Effects.around({
+      *dispatch([effectId, _data]: [string, Val], next) {
+        if (effectId === "caller.go") {
+          yield* invokeInline<Val>(asFn(inlineBody), []);
+          return null as Val;
+        }
+        return yield* next(effectId, _data);
+      },
+    });
+    yield* Effects.around(
+      {
+        *dispatch([_e, _d]: [string, Val]) {
+          return null as Val;
+        },
+      },
+      { at: "min" },
+    );
+
+    const { journal } = yield* execute({
+      ir: effectIR("caller", "go") as never,
+    });
+
+    // Resource child close under lane.0 (root.0.0).
+    const resourceCloses = closes(journal).filter((e) => e.coroutineId === "root.0.0");
+    expect(resourceCloses).toHaveLength(1);
+    expect(resourceCloses[0]!.result.status).toBe("ok");
+
+    // Lane itself emits no CloseEvent.
+    expect(closes(journal).some((e) => e.coroutineId === "root.0")).toBe(false);
+  });
+
+  it("IL-CS-005: resource provide value is usable by caller code after inline returns", function* () {
+    const inlineBody: TisynFn<[], Val> = Fn<[], Val>(
+      [],
+      resourceIR(provideIR("the-value")) as unknown as Val,
+    ) as unknown as TisynFn<[], Val>;
+
+    let fromInline: Val | undefined;
+    let usedLater: Val | undefined;
+
+    yield* Effects.around({
+      *dispatch([effectId, _data]: [string, Val], next) {
+        if (effectId === "caller.acquire") {
+          fromInline = yield* invokeInline<Val>(asFn(inlineBody), []);
+          return null as Val;
+        }
+        if (effectId === "caller.use") {
+          usedLater = fromInline;
+          return null as Val;
+        }
+        return yield* next(effectId, _data);
       },
     });
     yield* Effects.around(
@@ -1407,14 +1662,239 @@ describe("invokeInline — core runtime slice", () => {
     );
 
     const { result } = yield* execute({
-      ir: effectIR("parent", "trigger") as never,
+      ir: seqIR(effectIR("caller", "acquire"), effectIR("caller", "use")) as never,
+    });
+
+    expect(result.status).toBe("ok");
+    expect(fromInline).toBe("the-value");
+    expect(usedLater).toBe("the-value");
+  });
+
+  it("IL-RD-003: resource init body inside inline does not refire live on replay", function* () {
+    // Live run with journal capture.
+    const inlineBody: TisynFn<[], Val> = Fn<[], Val>(
+      [],
+      resourceIR(seqIR(effectIR("resource-init", "setup"), provideIR("ready"))) as unknown as Val,
+    ) as unknown as TisynFn<[], Val>;
+
+    let liveFireCount = 0;
+
+    const buildAgents = () =>
+      function* () {
+        yield* Effects.around({
+          *dispatch([effectId, _data]: [string, Val], next) {
+            if (effectId === "caller.go") {
+              yield* invokeInline<Val>(asFn(inlineBody), []);
+              return null as Val;
+            }
+            return yield* next(effectId, _data);
+          },
+        });
+        yield* Effects.around(
+          {
+            *dispatch([effectId, _d]: [string, Val]) {
+              if (effectId === "resource-init.setup") {
+                liveFireCount++;
+              }
+              return null as Val;
+            },
+          },
+          { at: "min" },
+        );
+      };
+
+    const stream = new InMemoryStream();
+    const live = buildAgents();
+    yield* live();
+
+    const { result: liveResult, journal: liveJournal } = yield* execute({
+      ir: effectIR("caller", "go") as never,
+      stream,
+    });
+    expect(liveResult.status).toBe("ok");
+    expect(liveFireCount).toBe(1);
+
+    // Replay with same stream. Init body MUST NOT refire live.
+    liveFireCount = 0;
+    const { result: replayResult, journal: replayJournal } = yield* execute({
+      ir: effectIR("caller", "go") as never,
+      stream,
+    });
+    expect(replayResult.status).toBe("ok");
+    // Replay: the init body's setup effect is replayed from journal, not re-dispatched live.
+    expect(liveFireCount).toBe(0);
+    // Journals are byte-identical.
+    expect(replayJournal).toEqual(liveJournal);
+
+    // Sanity: init body's setup effect journaled under lane's resource child.
+    const setupYields = yields(liveJournal).filter(
+      (e) => e.description.type === "resource-init" && e.description.name === "setup",
+    );
+    expect(setupYields).toHaveLength(1);
+    expect(setupYields[0]!.coroutineId).toBe("root.0.0");
+  });
+
+  // ── Regression: non-resource compound externals still rejected ──
+
+  it("regression: scope inside inline body still rejects with clear error", function* () {
+    const scopeInner = {
+      tisyn: "eval",
+      id: "scope",
+      data: {
+        tisyn: "quote",
+        expr: { handler: null, bindings: {}, body: Q(0) },
+      },
+    };
+    const bodyWithScope: TisynFn<[], Val> = Fn<[], Val>(
+      [],
+      scopeInner as unknown as Val,
+    ) as unknown as TisynFn<[], Val>;
+
+    yield* Effects.around({
+      *dispatch([effectId, _data]: [string, Val], next) {
+        if (effectId === "caller.go") {
+          yield* invokeInline<Val>(asFn(bodyWithScope), []);
+          return null as Val;
+        }
+        return yield* next(effectId, _data);
+      },
+    });
+    yield* Effects.around(
+      {
+        *dispatch([_e, _d]: [string, Val]) {
+          return null as Val;
+        },
+      },
+      { at: "min" },
+    );
+
+    const { result } = yield* execute({
+      ir: effectIR("caller", "go") as never,
     });
 
     expect(result.status).toBe("error");
     if (result.status === "error") {
-      expect(result.error.message).toContain("resource");
+      expect(result.error.message).toContain("'scope'");
+      // The narrowed message names the six still-rejected compounds.
+      expect(result.error.message).toContain("'scope', 'spawn', 'join', 'timebox', 'all', 'race'");
+      // And does NOT list 'resource' in that set.
+      expect(result.error.message).not.toContain("'resource'");
+    }
+  });
+
+  // ── Regression: inline-body `resource` from resource-init / cleanup contexts still rejects ──
+
+  it("regression: invokeInline body `resource` from resource-init middleware rejects", function* () {
+    // Inner inline body yields a resource.
+    const innerInline: TisynFn<[], Val> = Fn<[], Val>(
+      [],
+      resourceIR(provideIR("nested")) as unknown as Val,
+    ) as unknown as TisynFn<[], Val>;
+
+    let outerInitFired = 0;
+    let resourceSpawnCid: string | null = null;
+
+    yield* Effects.around({
+      *dispatch([effectId, _data]: [string, Val], next) {
+        if (effectId === "outer-init.go") {
+          outerInitFired++;
+          // Inside a resource-init dispatch — invokeInline should work for
+          // non-resource effects but must reject an inline-body `resource`.
+          yield* invokeInline<Val>(asFn(innerInline), []);
+          return null as Val;
+        }
+        return yield* next(effectId, _data);
+      },
+    });
+    yield* Effects.around(
+      {
+        *dispatch([_e, _d]: [string, Val]) {
+          return null as Val;
+        },
+      },
+      { at: "min" },
+    );
+
+    // Outer IR: resource whose init body yields outer-init.go then provides.
+    const outerIr = resourceIR(seqIR(effectIR("outer-init", "go"), provideIR(0)));
+
+    const { result, journal } = yield* execute({ ir: outerIr as never });
+
+    expect(result.status).toBe("error");
+    if (result.status === "error") {
       expect(result.error.message).toContain(
-        "compound primitives inside inline bodies are deferred",
+        "nested resources inside a resource body are not supported",
+      );
+      expect(result.error.message).toContain("resource init dispatch context");
+    }
+
+    // `outer-init.go` middleware fired (so invokeInline from init-phase
+    // middleware is NOT wholesale rejected — only the inline-body
+    // `resource` yield is).
+    expect(outerInitFired).toBe(1);
+
+    // Inner inline's resource child MUST NOT have started — no yields,
+    // no close under any descendant of the rejected lane. Lane was
+    // `root.0` (A's resource child), invokeInline advanced A's init
+    // allocator, so the rejected inline lane would be `root.0.1` and
+    // its resource child would be `root.0.1.0`. Neither id appears.
+    expect(yields(journal).some((e) => e.coroutineId === "root.0.1.0")).toBe(false);
+    expect(closes(journal).some((e) => e.coroutineId === "root.0.1.0")).toBe(false);
+
+    // Reference resourceSpawnCid to avoid unused-var lint.
+    expect(resourceSpawnCid).toBeNull();
+  });
+
+  it("regression: invokeInline body `resource` from resource-cleanup middleware rejects", function* () {
+    // Outer resource whose cleanup path triggers an effect whose middleware
+    // calls invokeInline with a body that yields `resource` — must reject.
+    const innerInline: TisynFn<[], Val> = Fn<[], Val>(
+      [],
+      resourceIR(provideIR("nested-cleanup")) as unknown as Val,
+    ) as unknown as TisynFn<[], Val>;
+
+    let cleanupFired = 0;
+
+    yield* Effects.around({
+      *dispatch([effectId, _data]: [string, Val], next) {
+        if (effectId === "outer-cleanup.go") {
+          cleanupFired++;
+          yield* invokeInline<Val>(asFn(innerInline), []);
+          return null as Val;
+        }
+        return yield* next(effectId, _data);
+      },
+    });
+    yield* Effects.around(
+      {
+        *dispatch([_e, _d]: [string, Val]) {
+          return null as Val;
+        },
+      },
+      { at: "min" },
+    );
+
+    // Outer: resource(Try(provide(0), finally: outer-cleanup.go))
+    const outerIr = resourceIR(
+      Try(provideIR(0), undefined, undefined, effectIR("outer-cleanup", "go")),
+    );
+
+    const { journal } = yield* execute({ ir: outerIr as never });
+
+    // The cleanup-phase target rejects the inner inline body's `resource`
+    // yield. That throws inside orchestrateResourceChild's cleanup loop,
+    // which writes an error CloseEvent for the resource child (root.0).
+    // Middleware still fires once before the rejection surfaces.
+    expect(cleanupFired).toBe(1);
+    const outerResourceCloses = closes(journal).filter((e) => e.coroutineId === "root.0");
+    expect(outerResourceCloses).toHaveLength(1);
+    expect(outerResourceCloses[0]!.result.status).toBe("error");
+    if (outerResourceCloses[0]!.result.status === "error") {
+      expect(outerResourceCloses[0]!.result.error.message).toContain(
+        "nested resources inside a resource body are not supported",
+      );
+      expect(outerResourceCloses[0]!.result.error.message).toContain(
+        "resource cleanup dispatch context",
       );
     }
   });

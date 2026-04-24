@@ -34,14 +34,18 @@ import type { InvokeOpts } from "./dispatch.js";
  * See `tisyn-inline-invocation-specification.md` for the full
  * normative contract. The current runtime phase supports standard-
  * effect dispatch inside the body, nested `invokeInline` / `invoke`
- * calls reached through standard-effect middleware, and
+ * calls reached through standard-effect middleware,
  * `stream.subscribe` / `stream.next` with owner-coroutineId counter
- * allocation (§12.4) — sibling inline lanes and the original caller
- * share a single subscription counter, so handles acquired inside
- * inline bodies compose with each other and with the caller
- * (§12.7). Compound externals (`scope`, `spawn`, `join`, `resource`,
+ * allocation (§12.4), and `resource` with provide-in-caller-scope
+ * and cleanup-at-caller-teardown semantics (§11.4, §11.8) — sibling
+ * inline lanes and post-return caller code can reuse a resource
+ * acquired inside an inline body until the caller itself exits.
+ * Non-resource compound externals (`scope`, `spawn`, `join`,
  * `timebox`, `all`, `race`) inside an inline body are still rejected
  * with a clear error; follow-up runtime phases will lift those.
+ * `resource` inside an inline body invoked from a resource-init or
+ * resource-cleanup dispatch context also remains rejected — nested
+ * resources inside a resource body are unsupported.
  */
 export function* invokeInline<T = Val>(
   fn: FnNode,
