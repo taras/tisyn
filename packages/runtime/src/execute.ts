@@ -29,7 +29,7 @@ import {
 } from "./errors.js";
 import { assertValidIr } from "@tisyn/validate";
 import { evaluate, type Env, envFromRecord, extendMulti } from "@tisyn/kernel";
-import { type DurableStream, InMemoryStream, ReplayIndex } from "@tisyn/durable-streams";
+import { type DurableStream, InMemoryStream, ReplayIndex } from "@tisyn/durable-streams/browser";
 import {
   dispatch,
   Effects,

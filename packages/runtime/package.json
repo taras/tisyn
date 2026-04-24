@@ -17,6 +17,10 @@
     ".": {
       "types": "./dist/index.d.ts",
       "import": "./dist/index.js"
+    },
+    "./execute": {
+      "types": "./dist/execute.d.ts",
+      "import": "./dist/execute.js"
     }
   },
   "publishConfig": {

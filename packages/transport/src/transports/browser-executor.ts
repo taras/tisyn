@@ -20,8 +20,8 @@
 
 import type { Operation } from "effection";
 import { run } from "effection";
-import { execute } from "@tisyn/runtime";
-import { InMemoryStream } from "@tisyn/durable-streams";
+import { execute } from "@tisyn/runtime/execute";
+import { InMemoryStream } from "@tisyn/durable-streams/browser";
 import { Call } from "@tisyn/ir";
 import type { IrInput, Json } from "@tisyn/ir";
 import type { InProcessRunner, LocalCapability } from "./browser.js";
