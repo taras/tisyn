@@ -43,11 +43,12 @@ import type { InvokeOpts } from "./dispatch.js";
  * post-return caller code, and the inline body itself can all
  * resolve task handles acquired inside an inline body; double-join
  * across the boundary fails with the existing "already been
- * joined" error. The
- * remaining four compound externals (`scope`, `timebox`, `all`,
- * `race`) inside an inline body are still rejected with a clear
- * error; follow-up runtime phases will lift those. `resource`
- * inside an inline body invoked from a resource-init or
+ * joined" error — and `timebox` / `all` / `race` with their own
+ * compound-external semantics (§11.6). `scope` inside an inline
+ * body remains rejected with a clear error; it is the only
+ * compound still deferred, and a follow-up runtime phase will
+ * review its transport-binding semantics before lifting it.
+ * `resource` inside an inline body invoked from a resource-init or
  * resource-cleanup dispatch context also remains rejected — nested
  * resources inside a resource body are unsupported.
  */

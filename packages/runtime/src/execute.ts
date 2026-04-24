@@ -401,10 +401,22 @@ function buildDispatchContext(args: {
  *   the inline body itself can `join` them; the caller's
  *   `joinedTasks` set is shared so a double-join across the
  *   boundary fails with the existing "already been joined" error.
- * - The remaining four compound externals (`scope`, `timebox`,
- *   `all`, `race`) inside an inline body are still rejected with a
- *   clear error: this runtime phase does NOT run them under
- *   inline-lane semantics yet.
+ * - `timebox` / `all` / `race` keep their own compound-external
+ *   semantics (§11.6). Child IDs are allocated from the lane's
+ *   own `inlineChildSpawnCount` — `timebox` takes two
+ *   (`laneId.{N}` body + `laneId.{N+1}` timeout); `all` / `race`
+ *   take a contiguous range of length `exprs.length`. The lane
+ *   itself still produces no `CloseEvent`; each child produces
+ *   its own `CloseEvent` per the orchestrator's existing rules.
+ *   Errors are routed through `kernel.throw(...)` with the
+ *   three-outcome pattern, so the inline body's `try`/`catch`
+ *   sees them as ordinary `EffectError` raises.
+ * - `scope` inside an inline body remains rejected with a clear
+ *   error — its transport-binding semantics need their own
+ *   review and will be a follow-up phase. A bare `provide` yield
+ *   (outside a resource init body) is caller IR misuse and
+ *   throws `RuntimeBugError("provide outside resource context")`,
+ *   matching driveKernel's behavior.
  */
 function* driveInlineBody<T = Val>(
   kernel: Generator<EffectDescriptor, Val, Val>,
@@ -614,15 +626,101 @@ function* driveInlineBody<T = Val>(
         continue;
       }
 
-      // `scope`, `timebox`, `all`, `race` — still deferred. Reject
-      // uniformly with a clear error naming the id. (`provide` is
-      // only legal inside a resource init body; a bare `provide`
-      // yield here is caller IR misuse rather than an unsupported
-      // inline compound, so it also hits this branch.)
+      if (descriptor.id === "timebox") {
+        // §11.6: `timebox` keeps its own compound-external semantics.
+        // Allocate 2 child IDs from the lane's own
+        // `inlineChildSpawnCount`: body = N, timeout = N+1
+        // (TB-R2). Delegate to the existing orchestrator and route
+        // any error through `kernel.throw` with the three outcomes.
+        const compoundData = descriptor.data as {
+          __tisyn_inner: { duration: number; body: Expr };
+          __tisyn_env: Env;
+        };
+        const bodyChildId = `${laneId}.${inlineChildSpawnCount++}`;
+        const timeoutChildId = `${laneId}.${inlineChildSpawnCount++}`;
+        const childEnv = compoundData.__tisyn_env;
+
+        let timeboxValue: Val = null;
+        let timeboxErr: Error | null = null;
+        try {
+          timeboxValue = yield* orchestrateTimebox(
+            compoundData.__tisyn_inner.duration,
+            compoundData.__tisyn_inner.body,
+            bodyChildId,
+            timeoutChildId,
+            childEnv,
+            ctx,
+          );
+        } catch (e) {
+          timeboxErr = e instanceof Error ? e : new Error(String(e));
+        }
+
+        if (timeboxErr === null) {
+          nextValue = timeboxValue;
+          continue;
+        }
+        const throwResult = kernel.throw(timeboxErr);
+        if (throwResult.done) {
+          return (throwResult.value ?? null) as T;
+        }
+        pendingStep = throwResult;
+        nextValue = null;
+        continue;
+      }
+
+      if (descriptor.id === "all" || descriptor.id === "race") {
+        // §11.6: `all` / `race` keep their own compound-external
+        // semantics. Allocate `exprs.length` contiguous child IDs
+        // from the lane's own `inlineChildSpawnCount`; delegate to
+        // the existing orchestrator; route any error through
+        // `kernel.throw` with the three outcomes.
+        const compoundData = descriptor.data as {
+          __tisyn_inner: { exprs: Expr[] };
+          __tisyn_env: Env;
+        };
+        const exprs = compoundData.__tisyn_inner.exprs;
+        const childEnv = compoundData.__tisyn_env;
+        const startIndex = inlineChildSpawnCount;
+        inlineChildSpawnCount += exprs.length;
+
+        let compoundValue: Val = null;
+        let compoundErr: Error | null = null;
+        try {
+          compoundValue =
+            descriptor.id === "all"
+              ? yield* orchestrateAll(exprs, laneId, startIndex, childEnv, ctx)
+              : yield* orchestrateRace(exprs, laneId, startIndex, childEnv, ctx);
+        } catch (e) {
+          compoundErr = e instanceof Error ? e : new Error(String(e));
+        }
+
+        if (compoundErr === null) {
+          nextValue = compoundValue;
+          continue;
+        }
+        const throwResult = kernel.throw(compoundErr);
+        if (throwResult.done) {
+          return (throwResult.value ?? null) as T;
+        }
+        pendingStep = throwResult;
+        nextValue = null;
+        continue;
+      }
+
+      if (descriptor.id === "provide") {
+        // Caller IR misuse — same rule as driveKernel: `provide` is
+        // only legal inside a resource init body. An inline body
+        // dispatching a bare `provide` is a runtime bug, not a
+        // deferred inline compound.
+        throw new RuntimeBugError("provide outside resource context");
+      }
+
+      // `scope` — still deferred. `scope` involves transport-binding
+      // semantics that need their own review before landing inside
+      // inline bodies; see §11.6 plan and the follow-up phase.
       throw new Error(
         `invokeInline body dispatched compound external '${descriptor.id}'; ` +
-          `compound primitives 'scope', 'timebox', 'all', 'race' ` +
-          `inside inline bodies are deferred ` +
+          `compound primitive 'scope' inside inline bodies is deferred ` +
           `(see tisyn-inline-invocation-specification.md §11)`,
       );
     }
