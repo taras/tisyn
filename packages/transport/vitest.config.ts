@@ -9,7 +9,10 @@ export default defineConfig({
       { find: /^@tisyn\/agent$/, replacement: resolve(__dirname, "../agent/src/index.ts") },
       { find: /^@tisyn\/protocol$/, replacement: resolve(__dirname, "../protocol/src/index.ts") },
       { find: /^@tisyn\/runtime$/, replacement: resolve(__dirname, "../runtime/src/index.ts") },
-      { find: /^@tisyn\/runtime\/execute$/, replacement: resolve(__dirname, "../runtime/src/execute.ts") },
+      {
+        find: /^@tisyn\/runtime\/execute$/,
+        replacement: resolve(__dirname, "../runtime/src/execute.ts"),
+      },
       { find: /^@tisyn\/validate$/, replacement: resolve(__dirname, "../validate/src/index.ts") },
     ],
   },
