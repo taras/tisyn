@@ -1,5 +1,18 @@
 # @tisyn/cli
 
+## 0.6.3
+
+### Patch Changes
+
+- Updated dependencies [f4012af]
+- Updated dependencies [f4012af]
+- Updated dependencies [f4012af]
+  - @tisyn/durable-streams@0.16.0
+  - @tisyn/runtime@0.16.0
+  - @tisyn/transport@0.16.0
+  - @tisyn/compiler@0.16.0
+  - @tisyn/ir@0.16.0
+
 ## 0.6.2
 
 ### Patch Changes
