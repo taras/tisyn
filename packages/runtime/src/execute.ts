@@ -83,6 +83,16 @@ interface DriveContext {
   journal: DurableEvent[];
   /** Stream subscription map shared across all coroutines in the execution. */
   subscriptions: Map<string, SubscriptionEntry>;
+  /**
+   * Subscription-token counters keyed by owner coroutineId. All dispatch
+   * sites that share an owner — the owner's own coroutine plus every inline
+   * lane whose captured owner is that coroutine — allocate subscription
+   * tokens from the same counter entry. Ensures token uniqueness across
+   * sibling inline lanes and across the caller/lane boundary, per
+   * `tisyn-inline-invocation-specification.md` §12.4. Runtime state only;
+   * never journaled.
+   */
+  subscriptionCounters: Map<string, number>;
 }
 
 /**
@@ -202,13 +212,15 @@ function mapChildResultToOperationOutcome<T>(r: EventResult): T {
 
 function buildDispatchContext(args: {
   coroutineId: string;
+  ownerCoroutineId: string;
   parentEnv: Env;
   driveContext: DriveContext;
   allocateChildId: () => string;
 }): DispatchContext {
-  const { coroutineId, parentEnv, driveContext, allocateChildId } = args;
+  const { coroutineId, ownerCoroutineId, parentEnv, driveContext, allocateChildId } = args;
   const self: DispatchContext = {
     coroutineId,
+    ownerCoroutineId,
     *invoke<T>(fn: FnNode, invokeArgs: readonly Val[], opts?: InvokeOpts): Operation<T> {
       // §5.3.3: may only be called while the SAME ctx is the currently-active
       // DispatchContext. Stale/captured/agent-handler reuse fails here and
@@ -263,10 +275,17 @@ function buildDispatchContext(args: {
       // +1 at the moment of the accepted call.
       const laneId = allocateChildId();
 
+      // v6 §12.3 capture-and-propagate: inherit owner from the active
+      // ctx. For the outermost invokeInline `self.ownerCoroutineId ===
+      // self.coroutineId`, so this captures the caller's coroutineId;
+      // for nested inline, it propagates the already-captured owner.
+      const laneOwner = self.ownerCoroutineId;
+
       const laneEnv = extendMulti(parentEnv, [...fn.params], invokeArgs as Val[]);
       const laneKernel = evaluate(fn.body as Expr, laneEnv);
 
-      const driveLane = () => driveInlineBody<T>(laneKernel, laneId, laneEnv, driveContext);
+      const driveLane = () =>
+        driveInlineBody<T>(laneKernel, laneId, laneEnv, driveContext, laneOwner);
 
       if (opts?.overlay) {
         return yield* withOverlayFrame(opts.overlay, driveLane);
@@ -281,12 +300,17 @@ function buildDispatchContext(args: {
 
 /**
  * Drive a compiled `Fn` as an inline lane under its caller's Effection
- * scope. Implements the Phase 5B subset of
+ * scope. Implements the relevant parts of
  * `tisyn-inline-invocation-specification.md` v6:
  *
- * - Standard-effect dispatches (agent effects + `__config`) journal
- *   under `laneId` via the shared `dispatchStandardEffect` helper and
- *   participate in replay on the lane's independent cursor.
+ * - Standard-effect dispatches (agent effects + `__config` + the
+ *   `stream.subscribe` / `stream.next` intrinsics) journal under
+ *   `laneId` via the shared `dispatchStandardEffect` helper and
+ *   participate in replay on the lane's independent cursor. The
+ *   stream intrinsics allocate subscription tokens from the **owner's**
+ *   shared counter (§12.4) rather than the lane's own counter, so
+ *   sibling inline lanes and the original caller can use each other's
+ *   handles without collisions (§12.7).
  * - Lane has its own `childSpawnCount` starting at 0 (v6 §7.3); nested
  *   `invokeInline` / `invoke` from middleware handling the body's
  *   dispatched effects allocate from this per-lane counter.
@@ -295,23 +319,20 @@ function buildDispatchContext(args: {
  *   directly to the caller's middleware frame.
  * - Compound externals (`scope`, `spawn`, `join`, `resource`,
  *   `timebox`, `all`, `race`) inside an inline body are rejected with
- *   a clear error: Phase 5B runtime scope does NOT run them under
+ *   a clear error: this runtime phase does NOT run them under
  *   inline-lane semantics yet.
- * - `stream.subscribe` and `stream.next` inside an inline body are
- *   rejected with a clear error: v6 §12.4 requires owner-coroutineId
- *   counter allocation for the deterministic token; Phase 5B defers
- *   that and rejects the effect ids rather than producing journal
- *   entries that would violate the landed spec.
  */
 function* driveInlineBody<T = Val>(
   kernel: Generator<EffectDescriptor, Val, Val>,
   laneId: string,
   env: Env,
   ctx: DriveContext,
+  ownerCoroutineId: string,
 ): Operation<T> {
-  // Own childSpawnCount per v6 §7.3.
+  // Own childSpawnCount per v6 §7.3. Subscription counter state lives on
+  // `ctx.subscriptionCounters[ownerCoroutineId]`, shared with the caller
+  // and any sibling/nested inline lanes whose captured owner matches.
   let inlineChildSpawnCount = 0;
-  let subscriptionCounter = 0; // Never consumed: stream effects rejected below.
   let nextValue: Val = null;
   let pendingStep: IteratorResult<EffectDescriptor, Val> | null = null;
 
@@ -327,43 +348,28 @@ function* driveInlineBody<T = Val>(
 
     const descriptor = step.value as EffectDescriptor;
 
-    // Compound-external descriptors are out of scope for this phase (see
-    // decision log §4 of the Phase 5B plan). Reject uniformly with a
-    // clear error that names the descriptor id.
+    // Compound-external descriptors are out of scope for this phase.
+    // Reject uniformly with a clear error that names the descriptor id.
     if (isCompoundExternal(descriptor.id)) {
       throw new Error(
         `invokeInline body dispatched compound external '${descriptor.id}'; ` +
-          `compound primitives inside inline bodies are deferred (Phase 5B scope; ` +
-          `see tisyn-inline-invocation-specification.md §11)`,
+          `compound primitives inside inline bodies are deferred ` +
+          `(see tisyn-inline-invocation-specification.md §11)`,
       );
     }
 
-    // Stream intrinsics require owner-coroutineId counter allocation
-    // per v6 §12.4 which is deferred. Reject both effect ids rather
-    // than emitting lane-local tokens that would violate the spec.
-    if (descriptor.id === "stream.subscribe" || descriptor.id === "stream.next") {
-      throw new Error(
-        `invokeInline body dispatched '${descriptor.id}'; stream effects inside ` +
-          `inline bodies require owner-counter semantics ` +
-          `(tisyn-inline-invocation-specification.md §12.4) which are deferred ` +
-          `in Phase 5B. Use plain agent effects inside the inline body for now.`,
-      );
-    }
-
-    // Agent effects and `__config` go through the shared helper. The
-    // lane's independent coroutineId + its own allocator are threaded
-    // through here so nested invoke/invokeInline calls from middleware
-    // handling the body's dispatched effects allocate from the lane.
+    // Agent effects, `__config`, and stream intrinsics all go through the
+    // shared helper. The lane's journal coroutineId is `laneId`; the
+    // owner coroutineId captured at the outermost `invokeInline` (and
+    // inherited unchanged through nested inline) drives subscription-
+    // token allocation and `stream.next` ancestry — v6 §12.3–§12.7.
     const { result } = yield* dispatchStandardEffect({
       descriptor,
       coroutineId: laneId,
+      ownerCoroutineId,
       env,
       ctx,
       allocateChildId: () => `${laneId}.${inlineChildSpawnCount++}`,
-      allocateSubscriptionToken: () => `sub:${laneId}:${subscriptionCounter++}`,
-      advanceSubscriptionCounter: () => {
-        subscriptionCounter++;
-      },
     });
 
     if (result.status === "ok") {
@@ -509,6 +515,7 @@ export function* execute(options: ExecuteOptions): Operation<ExecuteResult> {
       stream,
       journal,
       subscriptions: new Map(),
+      subscriptionCounters: new Map(),
     };
 
     let result: EventResult;
@@ -582,8 +589,6 @@ function* driveKernel(
   let pendingStep: IteratorResult<EffectDescriptor, Val> | null = null;
   // Unified counter for all compound-external children (scope, all, race, spawn) — replay-safe.
   let childSpawnCount = 0;
-  // Per-coroutine subscription counter for deterministic token generation.
-  let subscriptionCounter = 0;
   // Spawn/join tracking
   const spawnedTasks = new Map<string, { operation: Operation<EventResult> }>();
   const joinedTasks = new Set<string>();
@@ -849,16 +854,18 @@ function* driveKernel(
         }
 
         // ── Standard effect dispatch (helper-unified) ──
+        // Ordinary driveKernel dispatch: owner == coroutineId (§12.8
+        // says `invoke` children get their own coroutineId as owner,
+        // which is exactly what this driveKernel call represents — its
+        // coroutineId was allocated by a parent and is this kernel's own
+        // identity).
         const { result: effectResult } = yield* dispatchStandardEffect({
           descriptor,
           coroutineId,
+          ownerCoroutineId: coroutineId,
           env,
           ctx,
           allocateChildId: () => `${coroutineId}.${childSpawnCount++}`,
-          allocateSubscriptionToken: () => `sub:${coroutineId}:${subscriptionCounter++}`,
-          advanceSubscriptionCounter: () => {
-            subscriptionCounter++;
-          },
         });
 
         if (effectResult.status === "ok") {
@@ -1259,8 +1266,6 @@ function* orchestrateResourceChild(
 
   // Shared across init and cleanup phases for deterministic coroutineId allocation
   let childSpawnCount = 0;
-  // Per-resource subscription counter for deterministic token generation
-  let subscriptionCounter = 0;
 
   // ── INIT PHASE ──
   // Drive kernel to provide in its own scope. When the scope exits (at provide
@@ -1392,16 +1397,14 @@ function* orchestrateResourceChild(
         }
 
         // ── Standard effect dispatch (helper-unified, resource init) ──
+        // Resource child is an ordinary coroutine with owner == childId.
         const { result: effectResult } = yield* dispatchStandardEffect({
           descriptor,
           coroutineId: childId,
+          ownerCoroutineId: childId,
           env: childEnv,
           ctx,
           allocateChildId: () => `${childId}.${childSpawnCount++}`,
-          allocateSubscriptionToken: () => `sub:${childId}:${subscriptionCounter++}`,
-          advanceSubscriptionCounter: () => {
-            subscriptionCounter++;
-          },
         });
 
         if (effectResult.status === "ok") {
@@ -1598,16 +1601,17 @@ function* orchestrateResourceChild(
         }
 
         // ── Standard effect dispatch (helper-unified, resource cleanup) ──
+        // ── Standard effect dispatch (helper-unified, resource cleanup) ──
+        // Resource child cleanup body runs under the same coroutineId +
+        // owner as the init body: both are ordinary dispatches from the
+        // resource child's perspective.
         const { result: effectResult } = yield* dispatchStandardEffect({
           descriptor,
           coroutineId: childId,
+          ownerCoroutineId: childId,
           env: childEnv,
           ctx,
           allocateChildId: () => `${childId}.${childSpawnCount++}`,
-          allocateSubscriptionToken: () => `sub:${childId}:${subscriptionCounter++}`,
-          advanceSubscriptionCounter: () => {
-            subscriptionCounter++;
-          },
         });
 
         if (effectResult.status === "ok") {
@@ -1664,16 +1668,40 @@ function* orchestrateResourceChild(
 interface DispatchStandardEffectParams {
   descriptor: EffectDescriptor;
   coroutineId: string;
+  /**
+   * Runtime-only owner identity for this dispatch. Used for
+   * subscription-token counter allocation (§12.4) and `stream.next`
+   * ancestry checks (§12.7). Equals `coroutineId` for ordinary
+   * dispatch; equals the original caller's coroutineId for inline
+   * lanes (`tisyn-inline-invocation-specification.md` §12.3).
+   */
+  ownerCoroutineId: string;
   env: Env;
   ctx: DriveContext;
   allocateChildId: () => string;
-  /** Allocate the next subscription token on the live `stream.subscribe` path. */
-  allocateSubscriptionToken: () => string;
-  /**
-   * Advance the caller's subscription counter on a replayed `stream.subscribe`
-   * success. Prevents token reuse when execution later reaches the live frontier.
-   */
-  advanceSubscriptionCounter: () => void;
+}
+
+/**
+ * Allocate the next subscription token for `owner` and advance the
+ * owner's shared counter in `ctx.subscriptionCounters`. Token format
+ * is `sub:<owner>:<n>` — same structure as pre-Phase-5C, but under
+ * inline-lane dispatches `<owner>` is the inherited owner coroutineId
+ * rather than the journal coroutineId.
+ */
+function allocateSubscriptionToken(ctx: DriveContext, owner: string): string {
+  const n = ctx.subscriptionCounters.get(owner) ?? 0;
+  ctx.subscriptionCounters.set(owner, n + 1);
+  return `sub:${owner}:${n}`;
+}
+
+/**
+ * Advance the owner's subscription counter without emitting a token —
+ * used on replay of `stream.subscribe` so the live frontier can't
+ * reuse an already-consumed token.
+ */
+function advanceSubscriptionCounter(ctx: DriveContext, owner: string): void {
+  const n = ctx.subscriptionCounters.get(owner) ?? 0;
+  ctx.subscriptionCounters.set(owner, n + 1);
 }
 
 interface DispatchStandardEffectResult {
@@ -1712,15 +1740,7 @@ interface DispatchStandardEffectResult {
 function* dispatchStandardEffect(
   params: DispatchStandardEffectParams,
 ): Operation<DispatchStandardEffectResult> {
-  const {
-    descriptor,
-    coroutineId,
-    env,
-    ctx,
-    allocateChildId,
-    allocateSubscriptionToken,
-    advanceSubscriptionCounter,
-  } = params;
+  const { descriptor, coroutineId, ownerCoroutineId, env, ctx, allocateChildId } = params;
 
   const description = parseEffectId(descriptor.id);
   const stored = ctx.replayIndex.peekYield(coroutineId);
@@ -1753,7 +1773,8 @@ function* dispatchStandardEffect(
       ctx.replayIndex.consumeYield(coroutineId);
 
       // stream.subscribe replay: restore subscription map entry from stored
-      // handle AND advance counter so the live frontier does not reuse tokens.
+      // handle AND advance the owner's shared counter (§12.4) so the live
+      // frontier does not reuse a token.
       if (descriptor.id === "stream.subscribe" && stored.result.status === "ok") {
         const handle = stored.result.value as Record<string, unknown> | null;
         if (handle && typeof handle === "object" && "__tisyn_subscription" in handle) {
@@ -1761,7 +1782,7 @@ function* dispatchStandardEffect(
             subscription: null,
             sourceDefinition: descriptor.data,
           });
-          advanceSubscriptionCounter();
+          advanceSubscriptionCounter(ctx, ownerCoroutineId);
         }
       }
 
@@ -1789,7 +1810,7 @@ function* dispatchStandardEffect(
       if (descriptor.id === "__config") {
         resultValue = (yield* ConfigContext.expect()) as Val;
       } else if (descriptor.id === "stream.subscribe") {
-        const token = allocateSubscriptionToken();
+        const token = allocateSubscriptionToken(ctx, ownerCoroutineId);
         const sourceData = descriptor.data as unknown[];
         const source = sourceData[0];
         const sub = yield* source as Operation<{
@@ -1809,11 +1830,16 @@ function* dispatchStandardEffect(
           throw new RuntimeBugError("stream.next: argument is not a valid subscription handle");
         }
         const token = handle.__tisyn_subscription as string;
-        // RV1: ancestor-or-equal coroutineId check
-        const handleCid = token.split(":")[1]!;
-        if (coroutineId !== handleCid && !coroutineId.startsWith(handleCid + ".")) {
+        // Ancestry check (§12.7). Compare the token's embedded owner
+        // against the current dispatch's owner, not the journal
+        // coroutineId. This lets sibling inline lanes (shared owner)
+        // use each other's handles and the caller reuse handles
+        // acquired inside inline bodies, while keeping `invoke`
+        // children's handles (own owner) scoped to the child subtree.
+        const handleOwner = token.split(":")[1]!;
+        if (ownerCoroutineId !== handleOwner && !ownerCoroutineId.startsWith(handleOwner + ".")) {
           throw new SubscriptionCapabilityError(
-            `stream.next: handle from '${handleCid}' cannot be used from '${coroutineId}'`,
+            `stream.next: handle from '${handleOwner}' cannot be used from '${ownerCoroutineId}'`,
           );
         }
         const entry = ctx.subscriptions.get(token);
@@ -1880,6 +1906,7 @@ function* dispatchStandardEffect(
   // middleware gains invoke capability (§9.5.7).
   const dispatchCtx = buildDispatchContext({
     coroutineId,
+    ownerCoroutineId,
     parentEnv: env,
     driveContext: ctx,
     allocateChildId,
