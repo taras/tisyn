@@ -201,27 +201,35 @@ function* installMockDispatch(
 ) {
   let effectIndex = 0;
 
-  yield* Effects.around({
-    *dispatch([_effectId, _data]: [string, any]) {
-      if (effectIndex >= effects.length) {
-        throw new Error("More effects than expected");
-      }
-      const effect = effects[effectIndex]!;
-      effectIndex++;
-
-      if (effect.result.status === "ok") {
-        return effect.result.value;
-      }
-      if (effect.result.status === "error") {
-        const err = new Error(effect.result.error.message);
-        if (effect.result.error.name) {
-          err.name = effect.result.error.name;
+  // Install at `{ at: "min" }` so the mock sits below the runtime's
+  // replay-substitution boundary (§9.5). On replay, stored dispatches are
+  // substituted by the replay lane before the chain reaches min; the mock
+  // only fires for live dispatches. Matches the Phase 4 migration path
+  // documented in `.changeset/runtime-replay-boundary.md`.
+  yield* Effects.around(
+    {
+      *dispatch([_effectId, _data]: [string, any]) {
+        if (effectIndex >= effects.length) {
+          throw new Error("More effects than expected");
         }
-        throw err;
-      }
-      throw new Error("Unexpected cancelled result in mock");
+        const effect = effects[effectIndex]!;
+        effectIndex++;
+
+        if (effect.result.status === "ok") {
+          return effect.result.value;
+        }
+        if (effect.result.status === "error") {
+          const err = new Error(effect.result.error.message);
+          if (effect.result.error.name) {
+            err.name = effect.result.error.name;
+          }
+          throw err;
+        }
+        throw new Error("Unexpected cancelled result in mock");
+      },
     },
-  });
+    { at: "min" },
+  );
 }
 
 // ── Fixture runners ──
