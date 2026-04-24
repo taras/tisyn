@@ -296,10 +296,14 @@ export function* execute(options: ExecuteOptions): Operation<ExecuteResult> {
       next: (eid: string, d: Val) => Operation<Val>,
     ): Operation<Val> {
       const rctx = yield* RuntimeDispatchContext.get();
-      if (rctx == null) return yield* next(effectId, data);
+      if (rctx == null) {
+        return yield* next(effectId, data);
+      }
 
       const stored = rctx.ctx.replayIndex.peekYield(rctx.coroutineId);
-      if (stored == null) return yield* next(effectId, data);
+      if (stored == null) {
+        return yield* next(effectId, data);
+      }
 
       // Authoritative divergence check runs in the helper BEFORE the chain;
       // the defensive re-check here guards against runtime bugs.

@@ -30,9 +30,9 @@ import { expect } from "vitest";
 import { execute } from "./execute.js";
 import { InMemoryStream } from "@tisyn/durable-streams";
 import { Effects, invoke } from "@tisyn/effects";
-import { Fn, Eval, Q } from "@tisyn/ir";
+import { Fn, Q } from "@tisyn/ir";
 import type { FnNode, Val, IrInput, TisynFn } from "@tisyn/ir";
-import type { YieldEvent, CloseEvent, DurableEvent } from "@tisyn/kernel";
+import type { YieldEvent, DurableEvent } from "@tisyn/kernel";
 
 // ── IR helpers ──
 
@@ -77,14 +77,6 @@ function yieldErr(
     coroutineId,
     description: { type, name },
     result: { status: "error", error: { message, name: errorName } },
-  };
-}
-
-function closeOk(value: unknown, coroutineId = "root"): CloseEvent {
-  return {
-    type: "close",
-    coroutineId,
-    result: { status: "ok", value: value as never },
   };
 }
 
