@@ -1,7 +1,8 @@
 import { describe, it } from "@effectionx/vitest";
 import { expect } from "vitest";
+import type { Val } from "@tisyn/ir";
 import { agent, operation, implementAgent } from "./index.js";
-import { dispatch } from "@tisyn/effects";
+import { dispatch, Effects } from "@tisyn/effects";
 
 describe("dispatch", () => {
   it("routes a call descriptor through installed middleware", function* () {
@@ -41,5 +42,37 @@ describe("dispatch", () => {
       expect(error).toBeInstanceOf(Error);
       expect((error as Error).message).toBe("kaboom");
     }
+  });
+
+  // Phase-1 replay-boundary ordering prep (#125): default-priority middleware
+  // installed after impl.install() must observe dispatch before the framework
+  // handler, which now sits at { at: "min" }.
+  it("default-priority middleware installed after impl.install() observes dispatch first", function* () {
+    const math = agent("math-impl-order", {
+      double: operation<{ value: number }, number>(),
+    });
+
+    const log: string[] = [];
+
+    const impl = implementAgent(math, {
+      *double({ value }) {
+        log.push("handler");
+        return value * 2;
+      },
+    });
+
+    yield* impl.install();
+
+    yield* Effects.around({
+      *dispatch([e, d]: [string, Val], next) {
+        log.push("interceptor");
+        return yield* next(e, d);
+      },
+    });
+
+    const result = yield* dispatch(math.double({ value: 21 }));
+
+    expect(result).toBe(42);
+    expect(log).toEqual(["interceptor", "handler"]);
   });
 });

@@ -11,6 +11,10 @@
  * CBP-5: Middleware re-propagates to grandchild on re-delegation
  * CBP-6: Propagated middleware runs outermost — before child max and child min
  * CBP-7: Propagated middleware preserves standard (effectId, data) shape in child
+ * CBP-8: Default-priority middleware installed after installRemoteAgent observes
+ *        dispatch before the transport handler (phase-1 ordering prep, #125)
+ * CBP-9: Default-priority middleware installed after installAgentTransport observes
+ *        dispatch before the transport handler (phase-1 ordering prep, #125)
  */
 
 import { describe, it } from "@effectionx/vitest";
@@ -21,7 +25,7 @@ import type { Val } from "@tisyn/ir";
 import { Fn, Q, Throw, If, Eq, Ref, Eval } from "@tisyn/ir";
 import { agent, operation, implementAgent } from "@tisyn/agent";
 import { installCrossBoundaryMiddleware, Effects, dispatch } from "@tisyn/effects";
-import { installRemoteAgent } from "./install-remote.js";
+import { installRemoteAgent, installAgentTransport } from "./install-remote.js";
 import { createProtocolServer } from "./protocol-server.js";
 import { inprocessTransport } from "./transports/inprocess.js";
 import type {
@@ -339,6 +343,77 @@ describe("cross-boundary middleware", () => {
       };
       expect(result.receivedEffectId).toBe("cbp7.sentinel");
       expect(result.receivedData).toEqual({ x: 42 });
+    });
+  });
+
+  // CBP-8: installRemoteAgent now installs its dispatch at { at: "min" }, so a
+  // default-priority Effects.around installed *after* it must still observe the
+  // outbound dispatch before the transport routes the request.
+  it("default-priority middleware installed after installRemoteAgent observes dispatch first", function* () {
+    const calc = agent("calc-cbp8", {
+      add: operation<{ a: number; b: number }, number>(),
+    });
+
+    const factory = inprocessTransport(calc, {
+      *add({ a, b }: { a: number; b: number }) {
+        return a + b;
+      },
+    });
+
+    yield* scoped(function* () {
+      const log: string[] = [];
+
+      yield* installRemoteAgent(calc, factory);
+
+      yield* Effects.around({
+        *dispatch([e, d]: [string, Val], next) {
+          log.push(`before:${e}`);
+          const result = yield* next(e, d);
+          log.push(`after:${e}`);
+          return result;
+        },
+      });
+
+      const result = yield* dispatch(calc.add({ a: 3, b: 4 }));
+
+      expect(result).toBe(7);
+      expect(log).toEqual(["before:calc-cbp8.add", "after:calc-cbp8.add"]);
+    });
+  });
+
+  // CBP-9: same invariant for the agentId-string variant used by the runtime
+  // scope orchestrator and the CLI startup path.
+  it("default-priority middleware installed after installAgentTransport observes dispatch first", function* () {
+    // Declaration used only to build the inprocess server; installation is via
+    // the string-keyed installAgentTransport entry point.
+    const calc = agent("calc-cbp9", {
+      add: operation<{ a: number; b: number }, number>(),
+    });
+
+    const factory = inprocessTransport(calc, {
+      *add({ a, b }: { a: number; b: number }) {
+        return a + b;
+      },
+    });
+
+    yield* scoped(function* () {
+      const log: string[] = [];
+
+      yield* installAgentTransport("calc-cbp9", factory);
+
+      yield* Effects.around({
+        *dispatch([e, d]: [string, Val], next) {
+          log.push(`before:${e}`);
+          const result = yield* next(e, d);
+          log.push(`after:${e}`);
+          return result;
+        },
+      });
+
+      const result = yield* dispatch("calc-cbp9.add", { a: 3, b: 4 } as Val);
+
+      expect(result).toBe(7);
+      expect(log).toEqual(["before:calc-cbp9.add", "after:calc-cbp9.add"]);
     });
   });
 });
