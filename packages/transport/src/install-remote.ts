@@ -30,47 +30,53 @@ export function* installAgentTransport(
     capabilities: { methods: [] },
   });
 
-  yield* Effects.around({
-    *dispatch([effectId, data]: [string, Val], next) {
-      const { type, name } = parseEffectId(effectId);
-      if (type === agentId) {
-        const requestId = `${agentId}:${requestCounter++}`;
-        const middleware = yield* getCrossBoundaryMiddleware();
-        const stream = session.execute(
-          executeRequest(requestId, {
-            executionId,
-            taskId: "root",
-            operation: name,
-            args: [data],
-            progressToken: requestId,
-            ...(middleware != null ? { middleware: middleware as unknown as Val } : {}),
-          }),
-        );
-        const sub = yield* stream;
-        for (;;) {
-          const item = yield* sub.next();
-          if (item.done) {
-            const result = item.value;
-            if (result.ok) {
-              return result.value as Val;
-            }
-            {
-              const err = new Error(result.error.message);
-              if (result.error.name) {
-                err.name = result.error.name;
+  yield* Effects.around(
+    {
+      *dispatch([effectId, data]: [string, Val], next) {
+        const { type, name } = parseEffectId(effectId);
+        if (type === agentId) {
+          const requestId = `${agentId}:${requestCounter++}`;
+          const middleware = yield* getCrossBoundaryMiddleware();
+          const stream = session.execute(
+            executeRequest(requestId, {
+              executionId,
+              taskId: "root",
+              operation: name,
+              args: [data],
+              progressToken: requestId,
+              ...(middleware != null ? { middleware: middleware as unknown as Val } : {}),
+            }),
+          );
+          const sub = yield* stream;
+          for (;;) {
+            const item = yield* sub.next();
+            if (item.done) {
+              const result = item.value;
+              if (result.ok) {
+                return result.value as Val;
               }
-              throw err;
+              {
+                const err = new Error(result.error.message);
+                if (result.error.name) {
+                  err.name = result.error.name;
+                }
+                throw err;
+              }
             }
-          }
-          const sink = yield* ProgressContext.get();
-          if (sink) {
-            const cid = (yield* CoroutineContext.get()) ?? "root";
-            sink({ token: requestId, effectId, coroutineId: cid, value: item.value });
+            const sink = yield* ProgressContext.get();
+            if (sink) {
+              const cid = (yield* CoroutineContext.get()) ?? "root";
+              sink({ token: requestId, effectId, coroutineId: cid, value: item.value });
+            }
           }
         }
-      }
-      return yield* next(effectId, data);
+        return yield* next(effectId, data);
+      },
     },
+    { at: "min" },
+  );
+
+  yield* Effects.around({
     *resolve([id]: [string], next) {
       if (id === agentId) {
         return true;
@@ -106,49 +112,55 @@ export function* installRemoteAgent<Ops extends Record<string, OperationSpec>>(
     },
   });
 
-  yield* Effects.around({
-    *dispatch([effectId, data]: [string, Val], next) {
-      const { type, name } = parseEffectId(effectId);
-      if (type === id) {
-        const requestId = `${id}:${requestCounter++}`;
-        const middleware = yield* getCrossBoundaryMiddleware();
+  yield* Effects.around(
+    {
+      *dispatch([effectId, data]: [string, Val], next) {
+        const { type, name } = parseEffectId(effectId);
+        if (type === id) {
+          const requestId = `${id}:${requestCounter++}`;
+          const middleware = yield* getCrossBoundaryMiddleware();
 
-        const stream = session.execute(
-          executeRequest(requestId, {
-            executionId,
-            taskId: "root",
-            operation: name,
-            args: [data],
-            progressToken: requestId,
-            ...(middleware != null ? { middleware: middleware as unknown as Val } : {}),
-          }),
-        );
+          const stream = session.execute(
+            executeRequest(requestId, {
+              executionId,
+              taskId: "root",
+              operation: name,
+              args: [data],
+              progressToken: requestId,
+              ...(middleware != null ? { middleware: middleware as unknown as Val } : {}),
+            }),
+          );
 
-        const sub = yield* stream;
-        for (;;) {
-          const item = yield* sub.next();
-          if (item.done) {
-            const result = item.value;
-            if (result.ok) {
-              return result.value as Val;
-            }
-            {
-              const err = new Error(result.error.message);
-              if (result.error.name) {
-                err.name = result.error.name;
+          const sub = yield* stream;
+          for (;;) {
+            const item = yield* sub.next();
+            if (item.done) {
+              const result = item.value;
+              if (result.ok) {
+                return result.value as Val;
               }
-              throw err;
+              {
+                const err = new Error(result.error.message);
+                if (result.error.name) {
+                  err.name = result.error.name;
+                }
+                throw err;
+              }
             }
-          }
-          const sink = yield* ProgressContext.get();
-          if (sink) {
-            const cid = (yield* CoroutineContext.get()) ?? "root";
-            sink({ token: requestId, effectId, coroutineId: cid, value: item.value });
+            const sink = yield* ProgressContext.get();
+            if (sink) {
+              const cid = (yield* CoroutineContext.get()) ?? "root";
+              sink({ token: requestId, effectId, coroutineId: cid, value: item.value });
+            }
           }
         }
-      }
-      return yield* next(effectId, data);
+        return yield* next(effectId, data);
+      },
     },
+    { at: "min" },
+  );
+
+  yield* Effects.around({
     *resolve([agentId]: [string], next) {
       if (agentId === id) {
         return true;

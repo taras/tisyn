@@ -7,6 +7,8 @@
  * AG-4: Child scope binding doesn't affect parent
  * AG-5: Root Effects.around() intercepts locally-bound agent dispatch
  * AG-6: Agents.use() for two different agents in same scope — both accessible
+ * AG-7: Default-priority middleware installed after Agents.use() observes dispatch
+ *       before the framework handler (phase-1 replay-boundary ordering prep, #125)
  */
 
 import { describe, it } from "@effectionx/vitest";
@@ -164,5 +166,34 @@ describe("Agents setup API", () => {
 
     expect(yield* calcFacade.add({ a: 5, b: 5 })).toBe(10);
     expect(yield* greeterFacade.greet({ name: "world" })).toBe("hello world");
+  });
+
+  // AG-7
+  it("default-priority middleware installed after Agents.use() observes dispatch first", function* () {
+    const calc = agent("calc-ag7", {
+      add: operation<{ a: number; b: number }, number>(),
+    });
+
+    const log: string[] = [];
+
+    yield* Agents.use(calc, {
+      *add({ a, b }) {
+        log.push("handler");
+        return a + b;
+      },
+    });
+
+    yield* Effects.around({
+      *dispatch([e, d]: [string, Val], next) {
+        log.push("interceptor");
+        return yield* next(e, d);
+      },
+    });
+
+    const facade = yield* useAgent(calc);
+    const result = yield* facade.add({ a: 3, b: 4 });
+
+    expect(result).toBe(7);
+    expect(log).toEqual(["interceptor", "handler"]);
   });
 });

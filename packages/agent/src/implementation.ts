@@ -28,18 +28,24 @@ export function implementAgent<Ops extends Record<string, OperationSpec>>(
     id,
     handlers,
     *install() {
-      yield* Effects.around({
-        *dispatch([effectId, data]: [string, Val], next) {
-          const { type, name } = parseEffectId(effectId);
-          if (type === id) {
-            const handler = (handlers as Record<string, (args: Val) => Operation<Val>>)[name];
-            if (!handler) {
-              throw new Error(`Agent "${id}" has no handler for operation: ${name}`);
+      yield* Effects.around(
+        {
+          *dispatch([effectId, data]: [string, Val], next) {
+            const { type, name } = parseEffectId(effectId);
+            if (type === id) {
+              const handler = (handlers as Record<string, (args: Val) => Operation<Val>>)[name];
+              if (!handler) {
+                throw new Error(`Agent "${id}" has no handler for operation: ${name}`);
+              }
+              return yield* DispatchContext.with(undefined, () => handler(data));
             }
-            return yield* DispatchContext.with(undefined, () => handler(data));
-          }
-          return yield* next(effectId, data);
+            return yield* next(effectId, data);
+          },
         },
+        { at: "min" },
+      );
+
+      yield* Effects.around({
         *resolve([agentId]: [string], next) {
           if (agentId === id) {
             return true;
