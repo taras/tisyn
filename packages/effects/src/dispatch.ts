@@ -1,6 +1,6 @@
 import { type Operation, sleep as effectionSleep } from "effection";
 import type { Val } from "@tisyn/ir";
-import { createApi } from "@effectionx/context-api";
+import { createApi } from "@tisyn/context-api";
 
 /** Scoped-effect frame pushed for the duration of an invoked child subtree. */
 export interface ScopedEffectFrame {

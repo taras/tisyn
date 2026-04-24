@@ -32,23 +32,25 @@ const packagesDir = join(repoRoot, "packages");
  * Edges not listed here are forbidden.
  */
 const ALLOWED_EDGES: Record<string, ReadonlyArray<string>> = {
-  agent: ["effects", "ir", "kernel"],
+  agent: ["context-api", "effects", "ir", "kernel"],
   "claude-code": ["agent", "code-agent", "effects", "ir", "protocol", "transport"],
   "code-agent": ["agent", "effects", "ir", "protocol", "transport"],
   codex: ["agent", "code-agent", "effects", "ir", "protocol", "transport"],
   cli: ["compiler", "config", "durable-streams", "effects", "ir", "runtime", "transport"],
   compiler: ["ir", "validate"],
   config: [],
+  "context-api": [],
   conformance: ["agent", "durable-streams", "effects", "ir", "kernel", "runtime"],
   dsl: ["ir"],
   "durable-streams": ["kernel"],
-  effects: ["ir", "kernel"],
+  effects: ["context-api", "ir", "kernel"],
   ir: [],
   kernel: ["ir", "validate"],
   protocol: ["ir"],
   runtime: [
     "agent",
     "config",
+    "context-api",
     "durable-streams",
     "effects",
     "ir",
