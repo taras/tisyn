@@ -184,6 +184,30 @@ type InlineResourceTarget =
       reason: string;
     };
 
+/**
+ * Tisyn's durable task table for a given dispatch site. Maps the
+ * IR-level durable task id (the string inside a `{ __tisyn_task }`
+ * handle) to the live Effection join operation, and tracks the
+ * once-only `joinedTasks` set (R8). Bridges durable IR identity to
+ * live runtime operations; does NOT own scope or lifetime —
+ * Effection's `scoped(...)` owns those.
+ *
+ * Every dispatch site that already supports spawn/join (root
+ * `driveKernel`, `orchestrateResourceChild` init and cleanup
+ * phases) maintains its own table locally. This interface is the
+ * typed reference through which an `invokeInline` body sees the
+ * hosting site's existing table — inline bodies do not maintain
+ * their own per §11.2 ("no intermediate scope"), so an inline-body
+ * `spawn` registers in, and an inline-body `join` resolves
+ * against, the host's table.
+ *
+ * Runtime-internal only. Not exported.
+ */
+interface DurableTaskTable {
+  spawnedTasks: Map<string, { operation: Operation<EventResult> }>;
+  joinedTasks: Set<string>;
+}
+
 // ── Nested invocation helpers ──
 
 function isFnNode(value: unknown): value is FnNode {
@@ -240,6 +264,7 @@ function buildDispatchContext(args: {
   driveContext: DriveContext;
   allocateChildId: () => string;
   inlineResourceTarget: InlineResourceTarget;
+  durableTaskTable: DurableTaskTable;
 }): DispatchContext {
   const {
     coroutineId,
@@ -248,6 +273,7 @@ function buildDispatchContext(args: {
     driveContext,
     allocateChildId,
     inlineResourceTarget,
+    durableTaskTable,
   } = args;
   const self: DispatchContext = {
     coroutineId,
@@ -323,6 +349,7 @@ function buildDispatchContext(args: {
           driveContext,
           laneOwner,
           inlineResourceTarget,
+          durableTaskTable,
         );
 
       if (opts?.overlay) {
@@ -364,10 +391,20 @@ function buildDispatchContext(args: {
  *   dispatch. When the hosting dispatch is a resource-init or
  *   resource-cleanup phase, the target rejects instead — preserving
  *   the ordinary-yield nested-resource rejection.
- * - The remaining six compound externals (`scope`, `spawn`, `join`,
- *   `timebox`, `all`, `race`) inside an inline body are still
- *   rejected with a clear error: this runtime phase does NOT run
- *   them under inline-lane semantics yet.
+ * - `spawn` / `join` inside an inline body attach to the hosting
+ *   caller's Effection scope and durable task table (§11.5).
+ *   Spawned child id is `laneId.{m}` from the lane's own
+ *   `inlineChildSpawnCount`; the child runs via a full
+ *   `driveKernel` and produces its own `CloseEvent` under that id.
+ *   Handles register in the hosting caller's `spawnedTasks` map so
+ *   sibling inline lanes, the original caller's own later code, or
+ *   the inline body itself can `join` them; the caller's
+ *   `joinedTasks` set is shared so a double-join across the
+ *   boundary fails with the existing "already been joined" error.
+ * - The remaining four compound externals (`scope`, `timebox`,
+ *   `all`, `race`) inside an inline body are still rejected with a
+ *   clear error: this runtime phase does NOT run them under
+ *   inline-lane semantics yet.
  */
 function* driveInlineBody<T = Val>(
   kernel: Generator<EffectDescriptor, Val, Val>,
@@ -376,6 +413,7 @@ function* driveInlineBody<T = Val>(
   ctx: DriveContext,
   ownerCoroutineId: string,
   inlineResourceTarget: InlineResourceTarget,
+  durableTaskTable: DurableTaskTable,
 ): Operation<T> {
   // Own childSpawnCount per v6 §7.3. Subscription counter state lives on
   // `ctx.subscriptionCounters[ownerCoroutineId]`, shared with the caller
@@ -470,14 +508,120 @@ function* driveInlineBody<T = Val>(
         nextValue = null;
         continue;
       }
-      // `scope`, `spawn`, `join`, `timebox`, `all`, `race` — still
-      // deferred. Reject uniformly with a clear error naming the id.
-      // (`provide` is only legal inside a resource init body; a
-      // bare `provide` yield here is caller IR misuse rather than an
-      // unsupported inline compound, so it also hits this branch.)
+      if (descriptor.id === "spawn") {
+        // §11.5: spawn a foreground child at the HOSTING caller's
+        // Effection scope, registering in its durable task table.
+        // Lane allocator advances by exactly +1 (matches the
+        // `resource` rule above).
+        const compoundData = descriptor.data as {
+          __tisyn_inner: { body: Expr };
+          __tisyn_env: Env;
+        };
+        const spawnChildId = `${laneId}.${inlineChildSpawnCount++}`;
+        const childEnv = compoundData.__tisyn_env;
+        const spawnChildKernel = evaluate(compoundData.__tisyn_inner.body, childEnv);
+        const {
+          operation: joinOp,
+          resolve: joinResolve,
+          reject: joinReject,
+        } = withResolvers<EventResult>();
+        // Register in the hosting site's shared spawnedTasks so
+        // sibling inline lanes and post-return caller code can
+        // resolve this handle.
+        durableTaskTable.spawnedTasks.set(spawnChildId, { operation: joinOp });
+
+        yield* spawn(function* () {
+          try {
+            const childResult = yield* driveKernel(spawnChildKernel, spawnChildId, childEnv, ctx);
+            joinResolve(childResult);
+            if (childResult.status === "error") {
+              const errResult = childResult as {
+                status: "error";
+                error: { message: string; name?: string };
+              };
+              throw new EffectError(errResult.error.message, errResult.error.name);
+            }
+          } catch (e) {
+            const err = e instanceof Error ? e : new Error(String(e));
+            joinReject(err);
+            throw err; // R12: tear down hosting Effection scope on child failure
+          }
+        });
+
+        // R4: resume inline body immediately with the task handle.
+        nextValue = { __tisyn_task: spawnChildId } as Val;
+        continue;
+      }
+
+      if (descriptor.id === "join") {
+        const compoundData = descriptor.data as { __tisyn_inner: Val };
+        const taskHandle = compoundData.__tisyn_inner;
+
+        if (
+          taskHandle === null ||
+          typeof taskHandle !== "object" ||
+          typeof (taskHandle as Record<string, unknown>).__tisyn_task !== "string"
+        ) {
+          throw new RuntimeBugError("join: inner value is not a valid task handle");
+        }
+
+        const joinChildId = (taskHandle as { __tisyn_task: string }).__tisyn_task;
+
+        // R8: double-join — shared set with hosting caller, so a
+        // second join attempt from any lane or from caller code
+        // against the same handle fails.
+        if (durableTaskTable.joinedTasks.has(joinChildId)) {
+          throw new RuntimeBugError(`join: task '${joinChildId}' has already been joined`);
+        }
+        durableTaskTable.joinedTasks.add(joinChildId);
+
+        const entry = durableTaskTable.spawnedTasks.get(joinChildId);
+        if (!entry) {
+          throw new RuntimeBugError(`join: no spawned task found for '${joinChildId}'`);
+        }
+
+        let childResult: EventResult;
+        try {
+          childResult = yield* entry.operation;
+        } catch (e) {
+          // Child task threw — route through kernel.throw with the
+          // three outcomes (uncaught re-throw / caught-return /
+          // caught-yield), same as other errors in driveInlineBody.
+          const err = e instanceof EffectError ? e : new EffectError(String(e));
+          const throwResult = kernel.throw(err);
+          if (throwResult.done) {
+            return (throwResult.value ?? null) as T;
+          }
+          pendingStep = throwResult;
+          nextValue = null;
+          continue;
+        }
+
+        if (childResult.status === "ok") {
+          nextValue = (childResult.value ?? null) as Val;
+          continue;
+        }
+        if (childResult.status === "cancelled") {
+          throw new InvocationCancelledError();
+        }
+        const err = new EffectError(childResult.error.message, childResult.error.name);
+        const throwResult = kernel.throw(err);
+        if (throwResult.done) {
+          return (throwResult.value ?? null) as T;
+        }
+        pendingStep = throwResult;
+        nextValue = null;
+        continue;
+      }
+
+      // `scope`, `timebox`, `all`, `race` — still deferred. Reject
+      // uniformly with a clear error naming the id. (`provide` is
+      // only legal inside a resource init body; a bare `provide`
+      // yield here is caller IR misuse rather than an unsupported
+      // inline compound, so it also hits this branch.)
       throw new Error(
         `invokeInline body dispatched compound external '${descriptor.id}'; ` +
-          `compound primitives 'scope', 'spawn', 'join', 'timebox', 'all', 'race' ` +
+          `compound primitives 'scope', 'timebox', 'all', 'race' ` +
           `inside inline bodies are deferred ` +
           `(see tisyn-inline-invocation-specification.md §11)`,
       );
@@ -500,6 +644,11 @@ function* driveInlineBody<T = Val>(
       // outermost caller's registration destination, so sibling lanes
       // and nested lanes all register with the same caller's array.
       inlineResourceTarget,
+      // Same inheritance for the durable task table: sibling and
+      // nested inline lanes share the hosting caller's
+      // spawn/join maps so task handles are resolvable across
+      // lanes (§11.5).
+      durableTaskTable,
     });
 
     if (result.status === "ok") {
@@ -1005,6 +1154,11 @@ function* driveKernel(
               resourceChildren.push(child);
             },
           },
+          // §11.5: inline-body spawn/join shares this kernel's own
+          // durable task table so handles acquired inside an inline
+          // body are resolvable across sibling inline lanes and
+          // post-return caller code.
+          durableTaskTable: { spawnedTasks, joinedTasks },
         });
 
         if (effectResult.status === "ok") {
@@ -1556,6 +1710,11 @@ function* orchestrateResourceChild(
               "are not supported " +
               "(see tisyn-inline-invocation-specification.md §11.4)",
           },
+          // §11.5: inline-body spawn/join from middleware running on
+          // a resource-init dispatch attaches to the init phase's
+          // durable task table — matching where ordinary-yield
+          // `spawn` inside the resource init body already lands.
+          durableTaskTable: { spawnedTasks, joinedTasks },
         });
 
         if (effectResult.status === "ok") {
@@ -1773,6 +1932,12 @@ function* orchestrateResourceChild(
               "are not supported " +
               "(see tisyn-inline-invocation-specification.md §11.4)",
           },
+          // §11.5: inline-body spawn/join from middleware running on
+          // a resource-cleanup dispatch attaches to the cleanup
+          // phase's durable task table — matching where
+          // ordinary-yield `spawn` inside the cleanup body itself
+          // already lands.
+          durableTaskTable: { spawnedTasks, joinedTasks },
         });
 
         if (effectResult.status === "ok") {
@@ -1849,6 +2014,17 @@ interface DispatchStandardEffectParams {
    * §11.4 + §11.8). Unused by ordinary (non-inline) dispatch paths.
    */
   inlineResourceTarget: InlineResourceTarget;
+  /**
+   * Reference to the hosting dispatch site's existing durable
+   * task table (`driveKernel`'s local `spawnedTasks` +
+   * `joinedTasks`, or `orchestrateResourceChild`'s
+   * init/cleanup-phase equivalents). Passed through so an
+   * `invokeInline` body can share the same table — an inline-
+   * body `spawn` registers in it, an inline-body `join` resolves
+   * against it, and R8 once-only join is enforced across the
+   * boundary (§11.5).
+   */
+  durableTaskTable: DurableTaskTable;
 }
 
 /**
@@ -1918,6 +2094,7 @@ function* dispatchStandardEffect(
     ctx,
     allocateChildId,
     inlineResourceTarget,
+    durableTaskTable,
   } = params;
 
   const description = parseEffectId(descriptor.id);
@@ -2089,6 +2266,7 @@ function* dispatchStandardEffect(
     driveContext: ctx,
     allocateChildId,
     inlineResourceTarget,
+    durableTaskTable,
   });
 
   const runtimeCtxValue: RuntimeDispatchValue = { coroutineId, ctx };
