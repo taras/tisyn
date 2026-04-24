@@ -161,6 +161,29 @@ interface ResourceChild {
   waitCleanup: Operation<void>;
 }
 
+/**
+ * Registration target for a `resource` yielded from inside an
+ * `invokeInline` body. Per `tisyn-inline-invocation-specification.md`
+ * §11.4 + §11.8, a resource acquired inside an inline body attaches
+ * to the caller's scope — but only when the hosting dispatch context
+ * is a caller `driveKernel`. When the hosting context is a
+ * resource-init or resource-cleanup phase inside
+ * `orchestrateResourceChild`, nested resources are unsupported (the
+ * ordinary-yield nested-resource path throws
+ * `RuntimeBugError("Nested resource is not supported")`); the inline
+ * path preserves that rejection via a `"reject"` target so inline
+ * invocation cannot silently bypass it.
+ */
+type InlineResourceTarget =
+  | {
+      kind: "caller-scope";
+      register(child: ResourceChild): void;
+    }
+  | {
+      kind: "reject";
+      reason: string;
+    };
+
 // ── Nested invocation helpers ──
 
 function isFnNode(value: unknown): value is FnNode {
@@ -216,8 +239,16 @@ function buildDispatchContext(args: {
   parentEnv: Env;
   driveContext: DriveContext;
   allocateChildId: () => string;
+  inlineResourceTarget: InlineResourceTarget;
 }): DispatchContext {
-  const { coroutineId, ownerCoroutineId, parentEnv, driveContext, allocateChildId } = args;
+  const {
+    coroutineId,
+    ownerCoroutineId,
+    parentEnv,
+    driveContext,
+    allocateChildId,
+    inlineResourceTarget,
+  } = args;
   const self: DispatchContext = {
     coroutineId,
     ownerCoroutineId,
@@ -285,7 +316,14 @@ function buildDispatchContext(args: {
       const laneKernel = evaluate(fn.body as Expr, laneEnv);
 
       const driveLane = () =>
-        driveInlineBody<T>(laneKernel, laneId, laneEnv, driveContext, laneOwner);
+        driveInlineBody<T>(
+          laneKernel,
+          laneId,
+          laneEnv,
+          driveContext,
+          laneOwner,
+          inlineResourceTarget,
+        );
 
       if (opts?.overlay) {
         return yield* withOverlayFrame(opts.overlay, driveLane);
@@ -317,10 +355,19 @@ function buildDispatchContext(args: {
  * - Lane produces NO `CloseEvent` — ever. Normal completion returns
  *   the kernel's final value directly; uncaught errors propagate
  *   directly to the caller's middleware frame.
- * - Compound externals (`scope`, `spawn`, `join`, `resource`,
- *   `timebox`, `all`, `race`) inside an inline body are rejected with
- *   a clear error: this runtime phase does NOT run them under
- *   inline-lane semantics yet.
+ * - `resource` inside an inline body provides in the caller's scope
+ *   and cleans up at caller teardown (§11.4 + §11.8). The resource
+ *   child is allocated `laneId.{m}` from the lane's own
+ *   `inlineChildSpawnCount`, produces its own `CloseEvent` under
+ *   that id, and registers with the caller's `resourceChildren`
+ *   array via the `InlineResourceTarget` passed from the hosting
+ *   dispatch. When the hosting dispatch is a resource-init or
+ *   resource-cleanup phase, the target rejects instead — preserving
+ *   the ordinary-yield nested-resource rejection.
+ * - The remaining six compound externals (`scope`, `spawn`, `join`,
+ *   `timebox`, `all`, `race`) inside an inline body are still
+ *   rejected with a clear error: this runtime phase does NOT run
+ *   them under inline-lane semantics yet.
  */
 function* driveInlineBody<T = Val>(
   kernel: Generator<EffectDescriptor, Val, Val>,
@@ -328,6 +375,7 @@ function* driveInlineBody<T = Val>(
   env: Env,
   ctx: DriveContext,
   ownerCoroutineId: string,
+  inlineResourceTarget: InlineResourceTarget,
 ): Operation<T> {
   // Own childSpawnCount per v6 §7.3. Subscription counter state lives on
   // `ctx.subscriptionCounters[ownerCoroutineId]`, shared with the caller
@@ -348,12 +396,89 @@ function* driveInlineBody<T = Val>(
 
     const descriptor = step.value as EffectDescriptor;
 
-    // Compound-external descriptors are out of scope for this phase.
-    // Reject uniformly with a clear error that names the descriptor id.
+    // §11.4 + §11.8: `resource` inside an inline body provides in
+    // the caller's scope and cleans up at caller teardown — but only
+    // when the hosting dispatch context is a caller `driveKernel`.
+    // When invokeInline was called from middleware running on a
+    // resource-init / resource-cleanup dispatch, the target rejects,
+    // preserving the ordinary-yield "Nested resource is not supported"
+    // rule. Non-resource compound externals stay rejected uniformly.
     if (isCompoundExternal(descriptor.id)) {
+      if (descriptor.id === "resource") {
+        if (inlineResourceTarget.kind === "reject") {
+          // Do NOT advance the lane's child-spawn counter for a
+          // rejected call (matches "rejected calls do not advance
+          // allocators"); do NOT start `orchestrateResourceChild`.
+          throw new Error(inlineResourceTarget.reason);
+        }
+        const compoundData = descriptor.data as {
+          __tisyn_inner: { body: Expr };
+          __tisyn_env: Env;
+        };
+        const childId = `${laneId}.${inlineChildSpawnCount++}`;
+        const childEnv = compoundData.__tisyn_env;
+        const childResourceKernel = evaluate(compoundData.__tisyn_inner.body, childEnv);
+        const {
+          operation: provideOp,
+          resolve: provideRes,
+          reject: provideRej,
+        } = withResolvers<Val>();
+        const { operation: teardownOp, resolve: teardownRes } = withResolvers<void>();
+        const { operation: cleanupOp, resolve: cleanupRes } = withResolvers<void>();
+
+        yield* spawn(function* () {
+          yield* orchestrateResourceChild(
+            childResourceKernel,
+            childId,
+            childEnv,
+            ctx,
+            provideRes,
+            provideRej,
+            teardownOp,
+            cleanupRes,
+          );
+        });
+
+        let resourceValue: Val = null;
+        let resourceErr: Error | null = null;
+        try {
+          resourceValue = yield* provideOp;
+        } catch (e) {
+          resourceErr = e instanceof Error ? e : new Error(String(e));
+        }
+
+        if (resourceErr === null) {
+          // §11.4: register with CALLER's resourceChildren array so
+          // cleanup runs at caller teardown alongside caller resources.
+          inlineResourceTarget.register({
+            childId,
+            signalTeardown: teardownRes,
+            waitCleanup: cleanupOp,
+          });
+          nextValue = resourceValue;
+          continue;
+        }
+        // Init failed — route through kernel.throw with the three
+        // outcomes. Do NOT run teardownResourceChildren (lane has no
+        // teardown; the caller's teardown will pick up anything we
+        // already registered).
+        const throwResult = kernel.throw(resourceErr);
+        if (throwResult.done) {
+          return (throwResult.value ?? null) as T;
+        }
+        pendingStep = throwResult;
+        nextValue = null;
+        continue;
+      }
+      // `scope`, `spawn`, `join`, `timebox`, `all`, `race` — still
+      // deferred. Reject uniformly with a clear error naming the id.
+      // (`provide` is only legal inside a resource init body; a
+      // bare `provide` yield here is caller IR misuse rather than an
+      // unsupported inline compound, so it also hits this branch.)
       throw new Error(
         `invokeInline body dispatched compound external '${descriptor.id}'; ` +
-          `compound primitives inside inline bodies are deferred ` +
+          `compound primitives 'scope', 'spawn', 'join', 'timebox', 'all', 'race' ` +
+          `inside inline bodies are deferred ` +
           `(see tisyn-inline-invocation-specification.md §11)`,
       );
     }
@@ -370,6 +495,11 @@ function* driveInlineBody<T = Val>(
       env,
       ctx,
       allocateChildId: () => `${laneId}.${inlineChildSpawnCount++}`,
+      // Thread the caller's target unchanged — nested `invokeInline`
+      // invoked from middleware on a lane-dispatch inherits the
+      // outermost caller's registration destination, so sibling lanes
+      // and nested lanes all register with the same caller's array.
+      inlineResourceTarget,
     });
 
     if (result.status === "ok") {
@@ -866,6 +996,15 @@ function* driveKernel(
           env,
           ctx,
           allocateChildId: () => `${coroutineId}.${childSpawnCount++}`,
+          // §11.4: caller `driveKernel` hosts the dispatch — inline
+          // bodies invoked from middleware here attach resources to
+          // THIS kernel's `resourceChildren`.
+          inlineResourceTarget: {
+            kind: "caller-scope",
+            register: (child) => {
+              resourceChildren.push(child);
+            },
+          },
         });
 
         if (effectResult.status === "ok") {
@@ -1405,6 +1544,18 @@ function* orchestrateResourceChild(
           env: childEnv,
           ctx,
           allocateChildId: () => `${childId}.${childSpawnCount++}`,
+          // Nested resources inside a resource body are unsupported
+          // (cf. the ordinary-yield rejection in the compound
+          // interception block of this same phase). Inline invocation
+          // MUST NOT silently bypass that rule.
+          inlineResourceTarget: {
+            kind: "reject",
+            reason:
+              "invokeInline body dispatched 'resource' from inside a resource " +
+              "init dispatch context; nested resources inside a resource body " +
+              "are not supported " +
+              "(see tisyn-inline-invocation-specification.md §11.4)",
+          },
         });
 
         if (effectResult.status === "ok") {
@@ -1601,7 +1752,6 @@ function* orchestrateResourceChild(
         }
 
         // ── Standard effect dispatch (helper-unified, resource cleanup) ──
-        // ── Standard effect dispatch (helper-unified, resource cleanup) ──
         // Resource child cleanup body runs under the same coroutineId +
         // owner as the init body: both are ordinary dispatches from the
         // resource child's perspective.
@@ -1612,6 +1762,17 @@ function* orchestrateResourceChild(
           env: childEnv,
           ctx,
           allocateChildId: () => `${childId}.${childSpawnCount++}`,
+          // Nested resources inside a resource body are unsupported —
+          // same rule as the init-phase target. Preserves the existing
+          // rejection against inline invocation silently bypassing it.
+          inlineResourceTarget: {
+            kind: "reject",
+            reason:
+              "invokeInline body dispatched 'resource' from inside a resource " +
+              "cleanup dispatch context; nested resources inside a resource body " +
+              "are not supported " +
+              "(see tisyn-inline-invocation-specification.md §11.4)",
+          },
         });
 
         if (effectResult.status === "ok") {
@@ -1679,6 +1840,15 @@ interface DispatchStandardEffectParams {
   env: Env;
   ctx: DriveContext;
   allocateChildId: () => string;
+  /**
+   * Where to register a resource acquired inside an `invokeInline`
+   * body. `"caller-scope"` pushes into the hosting caller's
+   * `resourceChildren`; `"reject"` throws — preserving the existing
+   * nested-resource rejection when the host is a resource-init or
+   * resource-cleanup dispatch (`tisyn-inline-invocation-specification.md`
+   * §11.4 + §11.8). Unused by ordinary (non-inline) dispatch paths.
+   */
+  inlineResourceTarget: InlineResourceTarget;
 }
 
 /**
@@ -1740,7 +1910,15 @@ interface DispatchStandardEffectResult {
 function* dispatchStandardEffect(
   params: DispatchStandardEffectParams,
 ): Operation<DispatchStandardEffectResult> {
-  const { descriptor, coroutineId, ownerCoroutineId, env, ctx, allocateChildId } = params;
+  const {
+    descriptor,
+    coroutineId,
+    ownerCoroutineId,
+    env,
+    ctx,
+    allocateChildId,
+    inlineResourceTarget,
+  } = params;
 
   const description = parseEffectId(descriptor.id);
   const stored = ctx.replayIndex.peekYield(coroutineId);
@@ -1910,6 +2088,7 @@ function* dispatchStandardEffect(
     parentEnv: env,
     driveContext: ctx,
     allocateChildId,
+    inlineResourceTarget,
   });
 
   const runtimeCtxValue: RuntimeDispatchValue = { coroutineId, ctx };
