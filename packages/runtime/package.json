@@ -27,7 +27,7 @@
     "test": "vitest run"
   },
   "dependencies": {
-    "@effectionx/context-api": "^0.5.3",
+    "@effectionx/context-api": "https://pkg.pr.new/@effectionx/context-api@215",
     "@tisyn/agent": "workspace:*",
     "@tisyn/config": "workspace:*",
     "@tisyn/durable-streams": "workspace:*",

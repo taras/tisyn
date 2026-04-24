@@ -54,6 +54,7 @@ describe("@tisyn/effects — package exports", () => {
       const names = Object.keys(primary);
       expect(names).not.toContain("DispatchContext");
       expect(names).not.toContain("evaluateMiddlewareFn");
+      expect(names).not.toContain("installReplayDispatch");
     });
 
     it("error constructors are real classes", () => {
@@ -71,13 +72,16 @@ describe("@tisyn/effects — package exports", () => {
       const names = Object.keys(internal).sort();
       expect(names).toContain("DispatchContext");
       expect(names).toContain("evaluateMiddlewareFn");
+      expect(names).toContain("installReplayDispatch");
     });
 
     it("source files carry @internal JSDoc tags", () => {
       const dcSource = readFileSync(resolve(pkgRoot, "src/internal/dispatch-context.ts"), "utf8");
       const mwSource = readFileSync(resolve(pkgRoot, "src/internal/middleware-eval.ts"), "utf8");
+      const rpSource = readFileSync(resolve(pkgRoot, "src/internal/replay.ts"), "utf8");
       expect(dcSource).toMatch(/@internal/);
       expect(mwSource).toMatch(/@internal/);
+      expect(rpSource).toMatch(/@internal/);
     });
 
     it("README.md documents non-stability", () => {
