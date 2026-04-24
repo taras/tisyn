@@ -53,12 +53,15 @@ describe("Replay", () => {
     const stream = new InMemoryStream(stored);
 
     let agentCalled = false;
-    yield* Effects.around({
-      *dispatch([_effectId, _data]: [string, any]) {
-        agentCalled = true;
-        return 999;
+    yield* Effects.around(
+      {
+        *dispatch([_effectId, _data]: [string, any]) {
+          agentCalled = true;
+          return 999;
+        },
       },
-    });
+      { at: "min" },
+    );
 
     const { result, journal } = yield* execute({
       ir: singleEffectIR("a", "op") as never,
@@ -80,12 +83,15 @@ describe("Replay", () => {
     const stream = new InMemoryStream(stored);
 
     let liveCallCount = 0;
-    yield* Effects.around({
-      *dispatch([_effectId, _data]: [string, any]) {
-        liveCallCount++;
-        return 20;
+    yield* Effects.around(
+      {
+        *dispatch([_effectId, _data]: [string, any]) {
+          liveCallCount++;
+          return 20;
+        },
       },
-    });
+      { at: "min" },
+    );
 
     const { result, journal } = yield* execute({
       ir: twoEffectIR("a", "step1", "a", "step2") as never,
@@ -163,12 +169,15 @@ describe("Replay", () => {
     const stream = new InMemoryStream(stored);
 
     let agentCalled = false;
-    yield* Effects.around({
-      *dispatch([_effectId, _data]: [string, any]) {
-        agentCalled = true;
-        return 1;
+    yield* Effects.around(
+      {
+        *dispatch([_effectId, _data]: [string, any]) {
+          agentCalled = true;
+          return 1;
+        },
       },
-    });
+      { at: "min" },
+    );
 
     // IR sends different data than what was stored — shouldn't matter
     const { result } = yield* execute({
