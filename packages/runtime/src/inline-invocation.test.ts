@@ -14,9 +14,13 @@
  *  - Lifetime (§11) — `resource` inside an inline body provides in
  *    the caller's scope and cleans up at caller teardown. IL-PI-*,
  *    IL-L-*, IL-CS-*, IL-RD-* subset.
+ *  - Lifetime (§11.5) — `spawn` / `join` inside an inline body
+ *    attach to the hosting caller's Effection scope and task
+ *    registry. IL-CS-006/007/008 + sibling/caller join continuity +
+ *    double-join + replay.
  *
  * Out of scope — not tested here:
- *   - Non-resource compound externals (scope/spawn/join/timebox/all/
+ *   - Non-resource/spawn/join compound externals (scope/timebox/all/
  *     race) inside inline bodies (still rejected loudly by
  *     driveInlineBody).
  *   - IL-INT-*, IL-EX-*, and the full 31-test minimum subset.
@@ -1775,10 +1779,12 @@ describe("invokeInline — core runtime slice", () => {
     expect(result.status).toBe("error");
     if (result.status === "error") {
       expect(result.error.message).toContain("'scope'");
-      // The narrowed message names the six still-rejected compounds.
-      expect(result.error.message).toContain("'scope', 'spawn', 'join', 'timebox', 'all', 'race'");
-      // And does NOT list 'resource' in that set.
+      // The narrowed Phase 5E message names the four still-rejected compounds.
+      expect(result.error.message).toContain("'scope', 'timebox', 'all', 'race'");
+      // Does NOT list 'resource', 'spawn', or 'join' in that set.
       expect(result.error.message).not.toContain("'resource'");
+      expect(result.error.message).not.toContain("'spawn'");
+      expect(result.error.message).not.toContain("'join'");
     }
   });
 
@@ -1896,6 +1902,434 @@ describe("invokeInline — core runtime slice", () => {
       expect(outerResourceCloses[0]!.result.error.message).toContain(
         "resource cleanup dispatch context",
       );
+    }
+  });
+
+  // ── Phase 5E: inline-body `spawn` / `join` (IL-CS-006/007/008, L-003, RD-*) ──
+
+  const spawnIR = (body: unknown) =>
+    ({
+      tisyn: "eval",
+      id: "spawn",
+      data: { tisyn: "quote", expr: { body } },
+    }) as unknown as Val;
+
+  const joinByHandleIR = (handleRefName: string) =>
+    ({
+      tisyn: "eval",
+      id: "join",
+      data: { tisyn: "ref", name: handleRefName } as unknown,
+    }) as unknown as Val;
+
+  const letIR = (name: string, value: unknown, body: unknown) =>
+    ({
+      tisyn: "eval",
+      id: "let",
+      data: { tisyn: "quote", expr: { name, value, body } },
+    }) as unknown as Val;
+
+  it("IL-CS-006: inline body spawns + joins; child CloseEvent under laneId.{m}; lane has none", function* () {
+    // Inline body: `let t = spawn(42) in join(t)`. Returns child value.
+    const inlineBody: TisynFn<[], Val> = Fn<[], Val>(
+      [],
+      letIR("t", spawnIR(Q(42)), joinByHandleIR("t")) as unknown as Val,
+    ) as unknown as TisynFn<[], Val>;
+
+    let inlineReturn: Val | undefined;
+
+    yield* Effects.around({
+      *dispatch([effectId, _data]: [string, Val], next) {
+        if (effectId === "caller.go") {
+          inlineReturn = yield* invokeInline<Val>(asFn(inlineBody), []);
+          return null as Val;
+        }
+        return yield* next(effectId, _data);
+      },
+    });
+    yield* Effects.around(
+      {
+        *dispatch([_e, _d]: [string, Val]) {
+          return null as Val;
+        },
+      },
+      { at: "min" },
+    );
+
+    const { result, journal } = yield* execute({
+      ir: effectIR("caller", "go") as never,
+    });
+
+    expect(result.status).toBe("ok");
+    expect(inlineReturn).toBe(42);
+
+    // Spawned child's CloseEvent lives under root.0.0 (lane is root.0).
+    const childCloses = closes(journal).filter((e) => e.coroutineId === "root.0.0");
+    expect(childCloses).toHaveLength(1);
+    expect(childCloses[0]!.result.status).toBe("ok");
+
+    // Inline lane itself emits NO CloseEvent.
+    expect(closes(journal).some((e) => e.coroutineId === "root.0")).toBe(false);
+  });
+
+  it("IL-CS-007: spawned child attaches to caller lifetime and closes before caller close", function* () {
+    // Inline body spawns a child that yields one effect then returns 7;
+    // inline returns the task handle. Caller later joins the handle
+    // (via a JS-captured slot + readHandle agent effect) — that forces
+    // the child to complete inside the caller's scope. Assert: child's
+    // CloseEvent appears in the journal BEFORE the root's CloseEvent,
+    // and the inline lane itself has no CloseEvent.
+    const childBody = seqIR(effectIR("child", "work"), Q(7));
+    const inlineBody: TisynFn<[], Val> = Fn<[], Val>(
+      [],
+      spawnIR(childBody as unknown as Val) as unknown as Val,
+    ) as unknown as TisynFn<[], Val>;
+
+    let handleSlot: Val = null;
+
+    yield* Effects.around({
+      *dispatch([effectId, _data]: [string, Val], next) {
+        if (effectId === "caller.go") {
+          handleSlot = yield* invokeInline<Val>(asFn(inlineBody), []);
+          return null as Val;
+        }
+        if (effectId === "caller.readHandle") {
+          return handleSlot;
+        }
+        return yield* next(effectId, _data);
+      },
+    });
+    yield* Effects.around(
+      {
+        *dispatch([_e, _d]: [string, Val]) {
+          return null as Val;
+        },
+      },
+      { at: "min" },
+    );
+
+    // Caller IR: seq(caller.go, let h = caller.readHandle in join(h))
+    const callerIr = seqIR(
+      effectIR("caller", "go"),
+      letIR("h", effectIR("caller", "readHandle"), joinByHandleIR("h")),
+    );
+
+    const { result, journal } = yield* execute({ ir: callerIr as never });
+    expect(result.status).toBe("ok");
+    if (result.status === "ok") {
+      expect(result.value).toBe(7);
+    }
+
+    const childClose = closes(journal).find((e) => e.coroutineId === "root.0.0");
+    const rootClose = closes(journal).find((e) => e.coroutineId === "root");
+    expect(childClose).toBeDefined();
+    expect(rootClose).toBeDefined();
+    expect(childClose!.result.status).toBe("ok");
+    const childIdx = journal.indexOf(childClose!);
+    const rootIdx = journal.indexOf(rootClose!);
+    // Caller-scope lifetime: child closes before root.
+    expect(childIdx).toBeLessThan(rootIdx);
+    // Inline lane itself has no CloseEvent.
+    expect(closes(journal).some((e) => e.coroutineId === "root.0")).toBe(false);
+  });
+
+  it("IL-CS-008: inline lane has no CloseEvent; invoke/resource/spawn children all do", function* () {
+    // Three inline lanes in sequence:
+    //   A → invokes a child Fn (invoke → own CloseEvent)
+    //   B → acquires a resource R (→ own CloseEvent; lives until caller teardown)
+    //   C → spawns + joins a child (→ own CloseEvent)
+    // Assert: inline lanes root.0, root.1, root.2 have no CloseEvents;
+    // the three nested children all do.
+    const invokedChild: TisynFn<[], number> = Fn<[], number>([], Q(1));
+    const inlineA: TisynFn<[], Val> = Fn<[], Val>(
+      [],
+      effectIR("A", "invoke-now") as unknown as Val,
+    ) as unknown as TisynFn<[], Val>;
+    const inlineB: TisynFn<[], Val> = Fn<[], Val>(
+      [],
+      resourceIR(provideIR(2)) as unknown as Val,
+    ) as unknown as TisynFn<[], Val>;
+    const inlineC: TisynFn<[], Val> = Fn<[], Val>(
+      [],
+      letIR("t", spawnIR(Q(3)), joinByHandleIR("t")) as unknown as Val,
+    ) as unknown as TisynFn<[], Val>;
+
+    yield* Effects.around({
+      *dispatch([effectId, _data]: [string, Val], next) {
+        if (effectId === "caller.go") {
+          yield* invokeInline<Val>(asFn(inlineA), []);
+          yield* invokeInline<Val>(asFn(inlineB), []);
+          yield* invokeInline<Val>(asFn(inlineC), []);
+          return null as Val;
+        }
+        if (effectId === "A.invoke-now") {
+          // Middleware handling A's effect invokes a child Fn.
+          yield* invoke<Val>(asFn(invokedChild), []);
+          return null as Val;
+        }
+        return yield* next(effectId, _data);
+      },
+    });
+    yield* Effects.around(
+      {
+        *dispatch([_e, _d]: [string, Val]) {
+          return null as Val;
+        },
+      },
+      { at: "min" },
+    );
+
+    const { result, journal } = yield* execute({
+      ir: effectIR("caller", "go") as never,
+    });
+    expect(result.status).toBe("ok");
+
+    // Inline lanes root.0 (A), root.1 (B), root.2 (C) — no CloseEvents.
+    for (const laneId of ["root.0", "root.1", "root.2"]) {
+      expect(closes(journal).some((e) => e.coroutineId === laneId)).toBe(false);
+    }
+
+    // invoke child (root.0.0, A's middleware allocates from A's childSpawnCount).
+    expect(closes(journal).some((e) => e.coroutineId === "root.0.0")).toBe(true);
+    // resource child (root.1.0).
+    expect(closes(journal).some((e) => e.coroutineId === "root.1.0")).toBe(true);
+    // spawn child (root.2.0).
+    expect(closes(journal).some((e) => e.coroutineId === "root.2.0")).toBe(true);
+  });
+
+  it("sibling/caller join continuity: inline A spawns, inline B joins via handle", function* () {
+    // Inline A: spawn(42) → returns task handle.
+    // Inline B: (ignored arg) joins the handle captured between calls.
+    // Caller middleware holds the handle between invocations.
+    const inlineA: TisynFn<[], Val> = Fn<[], Val>(
+      [],
+      spawnIR(Q(42)) as unknown as Val,
+    ) as unknown as TisynFn<[], Val>;
+    // B takes the handle as its one arg, joins it, returns the child value.
+    const inlineB: TisynFn<[Val], Val> = Fn<[Val], Val>(
+      ["h"] as [string],
+      {
+        tisyn: "eval",
+        id: "join",
+        data: { tisyn: "ref", name: "h" } as unknown,
+      } as unknown as Val,
+    ) as unknown as TisynFn<[Val], Val>;
+
+    let joinedValue: Val | undefined;
+
+    yield* Effects.around({
+      *dispatch([effectId, _data]: [string, Val], next) {
+        if (effectId === "caller.go") {
+          const handle = yield* invokeInline<Val>(asFn(inlineA), []);
+          joinedValue = yield* invokeInline<Val>(asFn(inlineB), [handle]);
+          return null as Val;
+        }
+        return yield* next(effectId, _data);
+      },
+    });
+    yield* Effects.around(
+      {
+        *dispatch([_e, _d]: [string, Val]) {
+          return null as Val;
+        },
+      },
+      { at: "min" },
+    );
+
+    const { result } = yield* execute({ ir: effectIR("caller", "go") as never });
+    expect(result.status).toBe("ok");
+    expect(joinedValue).toBe(42);
+  });
+
+  it("caller joins an inline-spawned handle after inline returns", function* () {
+    // Inline A spawns(42) and returns the handle; caller code then yields
+    // join(handle) directly from root's driveKernel. The root join walks
+    // the shared spawnedTasks and finds the inline-registered entry.
+    const inlineA: TisynFn<[], Val> = Fn<[], Val>(
+      [],
+      spawnIR(Q(42)) as unknown as Val,
+    ) as unknown as TisynFn<[], Val>;
+
+    let handleSlot: Val = null;
+
+    yield* Effects.around({
+      *dispatch([effectId, _data]: [string, Val], next) {
+        if (effectId === "caller.spawnInline") {
+          handleSlot = yield* invokeInline<Val>(asFn(inlineA), []);
+          return null as Val;
+        }
+        if (effectId === "caller.readHandle") {
+          return handleSlot;
+        }
+        return yield* next(effectId, _data);
+      },
+    });
+    yield* Effects.around(
+      {
+        *dispatch([_e, _d]: [string, Val]) {
+          return null as Val;
+        },
+      },
+      { at: "min" },
+    );
+
+    // Caller: spawnInline; let h = readHandle in join(h)
+    const callerIr = seqIR(
+      effectIR("caller", "spawnInline"),
+      letIR("h", effectIR("caller", "readHandle"), joinByHandleIR("h")),
+    );
+
+    const { result } = yield* execute({ ir: callerIr as never });
+    expect(result.status).toBe("ok");
+    if (result.status === "ok") {
+      expect(result.value).toBe(42);
+    }
+  });
+
+  it("double-join regression: joining an inline-spawned handle twice fails", function* () {
+    // Inline A spawns(42); caller joins (succeeds); caller joins again
+    // (fails with the shared double-join error).
+    const inlineA: TisynFn<[], Val> = Fn<[], Val>(
+      [],
+      spawnIR(Q(42)) as unknown as Val,
+    ) as unknown as TisynFn<[], Val>;
+
+    let handleSlot: Val = null;
+
+    yield* Effects.around({
+      *dispatch([effectId, _data]: [string, Val], next) {
+        if (effectId === "caller.spawnInline") {
+          handleSlot = yield* invokeInline<Val>(asFn(inlineA), []);
+          return null as Val;
+        }
+        if (effectId === "caller.readHandle") {
+          return handleSlot;
+        }
+        return yield* next(effectId, _data);
+      },
+    });
+    yield* Effects.around(
+      {
+        *dispatch([_e, _d]: [string, Val]) {
+          return null as Val;
+        },
+      },
+      { at: "min" },
+    );
+
+    // Caller: spawn; h = read; join(h); join(h) (second join fails).
+    const callerIr = seqIR(
+      effectIR("caller", "spawnInline"),
+      letIR("h", effectIR("caller", "readHandle"), seqIR(joinByHandleIR("h"), joinByHandleIR("h"))),
+    );
+
+    const { result } = yield* execute({ ir: callerIr as never });
+    expect(result.status).toBe("error");
+    if (result.status === "error") {
+      expect(result.error.message).toContain("already been joined");
+    }
+  });
+
+  it("IL-RD-like: inline-spawned child replay is byte-identical", function* () {
+    // Inline body spawns a child that yields one effect and returns; inline
+    // body then joins the handle. Live run; replay with same stream.
+    const childBody = seqIR(effectIR("inline-spawn", "work"), Q(99));
+    const inlineBody: TisynFn<[], Val> = Fn<[], Val>(
+      [],
+      letIR("t", spawnIR(childBody as unknown as Val), joinByHandleIR("t")) as unknown as Val,
+    ) as unknown as TisynFn<[], Val>;
+
+    let liveFireCount = 0;
+
+    const installAgents = function* () {
+      yield* Effects.around({
+        *dispatch([effectId, _data]: [string, Val], next) {
+          if (effectId === "caller.go") {
+            yield* invokeInline<Val>(asFn(inlineBody), []);
+            return null as Val;
+          }
+          return yield* next(effectId, _data);
+        },
+      });
+      yield* Effects.around(
+        {
+          *dispatch([effectId, _d]: [string, Val]) {
+            if (effectId === "inline-spawn.work") {
+              liveFireCount++;
+            }
+            return null as Val;
+          },
+        },
+        { at: "min" },
+      );
+    };
+
+    const stream = new InMemoryStream();
+    yield* installAgents();
+
+    const { result: liveResult, journal: liveJournal } = yield* execute({
+      ir: effectIR("caller", "go") as never,
+      stream,
+    });
+    expect(liveResult.status).toBe("ok");
+    expect(liveFireCount).toBe(1);
+
+    // Replay — child does not refire live.
+    liveFireCount = 0;
+    const { result: replayResult, journal: replayJournal } = yield* execute({
+      ir: effectIR("caller", "go") as never,
+      stream,
+    });
+    expect(replayResult.status).toBe("ok");
+    expect(liveFireCount).toBe(0);
+    expect(replayJournal).toEqual(liveJournal);
+
+    // Child YieldEvent is under root.0.0, not the inline lane.
+    const workYields = yields(liveJournal).filter(
+      (e) => e.description.type === "inline-spawn" && e.description.name === "work",
+    );
+    expect(workYields).toHaveLength(1);
+    expect(workYields[0]!.coroutineId).toBe("root.0.0");
+  });
+
+  it("regression: timebox inside inline body still rejects with clear error", function* () {
+    const timeboxInner = {
+      tisyn: "eval",
+      id: "timebox",
+      data: {
+        tisyn: "quote",
+        expr: { duration: 10, body: Q(0) },
+      },
+    };
+    const bodyWithTimebox: TisynFn<[], Val> = Fn<[], Val>(
+      [],
+      timeboxInner as unknown as Val,
+    ) as unknown as TisynFn<[], Val>;
+
+    yield* Effects.around({
+      *dispatch([effectId, _data]: [string, Val], next) {
+        if (effectId === "caller.go") {
+          yield* invokeInline<Val>(asFn(bodyWithTimebox), []);
+          return null as Val;
+        }
+        return yield* next(effectId, _data);
+      },
+    });
+    yield* Effects.around(
+      {
+        *dispatch([_e, _d]: [string, Val]) {
+          return null as Val;
+        },
+      },
+      { at: "min" },
+    );
+
+    const { result } = yield* execute({ ir: effectIR("caller", "go") as never });
+    expect(result.status).toBe("error");
+    if (result.status === "error") {
+      expect(result.error.message).toContain("'timebox'");
+      expect(result.error.message).toContain("'scope', 'timebox', 'all', 'race'");
+      expect(result.error.message).not.toContain("'spawn'");
+      expect(result.error.message).not.toContain("'join'");
     }
   });
 });
