@@ -369,17 +369,26 @@ function* driveInlineBody<T = Val>(
     if (result.status === "ok") {
       nextValue = (result.value ?? null) as Val;
     } else if (result.status === "error") {
-      // Propagate as EffectError through the kernel. If the kernel
-      // catches it, we continue with the new step; if not, the error
-      // escapes driveInlineBody and propagates directly to the caller's
-      // middleware frame — v6 §13.1.
+      // Propagate as EffectError through the kernel. Three outcomes:
+      //
+      //  (a) Kernel body does not catch the error. `kernel.throw(err)`
+      //      re-throws naturally, which exits `driveInlineBody` with
+      //      the error reaching the caller's middleware frame — v6
+      //      §13.1. No CloseEvent (v6 §8.4), no teardown.
+      //
+      //  (b) Kernel body catches the error and returns a fallback
+      //      value. `kernel.throw(err)` returns `{ done: true, value }`.
+      //      The inline body resolved; return the fallback value
+      //      directly without writing a CloseEvent.
+      //
+      //  (c) Kernel body catches the error and yields another
+      //      effect. `kernel.throw(err)` returns `{ done: false,
+      //      value: <next descriptor> }`. Continue the loop with
+      //      that as the pending step.
       const err = new EffectError(result.error.message, result.error.name);
       const throwResult = kernel.throw(err);
       if (throwResult.done) {
-        // Uncaught — the kernel rejected the throw and ended. Propagate
-        // the error directly to the caller. No CloseEvent (v6 §8.4),
-        // no teardown (no resource children in Phase 5B scope).
-        throw err;
+        return (throwResult.value ?? null) as T;
       }
       pendingStep = throwResult;
       nextValue = null;

@@ -19,7 +19,7 @@ import { describe, it } from "@effectionx/vitest";
 import { expect } from "vitest";
 import { InMemoryStream } from "@tisyn/durable-streams";
 import type { DurableEvent, YieldEvent, CloseEvent } from "@tisyn/kernel";
-import { Fn, Eval, Ref, Arr, Q } from "@tisyn/ir";
+import { Fn, Eval, Ref, Arr, Q, Try } from "@tisyn/ir";
 import type { FnNode, TisynFn, Val } from "@tisyn/ir";
 import {
   Effects,
@@ -770,5 +770,59 @@ describe("invokeInline — core runtime slice", () => {
     // invoke-middleware short-circuits before `next`).
     const laneEvents = eventsFor(journal, "root.0");
     expect(laneEvents.length).toBeGreaterThan(0);
+  });
+
+  // ── Caught-error regression (v6 §13.3) ──
+
+  it("inline body catches dispatched error and returns fallback; no lane CloseEvent", function* () {
+    // Inline body: try { failing.op } catch (e) { "fallback" }
+    const body: TisynFn<[], string> = Fn<[], string>(
+      [],
+      Try<string>(Eval<string>("failing.op", Q([])), "_e", Q("fallback")),
+    );
+
+    let inlineResult: Val | undefined;
+
+    yield* Effects.around({
+      *dispatch([effectId, data]: [string, Val], next) {
+        if (effectId === "parent.trigger") {
+          inlineResult = yield* invokeInline<Val>(asFn(body), []);
+          return null as Val;
+        }
+        return yield* next(effectId, data);
+      },
+    });
+
+    // Min-priority handler makes `failing.op` throw. The inline body's
+    // try/catch MUST catch the resulting EffectError and return "fallback".
+    yield* Effects.around(
+      {
+        *dispatch([effectId, _data]: [string, Val]) {
+          if (effectId === "failing.op") {
+            throw new Error("boom");
+          }
+          return null as Val;
+        },
+      },
+      { at: "min" },
+    );
+
+    const { journal } = yield* execute({ ir: effectIR("parent", "trigger") as never });
+
+    // Inline body resolved to the caught-and-returned fallback value.
+    // The kernel wraps the caught error via errorToValue, so Try's catch
+    // binding "_e" was bound to a structured value; the catch body ignores
+    // it and returns the literal "fallback".
+    expect(inlineResult).toBe("fallback");
+
+    // v6 §8.4: still NO CloseEvent for the inline lane, even on the
+    // caught-error path.
+    expect(closes(journal).filter((e) => e.coroutineId === "root.0")).toHaveLength(0);
+
+    // The failing.op YieldEvent still journals under the lane with error status.
+    const laneYields = yields(journal).filter((e) => e.coroutineId === "root.0");
+    expect(laneYields).toHaveLength(1);
+    expect(laneYields[0]!.description).toEqual({ type: "failing", name: "op" });
+    expect(laneYields[0]!.result.status).toBe("error");
   });
 });
