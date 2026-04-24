@@ -18,16 +18,20 @@
  *    attach to the hosting caller's Effection scope and task
  *    registry. IL-CS-006/007/008 + sibling/caller join continuity +
  *    double-join + replay.
+ *  - Lifetime (§11.6) — `timebox` / `all` / `race` inside an
+ *    inline body keep their own compound-external semantics,
+ *    with child IDs allocated from the lane's own
+ *    `inlineChildSpawnCount`.
  *
  * Out of scope — not tested here:
- *   - Non-resource/spawn/join compound externals (scope/timebox/all/
- *     race) inside inline bodies (still rejected loudly by
- *     driveInlineBody).
+ *   - `scope` inside inline bodies (still rejected loudly by
+ *     driveInlineBody; lifting is a follow-up phase).
  *   - IL-INT-*, IL-EX-*, and the full 31-test minimum subset.
  */
 
 import { describe, it } from "@effectionx/vitest";
 import { expect } from "vitest";
+import { suspend } from "effection";
 import type { Operation } from "effection";
 import { InMemoryStream } from "@tisyn/durable-streams";
 import type { DurableEvent, YieldEvent, CloseEvent } from "@tisyn/kernel";
@@ -1779,12 +1783,18 @@ describe("invokeInline — core runtime slice", () => {
     expect(result.status).toBe("error");
     if (result.status === "error") {
       expect(result.error.message).toContain("'scope'");
-      // The narrowed Phase 5E message names the four still-rejected compounds.
-      expect(result.error.message).toContain("'scope', 'timebox', 'all', 'race'");
-      // Does NOT list 'resource', 'spawn', or 'join' in that set.
+      // Phase 5F narrowed the message to single-compound — only
+      // `scope` is still rejected.
+      expect(result.error.message).toContain(
+        "compound primitive 'scope' inside inline bodies is deferred",
+      );
+      // No other compound appears in the rejection list.
       expect(result.error.message).not.toContain("'resource'");
       expect(result.error.message).not.toContain("'spawn'");
       expect(result.error.message).not.toContain("'join'");
+      expect(result.error.message).not.toContain("'timebox'");
+      expect(result.error.message).not.toContain("'all'");
+      expect(result.error.message).not.toContain("'race'");
     }
   });
 
@@ -2291,24 +2301,323 @@ describe("invokeInline — core runtime slice", () => {
     expect(workYields[0]!.coroutineId).toBe("root.0.0");
   });
 
-  it("regression: timebox inside inline body still rejects with clear error", function* () {
-    const timeboxInner = {
+  // ── Phase 5F: inline-body `timebox` / `all` / `race` (§11.6) ──
+
+  const timeboxIR = (duration: number, body: unknown) =>
+    ({
       tisyn: "eval",
       id: "timebox",
-      data: {
-        tisyn: "quote",
-        expr: { duration: 10, body: Q(0) },
-      },
-    };
-    const bodyWithTimebox: TisynFn<[], Val> = Fn<[], Val>(
+      data: { tisyn: "quote", expr: { duration, body } },
+    }) as unknown as Val;
+
+  const allIR = (exprs: unknown[]) =>
+    ({
+      tisyn: "eval",
+      id: "all",
+      data: { tisyn: "quote", expr: { exprs } },
+    }) as unknown as Val;
+
+  const raceIR = (exprs: unknown[]) =>
+    ({
+      tisyn: "eval",
+      id: "race",
+      data: { tisyn: "quote", expr: { exprs } },
+    }) as unknown as Val;
+
+  const provideOutsideResourceIR = (value: unknown) =>
+    ({
+      tisyn: "eval",
+      id: "provide",
+      data: value,
+    }) as unknown as Val;
+
+  it("IL-CS-009 / timebox-completed: body wins → tagged { status: 'completed', value }", function* () {
+    // Inline body runs timebox with a fast-completing body (`Q(42)`);
+    // body-win produces the tagged value.
+    const inlineBody: TisynFn<[], Val> = Fn<[], Val>(
       [],
-      timeboxInner as unknown as Val,
+      timeboxIR(10_000, Q(42)) as unknown as Val,
+    ) as unknown as TisynFn<[], Val>;
+
+    let inlineReturn: Val | undefined;
+
+    yield* Effects.around({
+      *dispatch([effectId, _data]: [string, Val], next) {
+        if (effectId === "caller.go") {
+          inlineReturn = yield* invokeInline<Val>(asFn(inlineBody), []);
+          return null as Val;
+        }
+        return yield* next(effectId, _data);
+      },
+    });
+    yield* Effects.around(
+      {
+        *dispatch([_e, _d]: [string, Val]) {
+          return null as Val;
+        },
+      },
+      { at: "min" },
+    );
+
+    const { result, journal } = yield* execute({ ir: effectIR("caller", "go") as never });
+    expect(result.status).toBe("ok");
+    expect(inlineReturn).toEqual({ status: "completed", value: 42 });
+
+    // Body child (root.0.0) + timeout child (root.0.1) both produce CloseEvents.
+    expect(closes(journal).some((e) => e.coroutineId === "root.0.0")).toBe(true);
+    expect(closes(journal).some((e) => e.coroutineId === "root.0.1")).toBe(true);
+    // Inline lane itself has no CloseEvent.
+    expect(closes(journal).some((e) => e.coroutineId === "root.0")).toBe(false);
+  });
+
+  it("timebox-timed-out: timeout wins → tagged { status: 'timeout' }; not an error", function* () {
+    // Inline body runs timebox with duration 0. Timeout wins; orchestrator
+    // resolves with `{ status: "timeout" }` — this is a tagged success
+    // value, NOT an error.
+    const slowBody = effectIR("timebox-body", "wait");
+    const inlineBody: TisynFn<[], Val> = Fn<[], Val>(
+      [],
+      timeboxIR(0, slowBody) as unknown as Val,
+    ) as unknown as TisynFn<[], Val>;
+
+    let inlineReturn: Val | undefined;
+
+    yield* Effects.around({
+      *dispatch([effectId, _data]: [string, Val], next) {
+        if (effectId === "caller.go") {
+          inlineReturn = yield* invokeInline<Val>(asFn(inlineBody), []);
+          return null as Val;
+        }
+        return yield* next(effectId, _data);
+      },
+    });
+    yield* Effects.around(
+      {
+        *dispatch([effectId, _d]: [string, Val]) {
+          if (effectId === "timebox-body.wait") {
+            // Never resolves on its own — the timeout will halt the body.
+            yield* suspend();
+          }
+          return null as Val;
+        },
+      },
+      { at: "min" },
+    );
+
+    const { result, journal } = yield* execute({ ir: effectIR("caller", "go") as never });
+    // Execute result is OK — timeout is a successful tagged value.
+    expect(result.status).toBe("ok");
+    expect(inlineReturn).toEqual({ status: "timeout" });
+
+    // Body + timeout child CloseEvents both present.
+    expect(closes(journal).some((e) => e.coroutineId === "root.0.0")).toBe(true);
+    expect(closes(journal).some((e) => e.coroutineId === "root.0.1")).toBe(true);
+    // Inline lane itself has no CloseEvent.
+    expect(closes(journal).some((e) => e.coroutineId === "root.0")).toBe(false);
+  });
+
+  it("all-success: children under contiguous lane IDs; result order preserved", function* () {
+    const inlineBody: TisynFn<[], Val> = Fn<[], Val>(
+      [],
+      allIR([Q(1), Q(2), Q(3)]) as unknown as Val,
+    ) as unknown as TisynFn<[], Val>;
+
+    let inlineReturn: Val | undefined;
+
+    yield* Effects.around({
+      *dispatch([effectId, _data]: [string, Val], next) {
+        if (effectId === "caller.go") {
+          inlineReturn = yield* invokeInline<Val>(asFn(inlineBody), []);
+          return null as Val;
+        }
+        return yield* next(effectId, _data);
+      },
+    });
+    yield* Effects.around(
+      {
+        *dispatch([_e, _d]: [string, Val]) {
+          return null as Val;
+        },
+      },
+      { at: "min" },
+    );
+
+    const { result, journal } = yield* execute({ ir: effectIR("caller", "go") as never });
+    expect(result.status).toBe("ok");
+    expect(inlineReturn).toEqual([1, 2, 3]);
+
+    // Three contiguous child IDs, each with its own CloseEvent.
+    for (const childId of ["root.0.0", "root.0.1", "root.0.2"]) {
+      expect(closes(journal).some((e) => e.coroutineId === childId)).toBe(true);
+    }
+    // Inline lane has no CloseEvent.
+    expect(closes(journal).some((e) => e.coroutineId === "root.0")).toBe(false);
+  });
+
+  it("race-success: first ok child wins; children under contiguous lane IDs", function* () {
+    // Two children: first literal Q(99) should win trivially (both race
+    // orchestrator kicks them off concurrently; Q is synchronous).
+    const inlineBody: TisynFn<[], Val> = Fn<[], Val>(
+      [],
+      raceIR([Q(99), Q("slow")]) as unknown as Val,
+    ) as unknown as TisynFn<[], Val>;
+
+    let inlineReturn: Val | undefined;
+
+    yield* Effects.around({
+      *dispatch([effectId, _data]: [string, Val], next) {
+        if (effectId === "caller.go") {
+          inlineReturn = yield* invokeInline<Val>(asFn(inlineBody), []);
+          return null as Val;
+        }
+        return yield* next(effectId, _data);
+      },
+    });
+    yield* Effects.around(
+      {
+        *dispatch([_e, _d]: [string, Val]) {
+          return null as Val;
+        },
+      },
+      { at: "min" },
+    );
+
+    const { result, journal } = yield* execute({ ir: effectIR("caller", "go") as never });
+    expect(result.status).toBe("ok");
+    // Race orchestrator's scheduling picks one of the two as the winner;
+    // pin the behavior to "value comes from one of the input exprs".
+    expect([99, "slow"]).toContain(inlineReturn);
+
+    // Both race child IDs appear (though loser is halted mid-way).
+    const childCloses = closes(journal).filter(
+      (e) => e.coroutineId === "root.0.0" || e.coroutineId === "root.0.1",
+    );
+    expect(childCloses.length).toBeGreaterThanOrEqual(1);
+    // Inline lane has no CloseEvent.
+    expect(closes(journal).some((e) => e.coroutineId === "root.0")).toBe(false);
+  });
+
+  it("error from `all` routes through inline body's try/catch via kernel.throw", function* () {
+    // Inline body: try { all([Throw("boom"), Q(2)]) } catch "e" Ref("e-msg-from-effect")
+    // Simpler variant: just let the error propagate, assert the inline
+    // call rejects and the outer execute result is error with the "boom"
+    // message (fail-fast from orchestrateAll).
+    const inlineBody: TisynFn<[], Val> = Fn<[], Val>(
+      [],
+      Try(
+        allIR([effectIR("bomb", "go"), Q(2)]) as unknown as Val,
+        "e",
+        Ref<Val>("e"),
+      ) as unknown as Val,
+    ) as unknown as TisynFn<[], Val>;
+
+    let inlineReturn: Val | undefined;
+    let inlineThrown: unknown;
+
+    yield* Effects.around({
+      *dispatch([effectId, _data]: [string, Val], next) {
+        if (effectId === "caller.go") {
+          try {
+            inlineReturn = yield* invokeInline<Val>(asFn(inlineBody), []);
+          } catch (e) {
+            inlineThrown = e;
+          }
+          return null as Val;
+        }
+        return yield* next(effectId, _data);
+      },
+    });
+    yield* Effects.around(
+      {
+        *dispatch([effectId, _d]: [string, Val]) {
+          if (effectId === "bomb.go") {
+            throw new Error("boom");
+          }
+          return null as Val;
+        },
+      },
+      { at: "min" },
+    );
+
+    const { result } = yield* execute({ ir: effectIR("caller", "go") as never });
+    expect(result.status).toBe("ok");
+    // The inline body's try/catch caught the EffectError raised by the
+    // orchestrator; the catch binding `e` becomes an Error value which
+    // the IR evaluator surfaces as the error object itself.
+    expect(inlineThrown).toBeUndefined();
+    expect(inlineReturn).toBeDefined();
+    // The caught value is the EffectError — its message is "boom".
+    const msg = (inlineReturn as unknown as { message?: string })?.message;
+    expect(msg).toContain("boom");
+  });
+
+  it("replay byte-identical: inline-body `all` reruns on replay without firing live", function* () {
+    const inlineBody: TisynFn<[], Val> = Fn<[], Val>(
+      [],
+      allIR([effectIR("replay-all", "one"), effectIR("replay-all", "two")]) as unknown as Val,
+    ) as unknown as TisynFn<[], Val>;
+
+    let liveFireCount = 0;
+
+    const installAgents = function* () {
+      yield* Effects.around({
+        *dispatch([effectId, _data]: [string, Val], next) {
+          if (effectId === "caller.go") {
+            yield* invokeInline<Val>(asFn(inlineBody), []);
+            return null as Val;
+          }
+          return yield* next(effectId, _data);
+        },
+      });
+      yield* Effects.around(
+        {
+          *dispatch([effectId, _d]: [string, Val]) {
+            if (effectId === "replay-all.one" || effectId === "replay-all.two") {
+              liveFireCount++;
+              return "done" as Val;
+            }
+            return null as Val;
+          },
+        },
+        { at: "min" },
+      );
+    };
+
+    const stream = new InMemoryStream();
+    yield* installAgents();
+
+    const { result: liveResult, journal: liveJournal } = yield* execute({
+      ir: effectIR("caller", "go") as never,
+      stream,
+    });
+    expect(liveResult.status).toBe("ok");
+    expect(liveFireCount).toBe(2);
+
+    // Replay — nothing should refire live.
+    liveFireCount = 0;
+    const { result: replayResult, journal: replayJournal } = yield* execute({
+      ir: effectIR("caller", "go") as never,
+      stream,
+    });
+    expect(replayResult.status).toBe("ok");
+    expect(liveFireCount).toBe(0);
+    expect(replayJournal).toEqual(liveJournal);
+  });
+
+  it("regression: bare `provide` inside inline body is runtime misuse, not 'deferred'", function* () {
+    // Inline body yields provide(42) outside any resource context. Same
+    // rule as driveKernel: RuntimeBugError("provide outside resource
+    // context"). NOT a "deferred inline compound" — provide is never
+    // legal outside a resource body.
+    const inlineBody: TisynFn<[], Val> = Fn<[], Val>(
+      [],
+      provideOutsideResourceIR(42) as unknown as Val,
     ) as unknown as TisynFn<[], Val>;
 
     yield* Effects.around({
       *dispatch([effectId, _data]: [string, Val], next) {
         if (effectId === "caller.go") {
-          yield* invokeInline<Val>(asFn(bodyWithTimebox), []);
+          yield* invokeInline<Val>(asFn(inlineBody), []);
           return null as Val;
         }
         return yield* next(effectId, _data);
@@ -2326,10 +2635,9 @@ describe("invokeInline — core runtime slice", () => {
     const { result } = yield* execute({ ir: effectIR("caller", "go") as never });
     expect(result.status).toBe("error");
     if (result.status === "error") {
-      expect(result.error.message).toContain("'timebox'");
-      expect(result.error.message).toContain("'scope', 'timebox', 'all', 'race'");
-      expect(result.error.message).not.toContain("'spawn'");
-      expect(result.error.message).not.toContain("'join'");
+      expect(result.error.message).toContain("provide outside resource context");
+      // Not framed as a deferred compound.
+      expect(result.error.message).not.toContain("deferred");
     }
   });
 });
