@@ -337,6 +337,51 @@ M1 → M2 → m1 → m2 → core handler
 > traversal guarantees parent max middleware always runs before
 > child max middleware, preserving monotonic narrowing (§7.5).
 
+> **Replay consequence of priority placement.** The runtime
+> installs a structural replay-substitution boundary between
+> the max and min regions of the dispatch chain (§9.5). On
+> replay, max-priority middleware re-executes; min-priority
+> middleware and the core handler do not execute when a stored
+> cursor entry exists. This means:
+>
+> - **Min remains suitable for implementation replacement and
+>   innermost local constraints** as stated above. However,
+>   middleware installed at min does not re-execute on replay
+>   when a stored cursor entry exists, because it sits below
+>   the replay-substitution boundary (§9.5.3).
+> - **Middleware that must execute on every dispatch —
+>   including replay — SHOULD install at max**, regardless of
+>   whether it is conceptually "close to the implementation."
+>   This includes constraints, transforms, validators, and
+>   policy checks that enforce invariants on every pass.
+>   Installing at max does not change the middleware's
+>   relationship to the implementation; it means the
+>   middleware is above the replay boundary and re-executes on
+>   replay.
+> - **The practical effect:** most user-authored dispatch
+>   middleware installs at max (the default) and reruns on
+>   replay. Framework-installed effect implementations
+>   (`Agents.use`, `implementAgent(...).install`,
+>   `installAgentTransport`, `installRemoteAgent`) install at
+>   min (§9.5.2) and are replay-substituted. User-authored
+>   innermost constraints MAY install at min if skipping them
+>   on replay is acceptable (for example, pure deterministic
+>   validators whose results are already reflected in the
+>   stored entry); they SHOULD install at max if they must run
+>   on every pass.
+
+> **Non-normative note.** The underlying `createApi`
+> composition machinery supports user-defined middleware
+> groups beyond the default `max`/`min` configuration. The
+> runtime MAY declare additional internal groups for its own
+> operational purposes (such as replay management). Such
+> groups are not part of the public `Effects.around` API
+> surface; the public `{ at }` option accepts only the values
+> documented here (`"max"` and `"min"`). The existence,
+> naming, and ordering of runtime-internal groups is an
+> implementation detail and MUST NOT be relied upon by
+> middleware authors.
+
 ### 5.3 `next` Delegation
 
 Each middleware receives its arguments as an array and a `next`
@@ -809,6 +854,165 @@ metadata stored in the journal, not through IR representation.
 The runtime MUST read guard metadata on restart and re-install
 JavaScript guard middleware via the middleware installation
 primitive. Guard implementations are host-provided.
+
+### 9.5 Replay Substitution at the Dispatch Boundary
+
+#### 9.5.1 The Structural Replay Boundary
+
+The runtime MUST install a replay-substitution boundary between
+the max-priority and min-priority regions of the Effects
+dispatch chain. On replay, max-priority middleware re-executes
+above this boundary; min-priority middleware and the core
+handler sit below it and do not execute when a stored cursor
+entry exists.
+
+The effective dispatch composition is:
+
+````
+max (orchestration) → [replay boundary] → min (implementation) → core handler
+````
+
+**Normative status.** The replay boundary is a normative
+requirement of the Effects dispatch semantics. Every conforming
+runtime MUST produce the behavior described in §9.5.3. How the
+runtime achieves it — whether through a dedicated middleware
+group declared via `createApi` options, a composition-time
+wrapper, a chain-construction hook, or any other substrate
+mechanism — is an implementation detail. Users MUST NOT depend
+on internal group names, installation mechanics, or composition
+internals used to achieve the boundary. The public
+`Effects.around` API MUST accept only `"max"` and `"min"` as
+`{ at }` values.
+
+#### 9.5.2 Framework-Installed Effect Implementations
+
+Framework-installed effect handlers — `Agents.use`,
+`implementAgent(...).install`, `installAgentTransport`,
+`installRemoteAgent`, and framework-authored equivalents — MUST
+install their dispatch middleware at min priority
+(`{ at: "min" }`).
+
+This positions them below the replay boundary in the
+composition order. On replay, the replay boundary substitutes
+stored results before dispatch reaches these handlers; their
+live handler bodies do not execute on replay.
+
+On live dispatch, the max region delegates through the boundary
+(which delegates because no stored cursor exists), dispatch
+enters the min region, and the matching handler executes live.
+The result is journaled.
+
+#### 9.5.3 Replay Substitution Semantics
+
+The runtime's replay boundary MUST implement the following
+behavior for every standard-effect dispatch:
+
+1. **Check the replay cursor.** Using the dispatch's effect
+   description (type + name), check whether a stored
+   `YieldEvent` entry exists in the journal for this dispatch
+   point.
+
+2. **If a stored entry exists (replay path):**
+   - MUST return the stored result as the dispatch result.
+   - MUST consume the replay cursor entry.
+   - MUST push a replayed `YieldEvent` to the durable stream.
+   - MUST advance the coroutine's `yieldIndex`.
+   - MUST NOT delegate into the min region or core handler.
+     Min-priority middleware and the core handler MUST NOT
+     execute.
+
+3. **If no stored entry exists (live path):**
+   - MUST delegate into the min region and core handler.
+   - The result of delegation is the dispatch result.
+   - The runtime journals the result as a live `YieldEvent`.
+
+#### 9.5.4 Max-Priority Middleware Re-Executes on Replay
+
+Every max-priority dispatch frame MUST re-execute on replay in
+accordance with the determinism requirement of this section.
+Max middleware bodies — including pre-`next` code,
+orchestration calls, resource reconstruction logic, and
+testkit orchestration — execute on every replay pass.
+
+This is required because:
+
+- Workflow bodies re-execute on replay to reinstall middleware,
+  rebind transports, and reconstruct live host state.
+- Max middleware may perform dynamic orchestration (resource
+  reconstruction, session re-binding, transport
+  re-installation) that must rerun to rebuild live host state
+  needed for subsequent dispatches.
+- The determinism guarantee of §9 ensures max middleware
+  reaches the same dispatch decisions on replay as on the
+  original run.
+
+#### 9.5.5 Short-Circuit in Max with Stored Cursor
+
+If a max-priority frame returns a value without calling `next`
+(short-circuit), the chain terminates in the max region. The
+replay boundary is not reached.
+
+On replay, the runtime MUST check: if a stored cursor entry
+exists for this dispatch, the stored result MUST be used as
+the authoritative dispatch result. The short-circuiting
+frame's return value is discarded.
+
+On live dispatch, the short-circuiting frame's return value is
+the dispatch result, journaled normally.
+
+This is the same cursor-authoritative rule as §9.5.3, applied
+to the other chain termination mode. One semantic rule — **the
+stored cursor is authoritative for dispatch results on
+replay** — two application sites.
+
+#### 9.5.6 No Explicit Delegation Helper
+
+Replay correctness MUST be a structural property of the
+dispatch composition, not a convention that middleware bodies
+must follow.
+
+The runtime MUST NOT require any of the following of
+middleware-body authors:
+
+- No public helper function is required for middleware bodies
+  to participate in replay substitution.
+- No middleware body is required to restate `effectId` or
+  `data` to a runtime-provided boundary.
+- No per-middleware-body wrapper is required for replay
+  safety.
+- No runtime-provided context is required to be read or
+  invoked by middleware bodies.
+
+Helper-based terminal-delegation patterns — such as the
+`runAsTerminal` / `RuntimeTerminal` / `RuntimeTerminalBoundary`
+shape explored during earlier design work — are explicitly a
+non-goal. They MUST NOT be introduced as normative surface of
+`@tisyn/effects`, `@tisyn/effects/internal`, or
+`@tisyn/runtime`.
+
+#### 9.5.7 Resource-Body Dispatch
+
+Dispatches issued from inside a resource body — both
+initialization and cleanup — MUST traverse the same
+replay-boundary-aware dispatch composition as dispatches
+issued from an ordinary coroutine body. Replay substitution
+applies identically to resource-body dispatches.
+Implementations MUST NOT route resource-body dispatches
+through a separate path that bypasses the replay boundary.
+
+---
+
+> **Note (future extensions).** This specification defines
+> replay substitution against the current
+> `YieldEvent | CloseEvent` durable algebra and
+> effect-description (type + name) cursor matching. Two future
+> extensions are expected to compose with this model without
+> changing §9.5.1–§9.5.7: (a) payload-sensitive cursor
+> matching, if and when a payload-fingerprint specification is
+> adopted, and (b) inline invocation, if and when an
+> inline-invocation specification is adopted. Neither
+> extension is specified here, and neither is required for
+> conformance to §9.5.
 
 ---
 
