@@ -18,30 +18,65 @@ export interface InvokeOpts {
 // Effects API
 // ---------------------------------------------------------------------------
 
-const EffectsApi = createApi("Effects", {
-  *dispatch(effectId: string, _data: Val): Operation<Val> {
-    if (effectId === "sleep") {
-      const ms = (_data as unknown[])[0] as number;
-      yield* effectionSleep(ms);
-      return null as Val;
-    }
-    throw new Error(`No agent registered for effect: ${effectId}`);
+/**
+ * @internal
+ *
+ * Three-lane middleware composition for the Effects API. The `replay`
+ * lane sits between `max` (user/orchestration middleware) and `min`
+ * (framework implementations) and is reserved for the runtime's
+ * replay-substitution boundary. The `replay` lane is not addressable
+ * through the public `Effects.around` API; it is reached through
+ * `@tisyn/effects/internal` by workspace code only.
+ */
+export const EffectsApi = createApi(
+  "Effects",
+  {
+    *dispatch(effectId: string, _data: Val): Operation<Val> {
+      if (effectId === "sleep") {
+        const ms = (_data as unknown[])[0] as number;
+        yield* effectionSleep(ms);
+        return null as Val;
+      }
+      throw new Error(`No agent registered for effect: ${effectId}`);
+    },
+    *resolve(_agentId: string): Operation<boolean> {
+      return false;
+    },
+    *sleep(ms: number): Operation<Val> {
+      return yield* dispatch("sleep", [ms] as unknown as Val);
+    },
   },
-  *resolve(_agentId: string): Operation<boolean> {
-    return false;
+  {
+    groups: [
+      { name: "max", mode: "append" },
+      { name: "replay", mode: "prepend" },
+      { name: "min", mode: "prepend" },
+    ] as const,
   },
-  *sleep(ms: number): Operation<Val> {
-    return yield* dispatch("sleep", [ms] as unknown as Val);
-  },
-});
+);
+
+type PublicAroundOptions = { at: "max" | "min" };
+
+function publicAround(
+  handlers: Parameters<typeof EffectsApi.around>[0],
+  options?: PublicAroundOptions,
+): Operation<void> {
+  if (options != null && options.at !== "max" && options.at !== "min") {
+    throw new Error(`Effects.around: { at } must be "max" or "min"`);
+  }
+  return EffectsApi.around(handlers, options);
+}
 
 export const Effects: {
   operations: typeof EffectsApi.operations;
-  around: typeof EffectsApi.around;
+  around: (
+    handlers: Parameters<typeof EffectsApi.around>[0],
+    options?: PublicAroundOptions,
+  ) => Operation<void>;
   sleep: typeof EffectsApi.operations.sleep;
 } = {
   operations: EffectsApi.operations,
-  around: EffectsApi.around,
+  around: publicAround,
   sleep: EffectsApi.operations.sleep,
 };
 

@@ -7,3 +7,5 @@
  */
 export { DispatchContext } from "./dispatch-context.js";
 export { evaluateMiddlewareFn } from "./middleware-eval.js";
+export { installReplayDispatch } from "./replay.js";
+export type { ReplayDispatchMiddleware } from "./replay.js";
