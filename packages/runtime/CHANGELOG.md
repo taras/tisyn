@@ -1,5 +1,284 @@
 # @tisyn/runtime
 
+## 0.15.0
+
+### Minor Changes
+
+- 0f255bf: Adds the runtime implementation for `invokeInline` as a core
+  slice against `tisyn-inline-invocation-specification.md` v6.
+  Dispatch-boundary middleware that calls
+  `invokeInline(fn, args, opts?)` now runs a compiled `Fn` as a
+  journaled inline lane under the caller's Effection scope:
+
+  - **Lane identity** — each accepted call allocates one lane id
+    from the caller's unified `childSpawnCount` (shared with
+    `invoke`, `spawn`, `resource`, `scope`, `timebox`, `all`,
+    `race`). Rejected calls (invalid call site, non-`Fn` `fn`,
+    non-array `args`, invalid `opts`) do not advance the
+    allocator.
+  - **Journal shape** — standard-effect dispatches in the inline
+    body journal under the lane coroutineId via the shared replay-
+    aware dispatch helper. The lane itself produces no
+    `CloseEvent` under any condition (normal completion, uncaught
+    error, cancellation). No event is written for the
+    `invokeInline` call itself on the caller's coroutineId.
+  - **Return and error propagation** — the inline body's kernel
+    value is returned directly from the `Operation<T>`; uncaught
+    errors propagate directly (no reification, unlike `invoke`).
+  - **Replay** — lane and caller cursors are independent; replay
+    reconstructs both by deterministic re-execution of the same
+    `invokeInline` sequence. Live and replay journals are
+    byte-identical for the IL-R-001 subset.
+  - **Nested inline** — `invokeInline` called from middleware
+    handling an effect dispatched during an outer inline body
+    allocates a child lane with the `parentLane.{m}` format. Each
+    lane in a nested subtree has its own independent allocator
+    and cursor; no `CloseEvent` is produced at any level.
+  - **`invoke` inside inline** — retains full nested-invocation
+    semantics: own scope, own `CloseEvent`, reified child result.
+
+  **Phase 5B scope limit.** The `driveInlineBody` helper
+  explicitly rejects, with a clear error, any descriptor it
+  cannot yet support safely:
+
+  - Every compound external (`scope`, `spawn`, `join`,
+    `resource`, `timebox`, `all`, `race`) inside an inline body.
+  - `stream.subscribe` and `stream.next` inside an inline body —
+    v6 §12.4 requires owner-coroutineId counter allocation for
+    deterministic tokens; shipping a lane-local approximation
+    would violate the landed spec. A follow-up phase will add
+    owner-counter handling and lift the rejection.
+
+  Ordinary agent effects and `__config` dispatches inside an
+  inline body work normally.
+
+  Non-breaking: no existing `invoke`, agent, transport, or runtime
+  behavior changes. Existing replay/recovery/nested-invocation
+  test suites remain green. The spec's IL-INT-_, IL-RD-_,
+  IL-EX-\*, and the full 31-test minimum acceptance subset are
+  future work.
+
+  Semantics per `tisyn-inline-invocation-specification.md`.
+
+- 2037b6b: **BREAKING (pre-1.0):** Workflow replay is now structural. User
+  middleware installed via `Effects.around` re-executes on replay,
+  seeing the stored result returned from `next()`; framework
+  handlers (`Agents.use`, `implementAgent(...).install`,
+  `installAgentTransport`, `installRemoteAgent`) and core dispatch
+  do NOT re-execute when the journal already records a result for
+  that dispatch. Short-circuiting max frames yield to the stored
+  cursor at chain exit — the stored result wins over the
+  short-circuit value.
+
+  Resource init and resource cleanup dispatches traverse the same
+  replay-boundary-aware chain as ordinary coroutine dispatch.
+  Middleware around a resource-body dispatch now receives a
+  `DispatchContext` with `ctx.invoke` capability using the resource
+  child's allocator. The resource body's authored surface is
+  unchanged; only the middleware's observable surface expands.
+
+  Callers that were relying on the previous pre-dispatch replay
+  short-circuit — where `Effects.around` middleware did not re-run
+  on replay — will observe their middleware bodies running again on
+  replay. Middleware that should execute on every dispatch
+  (including replay) is already in the right position at
+  `{ at: "max" }` (the default) and no migration is required.
+  Middleware that should NOT re-run on replay can move to
+  `{ at: "min" }`, which places it below the replay-substitution
+  boundary and preserves the previous behavior.
+
+  The companion `@tisyn/effects` release provides the internal
+  three-lane composition substrate this behavior change uses.
+
+### Patch Changes
+
+- 43e8c48: Lift the Phase 5B rejection of `resource` inside `invokeInline`
+  bodies by completing the spec's §11.4 / §11.8 contract.
+
+  - **Provide in caller scope, cleanup at caller teardown.** A
+    resource acquired inside an inline body now registers with
+    the caller's resource list (the same list that holds the
+    caller's ordinary resources), so reverse-order teardown runs
+    as a single caller-level sequence. Sibling inline lanes and
+    post-return caller code can reuse the resource until the
+    caller exits. The resource child still produces its own
+    `CloseEvent` under `laneId.{m}`; the inline lane itself
+    still produces no `CloseEvent`.
+  - **Allocator discipline preserved.** The resource child id is
+    allocated from the inline lane's own `inlineChildSpawnCount`;
+    a rejected call does not advance the lane's allocator.
+  - **Nested resources still unsupported.** `invokeInline` called
+    from a resource-init or resource-cleanup dispatch context
+    continues to reject an inline-body `resource` yield with a
+    clear error — preserving the existing "Nested resource is
+    not supported" rule. `invokeInline` itself remains usable
+    from those contexts for non-resource effects.
+  - **Other compound externals still rejected.** `scope`,
+    `spawn`, `join`, `timebox`, `all`, `race` inside inline
+    bodies remain rejected with a clear error naming the
+    descriptor id; those remain follow-up phases.
+
+  No kernel/compiler/IR/durable-event-algebra changes. No new
+  public API. Semantics per
+  `tisyn-inline-invocation-specification.md` §11.
+
+- 969d91f: Lift the Phase 5B rejection of `spawn` and `join` inside
+  `invokeInline` bodies per the inline-invocation spec's §11.5.
+
+  Step middleware can now start background child work from
+  inside shared-lifetime inline execution and have the
+  returned task handle be joinable from the inline body
+  itself, sibling inline lanes, or later caller code —
+  without creating an inline scope boundary.
+
+  The implementation shares the hosting dispatch site's
+  existing durable task table (the pair of `spawnedTasks` +
+  `joinedTasks` maps already maintained by `driveKernel` and
+  `orchestrateResourceChild` for ordinary-yield spawn/join)
+  with inline evaluation. No new inline-specific bookkeeping
+  system is introduced.
+
+  - **Spawn.** Inside an inline body, `spawn` allocates the
+    child id from the lane's own `inlineChildSpawnCount` in
+    `laneId.{m}` format and starts the child via
+    `driveKernel(childKernel, childId, childEnv, ctx)`. The
+    child task runs under the hosting caller's Effection scope
+    — spawned via `yield* spawn(...)` inside the ambient
+    middleware chain — and produces its normal `CloseEvent`
+    under `laneId.{m}`. The inline lane itself still produces
+    no `CloseEvent`.
+  - **Join.** Handles resolve against the hosting caller's
+    `spawnedTasks` map; the double-join set is also shared, so
+    the existing "already been joined" error fires whether
+    both joins are from the inline body, from siblings, or
+    across the caller boundary.
+  - **Resource-body hosts unchanged.** When a resource init or
+    cleanup body hosts the dispatch, inline-body spawn/join
+    attaches to THAT phase's durable task table — mirroring
+    where ordinary-yield `spawn` from inside the resource body
+    already lands.
+
+  `scope`, `timebox`, `all`, `race` inside inline bodies
+  remain rejected with a clear error. Nested resources inside
+  a resource body (from an inline-body `resource` yield in a
+  resource-init/cleanup context) remain rejected per Phase 5D.
+  No kernel/compiler/IR/durable-event-algebra changes; no
+  public API changes; `invokeInline` signature unchanged.
+
+- 33c6391: Lift the Phase 5B rejection of `stream.subscribe` and
+  `stream.next` inside `invokeInline` bodies by implementing the
+  owner-coroutineId counter model from
+  `tisyn-inline-invocation-specification.md` §12.
+
+  - **Shared subscription counter across inline siblings and
+    caller.** Subscription tokens are now allocated from a
+    counter keyed by the dispatch chain's **owner coroutineId** —
+    the original caller's coroutineId, captured once at the
+    outermost `invokeInline` and inherited unchanged through
+    nested inline calls. Sibling inline lanes and the caller
+    itself share a single token namespace, so a handle acquired
+    inside an inline body can be used by another sibling inline
+    lane or by the caller after the inline returns, without
+    spurious `SubscriptionCapabilityError` ancestry failures or
+    token collisions.
+  - **`invoke` children keep their own namespace.** Per §12.8,
+    an `invoke` child is its own owner: tokens allocated inside
+    the child are prefixed with the child's coroutineId, and the
+    caller cannot use handles that escape an `invoke` child
+    (ancestry check correctly fails).
+  - **`stream.next` ancestry check compares owner identity**
+    (not journal coroutineId). For ordinary dispatch where owner
+    equals coroutineId, behavior is byte-identical to the prior
+    release — no fixture changes in the stream-iteration or
+    replay-dispatch suites.
+  - **Journal shape unchanged.** Stream YieldEvents continue to
+    journal under the inline lane's coroutineId; owner identity
+    lives only in runtime context and inside the opaque
+    subscription-handle token string (which already encoded a
+    coroutineId in the prior format). No new durable event
+    kinds, no `ownerCoroutineId` field on `YieldEvent`, no
+    kernel/compiler/IR changes.
+
+  Compound externals inside inline bodies (`scope`, `spawn`,
+  `join`, `resource`, `timebox`, `all`, `race`) remain rejected
+  with a clear error — lifting those is a follow-up phase.
+
+  Non-breaking for existing workloads: ordinary dispatch and
+  `invoke`-child subscription tokens keep their
+  `sub:<coroutineId>:<n>` shape. Semantics per
+  `tisyn-inline-invocation-specification.md` §12.
+
+- dde36c6: Lift the `timebox`, `all`, and `race` rejections inside
+  `invokeInline` bodies per §11.6 of the inline-invocation
+  specification. Step middleware can now use bounded and
+  concurrent child work inside shared-lifetime inline
+  execution without introducing a scope boundary.
+
+  - **`timebox` inside an inline body.** Allocates two child
+    IDs from the inline lane's own counter —
+    `laneId.{N}` (body) and `laneId.{N+1}` (timeout) — and
+    delegates to the existing `orchestrateTimebox` helper.
+    The orchestrator resolves with the tagged value
+    `{ status: "completed", value }` on body-win and
+    `{ status: "timeout" }` on timeout-win (timeout is NOT
+    an error; it is a successful tagged value). Both the
+    body child and the timeout child emit their own
+    `CloseEvent`; the inline lane itself still emits none.
+  - **`all` and `race` inside an inline body.** Allocate
+    `exprs.length` contiguous child IDs from the inline
+    lane's own counter and delegate to the existing
+    `orchestrateAll` / `orchestrateRace` helpers. Result
+    ordering, first-winner propagation, and empty-list
+    handling all match the runtime's pre-existing semantics.
+  - **Error routing.** Orchestrator errors (e.g. fail-fast
+    propagation from `all`) are routed through
+    `kernel.throw(err)` with the three-outcome pattern, so
+    the inline body's own `try`/`catch` semantics work for
+    these compounds the same way they do for standard-effect
+    errors.
+  - **`provide` misuse framing.** An inline body yielding a
+    bare `provide` outside a resource context throws
+    `RuntimeBugError("provide outside resource context")` —
+    framed as caller IR misuse (matching driveKernel), not
+    as a "deferred inline compound".
+
+  `scope` inside an inline body remains rejected with a
+  clear error naming only it; its transport-binding
+  semantics (handler / bindings / scope boundary) need their
+  own review before lifting. The catch-all rejection message
+  is narrowed to the single-compound form.
+
+  No kernel / compiler / IR / durable-event-algebra changes;
+  no public API changes; `invokeInline` signature unchanged.
+
+- 29707e6: Swap the preview `@effectionx/context-api` dependency for
+  the in-repo workspace vendor `@tisyn/context-api`. No
+  behavior change in public `@tisyn/runtime` API or
+  observable Runtime-context / middleware-composition /
+  replay semantics.
+- Updated dependencies [e7d62c6]
+- Updated dependencies [4766e26]
+- Updated dependencies [29707e6]
+- Updated dependencies [29707e6]
+- Updated dependencies [c268fc0]
+- Updated dependencies [969d91f]
+- Updated dependencies [ad2e267]
+- Updated dependencies [dde36c6]
+- Updated dependencies [0f255bf]
+- Updated dependencies [2037b6b]
+- Updated dependencies [29707e6]
+- Updated dependencies [e7d62c6]
+- Updated dependencies [51d11f5]
+- Updated dependencies [4766e26]
+  - @tisyn/agent@0.15.0
+  - @tisyn/context-api@0.15.0
+  - @tisyn/effects@0.3.0
+  - @tisyn/transport@0.15.0
+  - @tisyn/ir@0.15.0
+  - @tisyn/kernel@0.15.0
+  - @tisyn/validate@0.15.0
+  - @tisyn/durable-streams@0.15.0
+
 ## 0.14.0
 
 ### Minor Changes

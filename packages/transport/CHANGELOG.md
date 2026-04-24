@@ -1,5 +1,72 @@
 # @tisyn/transport
 
+## 0.15.0
+
+### Minor Changes
+
+- e7d62c6: **BREAKING:** `installRemoteAgent()` and `installAgentTransport()`
+  now register their dispatch middleware at `{ at: "min" }` (below
+  user middleware) instead of the default max priority. User-installed
+  `Effects.around` interceptors, including those installed after the
+  transport binding, continue to observe and can transform an outbound
+  dispatch before the transport routes the request — the change to
+  `min` makes the transport handler sit strictly below the
+  user-middleware region.
+
+  This prepares the ground for the replay-aware dispatch boundary
+  planned in #125, which will sit between max-priority user middleware
+  and min-priority framework handlers. No replay logic is introduced
+  yet.
+
+  `resolve` middleware (used by `useAgent` binding-probe) is **not**
+  moved — it remains at default priority. The single previous
+  `Effects.around({ dispatch, resolve })` registration in each
+  install entry point is now split into two separate `Effects.around`
+  calls so the priority change is scoped to dispatch only.
+
+  Callers that already install their own `{ at: "min" }` core handlers
+  downstream of `installRemoteAgent` / `installAgentTransport` should
+  note that two min-priority entries now coexist; relative ordering
+  between them follows registration order.
+
+- 51d11f5: `installRemoteAgent` and `installAgentTransport` now preserve the
+  adapter-supplied `error.name` when reconstructing thrown `Error`s
+  from `executeApplicationError` messages. Previously the name was
+  dropped and the workflow surface always saw `name === "Error"`.
+
+  Adapters that set distinct names (e.g. `InvalidPayload`,
+  `SessionNotFound`, `NotSupported`) round-trip those names to the
+  caller and can be branched on by `instanceof`-style discrimination
+  or `err.name === "..."` checks.
+
+- 4766e26: Documentation: README example updated to use the unwrapped
+  single-parameter payload shape. `math.double({ value: 21 })`
+  replaces the previous `math.double({ input: { value: 21 } })`
+  form, matching the new compiler lowering rule.
+
+  No runtime API changes in this package — the bump tracks the
+  fixed-group `@tisyn/compiler` change that drives the new payload
+  shape.
+
+### Patch Changes
+
+- Updated dependencies [e7d62c6]
+- Updated dependencies [4766e26]
+- Updated dependencies [29707e6]
+- Updated dependencies [c268fc0]
+- Updated dependencies [969d91f]
+- Updated dependencies [ad2e267]
+- Updated dependencies [dde36c6]
+- Updated dependencies [0f255bf]
+- Updated dependencies [2037b6b]
+- Updated dependencies [29707e6]
+  - @tisyn/agent@0.15.0
+  - @tisyn/effects@0.3.0
+  - @tisyn/ir@0.15.0
+  - @tisyn/kernel@0.15.0
+  - @tisyn/protocol@0.15.0
+  - @tisyn/validate@0.15.0
+
 ## 0.14.0
 
 ### Minor Changes

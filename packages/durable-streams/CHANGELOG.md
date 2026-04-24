@@ -1,5 +1,11 @@
 # @tisyn/durable-streams
 
+## 0.15.0
+
+### Patch Changes
+
+- @tisyn/kernel@0.15.0
+
 ## 0.14.0
 
 ### Patch Changes
