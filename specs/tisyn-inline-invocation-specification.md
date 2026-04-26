@@ -253,11 +253,32 @@ Foreground child at caller scope. Produces CloseEvent.
 
 Own compound-external semantics.
 
-### 11.7 Summary
+### 11.7 `scope`
 
-Only the **inline lane itself** has "no CloseEvent + shared lifetime." True at every nesting level.
+A `scope` descriptor encountered during inline-body evaluation MUST be orchestrated using the same mechanism as `scope` outside an inline body. The runtime MUST allocate a child coroutineId from the inline lane's own child allocator (`inlineChildSpawnCount`) in the `laneId.{m}` format, and MUST delegate to the existing scope orchestration: create an Effection `scoped()` block, install the handler middleware (if present) as outermost-max `Effects.around()` middleware, evaluate and install transport bindings, and drive the scope body via `driveKernel` under the allocated child coroutineId.
 
-### 11.8 Cross-inline-call resource continuity
+**Owner identity transition.** For scope orchestration inside an inline body, the runtime MUST install a scope-child dispatch context in which `coroutineId = childId` and `ownerCoroutineId = childId`. This rule is normative for scope inside inline bodies and does not depend on the inline lane's captured owner. The inline lane's captured owner coroutineId is NOT propagated into the scope body. Effects dispatched from the scope body — including through middleware installed by that scope — MUST use the scope child coroutineId as both:
+
+- **journal coroutineId** — `YieldEvent` writes, replay cursor
+- **owner coroutineId** — restricted capability ownership, subscription-counter allocation, ancestry checks
+
+The inline lane's dual-identity split (§12) does NOT apply inside the scope body. The scope body is a proper child scope, not an inline lane.
+
+**Middleware context.** Middleware installed by the inline-body `scope` — whether via the handler field or via host-side `Effects.around()` calls within the scope body — MUST observe and propagate the scope child's `DispatchContext`. It MUST NOT observe or propagate the inline caller's owner context. If middleware installed inside the scope body calls `invokeInline`, the resulting nested inline lane MUST capture the scope child's coroutineId as its owner (per §12.3), and MUST allocate a lane ID from the scope child's `childSpawnCount` — not from the outer inline lane's `inlineChildSpawnCount`.
+
+**Scope isolation.** Transport bindings installed inside the scope MUST be scoped to the Effection scope created for the scope orchestration. They MUST NOT be visible to the inline lane's shared lifetime region or to the inline caller's scope. When the scope exits, transport bindings MUST be shut down per the blocking-scope specification §6.2. Middleware installed inside the scope MUST be isolated to the scope's Effection scope. It MUST NOT leak into the inline lane or the caller's middleware chain.
+
+**CloseEvent.** The scope body MUST produce a `CloseEvent` under its child coroutineId per the blocking-scope specification §7. The inline lane itself MUST NOT produce a `CloseEvent` as a consequence of the `scope` orchestration.
+
+**Error routing.** Errors from the scope body MUST be routed through `kernel.throw(err)` with the three-outcome pattern, consistent with other compound externals inside inline bodies. Scope teardown (transport shutdown, middleware removal) MUST complete before the error reaches the inline body's `try/catch` (blocking-scope specification §7.4 T14).
+
+**Replay.** MUST follow the blocking-scope specification §8: the scope child's effects replay via per-coroutineId cursors; middleware and transport bindings are reconstructed from IR on replay; the scope child's `CloseEvent` is replayed. A rejected scope orchestration (e.g., binding evaluation failure per blocking-scope §6.1 R2) MUST still produce a `CloseEvent(error)` for the scope child.
+
+### 11.8 Summary
+
+Only the **inline lane itself** has "no CloseEvent + shared lifetime." Child-bearing primitives inside the inline body — `invoke` (§11.3), `resource` (§11.4), `spawn` (§11.5), `timebox` / `all` / `race` (§11.6), and `scope` (§11.7) — retain their own semantics, produce their own `CloseEvent`s, and create their own scope boundaries where applicable. True at every nesting level.
+
+### 11.9 Cross-inline-call resource continuity
 
 Resources persist because they attach to the caller's scope.
 
@@ -353,6 +374,7 @@ Uncaught errors as original value, not reified.
 - **IH12.** Call-site rule uniform at every nesting level.
 - **IH13.** Caller-owned capabilities. Owner coroutineId drives ownership AND counter allocation. Shared counter. Runtime context, not durable. Child-bearing primitives excluded.
 - **IH14.** Nested inline in MVP. Lane subtree, independent cursors, no CloseEvent, owner inherited.
+- **IH15.** Scope inside inline body. Scope child uses `childId` as both journal and owner coroutineId. CloseEvent under scope child. No CloseEvent on inline lane. Transport bindings and middleware isolated to scope lifetime. Owner identity transition is normative for scope inside inline bodies per §11.7.
 
 ---
 
@@ -406,6 +428,8 @@ This amendment does not change the unified allocator's mechanics, counter format
 | Resource lifetime | Child-owned | Caller-owned |
 | Error shape | Reified | Original |
 | Nested | N/A | In MVP; owner inherited |
+
+**`scope` inside inline body.** Scope child uses `childId` for both journal and owner coroutineId. Own `CloseEvent`. Own Effection scope. Transport bindings and middleware isolated to scope lifetime. Allocated from inline lane's `inlineChildSpawnCount`. Follows the runtime's ordinary child-scope dispatch context behavior, not the inline lane's dual-identity model.
 
 ---
 

@@ -26,6 +26,7 @@ Test IDs use the prefix `IL-`.
 - Nested inline — in MVP (§7.6)
 - Journal, replay, ordering, lifetime, error, cancellation
 - Composition with three-lane replay dispatch and with `invoke`
+- Scope inside inline bodies (§11.7)
 - Regression
 
 ### 1.2 Out of scope
@@ -289,7 +290,77 @@ These tests verify that `invokeInline` participates in the unified child allocat
 
 ---
 
-## 18. Regression
+## 18. Scope Inside Inline Body (§11.7)
+
+Test IDs use the prefix `IL-SC-`. Tests cover the lifting of `scope` from rejection to ordinary child-bearing primitive inside inline bodies: scope-child allocation from the lane's `inlineChildSpawnCount`, owner identity transition (scope child uses `childId` for both journal and owner), transport-binding/middleware isolation, scope-installed middleware calling `invokeInline`, replay equivalence, error routing through `kernel.throw`, composition with other inline-body compounds, and regression that other compounds remain unaffected.
+
+### 18.1 Core behavior (§11.7)
+
+| ID | Tier | Obs. | Description | Setup | Expected |
+|---|---|---|---|---|---|
+| IL-SC-001 | Core | Workflow + Journal | Scope inside inline body creates isolated child scope with CloseEvent. | Inline body contains `scope` with no handler, no bindings, body returns literal. | Scope child ID `laneId.{m}` has `CloseEvent(ok)`. Inline lane has no `CloseEvent`. Return value propagates to inline body. |
+| IL-SC-002 | Core | Journal | Scope child ID allocated from lane's own counter. | `invokeInline` → body yields `scope`. | Child ID = `laneId.{inlineChildSpawnCount}`. Counter advanced by +1. |
+| IL-SC-003 | Core | Journal | Scope body effects journal under scope child ID. | Inline body contains `scope` whose body dispatches agent effect. | `YieldEvent` under scope child ID, not under inline lane ID or caller ID. |
+| IL-SC-004 | Core | Workflow | Scope handler middleware intercepts effects inside scope body. | `scope` with handler that short-circuits effect ID `"test.probe"` to return `"intercepted"`. Body dispatches `"test.probe"`. | Inline body receives `"intercepted"`. Handler does not affect effects dispatched outside the scope. |
+
+### 18.2 Transport binding and middleware isolation (§11.7)
+
+| ID | Tier | Obs. | Description | Setup | Expected |
+|---|---|---|---|---|---|
+| IL-SC-005 | Core | Workflow | Transport bindings inside scope do not leak to inline lane. | `scope` with transport binding for agent A. After scope exits, inline body dispatches to agent A. | Agent A dispatch fails (no binding) after scope exits. Binding was active inside scope body. |
+| IL-SC-006 | Core | Workflow | Transport shutdown on scope exit. | `scope` with transport binding. Scope body completes normally. | Transport shut down before inline body continues. |
+| IL-SC-007 | Core | Workflow | Middleware installed inside scope does not leak to inline lane. | `scope` with handler that denies `"test.op"`. After scope exits, inline body dispatches `"test.op"`. | `"test.op"` succeeds after scope exit. Denied inside scope body. |
+
+### 18.3 Owner identity transition — restricted capability ownership (§11.7, §12)
+
+| ID | Tier | Obs. | Description | Setup | Expected |
+|---|---|---|---|---|---|
+| IL-SC-019 | Core | Journal | Stream subscription inside inline-body scope uses scope child's owner, not inline caller's owner. | Inline body contains `scope`. Scope body dispatches `stream.subscribe`. Inline body (outside scope) also dispatches `stream.subscribe`. | Scope-body subscription token = `sub:<scopeChildId>:0`. Inline-body subscription token = `sub:<callerOwner>:N`. Owner segments differ. |
+| IL-SC-020 | Core | Journal | Subscription counter inside scope body is independent of inline lane's shared owner counter. | One `stream.subscribe` in inline body before the scope. Two `stream.subscribe` calls inside inline-body scope. | Pre-scope token = `sub:<callerOwner>:0`. Scope-body tokens = `sub:<scopeChildId>:0`, `sub:<scopeChildId>:1`. Post-scope inline token = `sub:<callerOwner>:1`. |
+| IL-SC-021 | Core | Journal + Workflow | `stream.next` ancestry check inside scope body uses scope child coroutineId. | Scope body subscribes to stream, then calls `stream.next` on the subscription handle. | Ancestry check passes: handle owner = scope child, dispatch context owner = scope child. |
+
+### 18.4 Scope-installed middleware calling `invokeInline` (§11.7, §12.3)
+
+| ID | Tier | Obs. | Description | Setup | Expected |
+|---|---|---|---|---|---|
+| IL-SC-022 | Core | Journal | `invokeInline` from middleware inside inline-body scope allocates from scope child's allocator. | Inline body contains `scope`. Scope body dispatches effect E. Middleware handling E calls `invokeInline(innerFn)`. | Nested inline lane ID = `scopeChildId.{m}`, NOT `laneId.{m}` or `callerId.{m}`. Lane has no `CloseEvent`. |
+| IL-SC-023 | Core | Journal | Nested inline lane from scope-body middleware captures scope child as owner. | Same setup as IL-SC-022. `innerFn` dispatches `stream.subscribe`. | Subscription token = `sub:<scopeChildId>:N`. Owner is scope child, not inline caller. |
+| IL-SC-024 | Core | Journal | Replay byte-identical for scope-body `invokeInline`. | Live run of IL-SC-022 setup; replay from journal. | Journals byte-identical. Scope child's child allocator reconstructed deterministically. Nested lane cursor independent. |
+
+### 18.5 Determinism and replay (§11.7, blocking-scope §8)
+
+| ID | Tier | Obs. | Description | Setup | Expected |
+|---|---|---|---|---|---|
+| IL-SC-008 | Core | Journal | Replay byte-identical: scope inside inline body. | Live run; replay from journal. | Journals byte-identical. Scope body effects replayed via scope child cursor. Lane cursor independent. |
+| IL-SC-009 | Core | Journal | Scope child CloseEvent replayed correctly. | Live run with scope inside inline. Replay. | `CloseEvent` for scope child present in both runs. Inline lane has no `CloseEvent` in either. |
+| IL-SC-010 | Core | Journal | Crash recovery: incomplete scope inside inline. | Partial journal: scope child has YieldEvents but no CloseEvent. Recover. | Scope body replays from cursor, transitions to live at frontier. Scope child produces `CloseEvent` on completion. |
+
+### 18.6 Failure modes (§11.7, blocking-scope §7)
+
+| ID | Tier | Obs. | Description | Setup | Expected |
+|---|---|---|---|---|---|
+| IL-SC-011 | Core | Workflow | Scope body error propagates to inline body via kernel.throw. | `scope` body throws. Inline body has `try/catch`. | Error caught by inline body's `try/catch`. Scope teardown completes before catch runs (T14). |
+| IL-SC-012 | Core | Journal | Scope binding evaluation failure produces CloseEvent(error). | `scope` with binding expression that fails structurally. | `CloseEvent(error)` for scope child. Error propagates to inline body. |
+| IL-SC-013 | Core | Workflow | Cancellation of inline caller tears down scope. | Caller cancelled while scope body is running inside inline body. | Scope body cancelled. Scope teardown runs. Scope child `CloseEvent(cancelled)`. |
+
+### 18.7 Composition (§11.7 + §11.4–§11.6)
+
+| ID | Tier | Obs. | Description | Setup | Expected |
+|---|---|---|---|---|---|
+| IL-SC-014 | Core | Journal | Mixed scope + other compounds in same inline body. | Inline body: `scope(...)`, then `spawn(...)`, then agent effect. | Three allocations from lane counter: `.0` (scope, CloseEvent), `.1` (spawn child, CloseEvent), agent effect YieldEvent under lane. |
+| IL-SC-015 | Extended | Journal | Nested scope inside inline-body scope. | Inline body contains `scope` whose body contains another `scope`. | Outer scope child `.0`, inner scope child `.0.0`. Both produce CloseEvents. |
+| IL-SC-016 | Extended | Workflow | `invokeInline` from middleware inside inline-body scope (full round-trip). | Scope body dispatches effect. Middleware handling it calls `invokeInline`. Inner inline body dispatches agent effect and returns. | Scope child has CloseEvent. Nested inline lane has no CloseEvent. All effects journal under correct coroutineIds. |
+| IL-SC-017 | Core | Workflow | Scope inside nested inline. | Outer `invokeInline` body dispatches E. Middleware calls inner `invokeInline` whose body contains `scope`. | Scope child allocated from inner lane's counter. Full scope semantics preserved. |
+
+### 18.8 Regression
+
+| ID | Tier | Obs. | Description | Setup | Expected |
+|---|---|---|---|---|---|
+| IL-SC-018 | Core | Workflow | Existing resource/spawn/timebox/all/race inside inline body unaffected. | Run existing IL-CS-*, IL-L-*, compound tests. | All pass unchanged. |
+
+---
+
+## 19. Regression
 
 | ID | Tier | Obs. | Expected |
 |---|---|---|---|
@@ -300,7 +371,7 @@ These tests verify that `invokeInline` participates in the unified child allocat
 
 ---
 
-## 19. Minimum Acceptance Subset
+## 20. Minimum Acceptance Subset
 
 All 31 must pass. Tests 1–3: primary invariant. Tests 4–11: capability ownership and counter. Tests 12–15: nested inline. Tests 16–18: child semantics.
 
@@ -340,7 +411,7 @@ All 31 must pass. Tests 1–3: primary invariant. Tests 4–11: capability owner
 
 ---
 
-## 20. Coverage Summary
+## 21. Coverage Summary
 
 ### Conformance-hook coverage
 
@@ -360,6 +431,7 @@ All 31 must pass. Tests 1–3: primary invariant. Tests 4–11: capability owner
 | IH12 Call-site | IL-V-001–007, IL-NI-006 |
 | IH13 Caps + counter | IL-CO-001–014 |
 | IH14 Nested MVP | IL-NI-001–007, IL-CS-010, IL-CO-002, IL-CO-006, IL-CO-008 |
+| IH15 Scope inside inline | IL-SC-001–024 |
 
 ### Tier counts
 
@@ -382,5 +454,6 @@ All 31 must pass. Tests 1–3: primary invariant. Tests 4–11: capability owner
 | Replay-dispatch | 4 | 0 | 0 | 4 |
 | `invoke` regression | 4 | 0 | 0 | 4 |
 | Interaction | 5 | 1 | 0 | 6 |
+| Scope inside inline body | 22 | 2 | 0 | 24 |
 | Existing regression | 4 | 0 | 0 | 4 |
-| **Total** | **97** | **6** | **0** | **103** |
+| **Total** | **119** | **8** | **0** | **127** |
