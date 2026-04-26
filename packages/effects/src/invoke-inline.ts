@@ -45,11 +45,15 @@ import type { InvokeOpts } from "./dispatch.js";
  * across the boundary fails with the existing "already been
  * joined" error — and `timebox` / `all` / `race` with their own
  * compound-external semantics (§11.6). `scope` inside an inline
- * body remains rejected with a clear error; it is the only
- * compound still deferred, and a follow-up runtime phase will
- * review its transport-binding semantics before lifting it.
+ * body creates an ordinary child scope: bindings and handler are
+ * installed in a fresh Effection scope rooted at a child coroutine
+ * id allocated from the lane's `inlineChildSpawnCount`, the scope
+ * body runs under that child id as both journal and owner, and the
+ * scope produces its own `CloseEvent`. The inline lane itself
+ * still has no `CloseEvent`. See
+ * `tisyn-inline-invocation-specification.md` §11.7.
  * `resource` inside an inline body invoked from a resource-init or
- * resource-cleanup dispatch context also remains rejected — nested
+ * resource-cleanup dispatch context remains rejected — nested
  * resources inside a resource body are unsupported.
  */
 export function* invokeInline<T = Val>(

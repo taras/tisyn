@@ -715,14 +715,43 @@ function* driveInlineBody<T = Val>(
         throw new RuntimeBugError("provide outside resource context");
       }
 
-      // `scope` — still deferred. `scope` involves transport-binding
-      // semantics that need their own review before landing inside
-      // inline bodies; see §11.6 plan and the follow-up phase.
-      throw new Error(
-        `invokeInline body dispatched compound external '${descriptor.id}'; ` +
-          `compound primitive 'scope' inside inline bodies is deferred ` +
-          `(see tisyn-inline-invocation-specification.md §11)`,
-      );
+      if (descriptor.id === "scope") {
+        // §11.7: `scope` inside an inline body delegates to the
+        // existing `orchestrateScope` path. Allocate a child id
+        // from the lane's own `inlineChildSpawnCount`; the scope
+        // child uses `childId` for both journal and owner per the
+        // ordinary child-scope dispatch context behavior. No
+        // CloseEvent on the inline lane; scope produces its own.
+        const compoundData = descriptor.data as {
+          __tisyn_inner: ScopeInner;
+          __tisyn_env: Env;
+        };
+        const inner = compoundData.__tisyn_inner;
+        const childEnv = compoundData.__tisyn_env;
+        const childId = `${laneId}.${inlineChildSpawnCount++}`;
+
+        let scopeValue: Val = null;
+        let scopeErr: Error | null = null;
+        try {
+          scopeValue = yield* orchestrateScope(inner, childId, childEnv, ctx);
+        } catch (e) {
+          scopeErr = e instanceof Error ? e : new Error(String(e));
+        }
+
+        if (scopeErr === null) {
+          nextValue = scopeValue;
+          continue;
+        }
+        const throwResult = kernel.throw(scopeErr);
+        if (throwResult.done) {
+          return (throwResult.value ?? null) as T;
+        }
+        pendingStep = throwResult;
+        nextValue = null;
+        continue;
+      }
+
+      throw new RuntimeBugError(`driveInlineBody: unhandled compound external '${descriptor.id}'`);
     }
 
     // Agent effects, `__config`, and stream intrinsics all go through the
