@@ -22,10 +22,15 @@
  *    inline body keep their own compound-external semantics,
  *    with child IDs allocated from the lane's own
  *    `inlineChildSpawnCount`.
+ *  - Lifetime (§11.7) — `scope` inside an inline body delegates
+ *    to `orchestrateScope`: the scope child id is allocated from
+ *    the lane's `inlineChildSpawnCount`, the scope body runs
+ *    under `childId` as both journal and owner, and the scope
+ *    produces its own `CloseEvent` (the inline lane itself still
+ *    produces none). IL-SC-* coverage in the second describe
+ *    block at the bottom of this file.
  *
  * Out of scope — not tested here:
- *   - `scope` inside inline bodies (still rejected loudly by
- *     driveInlineBody; lifting is a follow-up phase).
  *   - IL-INT-*, IL-EX-*, and the full 31-test minimum subset.
  */
 
@@ -3677,8 +3682,68 @@ describe("invokeInline — scope inside inline body (§11.7)", () => {
     expect(scopeChild?.result.status).toBe("ok");
   });
 
-  // IL-SC-018 (regression): existing IL-CS-*, IL-L-*, IL-CO-*, IL-PI-*,
-  // and other compound tests in the surrounding 'invokeInline — core
-  // runtime slice' describe block above continue to pass unchanged.
-  // Verified by running `pnpm --filter @tisyn/runtime test`.
+  it("IL-SC-018: existing inline-body compounds (resource, spawn, timebox/all/race) unaffected by scope lift", function* () {
+    // Regression spot-check: alongside scope, a `resource` inside the
+    // inline body still provides in the caller's scope, cleans up at
+    // caller teardown (§11.4 + §11.9), and gets its own CloseEvent.
+    // The full IL-CS-*, IL-L-*, IL-CO-*, IL-PI-* suites in the
+    // surrounding 'invokeInline — core runtime slice' describe block
+    // exercise the rest of the regression surface.
+    const resourceIR = (body: unknown) =>
+      ({
+        tisyn: "eval",
+        id: "resource",
+        data: { tisyn: "quote", expr: { body } },
+      }) as unknown as Val;
+
+    const provideIR = (value: unknown) =>
+      ({
+        tisyn: "eval",
+        id: "provide",
+        data: value,
+      }) as unknown as Val;
+
+    const inlineBody: TisynFn<[], Val> = Fn<[], Val>(
+      [],
+      Seq(
+        resourceIR(Try(provideIR("svc"), undefined, undefined, effectIR("svc", "close"))),
+        scopeIR(Q("scope-result")),
+      ),
+    ) as unknown as TisynFn<[], Val>;
+
+    yield* Effects.around({
+      *dispatch([effectId, data]: [string, Val], next) {
+        if (effectId === "caller.go") {
+          yield* invokeInline<Val>(asFn(inlineBody), []);
+          return null as Val;
+        }
+        return yield* next(effectId, data);
+      },
+    });
+    yield* Effects.around(
+      {
+        *dispatch([_e, _d]: [string, Val]) {
+          return null as Val;
+        },
+      },
+      { at: "min" },
+    );
+
+    const { journal } = yield* execute({ ir: effectIR("caller", "go") as never });
+
+    // Resource child still gets its own CloseEvent at root.0.0.
+    const resourceClose = closes(journal).find((e) => e.coroutineId === "root.0.0");
+    expect(resourceClose?.result.status).toBe("ok");
+    // Scope child gets its own CloseEvent at root.0.1.
+    const scopeClose = closes(journal).find((e) => e.coroutineId === "root.0.1");
+    expect(scopeClose?.result.status).toBe("ok");
+    // Resource cleanup (svc.close) still ran at caller teardown,
+    // journaled under the resource child id.
+    const cleanup = yields(journal).find(
+      (e) => e.description.type === "svc" && e.description.name === "close",
+    );
+    expect(cleanup?.coroutineId).toBe("root.0.0");
+    // Inline lane itself still has no CloseEvent.
+    expect(closes(journal).some((e) => e.coroutineId === "root.0")).toBe(false);
+  });
 });

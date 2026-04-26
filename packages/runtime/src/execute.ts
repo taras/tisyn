@@ -164,7 +164,7 @@ interface ResourceChild {
 /**
  * Registration target for a `resource` yielded from inside an
  * `invokeInline` body. Per `tisyn-inline-invocation-specification.md`
- * §11.4 + §11.8, a resource acquired inside an inline body attaches
+ * §11.4 + §11.9, a resource acquired inside an inline body attaches
  * to the caller's scope — but only when the hosting dispatch context
  * is a caller `driveKernel`. When the hosting context is a
  * resource-init or resource-cleanup phase inside
@@ -383,7 +383,7 @@ function buildDispatchContext(args: {
  *   the kernel's final value directly; uncaught errors propagate
  *   directly to the caller's middleware frame.
  * - `resource` inside an inline body provides in the caller's scope
- *   and cleans up at caller teardown (§11.4 + §11.8). The resource
+ *   and cleans up at caller teardown (§11.4 + §11.9). The resource
  *   child is allocated `laneId.{m}` from the lane's own
  *   `inlineChildSpawnCount`, produces its own `CloseEvent` under
  *   that id, and registers with the caller's `resourceChildren`
@@ -411,11 +411,19 @@ function buildDispatchContext(args: {
  *   Errors are routed through `kernel.throw(...)` with the
  *   three-outcome pattern, so the inline body's `try`/`catch`
  *   sees them as ordinary `EffectError` raises.
- * - `scope` inside an inline body remains rejected with a clear
- *   error — its transport-binding semantics need their own
- *   review and will be a follow-up phase. A bare `provide` yield
- *   (outside a resource init body) is caller IR misuse and
- *   throws `RuntimeBugError("provide outside resource context")`,
+ * - `scope` inside an inline body delegates to the existing
+ *   `orchestrateScope` path (§11.7). The scope-child id is
+ *   allocated from the lane's own `inlineChildSpawnCount` as
+ *   `laneId.{m}`; the scope child uses `childId` as both journal
+ *   and owner coroutineId via `driveKernel(childId, ...)`. The
+ *   scope produces its own `CloseEvent` under `childId`; the
+ *   inline lane itself still produces no `CloseEvent`. Errors
+ *   from the scope body and from binding evaluation are routed
+ *   through `kernel.throw(...)` with the three-outcome pattern,
+ *   so the inline body's `try`/`catch` sees them as ordinary
+ *   `EffectError` raises. A bare `provide` yield (outside a
+ *   resource init body) is caller IR misuse and throws
+ *   `RuntimeBugError("provide outside resource context")`,
  *   matching driveKernel's behavior.
  */
 function* driveInlineBody<T = Val>(
@@ -446,7 +454,7 @@ function* driveInlineBody<T = Val>(
 
     const descriptor = step.value as EffectDescriptor;
 
-    // §11.4 + §11.8: `resource` inside an inline body provides in
+    // §11.4 + §11.9: `resource` inside an inline body provides in
     // the caller's scope and cleans up at caller teardown — but only
     // when the hosting dispatch context is a caller `driveKernel`.
     // When invokeInline was called from middleware running on a
@@ -2138,7 +2146,7 @@ interface DispatchStandardEffectParams {
    * `resourceChildren`; `"reject"` throws — preserving the existing
    * nested-resource rejection when the host is a resource-init or
    * resource-cleanup dispatch (`tisyn-inline-invocation-specification.md`
-   * §11.4 + §11.8). Unused by ordinary (non-inline) dispatch paths.
+   * §11.4 + §11.9). Unused by ordinary (non-inline) dispatch paths.
    */
   inlineResourceTarget: InlineResourceTarget;
   /**
