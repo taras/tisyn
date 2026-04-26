@@ -1,5 +1,22 @@
 # @tisyn/runtime
 
+## 0.17.0
+
+### Minor Changes
+
+- 6c83c81: `scope` inside an `invokeInline` body now creates an ordinary child scope (own Effection scope, own bindings, own handler middleware, own `CloseEvent` under `laneId.{m}`) instead of throwing. The scope child uses its own coroutineId for both journal and owner identity; the inline lane itself still produces no `CloseEvent`. Closes #136.
+
+### Patch Changes
+
+- Updated dependencies [6c83c81]
+  - @tisyn/effects@0.3.2
+  - @tisyn/agent@0.17.0
+  - @tisyn/transport@0.17.0
+  - @tisyn/ir@0.17.0
+  - @tisyn/kernel@0.17.0
+  - @tisyn/validate@0.17.0
+  - @tisyn/durable-streams@0.17.0
+
 ## 0.16.0
 
 ### Minor Changes
