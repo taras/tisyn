@@ -1,5 +1,13 @@
 # @tisyn/effects
 
+## 0.3.2
+
+### Patch Changes
+
+- 6c83c81: Updated `invokeInline` JSDoc to reflect that `scope` inside an inline body is now supported (creates an ordinary child scope, see `tisyn-inline-invocation-specification.md` §11.7). Nested-resource rejection notice unchanged.
+  - @tisyn/ir@0.17.0
+  - @tisyn/kernel@0.17.0
+
 ## 0.3.1
 
 ### Patch Changes

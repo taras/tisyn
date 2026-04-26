@@ -1,5 +1,16 @@
 # @tisyn/code-agent
 
+## 0.3.2
+
+### Patch Changes
+
+- Updated dependencies [6c83c81]
+  - @tisyn/effects@0.3.2
+  - @tisyn/agent@0.17.0
+  - @tisyn/transport@0.17.0
+  - @tisyn/ir@0.17.0
+  - @tisyn/protocol@0.17.0
+
 ## 0.3.1
 
 ### Patch Changes
