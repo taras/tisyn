@@ -153,28 +153,73 @@ effects flow — both built-in and user-defined. Middleware
 composes around this boundary. The dispatch boundary is the
 single interception point for all effect traffic within a scope.
 
-All effects MUST enter the dispatch boundary uniformly. There
-MUST NOT be a separate path for built-in effects that bypasses
-middleware. Middleware installed via the middleware installation
-primitive MUST intercept built-in effect calls the same way it
-intercepts user-defined effect calls.
+All effects MUST enter the dispatch boundary uniformly, **except
+effects classified as runtime-direct by this or a companion
+specification** (see §3.1.1). Runtime-direct effects are handled
+by the runtime's standard-effect dispatch path before entering
+the Effects middleware chain. Middleware installed via the
+middleware installation primitive (`Effects.around`) MUST
+intercept all chain-dispatched effects — both built-in and
+user-defined — uniformly. Middleware installed via
+`Effects.around` MUST NOT intercept runtime-direct effects; the
+runtime MUST route runtime-direct effects through its own
+dispatch path, not through the user-facing Effects chain.
 
-> **Non-normative.** Two valid paths reach the dispatch boundary
-> defined above:
+> **Non-normative.** Three dispatch paths reach effect
+> resolution under this specification:
 >
-> 1. **Compiled path.** Authored `yield* handle.method(args)` is
->    lowered by the compiler to `Eval("agent.method", ...)`. The
->    kernel suspends. The runtime routes the resulting effect
->    descriptor through the Effects middleware chain.
+> 1. **Compiled chain-dispatched path.** Authored
+>    `yield* handle.method(args)` is lowered by the compiler to
+>    `Eval("agent.method", ...)`. The kernel suspends. The
+>    runtime routes the resulting effect descriptor through the
+>    Effects middleware chain. `Effects.around` applies.
 >
-> 2. **Runtime facade path.** `useAgent()` returns a facade
->    (§6.2). Facade direct methods delegate through a backing
->    per-agent Context API. The call enters the same Effects
->    dispatch boundary without compiler-generated IR for the
->    call site.
+> 2. **Runtime facade chain-dispatched path.** `useAgent()`
+>    returns a facade (§6.2). Facade direct methods delegate
+>    through a backing per-agent Context API. The call enters
+>    the same Effects dispatch boundary as path 1, without
+>    compiler-generated IR for the call site. `Effects.around`
+>    applies.
 >
+> 3. **Runtime-direct path.** Effects classified as
+>    runtime-direct by §3.1.1 (currently `__config`,
+>    `stream.subscribe`, `stream.next`) are handled by the
+>    runtime's standard-effect dispatch path before reaching
+>    the user-facing Effects chain. `Effects.around` does NOT
+>    apply. Replay identity uses the source descriptor.
+>
+> Paths 1 and 2 share the chain-dispatched dispatch model:
 > `Effects.around()` middleware applies at the shared dispatch
-> boundary regardless of which path an effect takes to reach it.
+> boundary regardless of which compiled or facade path an
+> effect takes to reach it. Path 3 is the runtime-direct
+> exception.
+
+#### 3.1.1 Runtime-Direct Effects
+
+Runtime-direct effects are runtime-owned effects whose
+semantics depend on runtime-local state or capability
+reconstruction that cannot be meaningfully intercepted,
+transformed, or replaced by user middleware. Runtime-direct
+effects execute outside the user middleware dispatch chain.
+They still produce `YieldEvent` entries and participate in
+replay matching, but they are not interceptable by
+`Effects.around`.
+
+The following classification applies:
+
+| Effect | Classification | Rationale |
+|---|---|---|
+| `__config` | Runtime-direct | Reads execution-scoped configuration from runtime context. Not a user or agent effect. |
+| `stream.subscribe` | Runtime-direct, non-canonicalizable | Creates a runtime-owned live subscription capability. Payload includes a live Effection `Operation`. |
+| `stream.next` | Runtime-direct | Consumes a runtime-owned subscription capability via an opaque handle token. |
+| `sleep` | Chain-dispatched | Handled by the Effects chain's core handler. Interceptable by `Effects.around`. |
+| Agent effects | Chain-dispatched | Enter the Effects chain. Max middleware can intercept and transform. |
+
+**Extensibility.** Future effects that depend on runtime-local
+state or capability reconstruction MAY be classified as
+runtime-direct by companion specifications. The default
+classification for any new effect is chain-dispatched unless
+explicitly stated otherwise.
 
 > The runtime MAY expose `invokeInline(fn, args, opts?)` from `Effects.around({ dispatch })` middleware. Effects journal under a distinct inline lane coroutineId (journal identity); capability ownership and counter allocation use the original caller's coroutineId (owner identity). Owner coroutineId is runtime context, not durable data. The lane does not produce a `CloseEvent`. Child-bearing primitives retain own semantics. Participates in §9.5 replay. Nested inline permitted. Semantics: `tisyn-inline-invocation-specification.md`.
 
@@ -859,6 +904,34 @@ primitive. Guard implementations are host-provided.
 
 ### 9.5 Replay Substitution at the Dispatch Boundary
 
+> **Status note.** Payload-sensitive cursor matching is now
+> specified by this section. `YieldEvent.description` carries
+> `input` and `sha` for all payload-sensitive effects;
+> `stream.subscribe` is the only carve-out. See §9.5.3, §9.5.5,
+> §9.5.8, §9.5.9, and `tisyn-kernel-specification.md` §9.5,
+> §10.2–§10.4.
+
+**Definitions used in this section:**
+
+- **Chain-dispatched effect.** An effect that enters the
+  Effects middleware chain. Max middleware can intercept and
+  transform. The replay boundary performs boundary-identity
+  comparison and substitution.
+- **Runtime-direct effect.** An effect handled inline by the
+  runtime before entering the Effects chain (see §3.1.1). Not
+  interceptable by `Effects.around`. The source descriptor is
+  the durable identity (no middleware transformation is
+  possible).
+- **Source descriptor.** `{ type, name }` from
+  `parseEffectId(descriptor.id)`, paired with `descriptor.data`
+  — the kernel-yielded identity at the moment of suspension.
+- **Boundary descriptor.** `{ type, name }` and data taken
+  from the post-max `[effectId, data]` reaching the replay
+  substitution boundary — the request as max middleware
+  forwards it.
+- **Payload-sensitive effect.** Any effect whose payload is
+  canonicalizable. All effects except `stream.subscribe`.
+
 #### 9.5.1 The Structural Replay Boundary
 
 The runtime MUST install a replay-substitution boundary between
@@ -907,17 +980,34 @@ The result is journaled.
 #### 9.5.3 Replay Substitution Semantics
 
 The runtime's replay boundary MUST implement the following
-behavior for every standard-effect dispatch:
+behavior for every chain-dispatched standard-effect dispatch.
+Replay-identity comparison is **authoritative at the post-max
+boundary** — comparison uses the boundary descriptor, not the
+kernel-yielded source descriptor.
 
-1. **Check the replay cursor.** Using the dispatch's effect
-   description (type + name), check whether a stored
+1. **Construct the boundary description.** From the post-max
+   `[effectId, data]` reaching the replay boundary, derive
+   `{ type, name }` via `parseEffectId(effectId)` and form the
+   boundary description `{ type, name, input: data, sha:
+   payloadSha(data) }`. (`payloadSha` is defined in
+   `tisyn-kernel-specification.md` §9.5.)
+
+2. **Check the replay cursor.** Look up whether a stored
    `YieldEvent` entry exists in the journal for this dispatch
    point.
 
-2. **If a stored entry exists (replay path):**
-   - MUST return the stored result as the dispatch result.
+3. **If a stored entry exists (replay path):**
+   - MUST compare boundary `type` and `name` against the stored
+     entry's `description.type` and `description.name`. Mismatch
+     MUST raise `DivergenceError`.
+   - If the stored `description.sha` is absent, MUST raise
+     `DivergenceError` (nonconforming journal). `sha` is a
+     required field on stored entries for payload-sensitive
+     effects; chain-dispatched effects are payload-sensitive.
+   - MUST compare the boundary `sha` against the stored
+     `description.sha`. Mismatch MUST raise `DivergenceError`.
    - MUST consume the replay cursor entry.
-   - MUST push a replayed `YieldEvent` to the in-memory
+   - MUST push the stored `YieldEvent` to the in-memory
      execution journal returned by `execute`.
    - MUST NOT append a duplicate replayed `YieldEvent` to the
      backing durable stream. The durable stream is an
@@ -927,11 +1017,27 @@ behavior for every standard-effect dispatch:
    - MUST NOT delegate into the min region or core handler.
      Min-priority middleware and the core handler MUST NOT
      execute.
+   - MUST return the stored result as the dispatch result.
 
-3. **If no stored entry exists (live path):**
+4. **If no stored entry exists (live path):**
    - MUST delegate into the min region and core handler.
    - The result of delegation is the dispatch result.
-   - The runtime journals the result as a live `YieldEvent`.
+   - The runtime MUST journal the result as a live
+     `YieldEvent` whose `description` is the **boundary
+     description** (not the kernel-yielded source description).
+
+> **Rationale (non-normative).** Replay-identity comparison
+> happens at the post-max boundary because max-priority
+> middleware MAY transform `effectId` and/or `data` before
+> dispatching to the next layer (e.g., a max middleware that
+> rewrites `a.fetch({id: "A"})` into `http.get({url:
+> "/orders/A"})`). The durable identity of a chain-dispatched
+> effect MUST be the request that reaches the replay
+> substitution boundary; otherwise a transform whose output
+> changes between runs would replay the stale stored result
+> against a now-divergent live request. Comparing the
+> kernel-yielded source descriptor would mask exactly this
+> failure mode.
 
 #### 9.5.4 Max-Priority Middleware Re-Executes on Replay
 
@@ -957,20 +1063,43 @@ This is required because:
 
 If a max-priority frame returns a value without calling `next`
 (short-circuit), the chain terminates in the max region. The
-replay boundary is not reached.
+replay boundary is not reached, so no boundary descriptor is
+constructed.
 
-On replay, the runtime MUST check: if a stored cursor entry
-exists for this dispatch, the stored result MUST be used as
-the authoritative dispatch result. The short-circuiting
-frame's return value is discarded.
+Short-circuit identity uses the **source descriptor** — the
+kernel-yielded `{ type, name }` from
+`parseEffectId(descriptor.id)` and `descriptor.data` — because
+the request never reaches the post-max boundary.
+
+On replay, the runtime MUST check whether a stored cursor
+entry exists for this dispatch. If one does:
+
+1. MUST compare source `type` and `name` against the stored
+   entry's `description.type` and `description.name`. Mismatch
+   MUST raise `DivergenceError`.
+2. If the stored `description.sha` is absent, MUST raise
+   `DivergenceError` (nonconforming journal).
+3. MUST compare `payloadSha(descriptor.data)` against the
+   stored `description.sha`. Mismatch MUST raise
+   `DivergenceError`.
+4. MUST consume the cursor, push the stored `YieldEvent` to
+   the in-memory journal (subject to the same
+   no-duplicate-durable-append rule as §9.5.3), and return the
+   stored result. The short-circuiting frame's return value is
+   discarded.
 
 On live dispatch, the short-circuiting frame's return value is
-the dispatch result, journaled normally.
+the dispatch result. The runtime MUST journal a live
+`YieldEvent` whose `description` is the source description
+`{ type, name, input: descriptor.data, sha:
+payloadSha(descriptor.data) }`.
 
 This is the same cursor-authoritative rule as §9.5.3, applied
 to the other chain termination mode. One semantic rule — **the
 stored cursor is authoritative for dispatch results on
-replay** — two application sites.
+replay** — two application sites with two different identity
+conventions: boundary identity for delegated dispatch, source
+identity for short-circuit dispatch.
 
 #### 9.5.6 No Explicit Delegation Helper
 
@@ -990,12 +1119,12 @@ middleware-body authors:
 - No runtime-provided context is required to be read or
   invoked by middleware bodies.
 
-Helper-based terminal-delegation patterns — such as the
-`runAsTerminal` / `RuntimeTerminal` / `RuntimeTerminalBoundary`
-shape explored during earlier design work — are explicitly a
-non-goal. They MUST NOT be introduced as normative surface of
-`@tisyn/effects`, `@tisyn/effects/internal`, or
-`@tisyn/runtime`.
+Helper-based terminal-delegation patterns — any wrapper that
+asks middleware authors to restate effect parameters at a
+runtime-provided boundary in order to be replay-safe — are
+explicitly a non-goal. They MUST NOT be introduced as
+normative surface of `@tisyn/effects`,
+`@tisyn/effects/internal`, or `@tisyn/runtime`.
 
 #### 9.5.7 Resource-Body Dispatch
 
@@ -1007,16 +1136,101 @@ applies identically to resource-body dispatches.
 Implementations MUST NOT route resource-body dispatches
 through a separate path that bypasses the replay boundary.
 
+#### 9.5.8 Runtime-Direct Replay Comparison
+
+Runtime-direct effects (§3.1.1) are handled by the runtime's
+standard-effect dispatch path before reaching the user-facing
+Effects chain. Replay-identity comparison for runtime-direct
+effects uses the **source descriptor** because no max
+middleware can transform the request — there is no boundary
+distinct from the source.
+
+**Payload-sensitive runtime-direct effects (`__config`,
+`stream.next`).** Before dispatching, the runtime MUST:
+
+1. Compare source `type` and `name` against the stored
+   `description.type` and `description.name`. Mismatch MUST
+   raise `DivergenceError`.
+2. If the stored `description.sha` is absent, MUST raise
+   `DivergenceError` (nonconforming journal).
+3. Compare `payloadSha(descriptor.data)` against stored
+   `description.sha`. Mismatch MUST raise `DivergenceError`.
+
+On the live path, the runtime MUST journal a `YieldEvent` whose
+`description` is `{ type, name, input: descriptor.data, sha:
+payloadSha(descriptor.data) }`.
+
+**`stream.next` input rule.** `stream.next` is payload-sensitive
+because its runtime input is the serializable subscription
+handle-token payload, not the live Effection subscription, the
+stream source, or the source `Operation`. A conforming
+`stream.next` `YieldEvent.description.input` MUST contain only
+the canonicalizable handle-token payload passed to
+`stream.next`. It MUST NOT contain the live subscription
+object, the stream source, or any Effection `Operation`.
+
+**Non-canonicalizable runtime-direct (`stream.subscribe`).**
+`stream.subscribe`'s payload includes a live Effection
+`Operation` whose canonical encoding would be a degenerate
+constant. The runtime MUST omit `input` and `sha` from
+`stream.subscribe` `YieldEvent.description` entries; the
+description shape is `{ type: "stream", name: "subscribe" }`
+exactly. Replay comparison for `stream.subscribe` MUST compare
+only `type` and `name`. A missing `sha` on a stored
+`stream.subscribe` entry is expected and correct, not a
+nonconforming-journal error.
+
+#### 9.5.9 Transition Detection
+
+When a workflow's dispatch shape changes between runs in a way
+that crosses dispatch paths, replay MUST raise `DivergenceError`:
+
+- **Delegation → short-circuit.** A stored entry recorded
+  under boundary identity (chain-dispatched delegated) replays
+  against a current execution where max short-circuits.
+  Comparison is between stored boundary `{ type, name }` and
+  current source `{ type, name }`. Mismatch MUST raise
+  `DivergenceError`.
+- **Short-circuit → delegation.** A stored entry recorded
+  under source identity (short-circuit) replays against a
+  current execution where max delegates. Comparison is between
+  stored source `{ type, name }` and current boundary
+  `{ type, name }`. Mismatch MUST raise `DivergenceError`.
+
+These cases are detected by the same `type`/`name` mismatch
+checks specified in §9.5.3 and §9.5.5; they are called out
+separately because the failure mode (transformed identity
+moving between two stable shapes) is a frequent regression in
+practice.
+
+#### 9.5.10 Pre-1.0 Breaking Change
+
+This specification is a pre-1.0 breaking change to durable
+identity:
+
+- **Old behavior.** `YieldEvent.description` could omit
+  payload identity; replay matched on `type + name` only;
+  legacy entries without `sha` replayed successfully.
+- **New behavior.** `input` and `sha` are REQUIRED on
+  `YieldEvent.description` for all payload-sensitive effects.
+  A stored entry missing `sha` for a payload-sensitive effect
+  MUST raise `DivergenceError` (nonconforming journal).
+- **Only exception.** `stream.subscribe`, which MUST omit
+  `input` and `sha` because its payload contains a live
+  Effection `Operation` with no stable durable identity.
+
+No legacy-compatibility path replays missing-`sha` payload-
+sensitive entries. Implementations MUST NOT silently accept
+stored entries that violate the new shape.
+
 ---
 
 > **Note (future extensions and interactions).** This
 > specification defines replay substitution against the current
-> `YieldEvent | CloseEvent` durable algebra and
-> effect-description (type + name) cursor matching.
-> Payload-sensitive cursor matching is expected to compose with
-> this model without changing §9.5.1–§9.5.7, if and when a
-> payload-fingerprint specification is adopted. Inline
-> invocation is specified by
+> `YieldEvent | CloseEvent` durable algebra. Payload-sensitive
+> cursor matching is specified in §9.5.3, §9.5.5, §9.5.8, and
+> §9.5.9; §9.5.1, §9.5.2, §9.5.4, §9.5.6, and §9.5.7 are
+> unchanged. Inline invocation is specified by
 > `tisyn-inline-invocation-specification.md`; effects dispatched
 > during inline-body evaluation participate in §9.5 replay per
 > that specification's §9 (Replay Model).
