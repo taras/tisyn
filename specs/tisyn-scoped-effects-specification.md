@@ -220,7 +220,7 @@ The following classification applies:
 
 | Effect | Classification | Rationale |
 |---|---|---|
-| `__config` | Runtime-direct | Reads execution-scoped configuration from runtime context. Not a user or agent effect. |
+| `__config` | Runtime-direct, non-canonicalizable | Reads execution-scoped configuration from runtime context. Not a user or agent effect. The compiled IR for `Config.useConfig(Token)` carries no payload (the token is erased to `null`); the resolved value is read from runtime context at dispatch time. There is no canonicalizable input distinct from runtime context. |
 | `stream.subscribe` | Runtime-direct, non-canonicalizable | Creates a runtime-owned live subscription capability. Payload includes a live Effection `Operation`. |
 | `stream.next` | Runtime-direct | Consumes a runtime-owned subscription capability via an opaque handle token. |
 | `sleep` | Chain-dispatched | Handled by the Effects chain's core handler. Interceptable by `Effects.around`. |
@@ -927,7 +927,8 @@ primitive. Guard implementations are host-provided.
 > **Status note.** Payload-sensitive cursor matching is now
 > specified by this section. `YieldEvent.description` carries
 > `input` and `sha` for all payload-sensitive effects;
-> `stream.subscribe` is the only carve-out. See §9.5.3, §9.5.5,
+> `stream.subscribe` and `__config` are the non-canonicalizable
+> carve-outs (see §3.1.1 and §9.5.8). See §9.5.3, §9.5.5,
 > §9.5.8, §9.5.9, and `tisyn-kernel-specification.md` §9.5,
 > §10.2–§10.4.
 
@@ -950,7 +951,9 @@ primitive. Guard implementations are host-provided.
   substitution boundary — the request as max middleware
   forwards it.
 - **Payload-sensitive effect.** Any effect whose payload is
-  canonicalizable. All effects except `stream.subscribe`.
+  canonicalizable. All effects except `stream.subscribe` and
+  `__config` (the two non-canonicalizable runtime-direct effects;
+  see §3.1.1 and §9.5.8).
 
 #### 9.5.1 The Structural Replay Boundary
 
@@ -1165,8 +1168,8 @@ effects uses the **source descriptor** because no max
 middleware can transform the request — there is no boundary
 distinct from the source.
 
-**Payload-sensitive runtime-direct effects (`__config`,
-`stream.next`).** Before dispatching, the runtime MUST:
+**Payload-sensitive runtime-direct effects (`stream.next`).**
+Before dispatching, the runtime MUST:
 
 1. Compare source `type` and `name` against the stored
    `description.type` and `description.name`. Mismatch MUST
@@ -1189,15 +1192,29 @@ the canonicalizable handle-token payload passed to
 `stream.next`. It MUST NOT contain the live subscription
 object, the stream source, or any Effection `Operation`.
 
-**Non-canonicalizable runtime-direct (`stream.subscribe`).**
-`stream.subscribe`'s payload includes a live Effection
-`Operation` whose canonical encoding would be a degenerate
-constant. The runtime MUST omit `input` and `sha` from
-`stream.subscribe` `YieldEvent.description` entries; the
-description shape is `{ type: "stream", name: "subscribe" }`
-exactly. Replay comparison for `stream.subscribe` MUST compare
-only `type` and `name`. A missing `sha` on a stored
-`stream.subscribe` entry is expected and correct, not a
+**Non-canonicalizable runtime-direct effects (`stream.subscribe`,
+`__config`).** Both effects lack a canonicalizable input
+distinct from runtime-owned state:
+
+- `stream.subscribe`'s payload includes a live Effection
+  `Operation` whose canonical encoding would be a degenerate
+  constant.
+- `__config`'s compiled IR carries no payload — the lowering of
+  `Config.useConfig(Token)` erases the token and emits a
+  null-payload effect; the resolved value is read from runtime
+  context at dispatch time. There is no canonicalizable input
+  distinct from that context, and hashing the erased payload
+  would yield a degenerate constant.
+
+For both effects, the runtime MUST omit `input` and `sha` from
+the `YieldEvent.description`. The description shape is
+`{ type: "stream", name: "subscribe" }` for `stream.subscribe`
+and `{ type: "__config", name: "__config" }` for `__config`
+(per `parseEffectId` per `tisyn-kernel-specification.md` §4.6 —
+undotted IDs map to `{ type: id, name: id }`). Replay
+comparison for these effects MUST compare only `type` and
+`name`. A missing `sha` on a stored `stream.subscribe` or
+`__config` entry is expected and correct, not a
 nonconforming-journal error.
 
 #### 9.5.9 Transition Detection
@@ -1235,9 +1252,14 @@ identity:
   `YieldEvent.description` for all payload-sensitive effects.
   A stored entry missing `sha` for a payload-sensitive effect
   MUST raise `DivergenceError` (nonconforming journal).
-- **Only exception.** `stream.subscribe`, which MUST omit
-  `input` and `sha` because its payload contains a live
-  Effection `Operation` with no stable durable identity.
+- **Exceptions.** `stream.subscribe` and `__config` MUST omit
+  `input` and `sha`. Both are non-canonicalizable runtime-direct
+  effects: `stream.subscribe`'s payload contains a live Effection
+  `Operation` with no stable durable identity, and `__config`'s
+  compiled IR carries no payload (the token is erased at
+  lowering; the resolved value is read from runtime context at
+  dispatch time, so there is no canonicalizable input distinct
+  from that context).
 
 No legacy-compatibility path replays missing-`sha` payload-
 sensitive entries. Implementations MUST NOT silently accept

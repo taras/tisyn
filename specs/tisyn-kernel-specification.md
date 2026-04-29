@@ -883,17 +883,18 @@ Two event types. Nothing else.
 ```
 
 `description` carries `input` and `sha` for all payload-sensitive
-effects (see "Effect Description Shape" below). `stream.subscribe`
-is the only effect whose description omits both fields — its
-payload contains a live Effection `Operation` with no stable
-durable identity. The durable event algebra is unchanged:
-`DurableEvent = YieldEvent | CloseEvent`.
+effects (see "Effect Description Shape" below). Two effects —
+`stream.subscribe` and `__config` — omit both fields because
+neither has a canonicalizable input distinct from runtime-owned
+state. See §3.1.1 of `tisyn-scoped-effects-specification.md` for
+the classification rationale. The durable event algebra is
+unchanged: `DurableEvent = YieldEvent | CloseEvent`.
 
 **Effect Description Shape.** `YieldEvent.description` has two
 valid shapes.
 
 *Payload-sensitive effects* — all effects except
-`stream.subscribe`:
+`stream.subscribe` and `__config`:
 
 ```
 {
@@ -908,16 +909,27 @@ Both `input` and `sha` are REQUIRED. A `YieldEvent` for a
 payload-sensitive effect that lacks either field is
 **nonconforming**.
 
-*`stream.subscribe`* — non-canonicalizable runtime-direct:
+*Non-canonicalizable runtime-direct effects (`stream.subscribe`,
+`__config`)*:
 
 ```
-{ type: "stream", name: "subscribe" }
+{ type: "stream",   name: "subscribe" }
+{ type: "__config", name: "__config"  }
 ```
 
-`input` and `sha` MUST NOT be present.
+The `type`/`name` fields for each effect are derived from
+`parseEffectId(effectId)` (§4.6). The `__config` shape above
+follows the undotted-ID rule: `parseEffectId("__config")`
+returns `{ type: "__config", name: "__config" }` because the ID
+contains no dot.
+
+`input` and `sha` MUST NOT be present on either. Replay
+comparison for these effects compares only `type` and `name`;
+missing `sha` on a stored entry is expected and correct.
 
 A TypeScript representation marks both fields optional at the
-type level so the same type fits `stream.subscribe`:
+type level so the same type fits both non-canonicalizable
+shapes:
 
 ```typescript
 interface EffectDescription {
@@ -929,8 +941,9 @@ interface EffectDescription {
 ```
 
 The TS optionality is purely so the type also fits
-`stream.subscribe`. The normative requirement remains: `input`
-and `sha` MUST be present for every payload-sensitive effect.
+`stream.subscribe` and `__config`. The normative requirement
+remains: `input` and `sha` MUST be present for every
+payload-sensitive effect.
 
 **`payloadSha`.** Payload identity is computed by:
 
@@ -1079,7 +1092,8 @@ compare(stored, current):
   if stored.type ≠ current.type: → DIVERGENCE (type/name mismatch)
   if stored.name ≠ current.name: → DIVERGENCE (type/name mismatch)
   if effect is payload-sensitive
-        (i.e., stored.type/name is not stream.subscribe):
+        (i.e., stored.type/name is not in the
+         non-canonicalizable set { stream.subscribe, __config }):
     if stored.sha is absent:
       → DIVERGENCE (nonconforming journal — missing required sha)
     if stored.sha ≠ current.sha:
@@ -1122,15 +1136,17 @@ specifies only how two descriptions compare.
 ### 10.3 Description Matching
 
 Three fields participate in the matching algorithm for
-payload-sensitive effects: `type`, `name`, and `sha`. For
-`stream.subscribe` (non-canonicalizable; see §9.1 "Effect
-Description Shape"), only `type` and `name` participate;
-`sha` is neither expected nor compared.
+payload-sensitive effects: `type`, `name`, and `sha`. For the
+non-canonicalizable runtime-direct effects (`stream.subscribe`,
+`__config`; see §9.1 "Effect Description Shape"), only `type`
+and `name` participate; `sha` is neither expected nor compared.
 
 `sha` is part of durable identity for payload-sensitive
 effects. A stored entry that omits `sha` for a payload-
 sensitive effect is nonconforming and MUST raise
-`DivergenceError` (§10.4); it MUST NOT replay successfully.
+`DivergenceError` (§10.4); it MUST NOT replay successfully. A
+stored entry that omits `sha` for a non-canonicalizable
+runtime-direct effect is expected and MUST replay successfully.
 
 ### 10.4 Divergence
 

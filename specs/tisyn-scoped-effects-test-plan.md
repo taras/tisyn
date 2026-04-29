@@ -549,13 +549,13 @@ and does NOT subsume this matrix.
 | RD-PD-DC-005 | Core | Workflow-visible + Journal-visible | `stream.subscribe` is NOT intercepted and writes no `input`/`sha` | Same setup as DC-004. Inspect the user-installed middleware log AND the journal for the subscribe event. | Subscribe YieldEvent: no `input`, no `sha`. `"stream.subscribe"` does not appear in the user-installed middleware log. |
 | RD-PD-DC-006 | Core | Journal-visible | Chain-dispatched and runtime-direct built-ins have different replay identity rules | Two effects: `sleep(100)` (chain-dispatched) and `stream.next(handle)` (runtime-direct). Max middleware transforms `sleep` data. | `sleep` YieldEvent has boundary identity (transformed data). `stream.next` YieldEvent has source identity (kernel-yielded data). |
 
-#### 13.12.4 Runtime-Direct Payload-Sensitive Effects
+#### 13.12.4 Runtime-Direct Effects (write paths)
 
 | ID | Tier | Obs. class | Description | Setup | Expected |
 |---|---|---|---|---|---|
 | RD-PD-015 | Core | Journal-visible | `stream.subscribe` writes neither `input` nor `sha` | Loop IR, live dispatch. | Subscribe YieldEvent: neither field present. |
 | RD-PD-016 | Core | Journal-visible | `stream.next` writes source `input` and `sha` | Live dispatch. | `sha` present, computed from handle data. |
-| RD-PD-017 | Core | Journal-visible | `__config` writes source `input` and `sha` | Config read. | Both present. |
+| RD-PD-017 | Core | Journal-visible | `__config` writes neither `input` nor `sha` (non-canonicalizable runtime-direct) | Config read. | `__config` YieldEvent: neither `input` nor `sha` present. (Per §3.1.1 / §9.5.8: `__config` is non-canonicalizable; the compiled IR for `Config.useConfig(Token)` carries no payload.) |
 | RD-PD-018 | Core | Journal-visible | `sleep` writes boundary `input` and `sha` (chain-dispatched) | `sleep(100)` with no max transform. | `type="sleep"`, `name="sleep"`, `input=[100]`, `sha=payloadSha([100])` |
 | RD-PD-019 | Core | Journal-visible | `sleep` boundary identity when max transforms | Max transforms `sleep` data `[100]` → `[0]`, calls `next`. | `input=[0]`, `sha=payloadSha([0])` |
 
@@ -602,8 +602,18 @@ and does NOT subsume this matrix.
 | RD-PD-056 | Core | Workflow-visible | Stored `stream.next` missing `sha` → DivergenceError | Stored `stream.next` with no `sha`. | `DivergenceError`. |
 | RD-PD-057 | Core | Journal-visible | Stored `stream.subscribe` without `sha` → NOT an error | Stored `stream.subscribe` no `sha`. | Replay succeeds. (Expected: non-canonicalizable.) |
 | RD-PD-058 | Core | Workflow-visible | Stored `sleep` missing `sha` → DivergenceError | Stored `sleep` with no `sha`. | `DivergenceError`. |
+| RD-PD-059 | Core | Journal-visible | Stored `__config` without `sha` → NOT an error | Stored `__config` no `sha`. | Replay succeeds. (Expected: non-canonicalizable, mirrors RD-PD-057 for `stream.subscribe`.) |
 
-#### 13.12.10 `stream.subscribe` / `stream.next`
+Missing-SHA divergence applies only to genuinely payload-sensitive
+effects (`stream.next`, `sleep`, agent effects). The two
+non-canonicalizable runtime-direct effects (`stream.subscribe`,
+`__config`) replay successfully without `sha` per §9.5.8.
+
+#### 13.12.10 Non-canonicalizable runtime-direct (`stream.subscribe`, `__config`) and `stream.next`
+
+`stream.subscribe` and `__config` are the two non-canonicalizable
+runtime-direct effects (no `input`, no `sha`); `stream.next` is the
+only payload-sensitive runtime-direct effect.
 
 | ID | Tier | Obs. class | Description | Setup | Expected |
 |---|---|---|---|---|---|
@@ -613,6 +623,8 @@ and does NOT subsume this matrix.
 | RD-PD-073 | Core | Journal-visible | `stream.next` `description.input` contains only the serializable handle-token payload | Same as RD-PD-072. Inspect `description.input`. | `input` is the handle-token payload (e.g., `[{ __tisyn_subscription: "sub:root:0" }]`). It does NOT contain a live subscription object, stream source, or Effection `Operation`. |
 | RD-PD-074 | Core | Journal-visible | `stream.next` `description.input` does not contain non-serializable values | Same as RD-PD-072. Verify `canonical(description.input)` produces a meaningful (non-degenerate) canonical form. | `canonical(input)` is NOT `[{}]` or `{}`. It contains the handle token string. |
 | RD-PD-075 | Core | Workflow-visible | `stream.next` replay with changed handle token raises `DivergenceError` | Stored `stream.next` with SHA from handle token `sub:root:0`. Replay produces handle token `sub:root:1`. | `DivergenceError` with payload mismatch. |
+| RD-PD-076 | Core | Journal-visible | `__config` no `input`/`sha` | Live dispatch with `Config.useConfig(Token)` IR. | `__config` YieldEvent: neither `input` nor `sha` present. (Mirrors RD-PD-070 for `stream.subscribe`.) |
+| RD-PD-077 | Core | Journal-visible | `__config` replays with type/name only | Stored `__config` entry. | Replay succeeds; no `sha` comparison. (Mirrors RD-PD-071 for `stream.subscribe`.) |
 
 #### 13.12.11 Resource-Body Parity
 
@@ -721,10 +733,10 @@ Feature is implementation-ready when all 12 pass:
 | §9.5.3 Boundary identity (delegated) | RD-PD-001..006, RD-PD-020..024, RD-PD-030..035, RD-PD-090..092 |
 | §9.5.5 Source identity (short-circuit) | RD-PD-010..012, RD-PD-040..041 |
 | §9.5.7 Resource-body payload-sensitive | RD-PD-080..082 |
-| §9.5.8 Runtime-direct payload-sensitive | RD-PD-015..019, RD-PD-070..075 |
+| §9.5.8 Runtime-direct replay comparison (payload-sensitive + non-canonicalizable) | RD-PD-015..019, RD-PD-070..077 |
 | §9.5.9 Transition detection | RD-PD-050..051 |
 | Kernel §9.1 / §9.5 EffectDescription shape | RD-PD-095, RD-PD-096..097 |
-| Kernel §10.2 / §10.3 / §10.4 matching + divergence | RD-PD-055..058, RD-PD-100..105 |
+| Kernel §10.2 / §10.3 / §10.4 matching + divergence | RD-PD-055..059, RD-PD-100..105 |
 
 **Tier counts (RD-* baseline)**
 
@@ -755,14 +767,14 @@ Feature is implementation-ready when all 12 pass:
 | Boundary divergence | 6 | 0 | 0 | 6 |
 | Short-circuit divergence | 2 | 0 | 0 | 2 |
 | Transition detection | 2 | 0 | 0 | 2 |
-| Nonconforming journal | 4 | 0 | 0 | 4 |
-| stream.subscribe / next | 6 | 0 | 0 | 6 |
+| Nonconforming journal | 5 | 0 | 0 | 5 |
+| Non-canonicalizable runtime-direct + stream.next | 8 | 0 | 0 | 8 |
 | Resource-body parity | 3 | 0 | 0 | 3 |
 | Boundary placement | 3 | 0 | 0 | 3 |
 | Input determinism | 1 | 0 | 0 | 1 |
 | Fixture conformance | 2 | 0 | 0 | 2 |
 | Regression protection | 6 | 0 | 0 | 6 |
-| **Total** | **60** | **0** | **0** | **60** |
+| **Total** | **63** | **0** | **0** | **63** |
 
 ---
 
@@ -903,11 +915,11 @@ correctly implemented when:
 | §9.5.6 No delegation helper | Replay-aware dispatch | RD-RG-004, RD-RG-005 | Covered |
 | §9.5.7 Resource-body interaction | Replay-aware dispatch | RD-RS-001–003 | Covered |
 | §9.5.7 Resource-body payload-sensitive | Payload-sensitive | RD-PD-080..082 | Covered |
-| §9.5.8 Runtime-direct replay comparison | Payload-sensitive | RD-PD-015..019, RD-PD-070..075 | Covered |
+| §9.5.8 Runtime-direct replay comparison | Payload-sensitive | RD-PD-015..019, RD-PD-070..077 | Covered |
 | §9.5.9 Transition detection | Payload-sensitive | RD-PD-050..051 | Covered |
 | §3.1.1 Runtime-direct classification | Payload-sensitive | RD-PD-DC-001..006 | Covered |
 | Kernel §9.1 / §9.5 EffectDescription shape | Payload-sensitive | RD-PD-095..097 | Covered |
-| Kernel §10.2 / §10.3 / §10.4 matching + divergence | Payload-sensitive | RD-PD-055..058, RD-PD-100..105 | Covered |
+| Kernel §10.2 / §10.3 / §10.4 matching + divergence | Payload-sensitive | RD-PD-055..059, RD-PD-100..105 | Covered |
 
 ### 17.2 Test Count Summary
 
@@ -946,13 +958,13 @@ correctly implemented when:
 | RD-PD boundary divergence | 6 | 0 | 6 |
 | RD-PD short-circuit divergence | 2 | 0 | 2 |
 | RD-PD transition detection | 2 | 0 | 2 |
-| RD-PD nonconforming journal | 4 | 0 | 4 |
-| RD-PD stream.subscribe / next | 6 | 0 | 6 |
+| RD-PD nonconforming journal | 5 | 0 | 5 |
+| RD-PD non-canonicalizable runtime-direct + stream.next | 8 | 0 | 8 |
 | RD-PD resource-body parity | 3 | 0 | 3 |
 | RD-PD boundary placement | 3 | 0 | 3 |
 | RD-PD input determinism | 1 | 0 | 1 |
 | RD-PD fixture conformance | 2 | 0 | 2 |
 | RD-PD regression protection | 6 | 0 | 6 |
-| **Total** | **153** | **14** | **167** |
+| **Total** | **156** | **14** | **170** |
 
 > **Note.** §13.10 also includes one Diagnostic test (`RD-RG-005`) which is non-normative and not counted in the Core/Extended totals above. See §13.14 for the full Core/Extended/Diagnostic breakdown.
