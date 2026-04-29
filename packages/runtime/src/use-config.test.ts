@@ -94,4 +94,52 @@ describe("__config effect", () => {
     // __config returns config, not env
     expect(result).toEqual({ status: "ok", value: config });
   });
+
+  // RD-PD-076: __config is non-canonicalizable (per spec §3.1.1 / §9.5.8).
+  // YieldEvent.description omits both `input` and `sha`. Mirrors RD-PD-070
+  // for stream.subscribe.
+  it("RD-PD-076: __config writes neither input nor sha", function* () {
+    const config = { debug: true } as Val;
+    const stream = new InMemoryStream();
+
+    const { journal } = yield* execute({
+      ir: useConfigIr as never,
+      config,
+      stream,
+    });
+
+    const yieldEvents = journal.filter((e): e is YieldEvent => e.type === "yield");
+    expect(yieldEvents).toHaveLength(1);
+    expect(yieldEvents[0]!.description).toEqual({ type: "__config", name: "__config" });
+    expect(yieldEvents[0]!.description.input).toBeUndefined();
+    expect(yieldEvents[0]!.description.sha).toBeUndefined();
+  });
+
+  // RD-PD-077: stored __config replays with type/name only — no sha
+  // comparison, missing sha is expected. Mirrors RD-PD-071/RD-PD-057 for
+  // stream.subscribe. (Direct replay test: write a journal whose stored
+  // __config entry omits sha, then re-execute against it.)
+  it("RD-PD-077: __config replays with type/name only (no sha required)", function* () {
+    const config = { debug: true } as Val;
+
+    // Stored __config entry without sha (the new on-disk format).
+    const stored = [
+      {
+        type: "yield" as const,
+        coroutineId: "root",
+        description: { type: "__config", name: "__config" },
+        result: { status: "ok" as const, value: config },
+      },
+    ];
+    const stream = new InMemoryStream(stored);
+
+    const { result } = yield* execute({
+      ir: useConfigIr as never,
+      config,
+      stream,
+    });
+
+    // Replay succeeds: missing sha is expected for non-canonicalizable.
+    expect(result).toEqual({ status: "ok", value: config });
+  });
 });

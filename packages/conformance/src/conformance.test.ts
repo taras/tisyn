@@ -82,3 +82,49 @@ describe("Negative tests", () => {
     expect(result.pass, result.message).toBe(true);
   });
 });
+
+describe("Stale-fixture coverage (RD-PD-097)", () => {
+  it("RD-PD-097: a fixture whose expected_journal omits sha for a payload-sensitive effect MUST fail to match a runtime that journals sha", async () => {
+    // Construct a stale fixture where the expected_journal description
+    // for x.step1 omits the sha field. The runtime now journals
+    // { type, name, input, sha }, so the harness's strict canonical
+    // comparison rejects this fixture as nonconforming.
+    const staleFixture = {
+      id: "RD-PD-097",
+      suite_version: "2.0.0",
+      tier: "core" as const,
+      level: 3,
+      category: "kernel.replay.stale-fixture",
+      spec_ref: "scoped-effects.13.12.14",
+      type: "effect" as const,
+      description: "Stale expected_journal entry without sha must fail to match",
+      ir: { tisyn: "eval" as const, id: "x.step1", data: [] },
+      env: {},
+      effects: [
+        {
+          descriptor: { id: "x.step1", data: [] },
+          result: { status: "ok" as const, value: 10 },
+        },
+      ],
+      expected_result: { status: "ok" as const, value: 10 },
+      expected_journal: [
+        {
+          coroutineId: "root",
+          // Intentionally stale: missing input/sha.
+          description: { type: "x", name: "step1" },
+          result: { status: "ok" as const, value: 10 },
+          type: "yield" as const,
+        },
+        {
+          coroutineId: "root",
+          result: { status: "ok" as const, value: 10 },
+          type: "close" as const,
+        },
+      ],
+    };
+    const result = await runFixture(staleFixture);
+    expect(result.pass).toBe(false);
+    // The harness should report a description-shape mismatch.
+    expect(result.message).toMatch(/journal|description/i);
+  });
+});

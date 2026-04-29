@@ -5,16 +5,18 @@ import { Effects } from "@tisyn/effects";
 import type { Val } from "@tisyn/ir";
 import { InMemoryStream } from "@tisyn/durable-streams";
 import type { YieldEvent, DurableEvent } from "@tisyn/kernel";
+import { payloadSha } from "@tisyn/kernel";
 
 function sleepIR(ms: number) {
   return { tisyn: "eval", id: "sleep", data: [ms] };
 }
 
-function yieldEvent(value: unknown, coroutineId = "root"): YieldEvent {
+function yieldEvent(value: unknown, coroutineId = "root", ms = 1): YieldEvent {
+  const input = [ms];
   return {
     type: "yield",
     coroutineId,
-    description: { type: "sleep", name: "sleep" },
+    description: { type: "sleep", name: "sleep", input, sha: payloadSha(input) },
     result: { status: "ok", value: value as never },
   };
 }

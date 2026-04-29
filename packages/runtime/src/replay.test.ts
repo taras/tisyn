@@ -4,6 +4,8 @@ import { execute } from "./execute.js";
 import { InMemoryStream } from "@tisyn/durable-streams";
 import { Effects } from "@tisyn/effects";
 import type { YieldEvent, CloseEvent, DurableEvent } from "@tisyn/kernel";
+import { payloadSha } from "@tisyn/kernel";
+import type { Json } from "@tisyn/ir";
 
 // IR that yields a single external effect: agent.op(data)
 function singleEffectIR(agentType: string, opName: string, data: unknown = []) {
@@ -30,11 +32,17 @@ function twoEffectIR(type1: string, name1: string, type2: string, name2: string)
   };
 }
 
-function yieldEvent(type: string, name: string, value: unknown, coroutineId = "root"): YieldEvent {
+function yieldEvent(
+  type: string,
+  name: string,
+  value: unknown,
+  coroutineId = "root",
+  input: Json = [],
+): YieldEvent {
   return {
     type: "yield",
     coroutineId,
-    description: { type, name },
+    description: { type, name, input, sha: payloadSha(input) },
     result: { status: "ok", value: value as never },
   };
 }
@@ -162,30 +170,23 @@ describe("Replay", () => {
     }
   });
 
-  it("replay ignores data differences", function* () {
-    // Stored yield has data that differs from current IR args,
-    // but type/name match — should replay successfully
+  it("RD-PD-031: replay diverges on data difference (payload-sensitive)", function* () {
+    // Stored yield has data `[]` (default) but current IR sends
+    // different data. Per spec §9.5.3 / §9.5.10, payload-sensitive
+    // matching MUST detect this and raise DivergenceError; the legacy
+    // "type+name only" behavior is removed.
     const stored: DurableEvent[] = [yieldEvent("a", "op", 99)];
     const stream = new InMemoryStream(stored);
 
-    let agentCalled = false;
-    yield* Effects.around(
-      {
-        *dispatch([_effectId, _data]: [string, any]) {
-          agentCalled = true;
-          return 1;
-        },
-      },
-      { at: "min" },
-    );
-
-    // IR sends different data than what was stored — shouldn't matter
     const { result } = yield* execute({
       ir: singleEffectIR("a", "op", ["different", "data"]) as never,
       stream,
     });
 
-    expect(agentCalled).toBe(false);
-    expect(result).toEqual({ status: "ok", value: 99 });
+    expect(result.status).toBe("error");
+    if (result.status === "error") {
+      expect(result.error.name).toBe("DivergenceError");
+      expect(result.error.message).toContain("payload mismatch");
+    }
   });
 });

@@ -5,7 +5,18 @@
  * Each is a complete, machine-readable object matching the fixture schemas.
  */
 
+import { payloadSha } from "@tisyn/kernel";
+import type { Json } from "@tisyn/ir";
 import type { Fixture } from "./harness.js";
+
+// Helper: build a payload-sensitive description with input + sha.
+// All chain-dispatched effects in these fixtures are payload-sensitive
+// per scoped-effects §9.5.0; the runtime journals { type, name, input,
+// sha = payloadSha(input) }. (stream.subscribe and __config are
+// non-canonicalizable per §9.5.8 but no fixture uses them yet.)
+function ps(type: string, name: string, input: Json) {
+  return { type, name, input, sha: payloadSha(input) };
+}
 
 /** KERN-001: Integer literal evaluates to itself */
 export const KERN_001: Fixture = {
@@ -183,13 +194,13 @@ export const KERN_080: Fixture = {
   expected_journal: [
     {
       coroutineId: "root",
-      description: { name: "step1", type: "x" },
+      description: ps("x", "step1", []),
       result: { status: "ok", value: 10 },
       type: "yield",
     },
     {
       coroutineId: "root",
-      description: { name: "step2", type: "x" },
+      description: ps("x", "step2", [10]),
       result: { status: "ok", value: 20 },
       type: "yield",
     },
@@ -230,7 +241,7 @@ export const KERN_071: Fixture = {
   expected_journal: [
     {
       coroutineId: "root",
-      description: { name: "check", type: "x" },
+      description: ps("x", "check", [{ tisyn: "ref", name: "y" }] as Json),
       result: { status: "ok", value: true },
       type: "yield",
     },
@@ -298,13 +309,13 @@ export const REPLAY_010: Fixture = {
   stored_journal: [
     {
       coroutineId: "root",
-      description: { name: "step1", type: "x" },
+      description: ps("x", "step1", []),
       result: { status: "ok", value: 10 },
       type: "yield" as const,
     },
     {
       coroutineId: "root",
-      description: { name: "step2", type: "x" },
+      description: ps("x", "step2", [10]),
       result: { status: "ok", value: 20 },
       type: "yield" as const,
     },
@@ -319,19 +330,19 @@ export const REPLAY_010: Fixture = {
   expected_journal: [
     {
       coroutineId: "root",
-      description: { name: "step1", type: "x" },
+      description: ps("x", "step1", []),
       result: { status: "ok", value: 10 },
       type: "yield",
     },
     {
       coroutineId: "root",
-      description: { name: "step2", type: "x" },
+      description: ps("x", "step2", [10]),
       result: { status: "ok", value: 20 },
       type: "yield",
     },
     {
       coroutineId: "root",
-      description: { name: "step3", type: "x" },
+      description: ps("x", "step3", [20]),
       result: { status: "ok", value: 30 },
       type: "yield",
     },
@@ -358,7 +369,7 @@ export const REPLAY_020: Fixture = {
   stored_journal: [
     {
       coroutineId: "root",
-      description: { name: "op1", type: "a" },
+      description: ps("a", "op1", []),
       result: { status: "ok", value: 1 },
       type: "yield" as const,
     },
@@ -555,7 +566,7 @@ export const DET_002: Fixture = {
     {
       type: "yield",
       coroutineId: "root",
-      description: { type: "a", name: "op" },
+      description: ps("a", "op", { a: 2, m: 3, z: 1 }),
       result: { status: "ok", value: "done" },
     },
     {

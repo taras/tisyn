@@ -17,6 +17,8 @@ import { Ref, Get, Let } from "@tisyn/ir";
 import { agent, operation } from "@tisyn/agent";
 import { inprocessTransport } from "@tisyn/transport";
 import type { YieldEvent, DurableEvent } from "@tisyn/kernel";
+import { payloadSha } from "@tisyn/kernel";
+import type { Json } from "@tisyn/ir";
 
 // ── Agent + IR helpers ──
 
@@ -36,11 +38,17 @@ function effectIR(agentType: string, opName: string, data: unknown = {}) {
   return { tisyn: "eval", id: `${agentType}.${opName}`, data };
 }
 
-function yieldEvent(type: string, name: string, value: unknown, coroutineId: string): YieldEvent {
+function yieldEvent(
+  type: string,
+  name: string,
+  value: unknown,
+  coroutineId: string,
+  input: Json = [],
+): YieldEvent {
   return {
     type: "yield",
     coroutineId,
-    description: { type, name },
+    description: { type, name, input, sha: payloadSha(input) },
     result: { status: "ok", value: value as never },
   };
 }
@@ -255,9 +263,11 @@ describe("Browser scope — replay", () => {
   });
 
   it("incomplete browser scope transitions to live dispatch at frontier (v0.1.0)", function* () {
-    // Construct a partial journal: scope child has a YieldEvent but no CloseEvent
+    // Construct a partial journal: scope child has a YieldEvent but no CloseEvent.
+    // The stored input MUST match the live IR data ({ workflow: "first" }) per
+    // payload-sensitive replay (spec §9.5.3); otherwise replay diverges.
     const stored: DurableEvent[] = [
-      yieldEvent("browser", "execute", { result: "first" }, "root.0"),
+      yieldEvent("browser", "execute", { result: "first" }, "root.0", { workflow: "first" }),
       // No closeOk for root.0 — scope is incomplete
     ];
 

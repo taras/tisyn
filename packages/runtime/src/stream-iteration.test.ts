@@ -16,6 +16,16 @@ import { Effects } from "@tisyn/effects";
 import type { Val, IrInput } from "@tisyn/ir";
 import { InMemoryStream } from "@tisyn/durable-streams";
 import type { YieldEvent, DurableEvent } from "@tisyn/kernel";
+import { payloadSha } from "@tisyn/kernel";
+
+// stream.next descriptor.data (and therefore description.input) is
+// `[{ __tisyn_subscription: token }]` — the handle-token payload.
+function nextInput(token = "sub:root:0") {
+  return [{ __tisyn_subscription: token }];
+}
+function nextSha(token = "sub:root:0") {
+  return payloadSha(nextInput(token));
+}
 
 // ── IR helpers (plain objects, matching kernel/compiler output) ──
 
@@ -455,7 +465,7 @@ describe("stream journal invariants", () => {
     });
     expect(yieldEvents[1]).toMatchObject({
       type: "yield",
-      description: { type: "stream", name: "next" },
+      description: { type: "stream", name: "next", input: nextInput(), sha: nextSha() },
     });
   });
 
@@ -491,19 +501,19 @@ describe("stream replay", () => {
       {
         type: "yield",
         coroutineId: "root",
-        description: { type: "stream", name: "next" },
+        description: { type: "stream", name: "next", input: nextInput(), sha: nextSha() },
         result: { status: "ok", value: { done: false, value: "a" } },
       },
       {
         type: "yield",
         coroutineId: "root",
-        description: { type: "stream", name: "next" },
+        description: { type: "stream", name: "next", input: nextInput(), sha: nextSha() },
         result: { status: "ok", value: { done: false, value: "b" } },
       },
       {
         type: "yield",
         coroutineId: "root",
-        description: { type: "stream", name: "next" },
+        description: { type: "stream", name: "next", input: nextInput(), sha: nextSha() },
         result: { status: "ok", value: { done: true } },
       },
       {
@@ -566,7 +576,7 @@ describe("stream replay", () => {
       {
         type: "yield",
         coroutineId: "root",
-        description: { type: "stream", name: "next" },
+        description: { type: "stream", name: "next", input: nextInput(), sha: nextSha() },
         result: { status: "ok", value: { done: false, value: "replayed" } },
       },
     ];

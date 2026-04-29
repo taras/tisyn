@@ -16,6 +16,7 @@ import { scoped } from "effection";
 import { execute } from "@tisyn/runtime";
 import { InMemoryStream } from "@tisyn/durable-streams";
 import { Effects } from "@tisyn/effects";
+import { payloadSha } from "@tisyn/kernel";
 
 describe("End-to-end crash/replay", () => {
   it("should replay stored effects and continue with live dispatch", function* () {
@@ -157,8 +158,18 @@ describe("End-to-end crash/replay", () => {
       type: "yield";
       description: { type: string; name: string };
     };
-    expect(y1.description).toEqual({ type: "x", name: "step1" });
-    expect(y2.description).toEqual({ type: "x", name: "step2" });
-    expect(y3.description).toEqual({ type: "x", name: "step3" });
+    expect(y1.description).toEqual({ type: "x", name: "step1", input: [], sha: payloadSha([]) });
+    expect(y2.description).toEqual({
+      type: "x",
+      name: "step2",
+      input: [10],
+      sha: payloadSha([10]),
+    });
+    expect(y3.description).toEqual({
+      type: "x",
+      name: "step3",
+      input: [20],
+      sha: payloadSha([20]),
+    });
   });
 });
