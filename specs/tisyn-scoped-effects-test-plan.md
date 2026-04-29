@@ -471,18 +471,14 @@ implementation helper names.
 | RD-TR-002 | Core | Journal-visible | Transport reinstallation on replay (scope setup rerun) | Scope setup calls `installAgentTransport`. Run live; replay | Transport is reinstalled during scope-setup rerun; dispatches substitute at replay boundary |
 | RD-TR-003 | Extended | Journal-visible | Multiple transport bindings in the same scope | Two agents bound to different transports. Dispatch to each. Run live; replay | Both substitute correctly; neither refires |
 
-### 13.10 Exclusion Regression — Prototype Helper Shape (§9.5.6)
+### 13.10 Structural-Replay Regression (§9.5.6)
 
-Tests in this section verify that the excluded prototype
-symbols are not exported by the implementation, and that
-replay works without any such helper. Phrased as exclusion
-regression, not removal regression.
+Tests in this section verify that replay works without any
+helper-based delegation wrapper, in line with §9.5.6's
+structural-property requirement.
 
 | ID | Tier | Obs. class | Description | Setup | Expected |
 |---|---|---|---|---|---|
-| RD-RG-001 | Extended | API-surface-visible | `runAsTerminal` is not exported from `@tisyn/effects` | Attempt to import `runAsTerminal` from `@tisyn/effects` | Import fails; symbol does not exist |
-| RD-RG-002 | Extended | API-surface-visible | `RuntimeTerminal` is not exported from `@tisyn/effects/internal` | Attempt to import `RuntimeTerminal` from `@tisyn/effects/internal` | Import fails; symbol does not exist |
-| RD-RG-003 | Extended | API-surface-visible | `RuntimeTerminalBoundary` is not exported from `@tisyn/effects/internal` | Attempt to import `RuntimeTerminalBoundary` from `@tisyn/effects/internal` | Import fails; symbol does not exist |
 | RD-RG-004 | Core | Journal-visible | Replay correctness without any helper | Agent handler at min, no terminal-delegation wrapping anywhere. Run live; replay | Identical journals; no refire; replay substitution is structural |
 | RD-RG-005 | Diagnostic | Harness-introspective | No `effectId`/`data` restatement at any framework handler site | Inspect `Agents.use`, `implementAgent(...).install`, `installAgentTransport`, `installRemoteAgent` handler bodies at the source level | No restated parameters to a boundary helper. **Non-normative; implementation-quality check only** |
 
@@ -496,16 +492,195 @@ regression, not removal regression.
 | RD-EX-005 | Core | Journal-visible | Full existing nested-invocation test plan passes | Identical journals |
 | RD-EX-006 | Core | Journal-visible | Full existing payload-sensitive divergence tests pass | Identical journals |
 
-> **Note.** Test IDs `RD-PD-*` are reserved for a future
-> payload-fingerprint specification and are intentionally not
-> defined in this test plan (payload-sensitive divergence
-> regression is already covered by `RD-EX-006`). Test IDs
-> `RD-IL-*`, `RD-MX-003`, and `RD-EX-004` are deliberately not
-> defined here either; inline-invocation coverage lives in
-> `tisyn-inline-invocation-test-plan.md`, which is the
-> authoritative test plan for `invokeInline` semantics.
+> **Note.** Test IDs `RD-IL-*`, `RD-MX-003`, and `RD-EX-004`
+> are deliberately not defined here; inline-invocation coverage
+> lives in `tisyn-inline-invocation-test-plan.md`, which is the
+> authoritative test plan for `invokeInline` semantics. The
+> `RD-PD-*` matrix (payload-sensitive divergence) is now
+> defined in §13.12 below, covering boundary-identity, source-
+> identity, and runtime-direct dispatch paths against the
+> payload-sensitive replay rules in scoped-effects §9.5.3,
+> §9.5.5, §9.5.8, §9.5.9.
 
-### 13.12 Minimum Acceptance Subset
+### 13.12 Payload-Sensitive Divergence (RD-PD-*)
+
+These tests cover payload-sensitive replay against scoped-
+effects §9.5.3 (boundary identity for delegated chain
+dispatch), §9.5.5 (source identity for short-circuit), §9.5.8
+(runtime-direct), §9.5.9 (transition detection), §3.1.1
+(runtime-direct classification), and kernel §9.1, §10.2,
+§10.3, §10.4. They are normative additions for payload-
+sensitive replay; `RD-EX-006` is a baseline-regression entry
+and does NOT subsume this matrix.
+
+> **Editorial.** This matrix uses the `Setup → Expected`
+> column shape from earlier §13 subsections. The Obs. class
+> column is included in the same convention as the rest of
+> §13 (Workflow-visible / Journal-visible / Diagnostic /
+> API-surface-visible).
+
+#### 13.12.1 Delegated Dispatch — Boundary Identity Write Path
+
+| ID | Tier | Obs. class | Description | Setup | Expected |
+|---|---|---|---|---|---|
+| RD-PD-001 | Core | Journal-visible | Live delegated dispatch writes boundary `input` and `sha` | `a.op` data `[1,2]`. Max passes through. Min returns `42`. | `description`: `type="a"`, `name="op"`, `input=[1,2]`, `sha=payloadSha([1,2])` |
+| RD-PD-002 | Core | Journal-visible | Max transforms payload; journal records boundary input | Max intercepts `a.op` data `[1]`, calls `next("a.op", [999])`. | `input=[999]`, `sha=payloadSha([999])`. NOT `[1]`. |
+| RD-PD-003 | Core | Journal-visible | Max transforms effectId; journal records boundary type/name | Max intercepts `a.original`, calls `next("b.transformed", data)`. | `type="b"`, `name="transformed"`. NOT `type="a"`. |
+| RD-PD-004 | Core | Journal-visible | Max transforms both effectId and data | Max intercepts `a.fetch({id:"A"})`, calls `next("http.get", {url:"/orders/A"})`. | `type="http"`, `name="get"`, `input={url:"/orders/A"}` |
+| RD-PD-005 | Core | Journal-visible | Exactly one YieldEvent on live delegated dispatch | `a.op` with max pass-through. | Exactly one yield. No duplicate. |
+| RD-PD-006 | Core | Journal-visible | SHA is deterministic across executions | Same effect in two separate executions. | Identical `sha` |
+
+#### 13.12.2 Short-Circuit — Source Identity Write Path
+
+| ID | Tier | Obs. class | Description | Setup | Expected |
+|---|---|---|---|---|---|
+| RD-PD-010 | Core | Journal-visible | Short-circuit writes source `input` and `sha` | Max returns `"mock"` without `next`. Kernel yields `a.op` data `[1]`. | `type="a"`, `name="op"`, `input=[1]`, `sha=payloadSha([1])`, `result.value="mock"` |
+| RD-PD-011 | Core | Journal-visible | Short-circuit uses kernel-yielded type/name | Kernel yields `a.op`. Max short-circuits. | `type="a"`, `name="op"` |
+| RD-PD-012 | Core | Journal-visible | Exactly one YieldEvent on live short-circuit | Max short-circuits. | Exactly one yield. |
+
+#### 13.12.3 Dispatch Path Classification (§3.1.1)
+
+| ID | Tier | Obs. class | Description | Setup | Expected |
+|---|---|---|---|---|---|
+| RD-PD-DC-001 | Core | Workflow-visible | `sleep` is intercepted by max middleware | Max `Effects.around` intercepts `sleep` effectId, returns `42`. Execute `sleep(100)`. | Result is `42`. `sleep` entered the Effects chain. |
+| RD-PD-DC-002 | Core | Journal-visible | `sleep` uses boundary identity when max transforms | Max transforms `sleep` data `[100]` → `[0]` before `next`. | Journal: `input=[0]`, `sha=payloadSha([0])`. Boundary identity, not source. |
+| RD-PD-DC-003 | Core | Workflow-visible | `__config` is NOT intercepted by `Effects.around` | Install max `Effects.around` dispatch middleware that appends each observed effectId to a workflow-visible log array. Execute an IR that reads config. | `"__config"` does NOT appear in the log. Config read succeeds. (Log is workflow-visible because the middleware is user-installed and its accumulator is observable from authored code.) |
+| RD-PD-DC-004 | Core | Workflow-visible | `stream.next` is NOT intercepted by `Effects.around` | Install max `Effects.around` dispatch middleware that appends each observed effectId to a workflow-visible log array. Execute IR with `stream.subscribe` + `stream.next`. | `"stream.next"` and `"stream.subscribe"` do NOT appear in the log. Stream operations succeed. |
+| RD-PD-DC-005 | Core | Workflow-visible + Journal-visible | `stream.subscribe` is NOT intercepted and writes no `input`/`sha` | Same setup as DC-004. Inspect the user-installed middleware log AND the journal for the subscribe event. | Subscribe YieldEvent: no `input`, no `sha`. `"stream.subscribe"` does not appear in the user-installed middleware log. |
+| RD-PD-DC-006 | Core | Journal-visible | Chain-dispatched and runtime-direct built-ins have different replay identity rules | Two effects: `sleep(100)` (chain-dispatched) and `stream.next(handle)` (runtime-direct). Max middleware transforms `sleep` data. | `sleep` YieldEvent has boundary identity (transformed data). `stream.next` YieldEvent has source identity (kernel-yielded data). |
+
+#### 13.12.4 Runtime-Direct Payload-Sensitive Effects
+
+| ID | Tier | Obs. class | Description | Setup | Expected |
+|---|---|---|---|---|---|
+| RD-PD-015 | Core | Journal-visible | `stream.subscribe` writes neither `input` nor `sha` | Loop IR, live dispatch. | Subscribe YieldEvent: neither field present. |
+| RD-PD-016 | Core | Journal-visible | `stream.next` writes source `input` and `sha` | Live dispatch. | `sha` present, computed from handle data. |
+| RD-PD-017 | Core | Journal-visible | `__config` writes source `input` and `sha` | Config read. | Both present. |
+| RD-PD-018 | Core | Journal-visible | `sleep` writes boundary `input` and `sha` (chain-dispatched) | `sleep(100)` with no max transform. | `type="sleep"`, `name="sleep"`, `input=[100]`, `sha=payloadSha([100])` |
+| RD-PD-019 | Core | Journal-visible | `sleep` boundary identity when max transforms | Max transforms `sleep` data `[100]` → `[0]`, calls `next`. | `input=[0]`, `sha=payloadSha([0])` |
+
+#### 13.12.5 Replay — Boundary Matching (Happy Path)
+
+| ID | Tier | Obs. class | Description | Setup | Expected |
+|---|---|---|---|---|---|
+| RD-PD-020 | Core | Journal-visible | Matching boundary SHA substitutes stored result | Stored with boundary `sha`. Max passes through. | Stored result substituted; min does not fire. |
+| RD-PD-021 | Core | Journal-visible | Max transforms; replay compares boundary SHA | Stored boundary SHA from `[999]`. Max transforms `[1]` → `[999]`. | SHA matches. Substituted. |
+| RD-PD-022 | Core | Journal-visible | Max transforms effectId; replay compares boundary type/name | Stored boundary `type="b"`. Max transforms `a.original` → `b.transformed`. | Matches. Substituted. |
+| RD-PD-023 | Core | Journal-visible | Replay consumes exactly one cursor entry | Two sequential effects replayed. | Each consumes one. No journal duplicates. |
+| RD-PD-024 | Core | Journal-visible | Replay does not write to durable stream | Replay from stored journal. | Durable stream `appendCount` unchanged. |
+
+#### 13.12.6 Replay — Boundary Divergence
+
+| ID | Tier | Obs. class | Description | Setup | Expected |
+|---|---|---|---|---|---|
+| RD-PD-030 | Core | Workflow-visible | Mismatched boundary SHA → DivergenceError | Stored boundary SHA from `[999]`. Max now → `[888]`. | `DivergenceError`: payload mismatch. |
+| RD-PD-031 | Core | Workflow-visible | **Motivating failure**: same source, different boundary → divergence | Kernel yields same `a.fetch`. Max previously → `http.get /orders/A`. Now → `http.get /customers/A`. | `DivergenceError`. |
+| RD-PD-032 | Core | Workflow-visible | Same source, different boundary effectId → divergence | Same kernel `a.op`. Max previously → `b.op`. Now → `c.op`. | `DivergenceError`: expected `b.op`, got `c.op`. |
+| RD-PD-033 | Core | Workflow-visible | Error message includes stored and current SHA | Same as RD-PD-030. | Both hex strings in message. |
+| RD-PD-034 | Core | Workflow-visible | Boundary divergence is fatal | Two effects. Mismatch on first. | Second never reached. |
+| RD-PD-035 | Core | Journal-visible | Object key order does not cause false divergence | Stored SHA from `{a:1,b:2}`. Current boundary `{b:2,a:1}`. | SHA matches (canonical). |
+
+#### 13.12.7 Replay — Short-Circuit Divergence
+
+| ID | Tier | Obs. class | Description | Setup | Expected |
+|---|---|---|---|---|---|
+| RD-PD-040 | Core | Journal-visible | Short-circuit replay with matching source SHA | Stored source SHA. Max short-circuits. Same data. | Stored result used. |
+| RD-PD-041 | Core | Workflow-visible | Short-circuit with changed source input → divergence | Stored source SHA from `[1]`. Current data `[2]`. | `DivergenceError`. |
+
+#### 13.12.8 Transition Detection (§9.5.9)
+
+| ID | Tier | Obs. class | Description | Setup | Expected |
+|---|---|---|---|---|---|
+| RD-PD-050 | Core | Workflow-visible | Delegation → short-circuit → divergence | Stored: boundary `http.get`. Max now short-circuits. Source = `a.fetch`. | `DivergenceError`. |
+| RD-PD-051 | Core | Workflow-visible | Short-circuit → delegation → divergence | Stored: source `a.op`. Max now delegates `next("b.op",...)`. | `DivergenceError`. |
+
+#### 13.12.9 Nonconforming Journal — Missing Required SHA
+
+| ID | Tier | Obs. class | Description | Setup | Expected |
+|---|---|---|---|---|---|
+| RD-PD-055 | Core | Workflow-visible | Stored agent effect missing `sha` → DivergenceError | Stored `a.op` with no `sha`. | `DivergenceError`: nonconforming journal. |
+| RD-PD-056 | Core | Workflow-visible | Stored `stream.next` missing `sha` → DivergenceError | Stored `stream.next` with no `sha`. | `DivergenceError`. |
+| RD-PD-057 | Core | Journal-visible | Stored `stream.subscribe` without `sha` → NOT an error | Stored `stream.subscribe` no `sha`. | Replay succeeds. (Expected: non-canonicalizable.) |
+| RD-PD-058 | Core | Workflow-visible | Stored `sleep` missing `sha` → DivergenceError | Stored `sleep` with no `sha`. | `DivergenceError`. |
+
+#### 13.12.10 `stream.subscribe` / `stream.next`
+
+| ID | Tier | Obs. class | Description | Setup | Expected |
+|---|---|---|---|---|---|
+| RD-PD-070 | Core | Journal-visible | `stream.subscribe` no `input`/`sha` | Live dispatch. | Neither field present. |
+| RD-PD-071 | Core | Journal-visible | `stream.subscribe` replays with type/name only | Stored subscribe. | Succeeds. |
+| RD-PD-072 | Core | Journal-visible | `stream.next` journal entry includes `input` and `sha` | Live `stream.next` dispatch via loop IR with mock stream. Inspect journal. | `stream.next` YieldEvent has `description.input` and `description.sha` both present. |
+| RD-PD-073 | Core | Journal-visible | `stream.next` `description.input` contains only the serializable handle-token payload | Same as RD-PD-072. Inspect `description.input`. | `input` is the handle-token payload (e.g., `[{ __tisyn_subscription: "sub:root:0" }]`). It does NOT contain a live subscription object, stream source, or Effection `Operation`. |
+| RD-PD-074 | Core | Journal-visible | `stream.next` `description.input` does not contain non-serializable values | Same as RD-PD-072. Verify `canonical(description.input)` produces a meaningful (non-degenerate) canonical form. | `canonical(input)` is NOT `[{}]` or `{}`. It contains the handle token string. |
+| RD-PD-075 | Core | Workflow-visible | `stream.next` replay with changed handle token raises `DivergenceError` | Stored `stream.next` with SHA from handle token `sub:root:0`. Replay produces handle token `sub:root:1`. | `DivergenceError` with payload mismatch. |
+
+#### 13.12.11 Resource-Body Parity
+
+| ID | Tier | Obs. class | Description | Setup | Expected |
+|---|---|---|---|---|---|
+| RD-PD-080 | Core | Journal-visible | Resource init dispatch writes boundary `input`/`sha` | Resource init dispatches `a.op`. Max passes through. | Boundary `input`/`sha` in YieldEvent. |
+| RD-PD-081 | Core | Journal-visible | Resource init replay checks boundary SHA | Same data. | Replay succeeds. |
+| RD-PD-082 | Core | Workflow-visible | Resource init replay detects SHA mismatch | Different data. | `DivergenceError`. |
+
+#### 13.12.12 Boundary Placement Verification
+
+| ID | Tier | Obs. class | Description | Setup | Expected |
+|---|---|---|---|---|---|
+| RD-PD-090 | Core | Journal-visible | Lane compares boundary identity; no pre-check false divergence | Max transforms `a.original` → `b.transformed`. Stored boundary `b.transformed`. | Lane matches. No pre-check error. Replay succeeds. |
+| RD-PD-091 | Core | Workflow-visible | **Regression**: kernel-yielded-only hashing fails | Max transforms `[1]` → `[999]`. Stored boundary SHA from `[999]`. Max now → `[888]`. Source `[1]` unchanged. | `DivergenceError`. Kernel-yielded-only hashing would incorrectly pass. |
+| RD-PD-092 | Core | Journal-visible | Pre-check removed for chain-dispatched effects | Stored boundary `type="b"`. Kernel-yielded `type="a"`. Max transforms. | No pre-check error. Lane matches boundary. |
+
+#### 13.12.13 `input` Determinism
+
+| ID | Tier | Obs. class | Description | Setup | Expected |
+|---|---|---|---|---|---|
+| RD-PD-095 | Core | Journal-visible | `sha` equals `payloadSha(input)` | Live dispatch with data `{b:2,a:1}`. | `sha == payloadSha(description.input)` |
+
+#### 13.12.14 Fixture Conformance
+
+| ID | Tier | Obs. class | Description | Setup | Expected |
+|---|---|---|---|---|---|
+| RD-PD-096 | Core | Journal-visible | Updated conformance fixtures pass | Run all conformance replay fixtures (with `input`/`sha`); the harness compares actual `YieldEvent` journals against the fixture's expected journal. | All fixtures pass: actual journals match expected journals. |
+| RD-PD-097 | Core | Journal-visible | Fixture omitting `sha` for payload-sensitive effect fails | Stale fixture without `sha` for `a.op`; harness compares actual journal against expected journal. | Harness reports a journal mismatch and the fixture fails. |
+
+#### 13.12.15 Regression Protection
+
+| ID | Tier | Obs. class | Description | Expected |
+|---|---|---|---|---|
+| RD-PD-100 | Core | Journal-visible | Existing replay tests pass (updated) | Pass |
+| RD-PD-101 | Core | Journal-visible | Existing replay-dispatch tests pass (updated) | Pass |
+| RD-PD-102 | Core | Journal-visible | Existing stream-iteration replay tests pass (updated) | Pass |
+| RD-PD-103 | Core | Journal-visible | Existing crash-replay e2e tests pass | Pass |
+| RD-PD-104 | Core | Journal-visible | Existing recovery tests pass | Pass |
+| RD-PD-105 | Core | Journal-visible | Existing inline-invocation replay tests pass | Pass |
+
+#### 13.12.16 Payload-Sensitive Minimum Acceptance Subset
+
+Payload-sensitive replay is implementation-ready when all 15
+pass:
+
+| # | ID | What it proves |
+|---|---|---|
+| 1 | RD-PD-001 | Live delegated writes boundary identity |
+| 2 | RD-PD-002 | Max transforms payload → boundary input in journal |
+| 3 | RD-PD-005 | No double journal write |
+| 4 | RD-PD-010 | Short-circuit writes source identity |
+| 5 | RD-PD-015 | `stream.subscribe` omits `input`/`sha` |
+| 6 | RD-PD-018 | `sleep` is chain-dispatched |
+| 7 | RD-PD-020 | Matching boundary SHA replays |
+| 8 | RD-PD-031 | Motivating failure caught |
+| 9 | RD-PD-041 | Short-circuit source divergence |
+| 10 | RD-PD-050 | Delegation→short-circuit transition |
+| 11 | RD-PD-055 | Missing required `sha` → error |
+| 12 | RD-PD-091 | Kernel-yielded-only regression |
+| 13 | RD-PD-097 | Stale fixture fails |
+| 14 | RD-PD-DC-003 | `__config` is runtime-direct (not in middleware log) |
+| 15 | RD-PD-100 | Existing tests updated and green |
+
+This subset is in addition to the §13.13 RD-* subset; both
+gates apply to feature-readiness.
+
+### 13.13 Minimum Acceptance Subset
 
 Feature is implementation-ready when all 12 pass:
 
@@ -524,9 +699,9 @@ Feature is implementation-ready when all 12 pass:
 | 11 | RD-RG-004 | Replay works without any helper |
 | 12 | RD-EX-001 | Existing crash-replay suite stays green |
 
-### 13.13 Coverage Summary for §13
+### 13.14 Coverage Summary for §13
 
-**Spec-section coverage**
+**Spec-section coverage (RD-* baseline)**
 
 | Spec subsection | Test IDs |
 |---|---|
@@ -535,10 +710,23 @@ Feature is implementation-ready when all 12 pass:
 | §9.5.3 Replay substitution semantics | RD-RP-001..006, RD-MN-001..006 |
 | §9.5.4 Max re-executes on replay | RD-MX-001, 002, 004, 005 |
 | §9.5.5 Short-circuit stored-cursor-wins | RD-SC-001..004 |
-| §9.5.6 No delegation helper | RD-RG-001..005 |
+| §9.5.6 No delegation helper | RD-RG-004, RD-RG-005 |
 | §9.5.7 Resource-body interaction | RD-RS-001..003 |
 
-**Tier counts**
+**Spec-section coverage (RD-PD-* payload-sensitive)**
+
+| Spec subsection | Test IDs |
+|---|---|
+| §3.1.1 Runtime-direct classification | RD-PD-DC-001..006 |
+| §9.5.3 Boundary identity (delegated) | RD-PD-001..006, RD-PD-020..024, RD-PD-030..035, RD-PD-090..092 |
+| §9.5.5 Source identity (short-circuit) | RD-PD-010..012, RD-PD-040..041 |
+| §9.5.7 Resource-body payload-sensitive | RD-PD-080..082 |
+| §9.5.8 Runtime-direct payload-sensitive | RD-PD-015..019, RD-PD-070..075 |
+| §9.5.9 Transition detection | RD-PD-050..051 |
+| Kernel §9.1 / §9.5 EffectDescription shape | RD-PD-095, RD-PD-096..097 |
+| Kernel §10.2 / §10.3 / §10.4 matching + divergence | RD-PD-055..058, RD-PD-100..105 |
+
+**Tier counts (RD-* baseline)**
 
 | Category | Core | Extended | Diagnostic | Total |
 |---|---|---|---|---|
@@ -551,9 +739,30 @@ Feature is implementation-ready when all 12 pass:
 | Short-circuit | 3 | 1 | 0 | 4 |
 | Resource interaction | 3 | 0 | 0 | 3 |
 | Transport interaction | 2 | 1 | 0 | 3 |
-| Exclusion regression | 1 | 3 | 1 | 5 |
+| Exclusion regression | 1 | 0 | 1 | 2 |
 | Existing regression | 5 | 0 | 0 | 5 |
-| **Total** | **37** | **11** | **1** | **49** |
+| **Total** | **37** | **8** | **1** | **46** |
+
+**Tier counts (RD-PD-* payload-sensitive)**
+
+| Category | Core | Extended | Diagnostic | Total |
+|---|---|---|---|---|
+| Delegated write path | 6 | 0 | 0 | 6 |
+| Short-circuit write path | 3 | 0 | 0 | 3 |
+| Dispatch path classification | 6 | 0 | 0 | 6 |
+| Runtime-direct payload effects | 5 | 0 | 0 | 5 |
+| Replay matching | 5 | 0 | 0 | 5 |
+| Boundary divergence | 6 | 0 | 0 | 6 |
+| Short-circuit divergence | 2 | 0 | 0 | 2 |
+| Transition detection | 2 | 0 | 0 | 2 |
+| Nonconforming journal | 4 | 0 | 0 | 4 |
+| stream.subscribe / next | 6 | 0 | 0 | 6 |
+| Resource-body parity | 3 | 0 | 0 | 3 |
+| Boundary placement | 3 | 0 | 0 | 3 |
+| Input determinism | 1 | 0 | 0 | 1 |
+| Fixture conformance | 2 | 0 | 0 | 2 |
+| Regression protection | 6 | 0 | 0 | 6 |
+| **Total** | **60** | **0** | **0** | **60** |
 
 ---
 
@@ -644,14 +853,20 @@ correctly implemented when:
 12. All Core tier replay-aware dispatch tests (RD-*) defined
     in §13 pass.
 
-13. The Minimum Acceptance Subset in §13.12 MUST pass before
+13. The Minimum Acceptance Subset in §13.13 MUST pass before
     the replay-aware dispatch implementation (Refs #125) is
     considered complete.
 
-14. No Core tier test produces an unexpected error, hang,
+14. All Core tier payload-sensitive replay tests (RD-PD-*)
+    defined in §13.12 pass. The Payload-Sensitive Minimum
+    Acceptance Subset in §13.12.16 MUST pass before the
+    payload-sensitive replay implementation is considered
+    complete.
+
+15. No Core tier test produces an unexpected error, hang,
     or crash.
 
-15. Generic host Effects middleware does not cross the
+16. Generic host Effects middleware does not cross the
     agent boundary by scope inheritance. Explicit
     cross-boundary middleware crosses via
     `installCrossBoundaryMiddleware(fn)` and the protocol
@@ -681,10 +896,18 @@ correctly implemented when:
 | §9.5.1 Structural replay boundary | Replay-aware dispatch | RD-CO-001–004, RD-PL-001–003 | Covered |
 | §9.5.2 Framework handlers at min | Replay-aware dispatch | RD-FW-001–006 | Covered |
 | §9.5.3 Replay substitution semantics | Replay-aware dispatch | RD-RP-001–006, RD-MN-001–006 | Covered |
+| §9.5.3 Boundary-identity payload-sensitive matching | Payload-sensitive | RD-PD-001..006, RD-PD-020..024, RD-PD-030..035, RD-PD-090..092 | Covered |
 | §9.5.4 Max re-executes on replay | Replay-aware dispatch | RD-MX-001, 002, 004, 005 | Covered |
 | §9.5.5 Short-circuit stored-cursor-wins | Replay-aware dispatch | RD-SC-001–004 | Covered |
-| §9.5.6 No delegation helper | Replay-aware dispatch | RD-RG-001–005 | Covered |
+| §9.5.5 Source-identity payload-sensitive matching | Payload-sensitive | RD-PD-010..012, RD-PD-040..041 | Covered |
+| §9.5.6 No delegation helper | Replay-aware dispatch | RD-RG-004, RD-RG-005 | Covered |
 | §9.5.7 Resource-body interaction | Replay-aware dispatch | RD-RS-001–003 | Covered |
+| §9.5.7 Resource-body payload-sensitive | Payload-sensitive | RD-PD-080..082 | Covered |
+| §9.5.8 Runtime-direct replay comparison | Payload-sensitive | RD-PD-015..019, RD-PD-070..075 | Covered |
+| §9.5.9 Transition detection | Payload-sensitive | RD-PD-050..051 | Covered |
+| §3.1.1 Runtime-direct classification | Payload-sensitive | RD-PD-DC-001..006 | Covered |
+| Kernel §9.1 / §9.5 EffectDescription shape | Payload-sensitive | RD-PD-095..097 | Covered |
+| Kernel §10.2 / §10.3 / §10.4 matching + divergence | Payload-sensitive | RD-PD-055..058, RD-PD-100..105 | Covered |
 
 ### 17.2 Test Count Summary
 
@@ -713,8 +936,23 @@ correctly implemented when:
 | RD short-circuit | 3 | 1 | 4 |
 | RD resource interaction | 3 | 0 | 3 |
 | RD transport interaction | 2 | 1 | 3 |
-| RD exclusion regression | 1 | 3 | 4 |
+| RD exclusion regression | 1 | 0 | 1 |
 | RD existing regression | 5 | 0 | 5 |
-| **Total** | **93** | **17** | **110** |
+| RD-PD delegated write path | 6 | 0 | 6 |
+| RD-PD short-circuit write path | 3 | 0 | 3 |
+| RD-PD dispatch path classification | 6 | 0 | 6 |
+| RD-PD runtime-direct payload effects | 5 | 0 | 5 |
+| RD-PD replay matching | 5 | 0 | 5 |
+| RD-PD boundary divergence | 6 | 0 | 6 |
+| RD-PD short-circuit divergence | 2 | 0 | 2 |
+| RD-PD transition detection | 2 | 0 | 2 |
+| RD-PD nonconforming journal | 4 | 0 | 4 |
+| RD-PD stream.subscribe / next | 6 | 0 | 6 |
+| RD-PD resource-body parity | 3 | 0 | 3 |
+| RD-PD boundary placement | 3 | 0 | 3 |
+| RD-PD input determinism | 1 | 0 | 1 |
+| RD-PD fixture conformance | 2 | 0 | 2 |
+| RD-PD regression protection | 6 | 0 | 6 |
+| **Total** | **153** | **14** | **167** |
 
-> **Note.** §13.10 also includes one Diagnostic test (`RD-RG-005`) which is non-normative and not counted in the Core/Extended totals above. See §13.13 for the full Core/Extended/Diagnostic breakdown.
+> **Note.** §13.10 also includes one Diagnostic test (`RD-RG-005`) which is non-normative and not counted in the Core/Extended totals above. See §13.14 for the full Core/Extended/Diagnostic breakdown.

@@ -872,10 +872,83 @@ Two event types. Nothing else.
 {
   "type": "yield",
   "coroutineId": "root.0",
-  "description": { "type": "fraud-detector", "name": "fraudCheck" },
+  "description": {
+    "type": "fraud-detector",
+    "name": "fraudCheck",
+    "input": { "userId": "u-123", "amount": 4200 },
+    "sha": "9f3a…e8b1"
+  },
   "result": { "status": "ok", "value": true }
 }
 ```
+
+`description` carries `input` and `sha` for all payload-sensitive
+effects (see "Effect Description Shape" below). `stream.subscribe`
+is the only effect whose description omits both fields — its
+payload contains a live Effection `Operation` with no stable
+durable identity. The durable event algebra is unchanged:
+`DurableEvent = YieldEvent | CloseEvent`.
+
+**Effect Description Shape.** `YieldEvent.description` has two
+valid shapes.
+
+*Payload-sensitive effects* — all effects except
+`stream.subscribe`:
+
+```
+{
+  type: string,
+  name: string,
+  input: <durable canonicalizable JSON value>,
+  sha: string
+}
+```
+
+Both `input` and `sha` are REQUIRED. A `YieldEvent` for a
+payload-sensitive effect that lacks either field is
+**nonconforming**.
+
+*`stream.subscribe`* — non-canonicalizable runtime-direct:
+
+```
+{ type: "stream", name: "subscribe" }
+```
+
+`input` and `sha` MUST NOT be present.
+
+A TypeScript representation marks both fields optional at the
+type level so the same type fits `stream.subscribe`:
+
+```typescript
+interface EffectDescription {
+  type: string;
+  name: string;
+  input?: Val;
+  sha?: string;
+}
+```
+
+The TS optionality is purely so the type also fits
+`stream.subscribe`. The normative requirement remains: `input`
+and `sha` MUST be present for every payload-sensitive effect.
+
+**`payloadSha`.** Payload identity is computed by:
+
+```
+payloadSha(v) = bytesToHex(sha256(utf8(canonical(v))))
+```
+
+`canonical` is the canonical JSON encoding defined in §11.5.
+The hash function is SHA-256 from `@noble/hashes` (isomorphic
+across Node and browser builds). `payloadSha` is exported from
+`@tisyn/kernel`.
+
+**`input` semantics.** `input` is the durable canonicalizable
+JSON value from which `sha` is computed. The runtime MUST
+canonicalize `input` before hashing. Implementations MAY emit
+`input` with canonical key ordering. **Replay comparison uses
+`sha` only**; `input` is recorded for journal introspection
+and post-hoc auditability.
 
 **Close** — records a task's terminal state:
 
@@ -994,19 +1067,34 @@ buildIndex(events):
 
 ### 10.2 The Matching Algorithm
 
-When the kernel suspends with descriptor `D` for `coroutineId`:
+The kernel specifies the **comparison primitive**: given a
+stored description and a current description, what counts as a
+match. The kernel does NOT specify which description plays the
+`current` role; that ownership lives in
+`tisyn-scoped-effects-specification.md` and varies by dispatch
+path.
 
 ```
-match(coroutineId, D):
+compare(stored, current):
+  if stored.type ≠ current.type: → DIVERGENCE (type/name mismatch)
+  if stored.name ≠ current.name: → DIVERGENCE (type/name mismatch)
+  if effect is payload-sensitive
+        (i.e., stored.type/name is not stream.subscribe):
+    if stored.sha is absent:
+      → DIVERGENCE (nonconforming journal — missing required sha)
+    if stored.sha ≠ current.sha:
+      → DIVERGENCE (payload mismatch)
+  → MATCH
+```
+
+When the kernel suspends, the matching procedure is:
+
+```
+match(coroutineId, current):
   entry = peekYield(coroutineId)
 
   CASE 1: entry exists
-    expectedType = entry.description.type
-    expectedName = entry.description.name
-    actualType = parseEffectId(D.id).type
-    actualName = parseEffectId(D.id).name
-    if actualType ≠ expectedType: → DIVERGENCE
-    if actualName ≠ expectedName: → DIVERGENCE
+    compare(entry.description, current)
     consumeYield(coroutineId)    // cursor++
     return entry.result          // REPLAY path
 
@@ -1017,22 +1105,76 @@ match(coroutineId, D):
     → LIVE path (dispatch to agent)
 ```
 
+The construction of `current` is dispatch-path-specific and is
+specified by `tisyn-scoped-effects-specification.md`:
+
+- **Runtime-direct effects** (`__config`, `stream.subscribe`,
+  `stream.next`): source descriptor, per scoped-effects §9.5.8.
+- **Chain-dispatched delegated effects** (max calls `next`):
+  boundary descriptor, per scoped-effects §9.5.3.
+- **Chain-dispatched short-circuit effects** (max returns
+  without `next`): source descriptor, per scoped-effects
+  §9.5.5.
+
+The kernel does not restate the boundary-vs-source rule; it
+specifies only how two descriptions compare.
+
 ### 10.3 Description Matching
 
-Only two fields are compared: `type` and `name`. All other fields
-are ignored. This allows arguments to change between versions
-without breaking replay.
+Three fields participate in the matching algorithm for
+payload-sensitive effects: `type`, `name`, and `sha`. For
+`stream.subscribe` (non-canonicalizable; see §9.1 "Effect
+Description Shape"), only `type` and `name` participate;
+`sha` is neither expected nor compared.
+
+`sha` is part of durable identity for payload-sensitive
+effects. A stored entry that omits `sha` for a payload-
+sensitive effect is nonconforming and MUST raise
+`DivergenceError` (§10.4); it MUST NOT replay successfully.
 
 ### 10.4 Divergence
 
-A divergence is fatal. The kernel MUST halt and surface:
+A divergence is fatal. The kernel MUST halt and surface
+`DivergenceError`. The error MUST carry enough information to
+diagnose the cause; the following message templates are
+normative for the three cases:
+
+**Type/name mismatch:**
+
+```
+Divergence at {coroutineId}[{cursor}]: expected
+{storedType}.{storedName}, got {currentType}.{currentName}
+```
+
+**Payload mismatch (SHA differs):**
+
+```
+Divergence at {coroutineId}[{cursor}]: payload mismatch for
+{type}.{name}:
+  stored sha: {storedSha}
+  current sha: {currentSha}
+```
+
+**Missing required SHA (nonconforming journal):**
+
+```
+Divergence at {coroutineId}[{cursor}]: stored entry for
+{type}.{name} missing required sha — nonconforming journal
+```
+
+`DivergenceError` is the single error type for all three
+cases. No specialized payload-divergence error class is
+introduced. Implementations SHOULD include both the stored
+and current SHA hex strings in the payload-mismatch message
+to aid diagnosis.
 
 ```
 DivergenceError {
   coroutineId: string,
   position: number,
-  expected: { type, name },
-  actual: { type, name }
+  message: string,            // formatted per templates above
+  expected?: { type, name, sha? },
+  actual?:   { type, name, sha? }
 }
 ```
 
