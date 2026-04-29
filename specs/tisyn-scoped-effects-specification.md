@@ -1207,13 +1207,15 @@ distinct from runtime-owned state:
   would yield a degenerate constant.
 
 For both effects, the runtime MUST omit `input` and `sha` from
-the `YieldEvent.description`; the description shape is
-`{ type: "stream", name: "subscribe" }` and `{ type: "tisyn",
-name: "__config" }` (or whatever `parseEffectId(...)` returns
-for `__config`) exactly. Replay comparison for these effects
-MUST compare only `type` and `name`. A missing `sha` on a
-stored `stream.subscribe` or `__config` entry is expected and
-correct, not a nonconforming-journal error.
+the `YieldEvent.description`. The description shape is
+`{ type: "stream", name: "subscribe" }` for `stream.subscribe`
+and `{ type: "__config", name: "__config" }` for `__config`
+(per `parseEffectId` per `tisyn-kernel-specification.md` §4.6 —
+undotted IDs map to `{ type: id, name: id }`). Replay
+comparison for these effects MUST compare only `type` and
+`name`. A missing `sha` on a stored `stream.subscribe` or
+`__config` entry is expected and correct, not a
+nonconforming-journal error.
 
 #### 9.5.9 Transition Detection
 

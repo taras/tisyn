@@ -913,9 +913,15 @@ payload-sensitive effect that lacks either field is
 `__config`)*:
 
 ```
-{ type: "stream", name: "subscribe" }
-{ type: "tisyn",  name: "__config"  }
+{ type: "stream",   name: "subscribe" }
+{ type: "__config", name: "__config"  }
 ```
+
+The `type`/`name` fields for each effect are derived from
+`parseEffectId(effectId)` (§4.6). The `__config` shape above
+follows the undotted-ID rule: `parseEffectId("__config")`
+returns `{ type: "__config", name: "__config" }` because the ID
+contains no dot.
 
 `input` and `sha` MUST NOT be present on either. Replay
 comparison for these effects compares only `type` and `name`;
