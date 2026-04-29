@@ -33,14 +33,8 @@ declare function Projection(): {
     current: LoopControl;
     patch: BrowserControlPatch;
   }): Workflow<LoopControl>;
-  appendMessage(input: {
-    messages: TurnEntry[];
-    entry: TurnEntry;
-  }): Workflow<TurnEntry[]>;
-  appendPeerRecord(input: {
-    records: PeerRecord[];
-    record: PeerRecord;
-  }): Workflow<PeerRecord[]>;
+  appendMessage(input: { messages: TurnEntry[]; entry: TurnEntry }): Workflow<TurnEntry[]>;
+  appendPeerRecord(input: { records: PeerRecord[]; record: PeerRecord }): Workflow<PeerRecord[]>;
   appendEffectRequest(input: {
     records: EffectRequestRecord[];
     record: EffectRequestRecord;

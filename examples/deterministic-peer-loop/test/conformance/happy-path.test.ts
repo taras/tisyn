@@ -51,12 +51,7 @@ describe("DPL happy path", () => {
 
     // The final hydrate snapshot carries the full transcript the workflow built.
     const finalSnapshot = result.hydrateSnapshots[result.hydrateSnapshots.length - 1];
-    expect(finalSnapshot.messages.map((m) => m.speaker)).toEqual([
-      "taras",
-      "opus",
-      "taras",
-      "gpt",
-    ]);
+    expect(finalSnapshot.messages.map((m) => m.speaker)).toEqual(["taras", "opus", "taras", "gpt"]);
 
     // PER: PeerRecord appended per peer step with incremented turnIndex.
     expect(result.appendedPeerRecords.map((r) => r.turnIndex)).toEqual([1, 2]);

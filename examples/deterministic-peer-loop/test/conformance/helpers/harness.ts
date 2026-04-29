@@ -159,8 +159,7 @@ export function* runHarness(options: HarnessOptions): Operation<HarnessResult> {
   const policyScript = [...(options.policyScript ?? [])];
   const dispatchScript = [...(options.dispatchScript ?? [])];
   const maxTurns = options.maxTurns ?? 20;
-  const initialControl: LoopControl =
-    options.seededInitialControl ?? DEFAULT_LOOP_CONTROL;
+  const initialControl: LoopControl = options.seededInitialControl ?? DEFAULT_LOOP_CONTROL;
 
   let peerTurnIndex = 0;
   let exitReason: string | undefined;

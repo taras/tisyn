@@ -40,10 +40,7 @@ export const Projection = () =>
  * - `null` for `nextSpeakerOverride` clears the field.
  * - A concrete value replaces the current value.
  */
-export function mergeControlPatch(
-  current: LoopControl,
-  patch: BrowserControlPatch,
-): LoopControl {
+export function mergeControlPatch(current: LoopControl, patch: BrowserControlPatch): LoopControl {
   const next: LoopControl = {
     paused: patch.paused ?? current.paused,
     stopRequested: patch.stopRequested ?? current.stopRequested,

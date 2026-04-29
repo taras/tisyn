@@ -51,20 +51,14 @@ describe("DPL-MODE / DPL-DONE", () => {
     // The opus peer-turn append fires before the terminal hydrate.
     const peerAppendIdx = result.operations.findIndex(
       (op) =>
-        op.agent === "Projection" &&
-        op.op === "appendMessage" &&
-        op.args.entry.speaker === "opus",
+        op.agent === "Projection" && op.op === "appendMessage" && op.args.entry.speaker === "opus",
     );
     expect(peerAppendIdx).toBeGreaterThanOrEqual(0);
 
     const terminalHydrateIdx = (() => {
       for (let i = result.operations.length - 1; i >= 0; i = i - 1) {
         const op = result.operations[i];
-        if (
-          op.agent === "App" &&
-          op.op === "hydrate" &&
-          op.args.readOnlyReason === "done"
-        ) {
+        if (op.agent === "App" && op.op === "hydrate" && op.args.readOnlyReason === "done") {
           return i;
         }
       }
