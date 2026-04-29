@@ -1,5 +1,12 @@
 # @tisyn/durable-streams
 
+## 0.17.0
+
+### Patch Changes
+
+- Updated dependencies [cfa66c7]
+  - @tisyn/kernel@0.17.0
+
 ## 0.16.0
 
 ### Minor Changes
