@@ -26,3 +26,4 @@ export type {
 } from "./events.js";
 export { canonical } from "./canonical.js";
 export { parseEffectId } from "./effect-id.js";
+export { payloadSha } from "./payload-sha.js";

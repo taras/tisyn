@@ -1,8 +1,10 @@
-import type { Json } from "@tisyn/ir";
+import type { Json, Val } from "@tisyn/ir";
 
 export interface EffectDescription {
   type: string;
   name: string;
+  input?: Val;
+  sha?: string;
 }
 
 export type EventResult =
