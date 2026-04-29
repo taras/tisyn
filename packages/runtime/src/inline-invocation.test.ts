@@ -40,7 +40,15 @@ import { suspend } from "effection";
 import type { Operation } from "effection";
 import { InMemoryStream } from "@tisyn/durable-streams";
 import type { DurableEvent, YieldEvent, CloseEvent } from "@tisyn/kernel";
+import { payloadSha } from "@tisyn/kernel";
+import type { Json } from "@tisyn/ir";
 import { Fn, Eval, Ref, Arr, Q, Try, Throw, Seq, If, Eq } from "@tisyn/ir";
+
+// Helper: compute the EffectDescription shape the runtime produces for a
+// chain-dispatched effect with the given source data (defaults to `[]`).
+function desc(type: string, name: string, input: Json = []) {
+  return { type, name, input, sha: payloadSha(input) };
+}
 import type { FnNode, TisynFn, Val } from "@tisyn/ir";
 import {
   Effects,
@@ -389,8 +397,8 @@ describe("invokeInline — core runtime slice", () => {
 
     const laneYields = yields(journal).filter((e) => e.coroutineId === "root.0");
     expect(laneYields).toHaveLength(2);
-    expect(laneYields[0]?.description).toEqual({ type: "lane", name: "a" });
-    expect(laneYields[1]?.description).toEqual({ type: "lane", name: "b" });
+    expect(laneYields[0]?.description).toEqual(desc("lane", "a"));
+    expect(laneYields[1]?.description).toEqual(desc("lane", "b"));
   });
 
   it("IL-J-003: inline lane has NO CloseEvent on normal completion", function* () {
@@ -461,8 +469,8 @@ describe("invokeInline — core runtime slice", () => {
     const rootYields = yields(journal).filter((e) => e.coroutineId === "root");
     expect(rootYields).toHaveLength(2);
     expect(rootYields.map((e) => e.description)).toEqual([
-      { type: "parent", name: "A" },
-      { type: "parent", name: "B" },
+      desc("parent", "A"),
+      desc("parent", "B"),
     ]);
   });
 
@@ -563,12 +571,12 @@ describe("invokeInline — core runtime slice", () => {
 
     const rootYields = yields(journal).filter((e) => e.coroutineId === "root");
     expect(rootYields.map((e) => e.description)).toEqual([
-      { type: "parent", name: "A" },
-      { type: "parent", name: "C" },
-      { type: "parent", name: "D" },
+      desc("parent", "A"),
+      desc("parent", "C"),
+      desc("parent", "D"),
     ]);
     const laneYields = yields(journal).filter((e) => e.coroutineId === "root.0");
-    expect(laneYields.map((e) => e.description)).toEqual([{ type: "lane", name: "I" }]);
+    expect(laneYields.map((e) => e.description)).toEqual([desc("lane", "I")]);
   });
 
   // ── Replay (§9) ──
@@ -653,7 +661,7 @@ describe("invokeInline — core runtime slice", () => {
     // returns); the inner lane has no yields because innerBody is a literal.
     const outerYields = yields(journal).filter((e) => e.coroutineId === "root.0");
     expect(outerYields).toHaveLength(1);
-    expect(outerYields[0]!.description).toEqual({ type: "inner", name: "trigger" });
+    expect(outerYields[0]!.description).toEqual(desc("inner", "trigger"));
     // A root.0.0 coroutineId exists in the id space (id reachability is proven
     // by the no-close assertion above — innerCtxId is the same as the lane's).
     innerCtxId = "root.0.0";
@@ -786,7 +794,7 @@ describe("invokeInline — core runtime slice", () => {
     // Lane-internal events (the inner.trigger yield) exist under root.0.
     const laneYields = yields(journal).filter((e) => e.coroutineId === "root.0");
     expect(laneYields).toHaveLength(1);
-    expect(laneYields[0]!.description).toEqual({ type: "inner", name: "trigger" });
+    expect(laneYields[0]!.description).toEqual(desc("inner", "trigger"));
 
     // Use eventsFor to confirm the lane's standard-effect dispatch did reach
     // the min handler (which is invoked by the chain even though this test's
@@ -845,7 +853,7 @@ describe("invokeInline — core runtime slice", () => {
     // The failing.op YieldEvent still journals under the lane with error status.
     const laneYields = yields(journal).filter((e) => e.coroutineId === "root.0");
     expect(laneYields).toHaveLength(1);
-    expect(laneYields[0]!.description).toEqual({ type: "failing", name: "op" });
+    expect(laneYields[0]!.description).toEqual(desc("failing", "op"));
     expect(laneYields[0]!.result.status).toBe("error");
   });
 

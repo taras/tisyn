@@ -5,6 +5,8 @@ import { InMemoryStream } from "@tisyn/durable-streams";
 import { Effects } from "@tisyn/effects";
 import { ProgressContext } from "@tisyn/transport";
 import type { YieldEvent, DurableEvent } from "@tisyn/kernel";
+import { payloadSha } from "@tisyn/kernel";
+import type { Json } from "@tisyn/ir";
 import { Ref, Get } from "@tisyn/ir";
 import { createMockLlmTransport } from "@tisyn/transport/test-helpers/mock-llm-adapter";
 import type { ProgressEvent } from "@tisyn/transport";
@@ -26,11 +28,17 @@ function singleEffectIR(agentType: string, opName: string, data: unknown = null)
   };
 }
 
-function yieldEvent(type: string, name: string, value: unknown, coroutineId = "root"): YieldEvent {
+function yieldEvent(
+  type: string,
+  name: string,
+  value: unknown,
+  coroutineId = "root",
+  input: Json = null,
+): YieldEvent {
   return {
     type: "yield",
     coroutineId,
-    description: { type, name },
+    description: { type, name, input, sha: payloadSha(input) },
     result: { status: "ok", value: value as never },
   };
 }
@@ -40,11 +48,12 @@ function yieldErrorEvent(
   name: string,
   error: { message: string; name?: string },
   coroutineId = "root",
+  input: Json = null,
 ): YieldEvent {
   return {
     type: "yield",
     coroutineId,
-    description: { type, name },
+    description: { type, name, input, sha: payloadSha(input) },
     result: { status: "error", error } as never,
   };
 }
@@ -87,7 +96,13 @@ describe("LLM Sampling — Standard External Effect", () => {
       (e) => e.description.type === "llm" && e.description.name === "sample",
     );
     expect(llmYield).toBeDefined();
-    expect(llmYield!.description).toEqual({ type: "llm", name: "sample" });
+    const expectedInput = { prompt: "hello" };
+    expect(llmYield!.description).toEqual({
+      type: "llm",
+      name: "sample",
+      input: expectedInput,
+      sha: payloadSha(expectedInput),
+    });
   });
 
   // LS-003: Persist-before-resume — YieldEvent appears in journal before kernel resumes
@@ -163,29 +178,27 @@ describe("LLM Sampling — Replay", () => {
     }
   });
 
-  // LS-006: Replay ignores data differences (type/name match only)
-  it("LS-006: replay ignores data differences", function* () {
-    const stored: DurableEvent[] = [yieldEvent("llm", "sample", { cached: true })];
+  // LS-006 / RD-PD-031 (llm.sample variant): payload-sensitive replay
+  // diverges on changed prompt. Motivating failure from PR #123: stored
+  // result for prompt A must NOT replay against current prompt B.
+  it("LS-006: replay diverges on payload difference (payload-sensitive)", function* () {
+    const stored: DurableEvent[] = [
+      // Stored prompt was "original"; current IR sends "different data".
+      yieldEvent("llm", "sample", { cached: true }, "root", { prompt: "original" }),
+    ];
     const stream = new InMemoryStream(stored);
-
-    let agentCalled = false;
-    yield* Effects.around(
-      {
-        *dispatch([_effectId, _data]: [string, any]) {
-          agentCalled = true;
-          return 1;
-        },
-      },
-      { at: "min" },
-    );
 
     const { result } = yield* execute({
       ir: singleEffectIR("llm", "sample", { prompt: "different data" }) as never,
       stream,
     });
 
-    expect(agentCalled).toBe(false);
-    expect(result).toEqual({ status: "ok", value: { cached: true } });
+    expect(result.status).toBe("error");
+    if (result.status === "error") {
+      expect(result.error.name).toBe("DivergenceError");
+      expect(result.error.message).toContain("payload mismatch");
+      expect(result.error.message).toContain("llm.sample");
+    }
   });
 
   // LS-033: Backend error replays identically

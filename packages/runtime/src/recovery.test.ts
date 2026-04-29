@@ -11,6 +11,8 @@ import { execute } from "./execute.js";
 import { InMemoryStream } from "@tisyn/durable-streams";
 import { Effects } from "@tisyn/effects";
 import type { YieldEvent, CloseEvent, DurableEvent } from "@tisyn/kernel";
+import { payloadSha } from "@tisyn/kernel";
+import type { Json } from "@tisyn/ir";
 
 // ── IR helpers ──
 
@@ -36,11 +38,17 @@ function raceIR(...exprs: unknown[]) {
 
 // ── Journal event helpers ──
 
-function yieldEvent(type: string, name: string, value: unknown, coroutineId: string): YieldEvent {
+function yieldEvent(
+  type: string,
+  name: string,
+  value: unknown,
+  coroutineId: string,
+  input: Json = [],
+): YieldEvent {
   return {
     type: "yield",
     coroutineId,
-    description: { type, name },
+    description: { type, name, input, sha: payloadSha(input) },
     result: { status: "ok", value: value as never },
   };
 }

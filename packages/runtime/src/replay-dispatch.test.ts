@@ -31,8 +31,9 @@ import { execute } from "./execute.js";
 import { InMemoryStream } from "@tisyn/durable-streams";
 import { Effects, invoke } from "@tisyn/effects";
 import { Fn, Q } from "@tisyn/ir";
-import type { FnNode, Val, IrInput, TisynFn } from "@tisyn/ir";
+import type { FnNode, Val, IrInput, TisynFn, Json } from "@tisyn/ir";
 import type { YieldEvent, DurableEvent } from "@tisyn/kernel";
+import { payloadSha } from "@tisyn/kernel";
 
 // ── IR helpers ──
 
@@ -56,11 +57,17 @@ const resourceIR = (body: unknown): IrInput =>
 const provideIR = (value: unknown): IrInput =>
   ({ tisyn: "eval", id: "provide", data: value }) as unknown as IrInput;
 
-function yieldOk(type: string, name: string, value: unknown, coroutineId = "root"): YieldEvent {
+function yieldOk(
+  type: string,
+  name: string,
+  value: unknown,
+  coroutineId = "root",
+  input: Json = [],
+): YieldEvent {
   return {
     type: "yield",
     coroutineId,
-    description: { type, name },
+    description: { type, name, input, sha: payloadSha(input) },
     result: { status: "ok", value: value as never },
   };
 }
@@ -71,11 +78,12 @@ function yieldErr(
   message: string,
   errorName: string,
   coroutineId = "root",
+  input: Json = [],
 ): YieldEvent {
   return {
     type: "yield",
     coroutineId,
-    description: { type, name },
+    description: { type, name, input, sha: payloadSha(input) },
     result: { status: "error", error: { message, name: errorName } },
   };
 }
@@ -429,5 +437,100 @@ describe("runtime replay boundary (§9.5)", () => {
       value: { __tisyn_subscription: string };
     };
     expect(replayedHandle.value.__tisyn_subscription).toBe("sub:root:0");
+  });
+
+  // ── RD-PD-* payload-sensitive replay coverage ──
+
+  // RD-PD-001: live delegated dispatch writes boundary input + sha.
+  it("RD-PD-001: live delegated writes input + sha derived from descriptor.data", function* () {
+    const { journal } = yield* execute({
+      ir: effectIR("a", "op", [1, 2]) as never,
+      stream: new InMemoryStream(),
+    });
+    const e = journal.find((x) => x.type === "yield") as YieldEvent;
+    expect(e.description).toEqual({
+      type: "a",
+      name: "op",
+      input: [1, 2],
+      sha: payloadSha([1, 2]),
+    });
+  });
+
+  // RD-PD-002: max transforms data; journal records BOUNDARY (post-max) input.
+  it("RD-PD-002: max transforms payload → journal records boundary input", function* () {
+    yield* Effects.around({
+      *dispatch([eid, _data]: [string, Val], next) {
+        // Replace the entire payload before delegating.
+        return yield* next(eid, [999] as Val);
+      },
+    });
+    const { journal } = yield* execute({
+      ir: effectIR("a", "op", [1]) as never,
+      stream: new InMemoryStream(),
+    });
+    const e = journal.find((x) => x.type === "yield") as YieldEvent;
+    expect(e.description.input).toEqual([999]);
+    expect(e.description.sha).toBe(payloadSha([999]));
+  });
+
+  // RD-PD-055: stored payload-sensitive entry missing sha → DivergenceError.
+  it("RD-PD-055: stored entry missing required sha raises DivergenceError", function* () {
+    const stored: DurableEvent[] = [
+      {
+        type: "yield",
+        coroutineId: "root",
+        // Nonconforming: payload-sensitive entry without sha.
+        description: { type: "a", name: "op", input: [] },
+        result: { status: "ok", value: 42 },
+      },
+    ];
+    const { result } = yield* execute({
+      ir: effectIR("a", "op") as never,
+      stream: new InMemoryStream(stored),
+    });
+    expect(result.status).toBe("error");
+    if (result.status === "error") {
+      expect(result.error.name).toBe("DivergenceError");
+      expect(result.error.message).toContain("missing required sha");
+      expect(result.error.message).toContain("nonconforming journal");
+    }
+  });
+
+  // RD-PD-091: kernel-yielded-only hashing would falsely pass; boundary
+  // hashing catches the divergence. Max transformed [1] → [999] originally;
+  // current run transforms [1] → [888]. Stored boundary sha is from [999].
+  // If we hashed the kernel-yielded source ([1]) instead of the boundary,
+  // both runs would produce the same sha and the divergence would be missed.
+  it("RD-PD-091: regression — boundary hashing detects divergence kernel-yielded hashing would miss", function* () {
+    // Step 1: produce a journal where stored.description.input = [999]
+    // (the boundary value, after max transformed [1] → [999]).
+    const live = new InMemoryStream();
+    yield* Effects.around({
+      *dispatch([eid, _data]: [string, Val], next) {
+        return yield* next(eid, [999] as Val);
+      },
+    });
+    yield* execute({
+      ir: effectIR("a", "op", [1]) as never,
+      stream: live,
+    });
+
+    // Step 2: replay with a NEW max that transforms [1] → [888]. Source is
+    // unchanged ([1]); boundary changed ([999] → [888]). Boundary hashing
+    // MUST detect this.
+    yield* Effects.around({
+      *dispatch([eid, _data]: [string, Val], next) {
+        return yield* next(eid, [888] as Val);
+      },
+    });
+    const { result } = yield* execute({
+      ir: effectIR("a", "op", [1]) as never,
+      stream: live,
+    });
+    expect(result.status).toBe("error");
+    if (result.status === "error") {
+      expect(result.error.name).toBe("DivergenceError");
+      expect(result.error.message).toContain("payload mismatch");
+    }
   });
 });

@@ -17,6 +17,7 @@ import { describe, it } from "@effectionx/vitest";
 import { expect } from "vitest";
 import { InMemoryStream } from "@tisyn/durable-streams";
 import type { DurableEvent, YieldEvent, CloseEvent } from "@tisyn/kernel";
+import { payloadSha } from "@tisyn/kernel";
 import { Fn, Eval, Ref, Q } from "@tisyn/ir";
 import type { FnNode, TisynFn, Val } from "@tisyn/ir";
 import { agent, Agents, operation, useAgent } from "@tisyn/agent";
@@ -110,8 +111,12 @@ describe("nested invocation", () => {
 
     const childYields = yields(journal).filter((e) => e.coroutineId === "root.0");
     expect(childYields).toHaveLength(2);
-    expect(childYields[0]?.description).toEqual({ type: "child", name: "E1" });
-    expect(childYields[1]?.description).toEqual({ type: "child", name: "E2" });
+    expect(childYields[0]?.description).toEqual({
+      type: "child", name: "E1", input: [], sha: payloadSha([]),
+    });
+    expect(childYields[1]?.description).toEqual({
+      type: "child", name: "E2", input: [], sha: payloadSha([]),
+    });
 
     const childCloses = closes(journal).filter((e) => e.coroutineId === "root.0");
     expect(childCloses).toHaveLength(1);
