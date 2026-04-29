@@ -19,6 +19,7 @@ import {
   type EventResult,
   parseEffectId,
   payloadSha,
+  payloadIdentity,
   isCompoundExternal,
 } from "@tisyn/kernel";
 import {
@@ -893,12 +894,18 @@ export function* execute(options: ExecuteOptions): Operation<ExecuteResult> {
       // Construct the boundary description from the post-max
       // [effectId, data] reaching this point. For chain-dispatched
       // effects, this is the durable identity (spec §9.5.3).
+      //
+      // payloadIdentity snapshots `data` once and derives both `input`
+      // and `sha` from the same canonical encoding. This prevents
+      // downstream middleware / handlers from mutating `data` in place
+      // and leaving the journal with `description.input` and
+      // `description.sha` out of sync.
       const boundary = parseEffectId(effectId);
-      const boundarySha = payloadSha(data as Json);
+      const { input: boundaryInput, sha: boundarySha } = payloadIdentity(data as Json);
       const boundaryDescription: EffectDescription = {
         type: boundary.type,
         name: boundary.name,
-        input: data,
+        input: boundaryInput,
         sha: boundarySha,
       };
 
@@ -2435,13 +2442,17 @@ function* dispatchStandardEffect(
     // Live write: payload-sensitive runtime-direct (stream.next) carries
     // input + sha; non-canonicalizable runtime-direct (stream.subscribe,
     // __config) omit both per spec §9.5.8.
+    //
+    // payloadIdentity snapshots descriptor.data once and derives both
+    // input and sha from the same canonical encoding, so the journal's
+    // input/sha pair stays self-consistent even if descriptor.data is
+    // mutated in place after this point.
     const liveDescription: EffectDescription = isNonCanonicalizable
       ? sourceDescription
       : {
           type: sourceDescription.type,
           name: sourceDescription.name,
-          input: descriptor.data as Val,
-          sha: payloadSha(descriptor.data as Json),
+          ...payloadIdentity(descriptor.data as Json),
         };
     const yieldEvent: YieldEvent = {
       type: "yield",
@@ -2563,11 +2574,13 @@ function* dispatchStandardEffect(
     ? { status: "error", error: { message: threw.message, name: threw.name } }
     : { status: "ok", value: resultValue as Json };
 
+  // Source-fallback path snapshots descriptor.data via payloadIdentity so
+  // the journaled input/sha pair stays tied even if max mutated
+  // descriptor.data before short-circuiting.
   const journalDescription: EffectDescription = runtimeCtxValue.boundaryDescription ?? {
     type: sourceDescription.type,
     name: sourceDescription.name,
-    input: descriptor.data as Val,
-    sha: payloadSha(descriptor.data as Json),
+    ...payloadIdentity(descriptor.data as Json),
   };
   const yieldEvent: YieldEvent = {
     type: "yield",

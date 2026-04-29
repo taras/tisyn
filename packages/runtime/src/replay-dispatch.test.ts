@@ -533,4 +533,61 @@ describe("runtime replay boundary (§9.5)", () => {
       expect(result.error.message).toContain("payload mismatch");
     }
   });
+
+  // RD-PD-095 (mutation-stability variant): the journaled
+  // description.input/sha pair is a snapshot of the boundary payload at
+  // the moment the lane runs. Subsequent in-place mutation of the array
+  // or object passed to next(...) MUST NOT drift the journal: input is
+  // a fresh value graph (no live reference into caller data) and sha is
+  // computed from the same canonical encoding, so
+  // sha === payloadSha(input) always holds.
+  it("RD-PD-095 (mutation): boundary input/sha snapshot survives in-place payload mutation", function* () {
+    let mutationTarget: { count: number; tag: string }[] | null = null;
+
+    // Max delegates an object/array payload through next.
+    yield* Effects.around({
+      *dispatch([eid, _data]: [string, Val], next) {
+        const fresh: { count: number; tag: string }[] = [{ count: 1, tag: "original" }];
+        mutationTarget = fresh;
+        return yield* next(eid, fresh as unknown as Val);
+      },
+    });
+
+    // Min mutates the payload in place AFTER the lane has run and
+    // stashed the boundary description, but BEFORE the live write.
+    yield* Effects.around(
+      {
+        *dispatch([_eid, data]: [string, Val]) {
+          const arr = data as unknown as { count: number; tag: string }[];
+          arr[0]!.count = 9999;
+          arr[0]!.tag = "mutated";
+          arr.push({ count: 7777, tag: "appended" });
+          return null as Val;
+        },
+      },
+      { at: "min" },
+    );
+
+    const { journal } = yield* execute({
+      ir: effectIR("a", "op", []) as never,
+      stream: new InMemoryStream(),
+    });
+
+    // Sanity: the live data graph the middleware shared was indeed
+    // mutated, so this test would fail if the journal aliased it.
+    expect(mutationTarget).not.toBeNull();
+    expect(mutationTarget![0]!.count).toBe(9999);
+    expect(mutationTarget!).toHaveLength(2);
+
+    const ev = journal.find((e) => e.type === "yield") as YieldEvent;
+    // Snapshot was taken before mutation: original shape preserved.
+    expect(ev.description.input).toEqual([{ count: 1, tag: "original" }]);
+    // sha matches payloadSha of the journaled input — the load-bearing
+    // invariant. If the snapshot leaked a live reference, this would
+    // either fail (sha computed pre-mutation, input mutated) or, if
+    // computed post-mutation, the snapshot wouldn't match the original.
+    expect(ev.description.sha).toBe(payloadSha(ev.description.input!));
+    // And explicitly: input is NOT the mutated graph.
+    expect(ev.description.input).not.toBe(mutationTarget);
+  });
 });
