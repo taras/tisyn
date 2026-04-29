@@ -14,9 +14,11 @@ import {
   type DurableEvent,
   type YieldEvent,
   type CloseEvent,
+  type EffectDescription,
   type EffectDescriptor,
   type EventResult,
   parseEffectId,
+  payloadSha,
   isCompoundExternal,
 } from "@tisyn/kernel";
 import {
@@ -104,6 +106,16 @@ interface DriveContext {
 interface RuntimeDispatchValue {
   coroutineId: string;
   ctx: DriveContext;
+  /**
+   * Boundary description for chain-dispatched delegated dispatch.
+   * Set by the replay lane on the live path (no stored cursor) from the
+   * post-max `[effectId, data]` reaching the boundary, then read by
+   * `dispatchStandardEffect` for the live journal write per
+   * scoped-effects §9.5.3. Undefined for short-circuit (max returned
+   * without `next`); the post-dispatch path falls back to source
+   * identity per §9.5.5.
+   */
+  boundaryDescription?: EffectDescription;
 }
 
 const RuntimeDispatchContext = createContext<RuntimeDispatchValue | null>(
@@ -863,10 +875,12 @@ export function* execute(options: ExecuteOptions): Operation<ExecuteResult> {
     }
 
     // Install the replay-substitution lane. The middleware fires on every
-    // dispatch that enters the Effects chain; when no RuntimeDispatchContext
-    // is set (e.g. a raw test-only dispatch outside the kernel driver) or
-    // when no stored cursor entry exists, it passes through to `next`.
-    // Structural replay substitution — §9.5 of the scoped-effects spec.
+    // chain-dispatched effect that enters the Effects chain. When no
+    // RuntimeDispatchContext is set (e.g. a raw test-only dispatch outside
+    // the kernel driver) it passes through to `next`. Otherwise it
+    // constructs the post-max boundary description (per scoped-effects
+    // §9.5.3) and either substitutes the stored result (replay) or sets
+    // the boundary on RuntimeDispatchContext for the live write path.
     yield* installReplayDispatch(function* replayLane(
       [effectId, data]: [string, Val],
       next: (eid: string, d: Val) => Operation<Val>,
@@ -876,20 +890,56 @@ export function* execute(options: ExecuteOptions): Operation<ExecuteResult> {
         return yield* next(effectId, data);
       }
 
+      // Construct the boundary description from the post-max
+      // [effectId, data] reaching this point. For chain-dispatched
+      // effects, this is the durable identity (spec §9.5.3).
+      const boundary = parseEffectId(effectId);
+      const boundarySha = payloadSha(data as Json);
+      const boundaryDescription: EffectDescription = {
+        type: boundary.type,
+        name: boundary.name,
+        input: data,
+        sha: boundarySha,
+      };
+
       const stored = rctx.ctx.replayIndex.peekYield(rctx.coroutineId);
+
       if (stored == null) {
+        // Live path: stash the boundary description so
+        // dispatchStandardEffect's post-dispatch live write can journal
+        // boundary identity rather than source identity (§9.5.3).
+        rctx.boundaryDescription = boundaryDescription;
         return yield* next(effectId, data);
       }
 
-      // Authoritative divergence check runs in the helper BEFORE the chain;
-      // the defensive re-check here guards against runtime bugs.
-      const description = parseEffectId(effectId);
+      // Replay path: authoritative comparison at the boundary per
+      // kernel §10.2 / scoped-effects §9.5.3. type/name + sha.
+      const cursor = rctx.ctx.replayIndex.getCursor(rctx.coroutineId);
       if (
-        stored.description.type !== description.type ||
-        stored.description.name !== description.name
+        stored.description.type !== boundary.type ||
+        stored.description.name !== boundary.name
       ) {
-        throw new RuntimeBugError(
-          `Replay lane observed descriptor mismatch at ${rctx.coroutineId}`,
+        throw new DivergenceError(
+          `Divergence at ${rctx.coroutineId}[${cursor}]: ` +
+            `expected ${stored.description.type}.${stored.description.name}, ` +
+            `got ${boundary.type}.${boundary.name}`,
+        );
+      }
+      // Chain-dispatched effects are payload-sensitive (spec §9.5.0
+      // definition; the non-canonicalizable carve-outs are runtime-direct
+      // and never reach the chain). `sha` is required.
+      if (stored.description.sha == null) {
+        throw new DivergenceError(
+          `Divergence at ${rctx.coroutineId}[${cursor}]: ` +
+            `stored entry for ${boundary.type}.${boundary.name} missing required sha — nonconforming journal`,
+        );
+      }
+      if (stored.description.sha !== boundarySha) {
+        throw new DivergenceError(
+          `Divergence at ${rctx.coroutineId}[${cursor}]: ` +
+            `payload mismatch for ${boundary.type}.${boundary.name}:\n` +
+            `  stored sha: ${stored.description.sha}\n` +
+            `  current sha: ${boundarySha}`,
         );
       }
 
@@ -2232,34 +2282,61 @@ function* dispatchStandardEffect(
     durableTaskTable,
   } = params;
 
-  const description = parseEffectId(descriptor.id);
+  const sourceDescription = parseEffectId(descriptor.id);
   const stored = ctx.replayIndex.peekYield(coroutineId);
 
-  // Authoritative divergence pre-check. Applies to both intrinsic and
-  // agent-effect paths; runs before any live handling.
-  if (stored) {
-    if (
-      stored.description.type !== description.type ||
-      stored.description.name !== description.name
-    ) {
-      const cursor = ctx.replayIndex.getCursor(coroutineId);
-      throw new DivergenceError(
-        `Divergence at ${coroutineId}[${cursor}]: ` +
-          `expected ${stored.description.type}.${stored.description.name}, ` +
-          `got ${description.type}.${description.name}`,
-      );
-    }
-  }
-
-  // ── Runtime intrinsic bypass ──
-  const isIntrinsic =
+  // ── Runtime-direct bypass ──
+  // Per scoped-effects §3.1.1, three effects bypass the user-facing
+  // Effects chain: __config, stream.subscribe, stream.next. Of these,
+  // stream.subscribe and __config are non-canonicalizable (no input/no
+  // sha journaled; sha not compared on replay) per §9.5.8. stream.next
+  // is payload-sensitive (sha journaled and compared per kernel §10.2).
+  const isRuntimeDirect =
     descriptor.id === "__config" ||
     descriptor.id === "stream.subscribe" ||
     descriptor.id === "stream.next";
+  const isNonCanonicalizable =
+    descriptor.id === "stream.subscribe" || descriptor.id === "__config";
 
-  if (isIntrinsic) {
+  if (isRuntimeDirect) {
+    // Pre-check: type/name compare for all runtime-direct effects.
+    // Payload-sensitive runtime-direct (stream.next) additionally
+    // requires sha; non-canonicalizable runtime-direct effects skip
+    // the sha check (missing sha is expected per §9.5.8).
     if (stored) {
-      // Replay intrinsic.
+      if (
+        stored.description.type !== sourceDescription.type ||
+        stored.description.name !== sourceDescription.name
+      ) {
+        const cursor = ctx.replayIndex.getCursor(coroutineId);
+        throw new DivergenceError(
+          `Divergence at ${coroutineId}[${cursor}]: ` +
+            `expected ${stored.description.type}.${stored.description.name}, ` +
+            `got ${sourceDescription.type}.${sourceDescription.name}`,
+        );
+      }
+      if (!isNonCanonicalizable) {
+        // stream.next: payload-sensitive. sha required.
+        if (stored.description.sha == null) {
+          const cursor = ctx.replayIndex.getCursor(coroutineId);
+          throw new DivergenceError(
+            `Divergence at ${coroutineId}[${cursor}]: ` +
+              `stored entry for ${sourceDescription.type}.${sourceDescription.name} missing required sha — nonconforming journal`,
+          );
+        }
+        const currentSha = payloadSha(descriptor.data as Json);
+        if (currentSha !== stored.description.sha) {
+          const cursor = ctx.replayIndex.getCursor(coroutineId);
+          throw new DivergenceError(
+            `Divergence at ${coroutineId}[${cursor}]: ` +
+              `payload mismatch for ${sourceDescription.type}.${sourceDescription.name}:\n` +
+              `  stored sha: ${stored.description.sha}\n` +
+              `  current sha: ${currentSha}`,
+          );
+        }
+      }
+
+      // Replay runtime-direct.
       ctx.replayIndex.consumeYield(coroutineId);
 
       // stream.subscribe replay: restore subscription map entry from stored
@@ -2359,10 +2436,21 @@ function* dispatchStandardEffect(
       };
     }
 
+    // Live write: payload-sensitive runtime-direct (stream.next) carries
+    // input + sha; non-canonicalizable runtime-direct (stream.subscribe,
+    // __config) omit both per spec §9.5.8.
+    const liveDescription: EffectDescription = isNonCanonicalizable
+      ? sourceDescription
+      : {
+          type: sourceDescription.type,
+          name: sourceDescription.name,
+          input: descriptor.data as Val,
+          sha: payloadSha(descriptor.data as Json),
+        };
     const yieldEvent: YieldEvent = {
       type: "yield",
       coroutineId,
-      description,
+      description: liveDescription,
       result: effectResult,
     };
     yield* ctx.stream.append(yieldEvent);
@@ -2370,7 +2458,7 @@ function* dispatchStandardEffect(
     return { replayed: false, result: effectResult };
   }
 
-  // ── Agent-effect path ──
+  // ── Chain-dispatched (agent-effect) path ──
 
   // Peek-miss guards (only apply when stored == null → live dispatch).
   if (stored == null) {
@@ -2431,8 +2519,35 @@ function* dispatchStandardEffect(
   if (!replayed && stored) {
     // §9.5.5: max middleware short-circuited without calling `next`. The
     // lane never fired, so the cursor is still present and authoritative.
-    // Runtime consumes it now, journals the stored event, and overrides
-    // the short-circuit return value.
+    // Replay-identity here is the SOURCE descriptor (the request never
+    // reached the post-max boundary). Per kernel §10.2: type/name + sha
+    // must all match.
+    const cursor = ctx.replayIndex.getCursor(coroutineId);
+    if (
+      stored.description.type !== sourceDescription.type ||
+      stored.description.name !== sourceDescription.name
+    ) {
+      throw new DivergenceError(
+        `Divergence at ${coroutineId}[${cursor}]: ` +
+          `expected ${stored.description.type}.${stored.description.name}, ` +
+          `got ${sourceDescription.type}.${sourceDescription.name}`,
+      );
+    }
+    if (stored.description.sha == null) {
+      throw new DivergenceError(
+        `Divergence at ${coroutineId}[${cursor}]: ` +
+          `stored entry for ${sourceDescription.type}.${sourceDescription.name} missing required sha — nonconforming journal`,
+      );
+    }
+    const currentSha = payloadSha(descriptor.data as Json);
+    if (currentSha !== stored.description.sha) {
+      throw new DivergenceError(
+        `Divergence at ${coroutineId}[${cursor}]: ` +
+          `payload mismatch for ${sourceDescription.type}.${sourceDescription.name}:\n` +
+          `  stored sha: ${stored.description.sha}\n` +
+          `  current sha: ${currentSha}`,
+      );
+    }
     ctx.replayIndex.consumeYield(coroutineId);
     const replayedEvent: YieldEvent = {
       type: "yield",
@@ -2444,15 +2559,25 @@ function* dispatchStandardEffect(
     return { replayed: true, result: stored.result };
   }
 
-  // Live dispatch — persist-before-resume.
+  // Live dispatch — persist-before-resume. Journal description is the
+  // BOUNDARY descriptor (set by the replay lane on the live path) when
+  // max delegated through `next`. If max short-circuited, the lane never
+  // ran and we fall back to the SOURCE descriptor per §9.5.5.
   const effectResult: EventResult = threw
     ? { status: "error", error: { message: threw.message, name: threw.name } }
     : { status: "ok", value: resultValue as Json };
 
+  const journalDescription: EffectDescription =
+    runtimeCtxValue.boundaryDescription ?? {
+      type: sourceDescription.type,
+      name: sourceDescription.name,
+      input: descriptor.data as Val,
+      sha: payloadSha(descriptor.data as Json),
+    };
   const yieldEvent: YieldEvent = {
     type: "yield",
     coroutineId,
-    description,
+    description: journalDescription,
     result: effectResult,
   };
   yield* ctx.stream.append(yieldEvent);
