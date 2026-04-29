@@ -114,10 +114,15 @@ through a per-agent Context API into the scope's `Effects`
 middleware chain.
 
 **Dispatch boundary.** The interception point through which all
-effects flow. Middleware composes around this boundary.
-Workflow-level effect execution enters from the outside. The
-runtime MUST expose this boundary; the exact API surface is
-part of the reference API.
+**chain-dispatched** effects flow (see §3.1, §3.1.1).
+Middleware installed via `Effects.around` composes around this
+boundary. Workflow-level chain-dispatched effect execution
+enters from the outside. The runtime MUST expose this
+boundary; the exact API surface is part of the reference API.
+Runtime-direct effects classified by §3.1.1 (`__config`,
+`stream.subscribe`, `stream.next`) do NOT flow through this
+boundary; the runtime handles them via its own standard-effect
+dispatch path.
 
 **Global dispatch.** The outermost dispatch operation. When
 workflow code performs an effect, it enters the full middleware
@@ -1500,37 +1505,57 @@ this Appendix A catalog.
 
 ### A.2 Journaling Contracts
 
-Each built-in effect SHOULD produce journal entries with the
-following description/result shapes. These shapes are designed
-to support replay, security redaction, and guard integration.
+Each built-in effect produces a `YieldEvent` whose
+`description` follows the uniform envelope defined by
+`tisyn-kernel-specification.md` §9.1: `{ type, name, input,
+sha }`. The `type` and `name` are derived from the effect ID
+via `parseEffectId(...)`; `sha = payloadSha(input)`. This
+appendix specifies the recommended shape of `description.input`
+(the canonicalizable durable payload) and the recommended
+result shape for each effect. Redaction, hashing, and
+sort/normalization expectations apply to `description.input`
+under that envelope; they MUST NOT be expressed by replacing
+the envelope with an alternative top-level description schema.
 
 **`tisyn.sleep`**
-- Description: `{ kind: "tisyn.sleep", duration: number }`
-- Result: `{ completedAt: string }`
-- On replay: return immediately, no wait.
+- `description.type` = `"tisyn"`, `description.name` = `"sleep"`.
+- `description.input`: `{ duration: number }`.
+- Result: `{ completedAt: string }`.
+- On replay: return the stored result immediately, no wait.
 
 **`tisyn.fetch`**
-- Description: `{ kind: "tisyn.fetch", url, method, safeHeaders, bodyHash }`
-- Result: `{ status, filteredHeaders, body, bodyHash }`
+- `description.type` = `"tisyn"`, `description.name` = `"fetch"`.
+- `description.input`: `{ url, method, safeHeaders, bodyHash }`.
+- Result: `{ status, filteredHeaders, body, bodyHash }`.
 - Security: sensitive request headers SHOULD be redacted from
-  the description. Request body SHOULD be hashed, not stored.
+  `description.input.safeHeaders`. The request body SHOULD be
+  hashed into `description.input.bodyHash` and SHOULD NOT be
+  stored in `description.input` in raw form.
 
 **`tisyn.exec`**
-- Description: `{ kind: "tisyn.exec", command, cwd, envKeys, timeout }`
-- Result: `{ exitCode, stdout, stderr }`
+- `description.type` = `"tisyn"`, `description.name` = `"exec"`.
+- `description.input`: `{ command, cwd, envKeys, timeout }`.
+- Result: `{ exitCode, stdout, stderr }`.
 - Security: environment variable values SHOULD NOT appear in
-  the description. Only key names are recorded.
+  `description.input`. Only key names (`envKeys`) are recorded.
 
 **`tisyn.readFile`**
-- Description: `{ kind: "tisyn.readFile", path, encoding }`
-- Result: `{ content, contentHash }`
+- `description.type` = `"tisyn"`, `description.name` = `"readFile"`.
+- `description.input`: `{ path, encoding }`.
+- Result: `{ content, contentHash }`.
 - The `contentHash` field enables replay guard integration.
 
 **`tisyn.glob`**
-- Description: `{ kind: "tisyn.glob", baseDir, include, exclude }`
-- Result: `{ matches: [{path, contentHash}], scanHash }`
+- `description.type` = `"tisyn"`, `description.name` = `"glob"`.
+- `description.input`: `{ baseDir, include, exclude }`.
+- Result: `{ matches: [{path, contentHash}], scanHash }`.
 - Matches SHOULD be sorted by path. Duplicates SHOULD be
   removed.
+
+`description.sha` is `payloadSha(description.input)` for every
+entry above (kernel §9.1). Implementations MAY emit
+`description.input` with canonical key ordering; `sha` is
+deterministic either way.
 
 ### A.3 Design Rationale
 
