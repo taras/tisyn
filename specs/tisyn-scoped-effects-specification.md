@@ -42,7 +42,9 @@ underlying scoped-effects semantics that surface builds on.
 
 The specification also defines:
 
-- a dispatch boundary through which all effects flow,
+- a dispatch boundary through which all chain-dispatched
+  effects flow (runtime-direct effects classified by §3.1.1
+  follow a separate runtime-owned path),
 - a cross-boundary middleware protocol using IR `Fn` nodes,
 - scope-local dispatch semantics for IR middleware logic, and
 - durability requirements for cross-boundary middleware as
@@ -250,11 +252,15 @@ const Effects = createApi("tisyn.effects", {
 ````
 
 The dispatch boundary is the semantic primitive of the Effects
-API. All effects — built-in and user-defined — MUST flow
-through it. The built-in typed methods (`sleep`, `fetch`,
-`readFile`, `glob`, `exec`) are convenience surface only; they
-lower to `dispatch` calls with reserved `tisyn.*` effect IDs
-and carry no independent semantics beyond that lowering.
+API. All **chain-dispatched** effects — built-in and
+user-defined — MUST flow through it. Runtime-direct effects
+(§3.1.1) bypass the user-facing Effects chain and are handled
+by the runtime's own standard-effect dispatch path. The
+built-in typed methods (`sleep`, `fetch`, `readFile`, `glob`,
+`exec`) are convenience surface for chain-dispatched
+built-ins; they lower to `dispatch` calls with reserved
+`tisyn.*` effect IDs and carry no independent semantics beyond
+that lowering.
 
 For v1 of scoped effects, only the generic `Effects` boundary
 is required. Implementations do **not** need to provide the
@@ -262,16 +268,21 @@ typed convenience methods (`Effects.sleep`, `Effects.fetch`,
 `Effects.readFile`, `Effects.glob`, `Effects.exec`) yet. Those
 remain deferred to a later tooling-oriented pass. Middleware
 and interception semantics in this specification apply to plain
-effect IDs regardless of whether convenience methods exist.
+chain-dispatched effect IDs regardless of whether convenience
+methods exist.
 
 > **Note:** The exact convenience method surface is provisional
 > and MAY evolve. The normative commitments of this section are:
-> (a) the runtime MUST expose a dispatch boundary, (b) the
-> `tisyn.*` namespace is reserved for built-in effects, and
-> (c) built-in effects MUST be interceptable by middleware the
-> same way as user-defined effects. The specific set of
-> convenience methods and their signatures are not yet the
-> primary normative commitment. See Appendix A for the current
+> (a) the runtime MUST expose a dispatch boundary; (b) the
+> `tisyn.*` namespace is reserved for built-in effects; (c)
+> chain-dispatched built-in effects (e.g., `sleep`, `fetch`,
+> `readFile`, `glob`, `exec`) MUST be interceptable by
+> middleware the same way as user-defined effects, while
+> runtime-direct effects classified by §3.1.1 (`__config`,
+> `stream.subscribe`, `stream.next`) MUST NOT be intercepted by
+> `Effects.around`. The specific set of convenience methods and
+> their signatures are not yet the primary normative
+> commitment. See Appendix A for the current chain-dispatched
 > built-in effect catalog.
 
 ---
@@ -1339,8 +1350,13 @@ involved in this routing decision.
 The runtime MUST:
 
 1. **Provide a dispatch boundary.** Expose a scoped dispatch
-   boundary through which all effects flow. Built-in effects
-   and user-defined effects MUST enter the same boundary.
+   boundary through which all chain-dispatched effects flow.
+   Chain-dispatched built-in effects and user-defined effects
+   MUST enter the same boundary. Runtime-direct effects
+   classified by §3.1.1 (`__config`, `stream.subscribe`,
+   `stream.next`) MUST NOT enter the user-facing Effects
+   chain; the runtime handles them via its own standard-effect
+   dispatch path.
 2. **Process transport binding.** Bind agent identities to
    transport implementations within the current scope. Manage
    transport lifetime — shut down on scope exit.
@@ -1360,12 +1376,17 @@ The runtime MUST:
    Store cross-boundary IR middleware logic alongside other
    execution inputs. Validate consistency on replay (§9).
 7. **Provide the generic effect boundary.** The runtime MUST
-   route plain effect IDs, including reserved `tisyn.*` IDs,
-   through the same scoped `Effects` boundary.
-8. **Handle built-in effects when implemented.** If the runtime
-   implements any provisional built-in `tisyn.*` effects, it
-   MUST route them through the same boundary and journal them
-   per Appendix A.
+   route plain chain-dispatched effect IDs, including reserved
+   `tisyn.*` IDs that are chain-dispatched, through the same
+   scoped `Effects` boundary. Runtime-direct effects (§3.1.1)
+   are routed through the runtime's standard-effect dispatch
+   path instead.
+8. **Handle chain-dispatched built-in effects when implemented.**
+   If the runtime implements any provisional chain-dispatched
+   built-in `tisyn.*` effects, it MUST route them through the
+   same boundary and journal them per Appendix A.
+   Runtime-direct built-ins follow the runtime-direct dispatch
+   path defined in §9.5.8.
 9. **Route user-defined effects.** Route non-`tisyn.*` effect
    IDs to agent-registered handlers via transport bindings.
 
@@ -1468,7 +1489,14 @@ effect IDs under the reserved `tisyn.*` namespace:
 | `tisyn.readFile` | File read |
 | `tisyn.glob` | Directory scan |
 
-All built-in effects are subject to middleware per §3.1.
+The chain-dispatched built-in effects listed above
+(`tisyn.sleep`, `tisyn.fetch`, `tisyn.exec`, `tisyn.readFile`,
+`tisyn.glob`) are subject to middleware per §3.1. The
+runtime-direct effects classified by §3.1.1 (`__config`,
+`stream.subscribe`, `stream.next`) are NOT subject to
+`Effects.around` middleware; they are handled by the runtime's
+standard-effect dispatch path per §9.5.8 and are not part of
+this Appendix A catalog.
 
 ### A.2 Journaling Contracts
 

@@ -544,9 +544,9 @@ and does NOT subsume this matrix.
 |---|---|---|---|---|---|
 | RD-PD-DC-001 | Core | Workflow-visible | `sleep` is intercepted by max middleware | Max `Effects.around` intercepts `sleep` effectId, returns `42`. Execute `sleep(100)`. | Result is `42`. `sleep` entered the Effects chain. |
 | RD-PD-DC-002 | Core | Journal-visible | `sleep` uses boundary identity when max transforms | Max transforms `sleep` data `[100]` → `[0]` before `next`. | Journal: `input=[0]`, `sha=payloadSha([0])`. Boundary identity, not source. |
-| RD-PD-DC-003 | Core | Diagnostic | `__config` is NOT intercepted by `Effects.around` | Install max `Effects.around` dispatch middleware that logs all effectIds it sees. Execute an IR that reads config. | `"__config"` does NOT appear in the middleware log. Config read succeeds. |
-| RD-PD-DC-004 | Core | Diagnostic | `stream.next` is NOT intercepted by `Effects.around` | Install max `Effects.around` dispatch middleware that logs. Execute IR with `stream.subscribe` + `stream.next`. | `"stream.next"` and `"stream.subscribe"` do NOT appear in middleware log. Stream operations succeed. |
-| RD-PD-DC-005 | Core | Journal-visible + Diagnostic | `stream.subscribe` is NOT intercepted and writes no `input`/`sha` | Same setup as DC-004. Inspect journal for subscribe event. | Subscribe YieldEvent: no `input`, no `sha`. Not in middleware log. |
+| RD-PD-DC-003 | Core | Workflow-visible | `__config` is NOT intercepted by `Effects.around` | Install max `Effects.around` dispatch middleware that appends each observed effectId to a workflow-visible log array. Execute an IR that reads config. | `"__config"` does NOT appear in the log. Config read succeeds. (Log is workflow-visible because the middleware is user-installed and its accumulator is observable from authored code.) |
+| RD-PD-DC-004 | Core | Workflow-visible | `stream.next` is NOT intercepted by `Effects.around` | Install max `Effects.around` dispatch middleware that appends each observed effectId to a workflow-visible log array. Execute IR with `stream.subscribe` + `stream.next`. | `"stream.next"` and `"stream.subscribe"` do NOT appear in the log. Stream operations succeed. |
+| RD-PD-DC-005 | Core | Workflow-visible + Journal-visible | `stream.subscribe` is NOT intercepted and writes no `input`/`sha` | Same setup as DC-004. Inspect the user-installed middleware log AND the journal for the subscribe event. | Subscribe YieldEvent: no `input`, no `sha`. `"stream.subscribe"` does not appear in the user-installed middleware log. |
 | RD-PD-DC-006 | Core | Journal-visible | Chain-dispatched and runtime-direct built-ins have different replay identity rules | Two effects: `sleep(100)` (chain-dispatched) and `stream.next(handle)` (runtime-direct). Max middleware transforms `sleep` data. | `sleep` YieldEvent has boundary identity (transformed data). `stream.next` YieldEvent has source identity (kernel-yielded data). |
 
 #### 13.12.4 Runtime-Direct Payload-Sensitive Effects
@@ -640,8 +640,8 @@ and does NOT subsume this matrix.
 
 | ID | Tier | Obs. class | Description | Setup | Expected |
 |---|---|---|---|---|---|
-| RD-PD-096 | Core | Diagnostic | Updated conformance fixtures pass | Run all conformance replay fixtures (with `input`/`sha`). | All pass. |
-| RD-PD-097 | Core | Diagnostic | Fixture omitting `sha` for payload-sensitive effect fails | Stale fixture without `sha` for `a.op`. | Fails. |
+| RD-PD-096 | Core | Journal-visible | Updated conformance fixtures pass | Run all conformance replay fixtures (with `input`/`sha`); the harness compares actual `YieldEvent` journals against the fixture's expected journal. | All fixtures pass: actual journals match expected journals. |
+| RD-PD-097 | Core | Journal-visible | Fixture omitting `sha` for payload-sensitive effect fails | Stale fixture without `sha` for `a.op`; harness compares actual journal against expected journal. | Harness reports a journal mismatch and the fixture fails. |
 
 #### 13.12.15 Regression Protection
 
