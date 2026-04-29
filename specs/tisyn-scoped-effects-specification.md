@@ -156,21 +156,25 @@ the core execution spec for the complete set.
 ### 3.1 Requirements
 
 The runtime MUST expose a dispatch boundary through which all
-effects flow — both built-in and user-defined. Middleware
-composes around this boundary. The dispatch boundary is the
-single interception point for all effect traffic within a scope.
+**chain-dispatched** effects flow — both built-in and
+user-defined. Middleware installed via the middleware
+installation primitive (`Effects.around`) composes around this
+boundary. The dispatch boundary is the single interception
+point for chain-dispatched effect traffic within a scope.
+Runtime-direct effects classified by §3.1.1 (`__config`,
+`stream.subscribe`, `stream.next`) follow a separate
+runtime-owned dispatch path outside the user-facing Effects
+chain and do NOT pass through this boundary.
 
-All effects MUST enter the dispatch boundary uniformly, **except
-effects classified as runtime-direct by this or a companion
-specification** (see §3.1.1). Runtime-direct effects are handled
-by the runtime's standard-effect dispatch path before entering
-the Effects middleware chain. Middleware installed via the
-middleware installation primitive (`Effects.around`) MUST
-intercept all chain-dispatched effects — both built-in and
-user-defined — uniformly. Middleware installed via
-`Effects.around` MUST NOT intercept runtime-direct effects; the
-runtime MUST route runtime-direct effects through its own
-dispatch path, not through the user-facing Effects chain.
+All chain-dispatched effects MUST enter the dispatch boundary
+uniformly. The runtime MUST NOT introduce a separate path for
+chain-dispatched built-in effects that bypasses middleware.
+`Effects.around` MUST intercept all chain-dispatched effects —
+built-in and user-defined — uniformly. Runtime-direct effects
+are the only documented exception: `Effects.around` MUST NOT
+intercept them, and the runtime MUST route them through its own
+standard-effect dispatch path rather than through the
+user-facing Effects chain.
 
 > **Non-normative.** Three dispatch paths reach effect
 > resolution under this specification:
