@@ -3,7 +3,6 @@ import { workflow, agent, transport, env, journal, entrypoint, server } from "@t
 import type {
   BrowserControlPatch,
   EffectRequestRecord,
-  FinalSnapshot,
   InvokeOutcome,
   LoopControl,
   PeerRecord,

@@ -175,7 +175,9 @@ export function* runHarness(options: HarnessOptions): Operation<HarnessResult> {
 
   const enqueuePatchesForTurn = (turn: number) => {
     const queued = options.controlPatchesAfterTurn?.[turn];
-    if (!queued) return;
+    if (!queued) {
+      return;
+    }
     for (const patch of queued) {
       patchQueue.push(patch);
     }

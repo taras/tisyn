@@ -82,9 +82,13 @@ function* runPeerLoopScoped(args: {
     },
     *nextControlPatch() {
       liveCalls.push("App.nextControlPatch");
-      if (patchQueue.length > 0) return patchQueue.shift()!;
+      if (patchQueue.length > 0) {
+        return patchQueue.shift()!;
+      }
       const sub = yield* patchReady;
-      while (patchQueue.length === 0) yield* sub.next();
+      while (patchQueue.length === 0) {
+        yield* sub.next();
+      }
       return patchQueue.shift()!;
     },
     *hydrate() {
@@ -119,7 +123,9 @@ function* runPeerLoopScoped(args: {
     *takeTurn() {
       liveCalls.push("OpusAgent.takeTurn");
       const next = opusQueue.shift();
-      if (!next) throw new Error("OPUS_EXHAUSTED");
+      if (!next) {
+        throw new Error("OPUS_EXHAUSTED");
+      }
       return next;
     },
   });
@@ -142,11 +148,15 @@ function* runPeerLoopScoped(args: {
     *seed({ effects }) {
       liveCalls.push("EffectsQueue.seed");
       effectsQueue.length = 0;
-      for (const e of effects) effectsQueue.push(e);
+      for (const e of effects) {
+        effectsQueue.push(e);
+      }
     },
     *shift() {
       liveCalls.push("EffectsQueue.shift");
-      if (effectsQueue.length === 0) return { effect: null };
+      if (effectsQueue.length === 0) {
+        return { effect: null };
+      }
       return { effect: effectsQueue.shift()! };
     },
   });
