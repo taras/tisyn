@@ -915,10 +915,7 @@ export function* execute(options: ExecuteOptions): Operation<ExecuteResult> {
       // Replay path: authoritative comparison at the boundary per
       // kernel §10.2 / scoped-effects §9.5.3. type/name + sha.
       const cursor = rctx.ctx.replayIndex.getCursor(rctx.coroutineId);
-      if (
-        stored.description.type !== boundary.type ||
-        stored.description.name !== boundary.name
-      ) {
+      if (stored.description.type !== boundary.type || stored.description.name !== boundary.name) {
         throw new DivergenceError(
           `Divergence at ${rctx.coroutineId}[${cursor}]: ` +
             `expected ${stored.description.type}.${stored.description.name}, ` +
@@ -2295,8 +2292,7 @@ function* dispatchStandardEffect(
     descriptor.id === "__config" ||
     descriptor.id === "stream.subscribe" ||
     descriptor.id === "stream.next";
-  const isNonCanonicalizable =
-    descriptor.id === "stream.subscribe" || descriptor.id === "__config";
+  const isNonCanonicalizable = descriptor.id === "stream.subscribe" || descriptor.id === "__config";
 
   if (isRuntimeDirect) {
     // Pre-check: type/name compare for all runtime-direct effects.
@@ -2567,13 +2563,12 @@ function* dispatchStandardEffect(
     ? { status: "error", error: { message: threw.message, name: threw.name } }
     : { status: "ok", value: resultValue as Json };
 
-  const journalDescription: EffectDescription =
-    runtimeCtxValue.boundaryDescription ?? {
-      type: sourceDescription.type,
-      name: sourceDescription.name,
-      input: descriptor.data as Val,
-      sha: payloadSha(descriptor.data as Json),
-    };
+  const journalDescription: EffectDescription = runtimeCtxValue.boundaryDescription ?? {
+    type: sourceDescription.type,
+    name: sourceDescription.name,
+    input: descriptor.data as Val,
+    sha: payloadSha(descriptor.data as Json),
+  };
   const yieldEvent: YieldEvent = {
     type: "yield",
     coroutineId,

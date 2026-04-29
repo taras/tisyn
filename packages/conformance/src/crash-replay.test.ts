@@ -159,7 +159,17 @@ describe("End-to-end crash/replay", () => {
       description: { type: string; name: string };
     };
     expect(y1.description).toEqual({ type: "x", name: "step1", input: [], sha: payloadSha([]) });
-    expect(y2.description).toEqual({ type: "x", name: "step2", input: [10], sha: payloadSha([10]) });
-    expect(y3.description).toEqual({ type: "x", name: "step3", input: [20], sha: payloadSha([20]) });
+    expect(y2.description).toEqual({
+      type: "x",
+      name: "step2",
+      input: [10],
+      sha: payloadSha([10]),
+    });
+    expect(y3.description).toEqual({
+      type: "x",
+      name: "step3",
+      input: [20],
+      sha: payloadSha([20]),
+    });
   });
 });
