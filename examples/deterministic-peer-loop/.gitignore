@@ -1,0 +1,4 @@
+src/workflow.generated.ts
+test/browser/dom-workflows.generated.ts
+test/browser/host-workflows.generated.ts
+data/

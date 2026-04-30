@@ -22,6 +22,37 @@ Specification, Tisyn Codex Specification
 
 ### Changelog
 
+**v0.1.1** — Journal-only durability amendment. Replaces
+the file-backed DB agent with a stateless Projection
+agent (§4.2) whose pure reducer operations
+(`readInitialControl`, `applyControlPatch`,
+`appendMessage`, `appendPeerRecord`,
+`appendEffectRequest`) thread application-level state
+through workflow locals. On restart, the kernel journal —
+the sole durable artifact — is replayed by the runtime;
+the workflow's local accumulators (`messages`, `control`,
+`peerRecords`, `effectRequests`, `readOnlyReason`) are
+rebuilt deterministically from the recorded return values
+of Projection ops. Collapses the App agent's
+per-message fan-out ops (`showMessage`, `loadChat`,
+`readControl`, `setReadOnly`) into a single
+`App.hydrate({ messages, control, readOnlyReason })`
+called once per main-loop iteration (§4.1) plus a
+`nextControlPatch` blocking-pull for browser-origin
+`LoopControl` patches. Adds the post-gate control-patch
+drain (§7.2 Step 2a) as the authoritative integration
+point between browser-issued control patches and each
+cycle's stop/pause/override checks. Adds a host-side
+post-execute publish step (§7.1) to guarantee browser
+hydration on terminal replay-only runs. Renames §6.10 to
+LOOP-PERSIST-1 (per-turn projection) and §7.2 Step 7 to
+the Projection-based append flow. Reasoning: the prior
+JSON store doubled the durable surface, required
+hand-kept schema parity with the workflow's own shapes,
+and had already produced a concrete `usage` field
+parity bug; the journal-only model is the canonical
+Tisyn durability pattern.
+
 **v0.1.0** — Initial draft. Defines the deterministic
 peer-loop example: a forked variant of the multi-agent-chat
 substrate that coordinates two distinct non-Taras peers
@@ -208,10 +239,10 @@ defer, reject, or surface to Taras.
 peers operate without direct access to nondeterministic
 mutating backend tools. See §6.11.
 
-**Substrate** — The App agent, DB agent, compiled workflow
-entrypoint, and WebSocket transport that collectively host
-the loop. Derived from `examples/multi-agent-chat` by
-forking.
+**Substrate** — The App agent, Projection agent, compiled
+workflow entrypoint, and WebSocket transport that
+collectively host the loop. Derived from
+`examples/multi-agent-chat` by forking.
 
 ---
 
@@ -232,7 +263,10 @@ fork MUST preserve the original's topology:
 - browser WebSocket client
 - App agent as browser boundary (extended per §4.1)
 - compiled workflow executed via `tsn run`
-- DB agent as persistence boundary (extended per §4.2)
+- Projection agent as pure-reducer boundary (§4.2) in
+  place of a persistence-owning DB agent; durable state
+  lives in the kernel journal and is reconstructed by
+  runtime replay
 
 ### 3.2 Replaced Components
 
@@ -240,33 +274,47 @@ The original example's single LLM agent is replaced by two
 distinct peer agents: `OpusAgent` and `GptAgent` (§4.3,
 §4.4).
 
-The original example's `showAssistantMessage(message)`
-operation is replaced by a multi-speaker form
-`showMessage({ speaker, content })` (§4.1).
+The original example's App-side transcript and loop-control
+fan-out is replaced by a single `hydrate` operation that
+carries the full per-iteration snapshot (§4.1).
+
+The original example's file-backed DB agent is replaced by
+a stateless Projection agent (§4.2). The example no longer
+maintains a secondary JSON store; the kernel journal is
+the sole durable artifact, and the workflow rebuilds its
+application-level view (transcript, control, peer records,
+effect-request records) from journal replay of
+Projection-op return values.
 
 ### 3.3 Added Components
 
-The App and DB agents gain operations for durable
-loop-control state (§4.1, §4.2). The DB agent additionally
-gains operations for the peer-record and effect-request
-disposition streams (§4.2).
+The App agent gains a blocking-pull `nextControlPatch`
+operation for browser-origin control updates and a
+`hydrate` operation for per-iteration state push (§4.1).
+The Projection agent adds pure-reducer operations for
+transcript, control, peer-record, and effect-request
+projection (§4.2).
 
 ### 3.4 Execution Model
 
 The workflow MUST be compiled from TypeScript via
-`tsn generate` and executed via `tsn run`. No imperative
-host orchestrator is permitted. The workflow is the sole
-control-flow orchestrator of the peer loop. Substrate
-behaviors (App and DB agent lifecycle, WebSocket session
-management, browser connect/reconnect, journal
-persistence) remain the responsibility of their respective
+`tsn generate` and executed via `tsn run` (or a
+functionally equivalent programmatic host driver when a
+post-execute publish step is needed — see §7.1). No
+imperative host orchestrator participates in the loop's
+control flow. The workflow is the sole control-flow
+orchestrator of the peer loop. Substrate behaviors (App
+and Projection agent lifecycle, WebSocket session
+management, browser connect/reconnect, kernel journal
+I/O) remain the responsibility of their respective
 components; this specification does not claim they are
 inside the workflow.
 
 The deployment target is single-machine local execution.
-Taras runs `tsn run` locally. Both peer adapters run as
-local subprocesses or in-process. The durable journal is a
-local journal file.
+Taras runs `tsn run` (or the host driver) locally. Both
+peer adapters run as local subprocesses or in-process. The
+durable journal is a local NDJSON file written by the
+kernel.
 
 ---
 
@@ -280,10 +328,8 @@ following operations to the workflow:
 | Operation | Purpose |
 |---|---|
 | `elicit({ message })` | Block for a Taras-origin message |
-| `showMessage({ speaker, content })` | Display a message attributed to a named speaker |
-| `loadChat(messages)` | Hydrate the browser with prior transcript |
-| `readControl()` | Read current loop-control state |
-| `setReadOnly(reason)` | Mark the session read-only |
+| `nextControlPatch()` | Block for the next browser-origin `LoopControl` patch |
+| `hydrate({ messages, control, readOnlyReason })` | Push the current post-replay snapshot to attached browsers |
 
 **`elicit`** — Blocks indefinitely for a user message from
 Taras's connected browser. The input argument is an object
@@ -296,22 +342,40 @@ operation is defined. Used directly (unbounded) when
 `tarasMode` is `"required"` and wrapped in `timebox` when
 `tarasMode` is `"optional"` (see §6.3).
 
-**`showMessage`** — Delivers a message to the connected
-browser for display. The `speaker` field is one of
-`"taras"`, `"opus"`, or `"gpt"`. The App agent MUST render
-the speaker attribution in the browser transcript.
+**`nextControlPatch`** — Blocking-pull on a
+browser-origin queue of `BrowserControlPatch` values (a
+partial shape of `LoopControl` where an absent field
+preserves the current value and `nextSpeakerOverride: null`
+clears the current override). Returns one patch per call.
+The workflow composes `nextControlPatch` with
+`timebox(0, ...)` to drain the queue non-blockingly when
+it needs the complete set of browser-issued patches since
+the last drain (see §7.2 Step 2a).
 
-**`readControl`** — Returns the current `LoopControl`
-value as observed by the browser/app substrate. The
-returned value reflects any browser-side updates (pause,
-stop, speaker override) that have been persisted. The
-method by which the App agent obtains the current value
-is implementation-defined; this specification constrains
-the returned value, not the retrieval mechanism.
+**`hydrate`** — The workflow's "push current state to the
+browser" step. The workflow calls `hydrate` once per main
+loop iteration after its local accumulators settle,
+passing the complete current snapshot
+`{ messages, control, readOnlyReason }`. The App agent MUST
+overwrite its in-memory session mirror with the incoming
+snapshot and fan the snapshot out to attached owner and
+observer sessions as transcript / control / read-only
+WebSocket frames. `hydrate` is the sole App-side channel
+for transcript display, control fan-out, and read-only
+state; no per-message or per-control-field operations
+exist on the App surface.
 
-**`setReadOnly`** — Marks the session read-only with a
-reason. After `setReadOnly`, the workflow MUST NOT dispatch
-further peer steps.
+`hydrate` is journaled like any agent-op. On replay, each
+pre-frontier `hydrate` call returns its recorded void
+result from the journal without re-dispatching to the
+binding; the first post-frontier `hydrate` dispatches live
+and is what attached browsers observe after a host
+restart. Terminal replay-only runs (a journal that
+replays to completion without any live dispatch) are
+covered by a host-side post-execute publish step that
+forwards the workflow's final return value into the App
+binding; this publish step is not an agent operation and
+does not participate in replay.
 
 The App agent's other responsibilities (session identity,
 owner vs observer semantics, connect/reconnect hydration,
@@ -323,55 +387,56 @@ is not the generic Tisyn browser transport contract
 (specified separately in the Browser Contract
 Specification, and intentionally narrower).
 
-### 4.2 DB Agent
+### 4.2 Projection Agent
 
-The DB agent is the persistence boundary. It exposes the
-following operations to the workflow:
+The Projection agent is a pure reducer over values the
+workflow threads through its local accumulators. It holds
+no cross-call state, performs no I/O, and does not consult
+the journal directly. It exposes the following operations
+to the workflow:
 
 | Operation | Purpose |
 |---|---|
-| `loadMessages()` | Read the transcript |
-| `appendMessage(entry)` | Append to the transcript |
-| `loadControl()` | Read current loop-control state |
-| `writeControl(control)` | Write current loop-control state |
-| `loadPeerRecords()` | Read structured peer outputs |
-| `appendPeerRecord(record)` | Append a peer output record |
-| `loadEffectRequests()` | Read effect-request dispositions |
-| `appendEffectRequest(record)` | Append an effect-request disposition |
+| `readInitialControl({})` | Return the initial `LoopControl` used to seed the workflow's `control` local at startup |
+| `applyControlPatch({ current, patch })` | Return the result of merging `patch` onto `current` |
+| `appendMessage({ messages, entry })` | Return `[...messages, entry]` |
+| `appendPeerRecord({ records, record })` | Return `[...records, record]` |
+| `appendEffectRequest({ records, record })` | Return `[...records, record]` |
 
-The `append*` operations name append-only semantics: each
-call produces one new record in its collection, which is
-never mutated afterward. `writeControl` names
-current-state semantics: the latest written value is the
-current value, and `loadControl()` returns it. The DB
-agent MAY implement `writeControl` internally as an
-append of a new control snapshot (with `loadControl`
-returning the most recent); the normative observation is
-that `loadControl()` returns the current state.
+The Projection agent's role is twofold:
 
-The DB agent persists four application-level record
-collections to durable storage (JSON file on disk for
-MVP). These are application data consumed by the workflow,
-not the Tisyn runtime journal. The kernel's runtime
-journal is a separate, more fundamental substrate (Kernel
-Specification); the DB agent's collections are
-application-level outputs. Replay correctness depends on
-the journal, not on these collections (§8.1).
+1. It supplies the initial loop-control seed through a
+   real agent-op (`readInitialControl`) so both production
+   and replay paths go through the same journaled call. In
+   production the binding returns `DEFAULT_LOOP_CONTROL`
+   unconditionally; tests override the same op to seed a
+   non-default starting control.
+2. It validates and shapes reducer inputs (via TypeBox)
+   and returns their deterministic output. The workflow
+   passes each returned value back into its own local
+   accumulator, replacing the prior value. No Projection
+   op retains state between calls.
 
-Three of the four collections are append-only
-observational series: the transcript (`TurnEntry`
-entries), the peer-output records (`PeerRecord` entries),
-and the effect-request dispositions (`EffectRequestRecord`
-entries). The fourth, `LoopControl`, is semantically a
-current-state surface — the workflow reads its latest
-value, not its history. The DB agent MAY implement
-`LoopControl` persistence as an append log internally; the
-normative observation is that `loadControl()` returns the
-current state.
+**`applyControlPatch({ current, patch })`** returns a new
+`LoopControl` value: fields absent in `patch` preserve
+`current`; fields present in `patch` overwrite `current`;
+`patch.nextSpeakerOverride === null` clears the override
+from `current`.
 
-The DB agent MUST treat the four collections as
-independently persisted; they MAY share a single
-underlying file format.
+**`appendMessage` / `appendPeerRecord` /
+`appendEffectRequest`** return a new array constructed as
+`[...collection, entry]`. The input arrays MUST NOT be
+mutated.
+
+The four application-level record collections —
+transcript, current `LoopControl`, peer records, and
+effect-request records — live in the workflow's local
+variables. They are rebuilt on restart by kernel replay
+of the Projection-op return values recorded in the
+journal. No Projection binding reads or writes a
+persistence file. The kernel journal is the sole durable
+artifact and the sole source of truth for replay (§6.10,
+§7.3).
 
 Record schemas are defined in §5.
 
@@ -487,7 +552,10 @@ interface LoopControl {
 ```
 
 The durable, browser-writable, workflow-observable
-loop-control state. Persisted via the DB agent and read by
+loop-control state. Threaded through the workflow's local
+`control` accumulator and reconstructed on restart by
+replaying recorded `Projection.readInitialControl` and
+`Projection.applyControlPatch` return values. Re-read by
 the workflow before every peer step per LOOP-CTRL-1.
 
 `paused` — When `true`, the workflow MUST NOT dispatch a
@@ -545,9 +613,11 @@ interface PeerRecord {
 }
 ```
 
-A persisted structured record of one peer step's
-workflow-visible output. Persisted via
-`DB.appendPeerRecord(...)`.
+A structured record of one peer step's workflow-visible
+output. Projected into the workflow's local peer-record
+accumulator via `Projection.appendPeerRecord(...)`; the
+accumulator is rebuilt from replayed return values on
+restart.
 
 `turnIndex` corresponds to the `turnCount` at which the
 step executed.
@@ -659,18 +729,20 @@ interface EffectRequestRecord {
 }
 ```
 
-A persisted workflow-level disposition record for a
-requested effect. Persisted via
-`DB.appendEffectRequest(...)`.
+A workflow-level disposition record for a requested
+effect. Projected into the workflow's local
+effect-request accumulator via
+`Projection.appendEffectRequest(...)`; the accumulator is
+rebuilt from replayed return values on restart.
 
 **Single-record lifecycle.** Each requested effect
 produces exactly one `EffectRequestRecord`. The record is
 appended after the workflow has chosen a disposition —
 and, for the `"executed"` disposition, after the execution
 attempt has completed (returning a value or throwing). The
-record is never mutated after being appended. The DB
-agent's surface is append-only; this specification does
-not introduce update semantics.
+record is never mutated after being appended. The
+Projection surface is append-only; this specification
+does not introduce update semantics.
 
 `turnIndex` corresponds to the `turnCount` at which the
 effect was requested. `dispositionAt` corresponds to the
@@ -712,17 +784,25 @@ journal replay.
 ### 6.1 LOOP-CTRL-1 — Control-state re-read
 
 Before dispatching any non-Taras assistant step, the
-workflow MUST re-read the current `LoopControl` state via
-`App.readControl()`. If `LoopControl.stopRequested` is
-`true`, the workflow MUST invoke `setReadOnly(...)` and
-exit the loop without dispatching a peer step. If
-`LoopControl.paused` is `true`, the workflow MUST NOT
-dispatch a peer step on this cycle; it MUST elicit Taras
-(returning to the Taras gate) instead.
+workflow MUST apply every browser-origin control patch
+that has arrived since the prior application. Patches are
+pulled via `App.nextControlPatch()` (blocking) composed
+with `timebox(0, ...)` to drain the queue
+non-blockingly, and each pulled patch is merged into the
+workflow's local `control` variable via
+`Projection.applyControlPatch({ current, patch })` (see
+§7.2 Step 2a). After the drain, if
+`control.stopRequested` is `true`, the workflow MUST set
+`readOnlyReason = "stopped"`, call `hydrate` once so the
+browser sees the terminal state, and exit the loop
+without dispatching a peer step. If `control.paused` is
+`true`, the workflow MUST NOT dispatch a peer step on this
+cycle; it MUST elicit Taras (returning to the Taras gate)
+with `tarasMode = "optional"` instead.
 
-The re-read MUST occur within the same cycle as the
-potential peer dispatch. A control value read on an
-earlier cycle MUST NOT be used to gate a later cycle's
+The drain-and-merge MUST occur within the same cycle as
+the potential peer dispatch. A `control` value computed on
+an earlier cycle MUST NOT be used to gate a later cycle's
 dispatch.
 
 ### 6.2 LOOP-GATE-1 — Taras gate at cycle start
@@ -776,15 +856,18 @@ or more peer steps.
 
 ### 6.5 LOOP-OVERRIDE-1 — One-shot speaker override
 
-If `LoopControl.nextSpeakerOverride` is present when the
+If `control.nextSpeakerOverride` is present when the
 workflow selects the speaker for the current cycle's peer
 step, the override value MUST supply the speaker and the
-`nextSpeakerOverride` field MUST be cleared (removed or
-set to undefined) in `LoopControl` within the same cycle.
+`nextSpeakerOverride` field MUST be cleared in `control`
+within the same cycle. The clear MUST be applied via
+`Projection.applyControlPatch({ current: control, patch: { nextSpeakerOverride: null } })`
+so that replay reconstructs the cleared state identically.
 
 After an override is consumed, subsequent cycles MUST
 select the speaker per default alternation (LOOP-ALT-1)
-unless a new override is written by Taras via the browser.
+unless a new override arrives via a `nextControlPatch`
+drain on a later cycle.
 
 ### 6.6 LOOP-ALT-1 — Default alternation
 
@@ -827,31 +910,61 @@ NOT derive `tarasMode` from any other source.
 If a peer step returns `PeerTurnResult.status === "done"`,
 the workflow MUST:
 
-1. Persist the turn per LOOP-PERSIST-1.
+1. Project the turn per LOOP-PERSIST-1.
 2. Dispose any `requestedEffects` per §6.12.
-3. Invoke `App.setReadOnly("done")`.
-4. Return from the loop body.
+3. Set the local `readOnlyReason = "done"` and invoke
+   `App.hydrate({ messages, control, readOnlyReason })`
+   so the terminal read-only state reaches attached
+   browsers (and is journaled for any later replay).
+4. Return the final snapshot
+   `{ messages, control, readOnlyReason }` from the loop
+   body.
 
 No further cycles execute after a `"done"` termination.
+The terminal `hydrate` MUST be dispatched AFTER the
+per-turn Projection appends so that replay reconstructs
+the terminal snapshot identically on restart.
 
-### 6.10 LOOP-PERSIST-1 — Per-turn persistence
+### 6.10 LOOP-PERSIST-1 — Per-turn projection
 
-For every peer step, the workflow MUST persist both of the
+Durability for the four application-level record
+collections is achieved exclusively by recording the
+return values of Projection agent operations in the kernel
+journal. On restart, the runtime replays the journal and
+the workflow's local accumulators (`messages`, `control`,
+`peerRecords`, `effectRequests`, `readOnlyReason`) are
+rebuilt deterministically from the replayed Projection
+return values. No secondary persistence file is
+maintained, consulted, or reconciled.
+
+For every peer step, the workflow MUST project both of the
 following, independently:
 
 - a `TurnEntry` with `speaker` set to `"opus"` or `"gpt"`
   corresponding to the dispatched peer, `content` equal to
   `PeerTurnResult.display`, and `usage` copied from
-  `PeerTurnResult.usage` if present; via
-  `DB.appendMessage(...)`
+  `PeerTurnResult.usage` if present. The workflow passes
+  its current `messages` local and the new entry to
+  `Projection.appendMessage({ messages, entry })` and
+  replaces its local `messages` with the returned array.
 - a `PeerRecord` with the matching `turnIndex`, `speaker`,
-  `status`, and `data`; via `DB.appendPeerRecord(...)`
+  `status`, and `data`. The workflow passes its current
+  `peerRecords` local and the new record to
+  `Projection.appendPeerRecord({ records, record })` and
+  replaces its local `peerRecords` with the returned
+  array.
 
 For every Taras-origin message received at the Taras gate,
-the workflow MUST persist a `TurnEntry` with
+the workflow MUST project a `TurnEntry` with
 `speaker: "taras"` and `content` equal to the received
-message. No `PeerRecord` is written for Taras-origin
-messages.
+message via `Projection.appendMessage(...)`. No
+`PeerRecord` is written for Taras-origin messages.
+
+The workflow MUST call `App.hydrate(...)` once per main
+loop iteration after the above projections settle so that
+the journaled snapshot — and thus the live post-frontier
+dispatch observed by attached browsers — reflects the
+iteration's accumulated state.
 
 ### 6.11 M2-CAP-1 — Peer capability baseline
 
@@ -918,23 +1031,27 @@ rejected per the `"rejected"` disposition.
 ### 6.13 M2-EXEC-2 — Effect-request durability
 
 Every requested effect MUST result in exactly one
-persisted `EffectRequestRecord` (§5.8). The record is
-appended via `DB.appendEffectRequest(...)` after the
-workflow has finalized the disposition. For the
+`EffectRequestRecord` (§5.8) projected into the workflow's
+local `effectRequests` accumulator via
+`Projection.appendEffectRequest({ records, record })`
+after the workflow has finalized the disposition. For the
 `"executed"` disposition, the record is appended after
 the execution attempt has completed (returning a value or
 throwing).
 
 The `EffectRequestRecord` is never mutated after being
-appended. The DB agent's surface remains append-only;
-this specification introduces no update semantics.
+appended. The Projection surface is append-only; this
+specification introduces no update semantics.
 
 `EffectRequestRecord` is a workflow-level disposition log.
 It does not itself provide execution durability. Execution
 durability for effects dispatched through `@tisyn/effects`
 rides the ordinary YieldEvent journal produced by
-dispatch. This specification does not introduce a parallel
-durability mechanism for effect execution.
+dispatch; reconstruction of the `effectRequests`
+accumulator on restart rides the journaled Projection
+return values (§6.10, §7.3). This specification does not
+introduce a parallel durability mechanism for effect
+execution.
 
 ---
 
@@ -949,19 +1066,21 @@ the step sequence and invariants are.
 
 ### 7.1 Initial State
 
-The loop body's `RecursiveState` (§5.3) is ordinary
-workflow-execution state: it is carried as the recursive
-parameter of the loop body, it flows through the kernel as
-the recursive parameter to each cycle, and it is
-reconstructed on restart by ordinary Tisyn journal replay
-per the Kernel Specification's external-effect resumption
-path. The runtime journal is the sole source of truth for
-`RecursiveState`.
+The loop body's `RecursiveState` (§5.3) and application-
+level accumulators (`messages`, `control`, `peerRecords`,
+`effectRequests`, `readOnlyReason`) are ordinary workflow-
+execution state: they live in workflow-local variables,
+flow through the kernel as part of the recursive
+parameter/locals of each cycle, and are reconstructed on
+restart by ordinary Tisyn journal replay per the Kernel
+Specification's external-effect resumption path. The
+runtime journal is the sole source of truth for every
+reconstructed value.
 
 This specification does not introduce a secondary
-reconstruction mechanism for `RecursiveState`. DB-persisted
-application data is never consulted to reconstruct
-`RecursiveState`.
+reconstruction mechanism. No application-data store is
+consulted, read, or reconciled; no JSON file outside the
+journal is maintained.
 
 At the workflow's very first entry (the initial launch,
 before any journal entries exist for this loop), the
@@ -971,47 +1090,63 @@ workflow MUST initialize `RecursiveState` to:
 - `tarasMode`: `"optional"`
 - `turnCount`: `0`
 
-After initialization, the loop body reads application data
-from the DB agent to hydrate the application-level view of
-the loop:
+The workflow MUST initialize its application-level
+accumulators to:
 
-1. Call `DB.loadMessages()` to retrieve prior transcript.
-2. Call `DB.loadControl()` to retrieve the current
-   `LoopControl`; if none exists, initialize to
-   `{ paused: false, stopRequested: false }` and persist
-   via `DB.writeControl(...)`.
-3. Call `DB.loadPeerRecords()` to retrieve prior
-   structured peer outputs, if the application needs them
-   for context construction (§5.5 `PeerTurnInput`
-   composition).
-4. Call `App.loadChat(messages)` to hydrate the browser
-   with the persisted transcript.
+- `messages`: `[]`
+- `control`: the value returned by
+  `Projection.readInitialControl({})` — in production the
+  Projection binding returns `DEFAULT_LOOP_CONTROL =
+  { paused: false, stopRequested: false }`; tests override
+  this op to seed a non-default starting control. The
+  return value is journaled like any agent-op result, so
+  replay reconstructs the same starting control
+  deterministically.
+- `peerRecords`: `[]`
+- `effectRequests`: `[]`
+- `readOnlyReason`: `null`
 
-Each of those calls is itself an effect and participates
-normally in journal replay. On restart, these calls do not
-reconstruct `RecursiveState`; they rehydrate application
-context and UI.
+No initial `App` operation is invoked before the main
+loop's first iteration; the first `App.hydrate` call at
+the top of the first iteration is what drives the browser
+into its initial state.
 
-The DB-persisted collections are application data. They
-are consumed to render UI, compose peer inputs, audit
-effect dispositions, and present Taras with transcript
-history. They are NOT the authority for whether effects
-executed, whether peer steps completed, or what the
-current `RecursiveState` is. Those authorities all live in
-the journal.
+On restart, replay returns the recorded result of
+`Projection.readInitialControl` and every subsequent
+Projection/agent op without re-dispatching to bindings,
+and the workflow's local accumulators are rebuilt
+identically. The first post-frontier `App.hydrate`
+dispatches live and pushes the current snapshot to
+attached browsers on the first wire trip after restart.
 
-If DB-persisted application data and journal-reconstructed
-`RecursiveState` appear to disagree (e.g., a `PeerRecord`
-count that does not match `RecursiveState.turnCount`),
-the journal wins. Disagreement indicates a bug in DB
-persistence or the peer-step persistence sequence, not a
-reconciliation case. Applications MUST NOT attempt to
-"resync" by adjusting `RecursiveState` from DB data.
+**Host-side post-execute publish.** A completed journal
+(one ending in `readOnlyReason = "done"` or `"stopped"`)
+can replay end-to-end without any live dispatch — the
+runtime returns immediately and no `hydrate` ever reaches
+the binding. To cover this case, the host driver that
+invokes `execute(...)` MUST, after `execute` returns,
+forward the workflow's final return value — the snapshot
+`{ messages, control, readOnlyReason }` — into the App
+binding via a non-agent publish method. This publish step
+is NOT journaled and does NOT participate in replay. It
+exists solely to guarantee that late-attaching browsers
+observe the terminal state after a replay-only restart.
+The publish step is idempotent against the live-hydrate
+path.
 
 ### 7.2 Cycle Body
 
 Per cycle, the workflow MUST execute the following steps in
 order:
+
+**Step 0. Hydrate.** Call
+`App.hydrate({ messages, control, readOnlyReason })` so
+the App binding's mirror reflects the state the workflow
+locals finished building on the previous iteration (or the
+initial state on the first iteration). On replay, prior
+`hydrate` calls return from the journal and do not reach
+the binding; the first post-frontier `hydrate` dispatches
+live and drives attached browsers to the current state.
 
 **Step 1. Taras gate.** Per LOOP-GATE-1 and LOOP-GATE-2:
 
@@ -1028,42 +1163,74 @@ order:
     arrived.
 
 If a Taras-origin message is received (either branch),
-persist a `TurnEntry` with `speaker: "taras"` and `content`
-equal to the received message via `DB.appendMessage(...)`
-and call `App.showMessage({ speaker: "taras", content: message })`.
-If the gate timed out, proceed to Step 2 without
-persisting a Taras-origin turn.
+project a `TurnEntry` with `speaker: "taras"` and
+`content` equal to the received message via
+`Projection.appendMessage({ messages, entry })` and
+replace the local `messages` with the returned array. If
+the gate timed out, proceed to Step 2a without projecting
+a Taras-origin turn.
 
-**Step 2. Control re-read.** Per LOOP-CTRL-1, call
-`App.readControl()` to obtain the current `LoopControl`.
+**Step 2a. Post-gate control-patch drain.** Per
+LOOP-CTRL-1, drain every browser-origin control patch
+that has arrived since the prior drain (including ones
+that arrived while the Taras gate was blocking):
 
-**Step 3. Stop check.** If `LoopControl.stopRequested`,
-call `App.setReadOnly("stopped")` and return from the
-loop. No peer step executes.
+```
+while (true) {
+  const pulled = yield* timebox(0, function* () {
+    return yield* App.nextControlPatch({});
+  });
+  if (pulled.status === "completed") {
+    control = yield* Projection.applyControlPatch({
+      current: control, patch: pulled.value,
+    });
+  } else {
+    break;
+  }
+}
+```
 
-**Step 4. Pause check.** If `LoopControl.paused`, recurse
+`timebox(0, ...)` peeks the `nextControlPatch` signal
+non-blockingly; buffered patches are drained in order and
+merged into `control`; once the queue is empty the drain
+exits. Every subsequent step observes a `control` value
+that incorporates every patch the browser has sent during
+this iteration.
+
+**Step 3. Stop check.** If `control.stopRequested`, set
+`readOnlyReason = "stopped"`, call
+`App.hydrate({ messages, control, readOnlyReason })`, and
+return the final snapshot
+`{ messages, control, readOnlyReason }` from the loop. No
+peer step executes.
+
+**Step 4. Pause check.** If `control.paused`, recurse
 with `RecursiveState.tarasMode = "optional"`, `turnCount`
 unchanged. No peer step executes this cycle.
 
 **Step 5. Speaker selection.** Per LOOP-OVERRIDE-1 and
 LOOP-ALT-1:
-- If `LoopControl.nextSpeakerOverride` is present,
-  `currentSpeaker = nextSpeakerOverride` and clear
-  `nextSpeakerOverride` via `DB.writeControl(...)`.
+- If `control.nextSpeakerOverride` is present,
+  `currentSpeaker = control.nextSpeakerOverride` and
+  clear the override via
+  `control = yield* Projection.applyControlPatch({ current: control, patch: { nextSpeakerOverride: null } })`.
 - Otherwise, `currentSpeaker = RecursiveState.nextSpeaker`.
 
 **Step 6. Peer dispatch.** Per LOOP-STEP-1 and
 LOOP-RESULT-1:
-- Construct `PeerTurnInput` from the current transcript
+- Construct `PeerTurnInput` from the current `messages`
   and `RecursiveState.tarasMode`.
 - Dispatch `OpusAgent.takeTurn(input)` or
   `GptAgent.takeTurn(input)` as selected in Step 5.
 - Receive `result: PeerTurnResult`.
 
-**Step 7. Persist turn.** Per LOOP-PERSIST-1:
-- `DB.appendMessage({ speaker: currentSpeaker, content: result.display, usage: result.usage })`.
-- `DB.appendPeerRecord({ turnIndex: RecursiveState.turnCount, speaker: currentSpeaker, status: result.status, data: result.data })`.
-- `App.showMessage({ speaker: currentSpeaker, content: result.display })`.
+**Step 7. Project turn.** Per LOOP-PERSIST-1:
+- `messages = yield* Projection.appendMessage({ messages, entry: { speaker: currentSpeaker, content: result.display, ...(result.usage ? { usage: result.usage } : {}) } })`.
+- `peerRecords = yield* Projection.appendPeerRecord({ records: peerRecords, record: { turnIndex: RecursiveState.turnCount, speaker: currentSpeaker, status: result.status, data: result.data } })`.
+
+The peer `TurnEntry` MUST omit the `usage` key (not carry
+a present-but-undefined value) when
+`PeerTurnResult.usage` is absent.
 
 **Step 8. Dispose requested effects.** Per M2-EXEC-1 and
 M2-EXEC-2, for each entry in `result.requestedEffects`:
@@ -1075,20 +1242,22 @@ M2-EXEC-2, for each entry in `result.requestedEffects`:
    effect through `@tisyn/effects`. If the dispatch
    returns a value, capture it; if the dispatch throws,
    capture the thrown error's name and message.
-3. Append exactly one `EffectRequestRecord` via
-   `DB.appendEffectRequest(...)` carrying the final
-   disposition and (for `"executed"`) the captured
-   `result` or `error`. Records are append-only and are
-   not mutated after appending.
+3. Project exactly one `EffectRequestRecord` via
+   `effectRequests = yield* Projection.appendEffectRequest({ records: effectRequests, record })`
+   carrying the final disposition and (for `"executed"`)
+   the captured `result` or `error`. Records are
+   append-only and are not mutated after appending.
 
 Execution durability for effects dispatched in Step 8
 rides the ordinary YieldEvent journal per §8.1; the
-appended `EffectRequestRecord` is a workflow-level
+projected `EffectRequestRecord` is a workflow-level
 audit/review artifact and is not the replay substrate.
 
 **Step 9. Termination check.** Per LOOP-DONE-1, if
-`result.status === "done"`, call
-`App.setReadOnly("done")` and return from the loop.
+`result.status === "done"`, set `readOnlyReason = "done"`,
+call `App.hydrate({ messages, control, readOnlyReason })`,
+and return the final snapshot
+`{ messages, control, readOnlyReason }` from the loop.
 
 **Step 10. Next-state computation.** Per LOOP-MODE-1 and
 LOOP-ALT-1:
@@ -1107,13 +1276,25 @@ the external-effect resumption path (Kernel Specification
 by replaying the journal to the live frontier; the next
 cycle then executes live against the reconstructed state.
 
-Application-level DB collections (transcript, peer records,
-effect-request records, loop-control state) are NOT the
-replay substrate. They are persisted outputs that the
-workflow may consume; the journal is what determines
-replay correctness. This specification does not introduce
-any replay semantics beyond the existing external-effect
-path.
+The kernel journal is the sole durable artifact. Every
+Projection-op return value is recorded as part of the
+workflow's yield trace, and on replay the runtime returns
+those recorded values without dispatching to the
+Projection binding. The workflow's local accumulators
+(`messages`, `control`, `peerRecords`, `effectRequests`,
+`readOnlyReason`) are rebuilt deterministically from the
+replayed return values. No secondary store is consulted,
+maintained, or reconciled.
+
+`App.hydrate` calls before the replay frontier are
+similarly satisfied from the journal without re-dispatching;
+the first post-frontier `hydrate` call dispatches live and
+is observed by attached browsers. Terminal replay-only
+runs rely on the host-side post-execute publish step
+described in §7.1.
+
+This specification does not introduce any replay semantics
+beyond the existing external-effect path.
 
 ---
 
@@ -1324,8 +1505,32 @@ An earlier design proposed a bespoke single-agent
 `appendTurn`, and `checkStop` operations. Rejected in
 favor of forking the existing multi-agent-chat substrate,
 which already provides equivalent functionality through
-the App and DB agents and adds browser-interactive control
-affordances not available through files.
+the App and Projection agents and adds browser-interactive
+control affordances not available through files.
+
+### 11.2.1 JSON-file DB agent (earlier MVP sketch)
+
+An earlier pass of this specification kept a stateful DB
+agent that persisted transcript / control / peer-record /
+effect-request collections to a JSON file parallel to the
+kernel journal. Rejected because:
+
+- It doubled the durable surface (journal plus JSON file)
+  and required hand-kept schema parity between them. A
+  concrete bug (a peer `TurnEntry` carrying a
+  present-but-undefined `usage` key) came from the store
+  schema rejecting a shape the workflow was free to
+  produce.
+- It diverged from the kernel's design, where the
+  journal IS the source of truth and downstream state is
+  rebuilt from it by runtime replay.
+- The JSON store's contribution — rehydration at startup
+  — is subsumed by replay of Projection-op return
+  values, so the store added cost without adding
+  correctness.
+
+The journal-only model (Projection reducer + App hydrate,
+§4) replaced it.
 
 ### 11.3 Separate `EffectAgent` contract
 
@@ -1400,8 +1605,14 @@ The following are normative and observable:
 - the invariants in §6.1 through §6.13
 - the type shapes in §5
 - the agent operation signatures in §4
-- the persisted record schemas (`TurnEntry`, `PeerRecord`,
-  `EffectRequestRecord`, `LoopControl`)
+- the record schemas projected by the Projection agent
+  and carried in the workflow's local accumulators
+  (`TurnEntry`, `PeerRecord`, `EffectRequestRecord`,
+  `LoopControl`)
+- the `App.hydrate` snapshot schema
+  (`{ messages, control, readOnlyReason }`) as the
+  observable per-iteration boundary between workflow and
+  browser
 
 The following are NOT normative (implementation-defined):
 
@@ -1413,7 +1624,8 @@ The following are NOT normative (implementation-defined):
   strategy (OQ-P1)
 - the internal representation of `LoopControl` in the
   browser UI
-- the JSON file layout used by the DB agent
+- the kernel journal's NDJSON encoding details (governed
+  by the Kernel Specification, not this one)
 - the WebSocket framing details
 - per-effect disposition policy (§6.12; governed by
   workflow policy, not this specification)
