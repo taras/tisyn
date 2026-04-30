@@ -9,6 +9,7 @@ import {
   type LoopControl,
   type TurnEntry,
 } from "./schemas.js";
+import type { AppState } from "./state-types.js";
 import { logInfo, logDebug } from "./logger.js";
 
 export type { BrowserToHost, HostToBrowser } from "./schemas.js";
@@ -135,6 +136,20 @@ export class BrowserSessionManager {
     const payload: HostToBrowser = { type: "setReadOnly", reason };
     this.sendToOwner(payload);
     this.sendToObservers(payload);
+  }
+
+  /**
+   * Apply a full AppState snapshot. Replaces the per-field
+   * loadChat/publishControl/setReadOnly path used by the workflow's
+   * hydrate op (now deleted) with a single consolidated entry point
+   * called by the authority subscription in browser-agent.ts.
+   */
+  applySnapshot(state: AppState): void {
+    this.loadChat(state.messages);
+    this.publishControl(state.control);
+    if (state.readOnlyReason !== null) {
+      this.setReadOnly(state.readOnlyReason);
+    }
   }
 
   /** Called externally when the durable LoopControl changes (from store subscription). */

@@ -1,12 +1,16 @@
 /**
- * Conformance harness for the deterministic peer loop (journal-only model).
+ * Conformance harness for the deterministic peer loop (state-primitive spike).
  *
  * Runs the compiled `peerLoop` workflow against scripted agents and captures
- * the observable sequence of agent-operation calls. The DB agent is gone;
- * the Projection agent is a pure reducer (message/record appends, control
- * patch merges, initial-control read) and the App agent emits only
- * `elicit`, `nextControlPatch`, and `hydrate`. Tests assert against this
- * new surface — never on internal RecursiveState.
+ * the observable sequence of agent-operation calls.
+ *
+ * Spike change vs. journal-only model: the Projection agent is gone. Its
+ * five reducer ops are replaced by `StateAgent.transition(proposal)` (a
+ * single op carrying a discriminated `TransitionProposal`) plus
+ * `StateAgent.readInitialState({})` (initial-state read at workflow start).
+ * The App agent's `hydrate` op is gone — every accepted snapshot is captured
+ * here via an in-test reducer subscription, and `hydrateSnapshots` is now
+ * derived from those snapshots so existing test assertions keep working.
  */
 
 import { createSignal, spawn, suspend, withResolvers } from "effection";
@@ -21,7 +25,7 @@ import {
   GptAgent,
   OpusAgent,
   Policy,
-  Projection,
+  StateAgent,
   peerLoop,
   processEffects,
   dispatchEffect,
@@ -29,7 +33,8 @@ import {
   drainControlPatches,
 } from "../../../src/workflow.generated.js";
 import { DEFAULT_LOOP_CONTROL } from "../../../src/schemas.js";
-import { mergeControlPatch } from "../../../src/projection-agent.js";
+import { mergeControlPatch, EMPTY_APP_STATE } from "../../../src/state-authority.js";
+import type { AppState, TransitionProposal } from "../../../src/state-types.js";
 import type {
   BrowserControlPatch,
   EffectRequestRecord,
@@ -52,35 +57,11 @@ export type HydrateArgs = {
   readOnlyReason: string | null;
 };
 
-export type ApplyControlPatchArgs = {
-  current: LoopControl;
-  patch: BrowserControlPatch;
-};
-
-export type AppendMessageArgs = { messages: TurnEntry[]; entry: TurnEntry };
-export type AppendPeerRecordArgs = { records: PeerRecord[]; record: PeerRecord };
-export type AppendEffectRequestArgs = {
-  records: EffectRequestRecord[];
-  record: EffectRequestRecord;
-};
-
 export type OperationCall =
   | { agent: "App"; op: "elicit"; args: { message: string } }
   | { agent: "App"; op: "nextControlPatch"; args: Record<string, never> }
-  | { agent: "App"; op: "hydrate"; args: HydrateArgs }
-  | { agent: "Projection"; op: "readInitialControl"; args: Record<string, never> }
-  | {
-      agent: "Projection";
-      op: "applyControlPatch";
-      args: ApplyControlPatchArgs;
-    }
-  | { agent: "Projection"; op: "appendMessage"; args: AppendMessageArgs }
-  | { agent: "Projection"; op: "appendPeerRecord"; args: AppendPeerRecordArgs }
-  | {
-      agent: "Projection";
-      op: "appendEffectRequest";
-      args: AppendEffectRequestArgs;
-    }
+  | { agent: "StateAgent"; op: "readInitialState"; args: Record<string, never> }
+  | { agent: "StateAgent"; op: "transition"; args: TransitionProposal }
   | { agent: "OpusAgent"; op: "takeTurn"; args: PeerTurnInput }
   | { agent: "GptAgent"; op: "takeTurn"; args: PeerTurnInput }
   | { agent: "Policy"; op: "decide"; args: { effect: RequestedEffect } }
@@ -99,9 +80,9 @@ export type DispatchResult =
 
 export interface HarnessOptions {
   /**
-   * Initial LoopControl seeded through `Projection.readInitialControl`.
-   * Mocks the one production op that the workflow uses to read its starting
-   * control value; defaults to `DEFAULT_LOOP_CONTROL` when absent.
+   * Initial LoopControl seeded into the harness's authority. The workflow
+   * reads this via `StateAgent.readInitialState`. Defaults to
+   * `DEFAULT_LOOP_CONTROL`.
    */
   seededInitialControl?: LoopControl;
   /** Scripted Taras messages consumed in order by App.elicit. */
@@ -134,19 +115,39 @@ export interface HarnessOptions {
 
 export interface HarnessResult {
   operations: OperationCall[];
-  /** Final `entry` payloads from each Projection.appendMessage call, in order. */
+  /** Each TurnEntry that flowed through `append-message` proposals, in order. */
   appendedMessages: TurnEntry[];
-  /** Final `record` payloads from each Projection.appendPeerRecord call, in order. */
+  /** Each PeerRecord that flowed through `append-peer-record` proposals, in order. */
   appendedPeerRecords: PeerRecord[];
-  /** Final `record` payloads from each Projection.appendEffectRequest call, in order. */
+  /** Each EffectRequestRecord that flowed through `append-effect-request` proposals, in order. */
   appendedEffectRequests: EffectRequestRecord[];
-  /** One entry per App.hydrate dispatch, in order. */
+  /**
+   * Snapshot accumulated *after each accepted transition*. Synthesized from
+   * the harness-side reducer applied to every observed transition proposal.
+   * Stand-in for the deleted `App.hydrate` snapshots; tests that previously
+   * asserted on hydrate snapshots assert on the equivalent suffix here.
+   */
   hydrateSnapshots: HydrateArgs[];
-  /** Last control value threaded through `applyControlPatch` / `readInitialControl`. */
+  /** Last LoopControl observed in the rolling state. */
   finalControl: LoopControl;
-  /** `readOnlyReason` carried by the most recent hydrate, if any. */
+  /** `readOnlyReason` carried by the most recent accepted snapshot, if any. */
   exitReason?: string;
   terminatedByMaxTurns: boolean;
+}
+
+function reduce(state: AppState, proposal: TransitionProposal): AppState {
+  switch (proposal.tag) {
+    case "apply-control-patch":
+      return { ...state, control: mergeControlPatch(state.control, proposal.patch) };
+    case "append-message":
+      return { ...state, messages: [...state.messages, proposal.entry] };
+    case "append-peer-record":
+      return { ...state, peerRecords: [...state.peerRecords, proposal.record] };
+    case "append-effect-request":
+      return { ...state, effectRequests: [...state.effectRequests, proposal.record] };
+    case "set-read-only":
+      return { ...state, readOnlyReason: proposal.reason };
+  }
 }
 
 /** Run the compiled peerLoop workflow under the harness. */
@@ -164,11 +165,45 @@ export function* runHarness(options: HarnessOptions): Operation<HarnessResult> {
   let peerTurnIndex = 0;
   let exitReason: string | undefined;
   let terminatedByMaxTurns = false;
-  let lastControl: LoopControl = { ...initialControl };
 
-  // Browser-originated control patch buffer. The workflow pulls from this via
-  // App.nextControlPatch inside a timebox(0, ...). When the buffer is empty
-  // the mock suspends so the timebox expires and the drain exits.
+  // Harness-local authority mirror. Initial state seeded with the requested
+  // initialControl. `state` is reassigned after every observed transition so
+  // hydrateSnapshots reflects the authority-derived view a real subscriber
+  // would see.
+  let state: AppState = { ...EMPTY_APP_STATE, control: { ...initialControl } };
+  const hydrateSnapshots: HydrateArgs[] = [];
+  const appendedMessages: TurnEntry[] = [];
+  const appendedPeerRecords: PeerRecord[] = [];
+  const appendedEffectRequests: EffectRequestRecord[] = [];
+
+  // The first accepted snapshot the workflow ever sees is the seeded initial
+  // state — push it into hydrateSnapshots up front so tests that assert
+  // `hydrateSnapshots[0].messages === []` still see the seed snapshot.
+  hydrateSnapshots.push({
+    messages: [...state.messages],
+    control: { ...state.control },
+    readOnlyReason: state.readOnlyReason,
+  });
+
+  const recordTransition = (proposal: TransitionProposal) => {
+    state = reduce(state, proposal);
+    if (proposal.tag === "append-message") {
+      appendedMessages.push(proposal.entry);
+    } else if (proposal.tag === "append-peer-record") {
+      appendedPeerRecords.push(proposal.record);
+    } else if (proposal.tag === "append-effect-request") {
+      appendedEffectRequests.push(proposal.record);
+    } else if (proposal.tag === "set-read-only" && proposal.reason !== null) {
+      exitReason = proposal.reason;
+    }
+    hydrateSnapshots.push({
+      messages: [...state.messages],
+      control: { ...state.control },
+      readOnlyReason: state.readOnlyReason,
+    });
+  };
+
+  // Browser-originated control patch buffer.
   const patchQueue: BrowserControlPatch[] = [];
   const patchReady = createSignal<void, never>();
 
@@ -182,7 +217,6 @@ export function* runHarness(options: HarnessOptions): Operation<HarnessResult> {
     }
     patchReady.send();
   };
-  // Queue any patches meant for the pre-first-turn drain.
   enqueuePatchesForTurn(0);
 
   // Per-cycle queue state for EffectsQueue.seed / shift.
@@ -190,8 +224,6 @@ export function* runHarness(options: HarnessOptions): Operation<HarnessResult> {
 
   const done = withResolvers<void>();
 
-  // App: elicit (Taras messages), nextControlPatch (patch buffer drain),
-  // hydrate (workflow → binding snapshot).
   yield* Agents.use(App(), {
     *elicit(args) {
       operations.push({ agent: "App", op: "elicit", args });
@@ -212,55 +244,24 @@ export function* runHarness(options: HarnessOptions): Operation<HarnessResult> {
       }
       return patchQueue.shift()!;
     },
-    *hydrate(args) {
-      operations.push({ agent: "App", op: "hydrate", args });
-      if (args.readOnlyReason !== null) {
-        exitReason = args.readOnlyReason;
-      }
-    },
   });
 
-  // Projection: pure reducer, captures inputs and returns the applied value.
-  yield* Agents.use(Projection(), {
-    *readInitialControl() {
+  yield* Agents.use(StateAgent(), {
+    *readInitialState() {
       operations.push({
-        agent: "Projection",
-        op: "readInitialControl",
+        agent: "StateAgent",
+        op: "readInitialState",
         args: {},
       });
-      const snapshot = { ...initialControl };
-      lastControl = snapshot;
-      return snapshot;
+      return state;
     },
-    *applyControlPatch(args) {
-      operations.push({
-        agent: "Projection",
-        op: "applyControlPatch",
-        args,
-      });
-      const next = mergeControlPatch(args.current, args.patch);
-      lastControl = next;
-      return next;
-    },
-    *appendMessage(args) {
-      operations.push({ agent: "Projection", op: "appendMessage", args });
-      return [...args.messages, args.entry];
-    },
-    *appendPeerRecord(args) {
-      operations.push({ agent: "Projection", op: "appendPeerRecord", args });
-      return [...args.records, args.record];
-    },
-    *appendEffectRequest(args) {
-      operations.push({
-        agent: "Projection",
-        op: "appendEffectRequest",
-        args,
-      });
-      return [...args.records, args.record];
+    *transition(args) {
+      operations.push({ agent: "StateAgent", op: "transition", args });
+      recordTransition(args);
+      return state;
     },
   });
 
-  // Opus peer.
   yield* Agents.use(OpusAgent(), {
     *takeTurn(args) {
       operations.push({ agent: "OpusAgent", op: "takeTurn", args });
@@ -279,7 +280,6 @@ export function* runHarness(options: HarnessOptions): Operation<HarnessResult> {
     },
   });
 
-  // Gpt peer.
   yield* Agents.use(GptAgent(), {
     *takeTurn(args) {
       operations.push({ agent: "GptAgent", op: "takeTurn", args });
@@ -298,7 +298,6 @@ export function* runHarness(options: HarnessOptions): Operation<HarnessResult> {
     },
   });
 
-  // Policy agent — per-effect decisions from the scripted queue.
   yield* Agents.use(Policy(), {
     *decide(args) {
       operations.push({ agent: "Policy", op: "decide", args });
@@ -310,7 +309,6 @@ export function* runHarness(options: HarnessOptions): Operation<HarnessResult> {
     },
   });
 
-  // EffectsQueue agent — per-cycle FIFO of requested effects.
   yield* Agents.use(EffectsQueue(), {
     *seed(args) {
       operations.push({ agent: "EffectsQueue", op: "seed", args });
@@ -327,7 +325,6 @@ export function* runHarness(options: HarnessOptions): Operation<HarnessResult> {
     },
   });
 
-  // EffectHandler agent — scripted dispatch responses.
   yield* Agents.use(EffectHandler(), {
     *invoke(args) {
       operations.push({ agent: "EffectHandler", op: "invoke", args });
@@ -348,7 +345,6 @@ export function* runHarness(options: HarnessOptions): Operation<HarnessResult> {
     },
   });
 
-  // Run the compiled workflow in a spawned task so we can cancel / catch exit.
   const task = yield* spawn(function* () {
     try {
       yield* execute({
@@ -375,38 +371,13 @@ export function* runHarness(options: HarnessOptions): Operation<HarnessResult> {
   yield* done.operation;
   yield* task.halt();
 
-  const appendedMessages = operations
-    .filter(
-      (op): op is Extract<OperationCall, { op: "appendMessage" }> =>
-        op.agent === "Projection" && op.op === "appendMessage",
-    )
-    .map((op) => op.args.entry);
-  const appendedPeerRecords = operations
-    .filter(
-      (op): op is Extract<OperationCall, { op: "appendPeerRecord" }> =>
-        op.agent === "Projection" && op.op === "appendPeerRecord",
-    )
-    .map((op) => op.args.record);
-  const appendedEffectRequests = operations
-    .filter(
-      (op): op is Extract<OperationCall, { op: "appendEffectRequest" }> =>
-        op.agent === "Projection" && op.op === "appendEffectRequest",
-    )
-    .map((op) => op.args.record);
-  const hydrateSnapshots = operations
-    .filter(
-      (op): op is Extract<OperationCall, { op: "hydrate" }> =>
-        op.agent === "App" && op.op === "hydrate",
-    )
-    .map((op) => op.args);
-
   return {
     operations,
     appendedMessages,
     appendedPeerRecords,
     appendedEffectRequests,
     hydrateSnapshots,
-    finalControl: lastControl,
+    finalControl: { ...state.control },
     exitReason,
     terminatedByMaxTurns,
   };

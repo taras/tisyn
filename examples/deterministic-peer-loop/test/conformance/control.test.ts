@@ -69,11 +69,12 @@ describe("DPL-CTRL / DPL-OVR / DPL-RES", () => {
     expect(peerCalls).toHaveLength(1);
     expect(peerCalls[0].agent).toBe("GptAgent");
 
-    // Projection.applyControlPatch called with clear patch ({ nextSpeakerOverride: null }).
+    // StateAgent.transition called with clear patch ({ nextSpeakerOverride: null }).
     const clearCall = result.operations.find(
       (op) =>
-        op.agent === "Projection" &&
-        op.op === "applyControlPatch" &&
+        op.agent === "StateAgent" &&
+        op.op === "transition" &&
+        op.args.tag === "apply-control-patch" &&
         op.args.patch.nextSpeakerOverride === null,
     );
     expect(clearCall).toBeDefined();

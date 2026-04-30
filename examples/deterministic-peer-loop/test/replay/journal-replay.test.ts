@@ -2,12 +2,13 @@
  * DPL-JNL-01/02: the kernel journal is the sole durable source of truth.
  *
  *   - JNL-01: a completed run's journal records the full agent-op trace
- *     and ends in a Close event; replay from a prefix of that journal
- *     consumes replayable events without dispatching and then proceeds
- *     live for everything past the frontier.
- *   - JNL-02: the first live dispatch past the frontier is an App.hydrate,
- *     confirming the workflow's "push state to the browser" step fires
- *     under live evaluation instead of being served from the stream.
+ *     (now keyed on `StateAgent.transition` and `StateAgent.readInitialState`
+ *     in place of the deleted Projection ops, and with no `App.hydrate`
+ *     entry) and ends in a Close event.
+ *   - JNL-02: replay from a journal prefix consumes replayable events
+ *     without dispatching, and resumes live dispatch past the frontier.
+ *     The first post-frontier live op is the next workflow yield after
+ *     the prefix's last replayed yield.
  */
 
 import { describe, it } from "@effectionx/vitest";
@@ -26,7 +27,7 @@ import {
   GptAgent,
   OpusAgent,
   Policy,
-  Projection,
+  StateAgent,
   peerLoop,
   processEffects,
   dispatchEffect,
@@ -34,7 +35,8 @@ import {
   drainControlPatches,
 } from "../../src/workflow.generated.js";
 import { DEFAULT_LOOP_CONTROL } from "../../src/schemas.js";
-import { mergeControlPatch } from "../../src/projection-agent.js";
+import { EMPTY_APP_STATE, mergeControlPatch } from "../../src/state-authority.js";
+import type { AppState, TransitionProposal } from "../../src/state-types.js";
 import type {
   BrowserControlPatch,
   LoopControl,
@@ -47,6 +49,21 @@ interface RunOutcome {
   liveCalls: string[];
   journal: DurableEvent[];
   result: Awaited<ReturnType<typeof execute>>["result"];
+}
+
+function reduce(state: AppState, proposal: TransitionProposal): AppState {
+  switch (proposal.tag) {
+    case "apply-control-patch":
+      return { ...state, control: mergeControlPatch(state.control, proposal.patch) };
+    case "append-message":
+      return { ...state, messages: [...state.messages, proposal.entry] };
+    case "append-peer-record":
+      return { ...state, peerRecords: [...state.peerRecords, proposal.record] };
+    case "append-effect-request":
+      return { ...state, effectRequests: [...state.effectRequests, proposal.record] };
+    case "set-read-only":
+      return { ...state, readOnlyReason: proposal.reason };
+  }
 }
 
 function runPeerLoopOnce(args: {
@@ -71,6 +88,7 @@ function* runPeerLoopScoped(args: {
   const patchQueue: BrowserControlPatch[] = [];
   const patchReady = createSignal<void, never>();
   const seed = args.seededInitialControl ?? DEFAULT_LOOP_CONTROL;
+  let state: AppState = { ...EMPTY_APP_STATE, control: { ...seed } };
 
   yield* Agents.use(App(), {
     *elicit() {
@@ -91,31 +109,17 @@ function* runPeerLoopScoped(args: {
       }
       return patchQueue.shift()!;
     },
-    *hydrate() {
-      liveCalls.push("App.hydrate");
-    },
   });
 
-  yield* Agents.use(Projection(), {
-    *readInitialControl() {
-      liveCalls.push("Projection.readInitialControl");
-      return { ...seed };
+  yield* Agents.use(StateAgent(), {
+    *readInitialState() {
+      liveCalls.push("StateAgent.readInitialState");
+      return state;
     },
-    *applyControlPatch({ current, patch }) {
-      liveCalls.push("Projection.applyControlPatch");
-      return mergeControlPatch(current, patch);
-    },
-    *appendMessage({ messages, entry }) {
-      liveCalls.push("Projection.appendMessage");
-      return [...messages, entry];
-    },
-    *appendPeerRecord({ records, record }) {
-      liveCalls.push("Projection.appendPeerRecord");
-      return [...records, record];
-    },
-    *appendEffectRequest({ records, record }) {
-      liveCalls.push("Projection.appendEffectRequest");
-      return [...records, record];
+    *transition(proposal) {
+      liveCalls.push("StateAgent.transition");
+      state = reduce(state, proposal);
+      return state;
     },
   });
 
@@ -171,7 +175,6 @@ function* runPeerLoopScoped(args: {
     },
   });
 
-  // Suppress the elicit exhaustion sentinel and surface it as a clean error.
   let result: RunOutcome["result"];
   let journal: DurableEvent[] = [];
   try {
@@ -199,7 +202,7 @@ function* runPeerLoopScoped(args: {
 }
 
 describe("DPL-JNL", () => {
-  it("JNL-01: a completed run's journal ends in Close and captures the agent-op trace", function* () {
+  it("JNL-01: a completed run's journal ends in Close and captures the StateAgent trace", function* () {
     const first = yield* runPeerLoopOnce({
       stream: undefined,
       opusScript: [{ display: "opus done", status: "done" }],
@@ -210,15 +213,17 @@ describe("DPL-JNL", () => {
     expect(first.journal.length).toBeGreaterThan(0);
     expect(first.journal[first.journal.length - 1].type).toBe("close");
 
-    // Sanity: the binding trace includes at least one of each expected op.
-    expect(first.liveCalls).toContain("Projection.readInitialControl");
-    expect(first.liveCalls).toContain("App.hydrate");
+    // The new state surface: readInitialState fires once at the top of the
+    // workflow, transition fires once per accepted proposal. App.hydrate is
+    // gone — the binding owns its own subscription, not the workflow.
+    expect(first.liveCalls).toContain("StateAgent.readInitialState");
+    expect(first.liveCalls).toContain("StateAgent.transition");
     expect(first.liveCalls).toContain("App.elicit");
     expect(first.liveCalls).toContain("OpusAgent.takeTurn");
-    expect(first.liveCalls).toContain("Projection.appendMessage");
+    expect(first.liveCalls).not.toContain("App.hydrate");
   });
 
-  it("JNL-02: replay from a journal prefix drives live dispatch starting with App.hydrate", function* () {
+  it("JNL-02: replay from a journal prefix consumes replayable events and resumes live past the frontier", function* () {
     const first = yield* runPeerLoopOnce({
       stream: undefined,
       opusScript: [{ display: "opus done", status: "done" }],
@@ -238,9 +243,9 @@ describe("DPL-JNL", () => {
       tarasMessages: ["go"],
     });
 
-    // Live tail post-frontier contains at least one App.hydrate.
-    expect(second.liveCalls).toContain("App.hydrate");
-    // The workflow still terminates with an "ok" status on the rerun.
+    // The live tail past the frontier still drives a full peer step including
+    // a StateAgent.transition. The workflow terminates with an "ok" status.
+    expect(second.liveCalls).toContain("StateAgent.transition");
     expect(second.result.status).toBe("ok");
   });
 });

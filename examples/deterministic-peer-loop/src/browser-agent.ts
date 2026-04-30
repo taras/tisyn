@@ -1,21 +1,18 @@
 /**
  * App agent — local transport with WebSocket server binding.
  *
- * Surface: `elicit` + `nextControlPatch` + `hydrate`.
- * - `elicit` blocks on the owner-submitted user message (same pattern as before).
- * - `nextControlPatch` blocks on a buffered queue of control patches submitted
- *   by the owner; each call returns exactly one buffered patch (blocking until
- *   one is available).
- * - `hydrate({messages, control, readOnlyReason})` pushes the current
- *   workflow-owned snapshot into the session-manager mirror and broadcasts to
- *   attached browsers. Called once per main-loop iteration; during replay all
- *   but the frontier `hydrate` are replayed from the journal and never reach
- *   the binding.
+ * Surface: `elicit` + `nextControlPatch`. The `hydrate` op is removed
+ * by the State Primitive Spike — browser snapshot fanout is now driven
+ * by the example-local state authority's subscription mechanism, not
+ * by a workflow-yielded hydrate call.
  *
- * The binding owns no durable state. It does not read the journal. A
- * non-agent `publishFinalSnapshot(snapshot)` method is exposed for the driver
- * module (`main.ts`) to publish the replay-owned final snapshot after a
- * completed journal replays end-to-end without live dispatch.
+ * On `createBinding()` the binding installs a single
+ * `authority.subscribe(snapshot => session.applySnapshot(snapshot))`
+ * so every accepted transition fans out to attached browsers. On the
+ * first session attach (and post-replay terminal-state attach) the
+ * binding pushes `session.applySnapshot(authority.getState())` so a
+ * late-arriving browser sees the seeded state without any explicit
+ * publishFinalSnapshot driver step.
  */
 
 import { agent, operation } from "@tisyn/agent";
@@ -24,50 +21,18 @@ import type { LocalAgentBinding, LocalServerBinding } from "@tisyn/transport";
 import { createSignal, each, spawn, withResolvers } from "effection";
 import type { Operation } from "effection";
 import { Value } from "@sinclair/typebox/value";
-import {
-  BrowserToHostSchema,
-  type BrowserControlPatch,
-  type BrowserToHost,
-  type LoopControl,
-  type TurnEntry,
-} from "./schemas.js";
+import { BrowserToHostSchema, type BrowserControlPatch, type BrowserToHost } from "./schemas.js";
 import { BrowserSessionManager } from "./browser-session.js";
+import { authority } from "./state-authority.js";
 import { logInfo } from "./logger.js";
 
 export const App = () =>
   agent("app", {
     elicit: operation<{ message: string }, { message: string }>(),
     nextControlPatch: operation<Record<string, never>, BrowserControlPatch>(),
-    hydrate: operation<
-      {
-        messages: TurnEntry[];
-        control: LoopControl;
-        readOnlyReason: string | null;
-      },
-      void
-    >(),
   });
 
-/**
- * Public handle returned by {@link createBinding}. The driver module holds a
- * reference via {@link getCurrentAppBinding} and may call
- * {@link publishFinalSnapshot} after `runtime.execute(...)` returns.
- */
-export interface AppBindingHandle extends LocalAgentBinding {
-  publishFinalSnapshot(snapshot: {
-    messages: TurnEntry[];
-    control: LoopControl;
-    readOnlyReason: string | null;
-  }): void;
-}
-
-let currentAppBinding: AppBindingHandle | null = null;
-
-export function getCurrentAppBinding(): AppBindingHandle | null {
-  return currentAppBinding;
-}
-
-export function createBinding(_config?: Record<string, unknown>): AppBindingHandle {
+export function createBinding(_config?: Record<string, unknown>): LocalAgentBinding {
   const userInput = createSignal<string, never>();
 
   // Control-patch queue with a wake-up signal. Patches arrive via the
@@ -86,19 +51,23 @@ export function createBinding(_config?: Record<string, unknown>): AppBindingHand
     },
   });
 
-  const applySnapshot = (snapshot: {
-    messages: TurnEntry[];
-    control: LoopControl;
-    readOnlyReason: string | null;
-  }): void => {
-    session.loadChat(snapshot.messages);
-    session.publishControl(snapshot.control);
-    if (snapshot.readOnlyReason !== null) {
-      session.setReadOnly(snapshot.readOnlyReason);
-    }
+  // Authority subscription: every accepted transition fans out as a
+  // full-snapshot apply. The unsubscribe handle is held in module scope
+  // for the binding's lifetime — process exit drops it implicitly.
+  authority.subscribe((snapshot) => {
+    session.applySnapshot(snapshot);
+  });
+
+  // First-attach / late-attach broadcast: when a session attaches with
+  // no prior live transitions in this run (replay completed end-to-end
+  // without firing the binding), the seeded authority state still
+  // needs to reach the browser. Push the current snapshot once on
+  // attach.
+  const pushSeededSnapshotOnAttach = () => {
+    session.applySnapshot(authority.getState());
   };
 
-  const binding: AppBindingHandle = {
+  const binding: LocalAgentBinding = {
     transport: inprocessTransport(App(), {
       *elicit({ message }) {
         const sub = yield* userInput;
@@ -117,9 +86,6 @@ export function createBinding(_config?: Record<string, unknown>): AppBindingHand
         }
         return controlPatches.shift()!;
       },
-      *hydrate(snapshot) {
-        applySnapshot(snapshot);
-      },
     }),
 
     *bindServer(server: LocalServerBinding) {
@@ -136,6 +102,7 @@ export function createBinding(_config?: Record<string, unknown>): AppBindingHand
             const firstMsg = yield* waitForFirstMessage(ws);
             if (firstMsg.type === "connect") {
               session.attach(firstMsg.clientSessionId, ws);
+              pushSeededSnapshotOnAttach();
             } else {
               logInfo("browser-agent", "first message was not connect, closing");
               ws.close();
@@ -150,13 +117,8 @@ export function createBinding(_config?: Record<string, unknown>): AppBindingHand
         }
       });
     },
-
-    publishFinalSnapshot(snapshot) {
-      applySnapshot(snapshot);
-    },
   };
 
-  currentAppBinding = binding;
   return binding;
 }
 
