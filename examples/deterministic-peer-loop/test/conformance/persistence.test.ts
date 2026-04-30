@@ -93,9 +93,9 @@ describe("DPL-PER / DPL-RES / DPL-INIT extended", () => {
       gptScript: [],
     });
 
-    // readInitialControl was invoked exactly once at workflow startup.
+    // readInitialState was invoked exactly once at workflow startup.
     const inits = result.operations.filter(
-      (op) => op.agent === "Projection" && op.op === "readInitialControl",
+      (op) => op.agent === "StateAgent" && op.op === "readInitialState",
     );
     expect(inits).toHaveLength(1);
 

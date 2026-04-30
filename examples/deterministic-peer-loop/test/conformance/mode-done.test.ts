@@ -48,23 +48,31 @@ describe("DPL-MODE / DPL-DONE", () => {
       gptScript: [],
     });
 
-    // The opus peer-turn append fires before the terminal hydrate.
+    // The opus peer-turn append fires before the terminal set-read-only.
     const peerAppendIdx = result.operations.findIndex(
       (op) =>
-        op.agent === "Projection" && op.op === "appendMessage" && op.args.entry.speaker === "opus",
+        op.agent === "StateAgent" &&
+        op.op === "transition" &&
+        op.args.tag === "append-message" &&
+        op.args.entry.speaker === "opus",
     );
     expect(peerAppendIdx).toBeGreaterThanOrEqual(0);
 
-    const terminalHydrateIdx = (() => {
+    const terminalReadOnlyIdx = (() => {
       for (let i = result.operations.length - 1; i >= 0; i = i - 1) {
         const op = result.operations[i];
-        if (op.agent === "App" && op.op === "hydrate" && op.args.readOnlyReason === "done") {
+        if (
+          op.agent === "StateAgent" &&
+          op.op === "transition" &&
+          op.args.tag === "set-read-only" &&
+          op.args.reason === "done"
+        ) {
           return i;
         }
       }
       return -1;
     })();
-    expect(terminalHydrateIdx).toBeGreaterThan(peerAppendIdx);
+    expect(terminalReadOnlyIdx).toBeGreaterThan(peerAppendIdx);
     expect(result.exitReason).toBe("done");
   });
 });

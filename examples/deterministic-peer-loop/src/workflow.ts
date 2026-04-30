@@ -2,9 +2,7 @@ import type { Workflow } from "@tisyn/agent";
 import { workflow, agent, transport, env, journal, entrypoint, server } from "@tisyn/config";
 import type {
   BrowserControlPatch,
-  EffectRequestRecord,
   InvokeOutcome,
-  LoopControl,
   PeerRecord,
   PeerSpeaker,
   PeerTurnInput,
@@ -13,6 +11,7 @@ import type {
   RequestedEffect,
   TurnEntry,
 } from "./types.js";
+import type { AppState, TransitionProposal } from "./state-types.js";
 import type { Val } from "@tisyn/ir";
 
 // -- Declared agent contracts (compiler-recognized) --
@@ -20,25 +19,11 @@ import type { Val } from "@tisyn/ir";
 declare function App(): {
   elicit(input: { message: string }): Workflow<{ message: string }>;
   nextControlPatch(input: Record<string, never>): Workflow<BrowserControlPatch>;
-  hydrate(input: {
-    messages: TurnEntry[];
-    control: LoopControl;
-    readOnlyReason: string | null;
-  }): Workflow<void>;
 };
 
-declare function Projection(): {
-  readInitialControl(input: Record<string, never>): Workflow<LoopControl>;
-  applyControlPatch(input: {
-    current: LoopControl;
-    patch: BrowserControlPatch;
-  }): Workflow<LoopControl>;
-  appendMessage(input: { messages: TurnEntry[]; entry: TurnEntry }): Workflow<TurnEntry[]>;
-  appendPeerRecord(input: { records: PeerRecord[]; record: PeerRecord }): Workflow<PeerRecord[]>;
-  appendEffectRequest(input: {
-    records: EffectRequestRecord[];
-    record: EffectRequestRecord;
-  }): Workflow<EffectRequestRecord[]>;
+declare function StateAgent(): {
+  readInitialState(input: Record<string, never>): Workflow<AppState>;
+  transition(input: TransitionProposal): Workflow<AppState>;
 };
 
 declare function OpusAgent(): {
@@ -68,14 +53,14 @@ export function* dispatchExecuted(
   effect: RequestedEffect,
   turnCount: number,
   speaker: "opus" | "gpt",
-  records: EffectRequestRecord[],
-): Workflow<EffectRequestRecord[]> {
+  _state: AppState,
+): Workflow<AppState> {
   const outcome = yield* EffectHandler().invoke({
     effectId: effect.id,
     data: effect.input,
   });
   if (outcome.ok) {
-    const record: EffectRequestRecord = {
+    const record: AppState["effectRequests"][number] = {
       turnIndex: turnCount,
       requestor: speaker,
       effect,
@@ -83,10 +68,10 @@ export function* dispatchExecuted(
       dispositionAt: turnCount,
       result: outcome.result,
     };
-    const appended = yield* Projection().appendEffectRequest({ records, record });
-    return appended;
+    const accepted = yield* StateAgent().transition({ tag: "append-effect-request", record });
+    return accepted;
   } else {
-    const record: EffectRequestRecord = {
+    const record: AppState["effectRequests"][number] = {
       turnIndex: turnCount,
       requestor: speaker,
       effect,
@@ -94,8 +79,8 @@ export function* dispatchExecuted(
       dispositionAt: turnCount,
       error: outcome.error,
     };
-    const appended = yield* Projection().appendEffectRequest({ records, record });
-    return appended;
+    const accepted = yield* StateAgent().transition({ tag: "append-effect-request", record });
+    return accepted;
   }
 }
 
@@ -103,25 +88,25 @@ export function* dispatchEffect(
   effect: RequestedEffect,
   turnCount: number,
   speaker: "opus" | "gpt",
-  records: EffectRequestRecord[],
-): Workflow<EffectRequestRecord[]> {
+  state: AppState,
+): Workflow<AppState> {
   const decision = yield* Policy().decide({ effect });
 
   if (decision.kind === "executed") {
-    const next = yield* dispatchExecuted(effect, turnCount, speaker, records);
+    const next = yield* dispatchExecuted(effect, turnCount, speaker, state);
     return next;
   } else if (decision.kind === "deferred") {
-    const record: EffectRequestRecord = {
+    const record: AppState["effectRequests"][number] = {
       turnIndex: turnCount,
       requestor: speaker,
       effect,
       disposition: "deferred",
       dispositionAt: turnCount,
     };
-    const appended = yield* Projection().appendEffectRequest({ records, record });
-    return appended;
+    const accepted = yield* StateAgent().transition({ tag: "append-effect-request", record });
+    return accepted;
   } else if (decision.kind === "rejected") {
-    const record: EffectRequestRecord = {
+    const record: AppState["effectRequests"][number] = {
       turnIndex: turnCount,
       requestor: speaker,
       effect,
@@ -129,25 +114,25 @@ export function* dispatchEffect(
       dispositionAt: turnCount,
       error: { name: "PolicyRejected", message: decision.reason },
     };
-    const appended = yield* Projection().appendEffectRequest({ records, record });
-    return appended;
+    const accepted = yield* StateAgent().transition({ tag: "append-effect-request", record });
+    return accepted;
   } else {
-    const record: EffectRequestRecord = {
+    const record: AppState["effectRequests"][number] = {
       turnIndex: turnCount,
       requestor: speaker,
       effect,
       disposition: "surfaced_to_taras",
       dispositionAt: turnCount,
     };
-    const appended = yield* Projection().appendEffectRequest({ records, record });
-    return appended;
+    const accepted = yield* StateAgent().transition({ tag: "append-effect-request", record });
+    return accepted;
   }
 }
 
 // -- Sub-workflow: non-blockingly drain buffered control patches from App --
 
-export function* drainControlPatches(control: LoopControl): Workflow<LoopControl> {
-  let current: LoopControl = control;
+export function* drainControlPatches(state: AppState): Workflow<AppState> {
+  let current: AppState = state;
   let draining = true;
   while (draining) {
     const pulled = yield* timebox(0, function* () {
@@ -155,10 +140,11 @@ export function* drainControlPatches(control: LoopControl): Workflow<LoopControl
       return patch;
     });
     if (pulled.status === "completed") {
-      current = yield* Projection().applyControlPatch({
-        current,
+      const accepted = yield* StateAgent().transition({
+        tag: "apply-control-patch",
         patch: pulled.value,
       });
+      current = accepted;
     } else {
       draining = false;
     }
@@ -172,11 +158,11 @@ export function* processEffects(
   effects: RequestedEffect[],
   turnCount: number,
   speaker: "opus" | "gpt",
-  records: EffectRequestRecord[],
-): Workflow<EffectRequestRecord[]> {
+  state: AppState,
+): Workflow<AppState> {
   yield* EffectsQueue().seed({ effects });
 
-  let current: EffectRequestRecord[] = records;
+  let current: AppState = state;
   let draining = true;
   while (draining) {
     const head = yield* EffectsQueue().shift({});
@@ -192,25 +178,14 @@ export function* processEffects(
 
 // -- Workflow body (§7.2 cycle with recursive state in a while-loop) --
 
-export function* peerLoop(): Workflow<{
-  messages: TurnEntry[];
-  control: LoopControl;
-  readOnlyReason: string | null;
-}> {
-  let messages: TurnEntry[] = [];
-  let control: LoopControl = yield* Projection().readInitialControl({});
-  let peerRecords: PeerRecord[] = [];
-  let effectRequests: EffectRequestRecord[] = [];
-  let readOnlyReason: string | null = null;
+export function* peerLoop(): Workflow<AppState> {
+  let state: AppState = yield* StateAgent().readInitialState({});
   let nextSpeaker: PeerSpeaker = "opus";
   let tarasMode: "optional" | "required" = "optional";
   let turnCount = 0;
 
   while (true) {
-    // Step 1: hydrate browser mirror with current workflow-owned state.
-    yield* App().hydrate({ messages, control, readOnlyReason });
-
-    // Step 2: Taras gate.
+    // Step 1: Taras gate.
     let tarasMessage: string | null = null;
     if (tarasMode === "required") {
       const elicited = yield* App().elicit({
@@ -233,80 +208,87 @@ export function* peerLoop(): Workflow<{
 
     if (tarasMessage !== null) {
       const entry: TurnEntry = { speaker: "taras", content: tarasMessage };
-      messages = yield* Projection().appendMessage({ messages, entry });
+      const accepted = yield* StateAgent().transition({ tag: "append-message", entry });
+      state = accepted;
     }
 
-    // Step 3: drain buffered control patches non-blockingly. Every patch the
+    // Step 2: drain buffered control patches non-blockingly. Every patch the
     // browser sent during this iteration (including during the Taras gate) is
-    // folded into `control` before any control-sensitive check.
-    control = yield* drainControlPatches(control);
+    // folded into `state.control` before any control-sensitive check.
+    state = yield* drainControlPatches(state);
 
-    // Step 4: stop check.
-    if (control.stopRequested) {
-      readOnlyReason = "stopped";
-      yield* App().hydrate({ messages, control, readOnlyReason });
-      return { messages, control, readOnlyReason };
+    // Step 3: stop check.
+    if (state.control.stopRequested) {
+      const accepted = yield* StateAgent().transition({
+        tag: "set-read-only",
+        reason: "stopped",
+      });
+      state = accepted;
+      return state;
     }
 
-    // Step 5: paused check.
-    if (control.paused) {
+    // Step 4: paused check.
+    if (state.control.paused) {
       tarasMode = "optional";
     } else {
-      // Step 6: speaker selection (consume one-shot override).
+      // Step 5: speaker selection (consume one-shot override).
       let speaker: PeerSpeaker = nextSpeaker;
-      if (control.nextSpeakerOverride) {
-        speaker = control.nextSpeakerOverride;
-        control = yield* Projection().applyControlPatch({
-          current: control,
+      if (state.control.nextSpeakerOverride) {
+        speaker = state.control.nextSpeakerOverride;
+        const accepted = yield* StateAgent().transition({
+          tag: "apply-control-patch",
           patch: { nextSpeakerOverride: null },
         });
+        state = accepted;
       }
 
-      // Step 7: peer step.
-      const peerInput: PeerTurnInput = { transcript: messages, tarasMode };
+      // Step 6: peer step.
+      const peerInput: PeerTurnInput = { transcript: state.messages, tarasMode };
       const result: PeerTurnResult =
         speaker === "opus"
           ? yield* OpusAgent().takeTurn(peerInput)
           : yield* GptAgent().takeTurn(peerInput);
       turnCount = turnCount + 1;
 
-      // Step 8: persist peer turn. Only include `usage` when the peer supplied
+      // Step 7: persist peer turn. Only include `usage` when the peer supplied
       // one — store validation rejects a present-but-undefined field.
       const peerEntry: TurnEntry = result.usage
         ? { speaker, content: result.display, usage: result.usage }
         : { speaker, content: result.display };
-      messages = yield* Projection().appendMessage({ messages, entry: peerEntry });
+      const messageAccepted = yield* StateAgent().transition({
+        tag: "append-message",
+        entry: peerEntry,
+      });
+      state = messageAccepted;
       const peerRecord: PeerRecord = {
         turnIndex: turnCount,
         speaker,
         status: result.status,
         data: result.data,
       };
-      peerRecords = yield* Projection().appendPeerRecord({
-        records: peerRecords,
+      const peerAccepted = yield* StateAgent().transition({
+        tag: "append-peer-record",
         record: peerRecord,
       });
+      state = peerAccepted;
 
-      // Step 9: per-effect disposition via helper agents (§6.12).
+      // Step 8: per-effect disposition via helper agents (§6.12).
       const requestedEffects: RequestedEffect[] = result.requestedEffects
         ? result.requestedEffects
         : [];
-      const nextEffectRequests = yield* processEffects(
-        requestedEffects,
-        turnCount,
-        speaker,
-        effectRequests,
-      );
-      effectRequests = nextEffectRequests;
+      state = yield* processEffects(requestedEffects, turnCount, speaker, state);
 
-      // Step 10: done handling before recurse.
+      // Step 9: done handling before recurse.
       if (result.status === "done") {
-        readOnlyReason = "done";
-        yield* App().hydrate({ messages, control, readOnlyReason });
-        return { messages, control, readOnlyReason };
+        const accepted = yield* StateAgent().transition({
+          tag: "set-read-only",
+          reason: "done",
+        });
+        state = accepted;
+        return state;
       }
 
-      // Step 11: update recursive state.
+      // Step 10: update recursive state.
       tarasMode = result.status === "needs_taras" ? "required" : "optional";
       nextSpeaker = speaker === "opus" ? "gpt" : "opus";
     }
@@ -317,7 +299,7 @@ export const workflowDescriptor = workflow({
   run: { export: "peerLoop", module: "./workflow.ts" },
   agents: [
     agent("app", transport.local("./browser-agent.ts")),
-    agent("projection", transport.inprocess("./projection-agent.ts")),
+    agent("state-agent", transport.inprocess("./state-binding.ts")),
     agent("opus-agent", transport.inprocess("./peers/opus-binding.ts")),
     agent("gpt-agent", transport.inprocess("./peers/gpt-binding.ts")),
     agent("effects-policy", transport.inprocess("./effects/policy-binding.ts")),

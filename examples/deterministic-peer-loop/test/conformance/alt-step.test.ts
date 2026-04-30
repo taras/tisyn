@@ -78,8 +78,9 @@ describe("DPL-ALT / DPL-STEP / DPL-OVR extended", () => {
 
     const clearCall = result.operations.find(
       (op) =>
-        op.agent === "Projection" &&
-        op.op === "applyControlPatch" &&
+        op.agent === "StateAgent" &&
+        op.op === "transition" &&
+        op.args.tag === "apply-control-patch" &&
         op.args.patch.nextSpeakerOverride === null,
     );
     expect(clearCall).toBeDefined();
